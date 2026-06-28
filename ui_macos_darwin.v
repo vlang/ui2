@@ -42,12 +42,16 @@ mut:
 	root_view      NativeView
 	button_handler NativeView
 	views          map[string]NativeView
+	nodes          map[string]NativeView
+	node_kinds     map[string]Kind
 	button_ids     []string
 	run_config     RunConfig
 }
 
 const runtime_state_singleton = &RuntimeState{
-	views: map[string]NativeView{}
+	views:      map[string]NativeView{}
+	nodes:      map[string]NativeView{}
+	node_kinds: map[string]Kind{}
 }
 
 fn state() &RuntimeState {
@@ -173,80 +177,178 @@ fn element_rect(r Rect) NativeRect {
 
 fn render_root(root Element) {
 	mut st := state()
-	native_remove_all_subviews(st.root_view)
 	st.views = map[string]NativeView{}
 	st.button_ids = []string{}
 	native_set_background(st.root_view, root.box.bg)
-	for child in root.children {
-		render_element(st.root_view, child)
+	mut active := map[string]bool{}
+	for i, child in root.children {
+		render_element(st.root_view, child, i.str(), mut active)
 	}
+	remove_stale_nodes(active)
 }
 
-fn render_element(parent NativeView, el Element) NativeView {
-	mut native := native_nil_view()
+fn render_element(parent NativeView, el Element, key string, mut active map[string]bool) NativeView {
+	active[key] = true
+	mut st := state()
+	mut native := st.nodes[key] or { native_nil_view() }
+	existing_kind := st.node_kinds[key] or { Kind.screen }
+	if native_is_nil(native) || existing_kind != el.kind {
+		if !native_is_nil(native) {
+			native_remove_from_superview(native)
+		}
+		native = native_create_element(el)
+		st.nodes[key] = native
+		st.node_kinds[key] = el.kind
+		if el.kind != .screen {
+			native_add_subview(parent, native)
+		}
+	} else {
+		native_update_element(native, el)
+	}
+
 	match el.kind {
 		.screen {
 			native = parent
-			for child in el.children {
-				render_element(parent, child)
+			for i, child in el.children {
+				render_element(parent, child, child_key(key, i), mut active)
 			}
 		}
 		.view {
-			native = native_new_flipped_view(element_rect(el.frame), el.box.bg)
-			native_set_corner_radius(native, el.box.radius)
-			native_add_subview(parent, native)
-			for child in el.children {
-				render_element(native, child)
+			for i, child in el.children {
+				render_element(native, child, child_key(key, i), mut active)
 			}
 		}
 		.scroll {
-			native = native_new_scroll(element_rect(el.frame), el.box.bg)
+			doc_key := key + '/document'
+			active[doc_key] = true
 			doc_h := content_height(el.children) + 16
-			doc := native_new_flipped_view(native_rect(0, 0, el.frame.width, doc_h), el.box.bg)
-			for child in el.children {
-				render_element(doc, child)
+			mut doc := st.nodes[doc_key] or { native_nil_view() }
+			if native_is_nil(doc) {
+				doc = native_new_flipped_view(native_rect(0, 0, el.frame.width, doc_h), el.box.bg)
+				st.nodes[doc_key] = doc
+				st.node_kinds[doc_key] = .view
+				native_set_document_view(native, doc)
+			} else {
+				native_set_frame(doc, native_rect(0, 0, el.frame.width, doc_h))
+				native_set_background(doc, el.box.bg)
 			}
-			native_set_document_view(native, doc)
-			native_add_subview(parent, native)
-		}
-		.label {
-			native = native_new_label(element_rect(el.frame), el.text, el.text_style.color,
-				el.text_style.size, el.text_style.bold, align_value(el.text_style.align),
-				el.text_style.lines)
-			native_add_subview(parent, native)
+			for i, child in el.children {
+				render_element(doc, child, child_key(doc_key, i), mut active)
+			}
 		}
 		.button {
-			native = native_new_button(element_rect(el.frame), el.text, el.box.bg,
-				el.text_style.color, el.text_style.size, el.text_style.bold, el.box.radius,
-				el.text_style.lines)
-			mut st := state()
-			tag := st.button_ids.len
-			st.button_ids << el.id
-			native_set_tag(native, tag)
-			native_set_button_target(native, st.button_handler)
-			native_set_associated_object(native, assoc_handler_key(), st.button_handler)
-			native_add_subview(parent, native)
+			register_button(native, el.id)
 		}
 		.text_field {
-			native = native_new_text_field(element_rect(el.frame), el.placeholder, el.text,
-				el.box.bg, el.text_style.color, el.text_style.size, el.box.radius)
 			if el.emit_change {
-				mut st := state()
-				tag := st.button_ids.len
-				st.button_ids << el.id
-				native_set_tag(native, tag)
-				native_set_control_target(native, st.button_handler)
-				native_set_associated_object(native, assoc_handler_key(), st.button_handler)
+				register_control(native, el.id)
 			}
-			native_add_subview(parent, native)
+		}
+		.label {
+			// Labels are updated by native_update_element.
 		}
 	}
 
 	if el.id.len > 0 {
-		mut st := state()
 		st.views[el.id] = native
 	}
 	return native
+}
+
+fn native_create_element(el Element) NativeView {
+	return match el.kind {
+		.screen {
+			native_nil_view()
+		}
+		.view {
+			native_new_flipped_view(element_rect(el.frame), el.box.bg)
+		}
+		.scroll {
+			native_new_scroll(element_rect(el.frame), el.box.bg)
+		}
+		.label {
+			native_new_label(element_rect(el.frame), el.text, el.text_style.color,
+				el.text_style.size, el.text_style.bold, align_value(el.text_style.align),
+				el.text_style.lines)
+		}
+		.button {
+			native_new_button(element_rect(el.frame), el.text, el.box.bg, el.text_style.color,
+				el.text_style.size, el.text_style.bold, el.box.radius, el.text_style.lines)
+		}
+		.text_field {
+			native_new_text_field(element_rect(el.frame), el.placeholder, el.text, el.box.bg,
+				el.text_style.color, el.text_style.size, el.box.radius)
+		}
+	}
+}
+
+fn native_update_element(native NativeView, el Element) {
+	match el.kind {
+		.screen {}
+		.view {
+			native_set_frame(native, element_rect(el.frame))
+			native_set_background(native, el.box.bg)
+			native_set_corner_radius(native, el.box.radius)
+		}
+		.scroll {
+			native_set_frame(native, element_rect(el.frame))
+			native_set_scroll_background(native, el.box.bg)
+		}
+		.label {
+			native_update_label(native, element_rect(el.frame), el.text, el.text_style.color,
+				el.text_style.size, el.text_style.bold, align_value(el.text_style.align),
+				el.text_style.lines)
+		}
+		.button {
+			native_update_button(native, element_rect(el.frame), el.text, el.box.bg,
+				el.text_style.size, el.text_style.bold, el.box.radius, el.text_style.lines)
+		}
+		.text_field {
+			native_update_text_field(native, element_rect(el.frame), el.placeholder, el.text,
+				el.box.bg, el.text_style.color, el.text_style.size, el.box.radius)
+		}
+	}
+}
+
+fn child_key(parent string, index int) string {
+	if parent.len == 0 {
+		return index.str()
+	}
+	return parent + '/' + index.str()
+}
+
+fn register_button(native NativeView, id string) {
+	mut st := state()
+	tag := st.button_ids.len
+	st.button_ids << id
+	native_set_tag(native, tag)
+	native_set_button_target(native, st.button_handler)
+	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
+}
+
+fn register_control(native NativeView, id string) {
+	mut st := state()
+	tag := st.button_ids.len
+	st.button_ids << id
+	native_set_tag(native, tag)
+	native_set_control_target(native, st.button_handler)
+	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
+}
+
+fn remove_stale_nodes(active map[string]bool) {
+	mut st := state()
+	mut stale := []string{}
+	for key, _ in st.nodes {
+		if key !in active {
+			stale << key
+		}
+	}
+	for key in stale {
+		native := st.nodes[key] or { continue }
+		native_remove_from_superview(native)
+		st.nodes.delete(key)
+		st.node_kinds.delete(key)
+	}
 }
 
 fn content_height(children []Element) f64 {
@@ -336,19 +438,11 @@ fn native_add_subview(parent NativeView, child NativeView) {
 	macos.msg_void1(parent, 'addSubview:', child)
 }
 
-fn native_remove_all_subviews(view NativeView) {
+fn native_remove_from_superview(view NativeView) {
 	if native_is_nil(view) {
 		return
 	}
-	subviews := macos.msg_id(macos.msg_id(view, 'subviews'), 'copy')
-	defer {
-		macos.release(subviews)
-	}
-	count := int(macos.msg_u64(subviews, 'count'))
-	for i in 0 .. count {
-		subview := macos.msg_id_u64(subviews, 'objectAtIndex:', u64(i))
-		macos.msg_void(subview, 'removeFromSuperview')
-	}
+	macos.msg_void(view, 'removeFromSuperview')
 }
 
 fn native_new_object(class_name string) NativeView {
@@ -379,7 +473,7 @@ fn native_new_scroll(frame NativeRect, bg u32) NativeView {
 	macos.msg_void_bool(scroll_view, 'setHasVerticalScroller:', true)
 	macos.msg_void_bool(scroll_view, 'setAutohidesScrollers:', true)
 	macos.msg_void_bool(scroll_view, 'setDrawsBackground:', true)
-	macos.msg_void1(scroll_view, 'setBackgroundColor:', native_color(bg))
+	native_set_scroll_background(scroll_view, bg)
 	return scroll_view
 }
 
@@ -387,9 +481,20 @@ fn native_set_document_view(scroll NativeView, view NativeView) {
 	macos.msg_void1(scroll, 'setDocumentView:', view)
 }
 
+fn native_set_scroll_background(scroll NativeView, bg u32) {
+	macos.msg_void_bool(scroll, 'setDrawsBackground:', true)
+	macos.msg_void1(scroll, 'setBackgroundColor:', native_color(bg))
+}
+
 fn native_new_label(frame NativeRect, text string, text_hex u32, size f64, bold bool, align int, lines int) NativeView {
 	label_view := macos.msg_id_rect(macos.alloc('NSTextField'), 'initWithFrame:',
 		appkit_rect(frame))
+	native_update_label(label_view, frame, text, text_hex, size, bold, align, lines)
+	return label_view
+}
+
+fn native_update_label(label_view NativeView, frame NativeRect, text string, text_hex u32, size f64, bold bool, align int, lines int) {
+	native_set_frame(label_view, frame)
 	macos.msg_void1(label_view, 'setStringValue:', macos.nsstring(text))
 	macos.msg_void_bool(label_view, 'setEditable:', false)
 	macos.msg_void_bool(label_view, 'setSelectable:', false)
@@ -402,26 +507,36 @@ fn native_new_label(frame NativeRect, text string, text_hex u32, size f64, bold 
 	cell := macos.msg_id(label_view, 'cell')
 	macos.msg_void_i64(cell, 'setLineBreakMode:', 4)
 	macos.msg_void_bool(cell, 'setUsesSingleLineMode:', lines == 1)
-	return label_view
 }
 
 fn native_new_button(frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, radius f64, lines int) NativeView {
 	button_view := macos.msg_id_rect(macos.alloc('NSButton'), 'initWithFrame:', appkit_rect(frame))
+	native_update_button(button_view, frame, title, bg_hex, size, bold, radius, lines)
+	_ = text_hex
+	return button_view
+}
+
+fn native_update_button(button_view NativeView, frame NativeRect, title string, bg_hex u32, size f64, bold bool, radius f64, lines int) {
+	native_set_frame(button_view, frame)
 	macos.msg_void1(button_view, 'setTitle:', macos.nsstring(title))
 	macos.msg_void_u64(button_view, 'setBezelStyle:', 1)
 	macos.msg_void_bool(button_view, 'setBordered:', true)
 	macos.msg_void1(button_view, 'setFont:', native_font(size, bold))
 	native_set_background(button_view, bg_hex)
-	_ = text_hex
 	native_set_corner_radius(button_view, radius)
 	cell := macos.msg_id(button_view, 'cell')
 	macos.msg_void_i64(cell, 'setLineBreakMode:', 4)
 	macos.msg_void_bool(cell, 'setUsesSingleLineMode:', lines == 1)
-	return button_view
 }
 
 fn native_new_text_field(frame NativeRect, placeholder string, text string, bg_hex u32, text_hex u32, size f64, radius f64) NativeView {
 	field := macos.msg_id_rect(macos.alloc('NSTextField'), 'initWithFrame:', appkit_rect(frame))
+	native_update_text_field(field, frame, placeholder, text, bg_hex, text_hex, size, radius)
+	return field
+}
+
+fn native_update_text_field(field NativeView, frame NativeRect, placeholder string, text string, bg_hex u32, text_hex u32, size f64, radius f64) {
+	native_set_frame(field, frame)
 	macos.msg_void1(field, 'setStringValue:', macos.nsstring(text))
 	macos.msg_void1(field, 'setPlaceholderString:', macos.nsstring(placeholder))
 	macos.msg_void1(field, 'setTextColor:', native_color(text_hex))
@@ -430,7 +545,6 @@ fn native_new_text_field(frame NativeRect, placeholder string, text string, bg_h
 	macos.msg_void_bool(field, 'setDrawsBackground:', true)
 	macos.msg_void1(field, 'setBackgroundColor:', native_color(bg_hex))
 	native_set_corner_radius(field, radius)
-	return field
 }
 
 fn native_set_button_target(button NativeView, target NativeView) {
@@ -459,6 +573,10 @@ fn native_end_editing(view NativeView) {
 	macos.msg_bool(view, 'resignFirstResponder')
 }
 
+fn native_set_frame(view NativeView, frame NativeRect) {
+	macos.msg_void_rect(view, 'setFrame:', appkit_rect(frame))
+}
+
 fn native_set_background(view NativeView, hex u32) {
 	macos.msg_void_bool(view, 'setWantsLayer:', true)
 	layer := macos.msg_id(view, 'layer')
@@ -466,13 +584,10 @@ fn native_set_background(view NativeView, hex u32) {
 }
 
 fn native_set_corner_radius(view NativeView, radius f64) {
-	if radius <= 0 {
-		return
-	}
 	macos.msg_void_bool(view, 'setWantsLayer:', true)
 	layer := macos.msg_id(view, 'layer')
 	macos.msg_void_f64(layer, 'setCornerRadius:', radius)
-	macos.msg_void_bool(layer, 'setMasksToBounds:', true)
+	macos.msg_void_bool(layer, 'setMasksToBounds:', radius > 0)
 }
 
 fn native_font(size f64, bold bool) NativeView {
