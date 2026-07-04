@@ -288,6 +288,34 @@ pub fn element_from_qnode(node &QNode, frame Rect) !Element {
 }
 
 fn node_to_element(node &QNode, frame Rect) !Element {
+	el := node_to_element_base(node, frame)!
+	key := node.prop('key')
+	menu := q_menu(node)
+	if key == '' && menu.len == 0 {
+		return el
+	}
+	return Element{
+		...el
+		key:  key
+		menu: menu
+	}
+}
+
+// q_menu collects MenuItem children as a right-click context menu.
+fn q_menu(node &QNode) []MenuEntry {
+	mut out := []MenuEntry{}
+	for child in node.children {
+		if child.tag == 'MenuItem' {
+			out << MenuEntry{
+				id:    child.prop_or('on_tap', child.id)
+				title: child.prop('text')
+			}
+		}
+	}
+	return out
+}
+
+fn node_to_element_base(node &QNode, frame Rect) !Element {
 	match node.tag {
 		'Screen' {
 			return screen(q_color(node, 'background', 0xffffff), q_children(node, frame)!)
@@ -313,6 +341,17 @@ fn node_to_element(node &QNode, frame Rect) !Element {
 			return button(id, node.prop('text'), q_frame(node, frame), q_box(node),
 				q_text_style(node))
 		}
+		'TextArea' {
+			return Element{
+				kind:       .text_area
+				id:         node.id
+				text:       node.prop('text')
+				frame:      q_frame(node, frame)
+				box:        q_box(node)
+				text_style: q_text_style(node)
+				readonly:   node.prop('editable') == 'false'
+			}
+		}
 		'TextField' {
 			id := node.prop_or('on_change', node.id)
 			frame_ := q_frame(node, frame)
@@ -332,6 +371,9 @@ fn node_to_element(node &QNode, frame Rect) !Element {
 fn q_children(node &QNode, frame Rect) ![]Element {
 	mut out := []Element{}
 	for child in node.children {
+		if child.tag == 'MenuItem' {
+			continue // context menu entries, not child views
+		}
 		out << node_to_element(child, q_frame(child, frame))!
 	}
 	return out
@@ -344,6 +386,9 @@ fn q_column(node &QNode, frame Rect) !Element {
 	mut y := padding
 	mut children := []Element{}
 	for child in node.children {
+		if child.tag == 'MenuItem' {
+			continue
+		}
 		child_h := q_dimension(child, 'height', 32)
 		child_w := q_dimension(child, 'width', container.width - padding * 2)
 		child_frame := rect(padding, y, child_w, child_h)
@@ -360,6 +405,9 @@ fn q_row(node &QNode, frame Rect) !Element {
 	mut x := padding
 	mut children := []Element{}
 	for child in node.children {
+		if child.tag == 'MenuItem' {
+			continue
+		}
 		child_w := q_dimension(child, 'width', 80)
 		child_h := q_dimension(child, 'height', container.height - padding * 2)
 		child_frame := rect(x, padding, child_w, child_h)

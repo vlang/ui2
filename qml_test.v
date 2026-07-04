@@ -188,3 +188,44 @@ fn test_parse_row() {
 	assert node.children[0].prop('text') == 'Accept'
 	assert node.children[1].prop('text') == 'Decline'
 }
+
+fn test_parse_text_area() {
+	source := 'TextArea {
+		id: body
+		text: "line one\\nline two"
+		editable: false
+		background: #FAFAFA
+	}'
+	node := parse_qml(source) or { panic(err) }
+	assert node.tag == 'TextArea'
+	el := element_from_qnode(node, rect(0, 0, 400, 300)) or { panic(err) }
+	assert el.id == 'body'
+	assert el.readonly == true
+	assert el.text.contains('line two')
+}
+
+fn test_parse_menu_items() {
+	source := 'Button {
+		text: "Row"
+		on_tap: open_row
+		key: row42
+
+		MenuItem {
+			text: "Reply"
+			on_tap: ctx_reply
+		}
+		MenuItem {
+			text: "Delete"
+			on_tap: ctx_delete
+		}
+	}'
+	node := parse_qml(source) or { panic(err) }
+	el := element_from_qnode(node, rect(0, 0, 100, 30)) or { panic(err) }
+	assert el.key == 'row42'
+	assert el.menu.len == 2
+	assert el.menu[0].title == 'Reply'
+	assert el.menu[0].id == 'ctx_reply'
+	assert el.menu[1].id == 'ctx_delete'
+	// MenuItem children must not become subviews
+	assert el.children.len == 0
+}

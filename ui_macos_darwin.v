@@ -11,6 +11,14 @@ fn C.ui2_app_did_finish_launching(self voidptr, cmd voidptr, notification voidpt
 fn C.ui2_app_should_terminate_after_last_window_closed(self voidptr, cmd voidptr, sender voidptr) bool
 fn C.ui2_button_tap(self voidptr, cmd voidptr, sender voidptr)
 fn C.ui2_view_is_flipped(self voidptr, cmd voidptr) bool
+fn C.ui2_window_key_down(self voidptr, cmd voidptr, event voidptr)
+fn C.ui2_window_perform_key_equiv(self voidptr, cmd voidptr, event voidptr) bool
+fn C.ui2_window_did_resize(self voidptr, cmd voidptr, notification voidptr)
+fn C.ui2_control_text_changed(self voidptr, cmd voidptr, notification voidptr)
+fn C.ui2_text_view_changed(self voidptr, cmd voidptr, notification voidptr)
+fn C.ui2_bounds_changed(self voidptr, cmd voidptr, notification voidptr)
+fn C.ui2_dispatch_main(cb voidptr)
+fn C.ui2_observe_bounds(observer voidptr, view voidptr)
 
 const ns_window_style_titled = u64(1)
 const ns_window_style_closable = u64(2)
@@ -36,22 +44,33 @@ struct RunConfig {
 @[heap]
 struct RuntimeState {
 mut:
-	build_screen   BuildFn = BuildFn(unsafe { nil })
-	event_handler  EventFn = EventFn(unsafe { nil })
+	build_screen   BuildFn  = BuildFn(unsafe { nil })
+	event_handler  EventFn  = EventFn(unsafe { nil })
+	key_handler    KeyFn    = KeyFn(unsafe { nil })
+	scroll_handler ScrollFn = ScrollFn(unsafe { nil })
 	window         NativeView
 	root_view      NativeView
 	button_handler NativeView
+	app_delegate   NativeView
 	views          map[string]NativeView
+	view_kinds     map[string]Kind
 	nodes          map[string]NativeView
 	node_kinds     map[string]Kind
+	textview_ids   map[u64]string // NSTextView pointer -> element id (no tag on NSView)
+	scroll_ids     map[u64]string // NSClipView pointer -> Scroll element id
+	observed       map[u64]bool   // clip views we already observe for scroll changes
 	button_ids     []string
 	run_config     RunConfig
 }
 
 const runtime_state_singleton = &RuntimeState{
-	views:      map[string]NativeView{}
-	nodes:      map[string]NativeView{}
-	node_kinds: map[string]Kind{}
+	views:        map[string]NativeView{}
+	view_kinds:   map[string]Kind{}
+	nodes:        map[string]NativeView{}
+	node_kinds:   map[string]Kind{}
+	textview_ids: map[u64]string{}
+	scroll_ids:   map[u64]string{}
+	observed:     map[u64]bool{}
 }
 
 fn state() &RuntimeState {
@@ -91,6 +110,7 @@ pub fn run_window(title string, width int, height int, build_fn BuildFn, event_f
 	ensure_runtime_classes()
 	native_set_activation_policy_regular()
 	delegate := native_new_object('UI2AppDelegate')
+	st.app_delegate = delegate
 	native_set_delegate(delegate)
 	native_run_app()
 }
@@ -104,18 +124,76 @@ pub fn refresh() {
 	render_root(root)
 }
 
+// on_key registers a handler for key events that reach the window
+// (i.e. not consumed by a focused text field). Keys arrive normalized:
+// 'up', 'forward_delete', 'escape', 'cmd+shift+r', 'f5', ...
+pub fn on_key(handler KeyFn) {
+	mut st := state()
+	st.key_handler = handler
+}
+
+// on_scroll registers a handler called with a Scroll element's id whenever
+// its scroll position changes (used for list virtualization).
+pub fn on_scroll(handler ScrollFn) {
+	mut st := state()
+	st.scroll_handler = handler
+}
+
+fn refresh_on_main() {
+	refresh()
+}
+
+// request_refresh schedules a rebuild on the main thread; safe to call from
+// background threads (sync loops, network fetches).
+pub fn request_refresh() {
+	cb := refresh_on_main
+	C.ui2_dispatch_main(voidptr(cb))
+}
+
+// scroll_offset returns the current vertical scroll position of a Scroll element.
+pub fn scroll_offset(id string) f64 {
+	st := state()
+	scrollv := st.views[id] or { return 0 }
+	r := macos.msg_rect(scrollv, 'documentVisibleRect')
+	return r.y
+}
+
+// scroll_to_rect scrolls a Scroll element so the given document rect is visible.
+pub fn scroll_to_rect(id string, x f64, y f64, width f64, height f64) {
+	st := state()
+	scrollv := st.views[id] or { return }
+	doc := macos.msg_id(scrollv, 'documentView')
+	if native_is_nil(doc) {
+		return
+	}
+	macos.msg_void_rect(doc, 'scrollRectToVisible:', macos.rect(x, y, width, height))
+}
+
 pub fn text(id string) string {
 	st := state()
 	native := st.views[id] or { return '' }
+	if (st.view_kinds[id] or { Kind.view }) == .text_area {
+		tv := macos.msg_id(native, 'documentView')
+		if native_is_nil(tv) {
+			return ''
+		}
+		return macos.utf8_string(macos.msg_id(tv, 'string'))
+	}
 	return native_text(native)
 }
 
 pub fn set_text(id string, t string) {
 	st := state()
-	if id in st.views {
-		native := st.views[id] or { return }
-		native_set_text(native, t)
+	native := st.views[id] or { return }
+	if (st.view_kinds[id] or { Kind.view }) == .text_area {
+		tv := macos.msg_id(native, 'documentView')
+		if native_is_nil(tv) {
+			return
+		}
+		macos.msg_void1(tv, 'setString:', macos.nsstring(t))
+		return
 	}
+	native_set_text(native, t)
 }
 
 pub fn focus(id string) {
@@ -154,11 +232,23 @@ fn ensure_runtime_classes() {
 			voidptr(C.ui2_app_did_finish_launching), 'v@:@')
 		macos.add_method(cls, 'applicationShouldTerminateAfterLastWindowClosed:',
 			voidptr(C.ui2_app_should_terminate_after_last_window_closed), 'B@:@')
+		macos.add_method(cls, 'windowDidResize:', voidptr(C.ui2_window_did_resize), 'v@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2ButtonHandler') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSObject'), 'UI2ButtonHandler')
 		macos.add_method(cls, 'handleTap:', voidptr(C.ui2_button_tap), 'v@:@')
+		macos.add_method(cls, 'controlTextDidChange:', voidptr(C.ui2_control_text_changed),
+			'v@:@')
+		macos.add_method(cls, 'textDidChange:', voidptr(C.ui2_text_view_changed), 'v@:@')
+		macos.add_method(cls, 'ui2BoundsChanged:', voidptr(C.ui2_bounds_changed), 'v@:@')
+		macos.register_class_pair(cls)
+	}
+	if macos.get_class('UI2Window') == unsafe { nil } {
+		cls := macos.allocate_class_pair(macos.get_class('NSWindow'), 'UI2Window')
+		macos.add_method(cls, 'keyDown:', voidptr(C.ui2_window_key_down), 'v@:@')
+		macos.add_method(cls, 'performKeyEquivalent:', voidptr(C.ui2_window_perform_key_equiv),
+			'B@:@')
 		macos.register_class_pair(cls)
 	}
 }
@@ -178,11 +268,12 @@ fn element_rect(r Rect) NativeRect {
 fn render_root(root Element) {
 	mut st := state()
 	st.views = map[string]NativeView{}
+	st.view_kinds = map[string]Kind{}
 	st.button_ids = []string{}
 	native_set_background(st.root_view, root.box.bg)
 	mut active := map[string]bool{}
 	for i, child in root.children {
-		render_element(st.root_view, child, i.str(), mut active)
+		render_element(st.root_view, child, child_key('', i, child), mut active)
 	}
 	remove_stale_nodes(active)
 }
@@ -210,15 +301,25 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		.screen {
 			native = parent
 			for i, child in el.children {
-				render_element(parent, child, child_key(key, i), mut active)
+				render_element(parent, child, child_key(key, i, child), mut active)
 			}
 		}
 		.view {
 			for i, child in el.children {
-				render_element(native, child, child_key(key, i), mut active)
+				render_element(native, child, child_key(key, i, child), mut active)
 			}
 		}
 		.scroll {
+			// Observe scroll position changes for virtualized lists
+			clip := macos.msg_id(native, 'contentView')
+			if el.id.len > 0 {
+				st.scroll_ids[u64(voidptr(clip))] = el.id
+			}
+			if u64(voidptr(clip)) !in st.observed {
+				st.observed[u64(voidptr(clip))] = true
+				macos.msg_void_bool(clip, 'setPostsBoundsChangedNotifications:', true)
+				C.ui2_observe_bounds(voidptr(st.button_handler), voidptr(clip))
+			}
 			doc_key := key + '/document'
 			active[doc_key] = true
 			doc_h := content_height(el.children) + 16
@@ -233,7 +334,7 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 				native_set_background(doc, el.box.bg)
 			}
 			for i, child in el.children {
-				render_element(doc, child, child_key(doc_key, i), mut active)
+				render_element(doc, child, child_key(doc_key, i, child), mut active)
 			}
 		}
 		.button {
@@ -244,15 +345,43 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 				register_control(native, el.id)
 			}
 		}
+		.text_area {
+			if el.id.len > 0 {
+				tv := macos.msg_id(native, 'documentView')
+				st.textview_ids[u64(voidptr(tv))] = el.id
+			}
+		}
 		.label {
 			// Labels are updated by native_update_element.
 		}
 	}
 
+	if el.menu.len > 0 {
+		attach_menu(native, el.menu)
+	}
+
 	if el.id.len > 0 {
 		st.views[el.id] = native
+		st.view_kinds[el.id] = el.kind
 	}
 	return native
+}
+
+// attach_menu builds a right-click context menu for an element. Item taps
+// arrive through the same handler/tag registry as buttons.
+fn attach_menu(native NativeView, entries []MenuEntry) {
+	mut st := state()
+	menu := macos.msg_id(macos.alloc('NSMenu'), 'init')
+	for e in entries {
+		tag := st.button_ids.len
+		st.button_ids << e.id
+		item := macos.msg_id3(macos.alloc('NSMenuItem'), 'initWithTitle:action:keyEquivalent:',
+			macos.nsstring(e.title), macos.Id(voidptr(macos.sel('handleTap:'))), macos.nsstring(''))
+		macos.msg_void1(item, 'setTarget:', st.button_handler)
+		macos.msg_void_i64(item, 'setTag:', i64(tag))
+		macos.msg_void1(menu, 'addItem:', item)
+	}
+	macos.msg_void1(native, 'setMenu:', menu)
 }
 
 fn native_create_element(el Element) NativeView {
@@ -278,6 +407,9 @@ fn native_create_element(el Element) NativeView {
 		.text_field {
 			native_new_text_field(element_rect(el.frame), el.placeholder, el.text, el.box.bg,
 				el.text_style.color, el.text_style.size, el.box.radius)
+		}
+		.text_area {
+			native_new_text_area(el)
 		}
 	}
 }
@@ -307,14 +439,20 @@ fn native_update_element(native NativeView, el Element) {
 			native_update_text_field(native, element_rect(el.frame), el.placeholder, el.text,
 				el.box.bg, el.text_style.color, el.text_style.size, el.box.radius)
 		}
+		.text_area {
+			native_update_text_area(native, el)
+		}
 	}
 }
 
-fn child_key(parent string, index int) string {
+// child_key prefers the element's explicit key over its index, so windowed
+// lists keep native-view identity while scrolling.
+fn child_key(parent string, index int, el Element) string {
+	suffix := if el.key.len > 0 { 'k:' + el.key } else { index.str() }
 	if parent.len == 0 {
-		return index.str()
+		return suffix
 	}
-	return parent + '/' + index.str()
+	return parent + '/' + suffix
 }
 
 fn register_button(native NativeView, id string) {
@@ -332,6 +470,8 @@ fn register_control(native NativeView, id string) {
 	st.button_ids << id
 	native_set_tag(native, tag)
 	native_set_control_target(native, st.button_handler)
+	// Delegate delivers controlTextDidChange: for per-keystroke events
+	macos.msg_void1(native, 'setDelegate:', st.button_handler)
 	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
 }
 
@@ -413,7 +553,7 @@ fn native_set_delegate(delegate NativeView) {
 
 fn native_new_window(frame NativeRect, title string) NativeView {
 	style := ns_window_style_titled | ns_window_style_closable | ns_window_style_miniaturizable | ns_window_style_resizable
-	window := C.macos_objc_msg_id_rect_u64_u64_bool(macos.alloc('NSWindow'),
+	window := C.macos_objc_msg_id_rect_u64_u64_bool(macos.alloc('UI2Window'),
 		macos.sel('initWithContentRect:styleMask:backing:defer:'), appkit_rect(frame), style,
 		ns_backing_store_buffered, false)
 	macos.msg_void1(window, 'setTitle:', macos.nsstring(title))
@@ -537,7 +677,12 @@ fn native_new_text_field(frame NativeRect, placeholder string, text string, bg_h
 
 fn native_update_text_field(field NativeView, frame NativeRect, placeholder string, text string, bg_hex u32, text_hex u32, size f64, radius f64) {
 	native_set_frame(field, frame)
-	macos.msg_void1(field, 'setStringValue:', macos.nsstring(text))
+	// Only replace the value when it actually changed — a rebuild during
+	// editing must not reset the cursor or editing session.
+	cur := macos.utf8_string(macos.msg_id(field, 'stringValue'))
+	if cur != text {
+		macos.msg_void1(field, 'setStringValue:', macos.nsstring(text))
+	}
 	macos.msg_void1(field, 'setPlaceholderString:', macos.nsstring(placeholder))
 	macos.msg_void1(field, 'setTextColor:', native_color(text_hex))
 	macos.msg_void1(field, 'setFont:', native_font(size, false))
@@ -545,6 +690,48 @@ fn native_update_text_field(field NativeView, frame NativeRect, placeholder stri
 	macos.msg_void_bool(field, 'setDrawsBackground:', true)
 	macos.msg_void1(field, 'setBackgroundColor:', native_color(bg_hex))
 	native_set_corner_radius(field, radius)
+}
+
+// native_new_text_area builds an NSScrollView wrapping an NSTextView —
+// native multi-line editing with wrapping, selection, clipboard and undo.
+fn native_new_text_area(el Element) NativeView {
+	frame := element_rect(el.frame)
+	scroll_view := macos.msg_id_rect(macos.alloc('NSScrollView'), 'initWithFrame:',
+		appkit_rect(frame))
+	macos.msg_void_bool(scroll_view, 'setHasVerticalScroller:', true)
+	macos.msg_void_bool(scroll_view, 'setAutohidesScrollers:', true)
+	tv := macos.msg_id_rect(macos.alloc('NSTextView'), 'initWithFrame:', macos.rect(0,
+		0, frame.width, frame.height))
+	macos.msg_void1(tv, 'setFont:', native_font(el.text_style.size, el.text_style.bold))
+	macos.msg_void_bool(tv, 'setRichText:', false)
+	macos.msg_void_bool(tv, 'setAllowsUndo:', true)
+	macos.msg_void_bool(tv, 'setVerticallyResizable:', true)
+	macos.msg_void_bool(tv, 'setHorizontallyResizable:', false)
+	macos.msg_void_u64(tv, 'setAutoresizingMask:', 2) // NSViewWidthSizable
+	macos.msg_void1(tv, 'setBackgroundColor:', native_color(el.box.bg))
+	macos.msg_void1(tv, 'setTextColor:', native_color(el.text_style.color))
+	macos.msg_void_bool(tv, 'setEditable:', !el.readonly)
+	macos.msg_void_bool(tv, 'setSelectable:', true)
+	macos.msg_void1(tv, 'setString:', macos.nsstring(el.text))
+	st := state()
+	macos.msg_void1(tv, 'setDelegate:', st.button_handler)
+	macos.msg_void1(scroll_view, 'setDocumentView:', tv)
+	native_set_corner_radius(scroll_view, el.box.radius)
+	return scroll_view
+}
+
+fn native_update_text_area(native NativeView, el Element) {
+	native_set_frame(native, element_rect(el.frame))
+	tv := macos.msg_id(native, 'documentView')
+	if native_is_nil(tv) {
+		return
+	}
+	macos.msg_void_bool(tv, 'setEditable:', !el.readonly)
+	// Same guard as text fields: don't clobber an active editing session
+	cur := macos.utf8_string(macos.msg_id(tv, 'string'))
+	if cur != el.text {
+		macos.msg_void1(tv, 'setString:', macos.nsstring(el.text))
+	}
 }
 
 fn native_set_button_target(button NativeView, target NativeView) {
@@ -612,6 +799,8 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 	mut st := state()
 	frame := native_rect(120, 120, f64(st.run_config.width), f64(st.run_config.height))
 	st.window = native_new_window(frame, st.run_config.title)
+	// The app delegate doubles as window delegate for windowDidResize:
+	macos.msg_void1(st.window, 'setDelegate:', st.app_delegate)
 	root_frame := native_rect(0, 0, f64(st.run_config.width), f64(st.run_config.height))
 	st.root_view = native_new_flipped_view(root_frame, 0xffffff)
 	native_set_content_view(st.window, st.root_view)
@@ -634,4 +823,125 @@ fn ui2_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
 		return
 	}
 	st.event_handler(st.button_ids[tag])
+}
+
+@[export: 'ui2_control_text_changed']
+fn ui2_control_text_changed(_self voidptr, _cmd voidptr, notification voidptr) {
+	st := state()
+	if voidptr(st.event_handler) == unsafe { nil } {
+		return
+	}
+	field := macos.msg_id(macos.Id(notification), 'object')
+	tag := int(macos.msg_i64(field, 'tag'))
+	if tag < 0 || tag >= st.button_ids.len {
+		return
+	}
+	st.event_handler(st.button_ids[tag])
+}
+
+@[export: 'ui2_text_view_changed']
+fn ui2_text_view_changed(_self voidptr, _cmd voidptr, notification voidptr) {
+	st := state()
+	if voidptr(st.event_handler) == unsafe { nil } {
+		return
+	}
+	tv := macos.msg_id(macos.Id(notification), 'object')
+	id := st.textview_ids[u64(voidptr(tv))] or { return }
+	st.event_handler(id)
+}
+
+@[export: 'ui2_bounds_changed']
+fn ui2_bounds_changed(_self voidptr, _cmd voidptr, notification voidptr) {
+	st := state()
+	if voidptr(st.scroll_handler) == unsafe { nil } {
+		return
+	}
+	clip := macos.msg_id(macos.Id(notification), 'object')
+	id := st.scroll_ids[u64(voidptr(clip))] or { return }
+	st.scroll_handler(id)
+}
+
+@[export: 'ui2_window_did_resize']
+fn ui2_window_did_resize(_self voidptr, _cmd voidptr, _notification voidptr) {
+	refresh()
+}
+
+@[export: 'ui2_window_key_down']
+fn ui2_window_key_down(_self voidptr, _cmd voidptr, event voidptr) {
+	st := state()
+	if voidptr(st.key_handler) == unsafe { nil } {
+		return
+	}
+	st.key_handler(key_event_string(macos.Id(event)))
+}
+
+// Cmd chords the menu bar owns (clipboard, undo, quit) pass through so the
+// focused field keeps native editing behavior; everything else goes to the app.
+const menu_owned_chords = ['cmd+c', 'cmd+v', 'cmd+x', 'cmd+a', 'cmd+z', 'cmd+shift+z', 'cmd+q']
+
+@[export: 'ui2_window_perform_key_equiv']
+fn ui2_window_perform_key_equiv(_self voidptr, _cmd voidptr, event voidptr) bool {
+	st := state()
+	if voidptr(st.key_handler) == unsafe { nil } {
+		return false
+	}
+	s := key_event_string(macos.Id(event))
+	if !s.starts_with('cmd+') || s in menu_owned_chords {
+		return false
+	}
+	st.key_handler(s)
+	return true
+}
+
+// key_event_string normalizes an NSEvent into 'cmd+shift+r' style strings.
+fn key_event_string(event macos.Id) string {
+	chars := macos.utf8_string(macos.msg_id(event, 'charactersIgnoringModifiers'))
+	mods := macos.msg_u64(event, 'modifierFlags')
+	mut name := ''
+	if chars.len > 0 {
+		r := u32(chars.runes()[0])
+		name = match r {
+			0xF700 { 'up' }
+			0xF701 { 'down' }
+			0xF702 { 'left' }
+			0xF703 { 'right' }
+			0xF704 { 'f1' }
+			0xF705 { 'f2' }
+			0xF706 { 'f3' }
+			0xF707 { 'f4' }
+			0xF708 { 'f5' }
+			0xF709 { 'f6' }
+			0xF70A { 'f7' }
+			0xF70B { 'f8' }
+			0xF70C { 'f9' }
+			0xF70D { 'f10' }
+			0xF70E { 'f11' }
+			0xF70F { 'f12' }
+			0xF728 { 'forward_delete' }
+			0xF729 { 'home' }
+			0xF72B { 'end' }
+			0xF72C { 'page_up' }
+			0xF72D { 'page_down' }
+			0x7F { 'backspace' }
+			0x0D, 0x03 { 'enter' }
+			0x1B { 'escape' }
+			0x09 { 'tab' }
+			0x20 { 'space' }
+			else { chars.to_lower() }
+		}
+	}
+	mut prefix := ''
+	if mods & 0x100000 != 0 {
+		prefix += 'cmd+'
+	}
+	if mods & 0x40000 != 0 {
+		prefix += 'ctrl+'
+	}
+	if mods & 0x80000 != 0 {
+		prefix += 'alt+'
+	}
+	if mods & 0x20000 != 0 {
+		prefix += 'shift+'
+	}
+	return prefix + name
 }

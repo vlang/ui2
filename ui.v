@@ -4,6 +4,12 @@ pub type BuildFn = fn () Element
 
 pub type EventFn = fn (string)
 
+// KeyFn receives normalized key strings: 'up', 'forward_delete', 'cmd+shift+r', 'f5', ...
+pub type KeyFn = fn (string)
+
+// ScrollFn receives the id of the Scroll element whose position changed.
+pub type ScrollFn = fn (string)
+
 pub enum Align {
 	left
 	center
@@ -16,7 +22,15 @@ enum Kind {
 	label
 	button
 	text_field
+	text_area
 	scroll
+}
+
+// MenuEntry is one right-click context menu item attached to an element.
+pub struct MenuEntry {
+pub:
+	id    string
+	title string
 }
 
 pub struct Rect {
@@ -46,6 +60,7 @@ pub struct Element {
 	kind Kind
 pub:
 	id          string
+	key         string // stable identity for reconciliation (falls back to child index)
 	text        string
 	placeholder string
 	frame       Rect
@@ -55,6 +70,8 @@ pub:
 	emit_change bool
 	long_press  bool
 	swipe_left  bool
+	readonly    bool // text_area: selectable but not editable
+	menu        []MenuEntry
 	children    []Element
 }
 
@@ -168,6 +185,19 @@ pub fn text_field(id string, placeholder string, text string, frame Rect, box_ B
 		box:         box_
 		text_style:  style
 		keyboard:    keyboard
+	}
+}
+
+// text_area is a multi-line editor (NSTextView on macOS) with native
+// wrapping, scrolling, selection, clipboard and undo.
+pub fn text_area(id string, text string, frame Rect, box_ BoxStyle, style TextStyle) Element {
+	return Element{
+		kind:       .text_area
+		id:         id
+		text:       text
+		frame:      frame
+		box:        box_
+		text_style: style
 	}
 }
 
