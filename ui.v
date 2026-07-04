@@ -71,6 +71,7 @@ pub:
 	long_press  bool
 	swipe_left  bool
 	readonly    bool // text_area: selectable but not editable
+	secure      bool // text_field: password entry (NSSecureTextField)
 	menu        []MenuEntry
 	children    []Element
 }

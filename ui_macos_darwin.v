@@ -405,8 +405,7 @@ fn native_create_element(el Element) NativeView {
 				el.text_style.size, el.text_style.bold, el.box.radius, el.text_style.lines)
 		}
 		.text_field {
-			native_new_text_field(element_rect(el.frame), el.placeholder, el.text, el.box.bg,
-				el.text_style.color, el.text_style.size, el.box.radius)
+			native_new_text_field(el)
 		}
 		.text_area {
 			native_new_text_area(el)
@@ -669,9 +668,12 @@ fn native_update_button(button_view NativeView, frame NativeRect, title string, 
 	macos.msg_void_bool(cell, 'setUsesSingleLineMode:', lines == 1)
 }
 
-fn native_new_text_field(frame NativeRect, placeholder string, text string, bg_hex u32, text_hex u32, size f64, radius f64) NativeView {
-	field := macos.msg_id_rect(macos.alloc('NSTextField'), 'initWithFrame:', appkit_rect(frame))
-	native_update_text_field(field, frame, placeholder, text, bg_hex, text_hex, size, radius)
+fn native_new_text_field(el Element) NativeView {
+	frame := element_rect(el.frame)
+	cls := if el.secure { 'NSSecureTextField' } else { 'NSTextField' }
+	field := macos.msg_id_rect(macos.alloc(cls), 'initWithFrame:', appkit_rect(frame))
+	native_update_text_field(field, frame, el.placeholder, el.text, el.box.bg, el.text_style.color,
+		el.text_style.size, el.box.radius)
 	return field
 }
 

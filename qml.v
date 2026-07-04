@@ -291,13 +291,15 @@ fn node_to_element(node &QNode, frame Rect) !Element {
 	el := node_to_element_base(node, frame)!
 	key := node.prop('key')
 	menu := q_menu(node)
-	if key == '' && menu.len == 0 {
+	secure := node.prop_bool('secure')
+	if key == '' && menu.len == 0 && !secure {
 		return el
 	}
 	return Element{
 		...el
-		key:  key
-		menu: menu
+		key:    key
+		menu:   menu
+		secure: secure
 	}
 }
 
