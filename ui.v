@@ -46,14 +46,15 @@ pub:
 
 pub struct TextStyle {
 pub:
-	color       u32 = 0x111111
-	size        f64 = 15.0
-	font_family string
-	bold        bool
-	italic      bool
-	underline   bool
-	align       Align
-	lines       int = 1
+	color          u32 = 0x111111
+	size           f64 = 15.0
+	font_family    string
+	bold           bool
+	italic         bool
+	underline      bool
+	vertical_align string
+	align          Align
+	lines          int = 1
 }
 
 pub struct TextRun {
@@ -70,9 +71,11 @@ pub enum TextFormat {
 
 pub struct TextFormatState {
 pub:
-	bold      bool
-	italic    bool
-	underline bool
+	bold        bool
+	italic      bool
+	underline   bool
+	subscript   bool
+	superscript bool
 }
 
 pub struct BoxStyle {

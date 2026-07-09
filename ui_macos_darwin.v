@@ -24,14 +24,16 @@ fn C.ui2_text_view_do_command(self voidptr, cmd voidptr, text_view voidptr, comm
 fn C.ui2_bounds_changed(self voidptr, cmd voidptr, notification voidptr)
 fn C.ui2_dispatch_main(cb voidptr)
 fn C.ui2_observe_bounds(observer voidptr, view voidptr)
-fn C.ui2_text_view_set_attributed_string(tv voidptr, utf8 &char, color u32, size f64, family &char, bold bool, italic bool, underline bool)
-fn C.ui2_text_view_add_style(tv voidptr, location u64, length u64, color u32, size f64, family &char, bold bool, italic bool, underline bool)
+fn C.ui2_text_view_set_attributed_string(tv voidptr, utf8 &char, color u32, size f64, family &char, bold bool, italic bool, underline bool, vertical_align &char)
+fn C.ui2_text_view_add_style(tv voidptr, location u64, length u64, color u32, size f64, family &char, bold bool, italic bool, underline bool, vertical_align &char)
 fn C.ui2_text_view_runs(tv voidptr) macos.Id
 fn C.ui2_control_set_attributed_title(control voidptr, utf8 &char, color u32, size f64, bold bool, italic bool, underline bool)
 fn C.ui2_text_view_toggle_format(tv voidptr, format int)
 fn C.ui2_text_view_set_font_family(tv voidptr, family &char)
 fn C.ui2_text_view_set_font_size(tv voidptr, size f64)
 fn C.ui2_text_view_format_active(tv voidptr, format int) bool
+fn C.ui2_text_view_toggle_vertical_align(tv voidptr, align int)
+fn C.ui2_text_view_vertical_align_active(tv voidptr) int
 fn C.ui2_text_view_set_selected_range(tv voidptr, location u64, length u64)
 fn C.ui2_text_view_selected_location(tv voidptr) u64
 fn C.ui2_text_view_selected_length(tv voidptr) u64
@@ -359,6 +361,28 @@ pub fn set_text_area_font_size(id string, size f64) TextFormatState {
 	return text_area_format_state(id)
 }
 
+pub fn toggle_text_area_superscript(id string) TextFormatState {
+	return toggle_text_area_vertical_align(id, 'superscript')
+}
+
+pub fn toggle_text_area_subscript(id string) TextFormatState {
+	return toggle_text_area_vertical_align(id, 'subscript')
+}
+
+pub fn toggle_text_area_vertical_align(id string, align string) TextFormatState {
+	tv := text_area_document_view(id) or { return TextFormatState{} }
+	C.ui2_text_view_toggle_vertical_align(voidptr(tv), vertical_align_value(align))
+	return text_area_format_state(id)
+}
+
+fn vertical_align_value(align string) int {
+	return match align {
+		'superscript' { 1 }
+		'subscript' { -1 }
+		else { 0 }
+	}
+}
+
 pub fn text_area_runs(id string) []TextRun {
 	tv := text_area_document_view(id) or { return []TextRun{} }
 	raw := macos.utf8_string(C.ui2_text_view_runs(voidptr(tv)))
@@ -382,23 +406,34 @@ fn parse_text_area_runs(raw string) []TextRun {
 		runs << TextRun{
 			text:  run_text
 			style: TextStyle{
-				font_family: base64.decode_str(parts[1])
-				size:        parts[2].f64()
-				bold:        parts[3] == '1'
-				italic:      parts[4] == '1'
-				underline:   parts[5] == '1'
+				font_family:    base64.decode_str(parts[1])
+				size:           parts[2].f64()
+				bold:           parts[3] == '1'
+				italic:         parts[4] == '1'
+				underline:      parts[5] == '1'
+				vertical_align: text_run_vertical_align(if parts.len > 6 { parts[6] } else { '' })
 			}
 		}
 	}
 	return runs
 }
 
+fn text_run_vertical_align(value string) string {
+	return match value {
+		'superscript', 'subscript' { value }
+		else { '' }
+	}
+}
+
 pub fn text_area_format_state(id string) TextFormatState {
 	tv := text_area_document_view(id) or { return TextFormatState{} }
+	vertical := C.ui2_text_view_vertical_align_active(voidptr(tv))
 	return TextFormatState{
-		bold:      C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.bold))
-		italic:    C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.italic))
-		underline: C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.underline))
+		bold:        C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.bold))
+		italic:      C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.italic))
+		underline:   C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.underline))
+		subscript:   vertical < 0
+		superscript: vertical > 0
 	}
 }
 
@@ -1062,14 +1097,14 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 	macos.msg_void_bool(tv, 'setRichText:', true)
 	C.ui2_text_view_set_attributed_string(voidptr(tv), &char(el.text.str), el.text_style.color,
 		el.text_style.size, &char(el.text_style.font_family.str), el.text_style.bold,
-		el.text_style.italic, el.text_style.underline)
+		el.text_style.italic, el.text_style.underline, &char(el.text_style.vertical_align.str))
 	mut location := u64(0)
 	for run in el.text_runs {
 		length := C.ui2_utf16_length(&char(run.text.str))
 		if length > 0 {
 			C.ui2_text_view_add_style(voidptr(tv), location, length, run.style.color,
 				run.style.size, &char(run.style.font_family.str), run.style.bold, run.style.italic,
-				run.style.underline)
+				run.style.underline, &char(run.style.vertical_align.str))
 		}
 		location += length
 	}

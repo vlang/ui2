@@ -1,5 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #include <dispatch/dispatch.h>
+#include <string.h>
 
 static inline NSColor* ui2_nscolor_obj(unsigned int hex) {
 	double r = ((hex >> 16) & 0xff) / 255.0;
@@ -87,7 +88,30 @@ static inline NSString* ui2_base64_utf8(NSString *s) {
 
 static inline NSFont* ui2_font_with_family(NSFont *font, const char* family_name, double fallback_size);
 
-static inline NSDictionary* ui2_text_attrs(unsigned int color, double size, const char* family_name, bool bold, bool italic, bool underline) {
+static inline int ui2_vertical_align_value(const char* vertical_align) {
+	if (vertical_align == NULL) {
+		return 0;
+	}
+	if (strcmp(vertical_align, "superscript") == 0) {
+		return 1;
+	}
+	if (strcmp(vertical_align, "subscript") == 0) {
+		return -1;
+	}
+	return 0;
+}
+
+static inline NSString* ui2_vertical_align_name(int value) {
+	if (value > 0) {
+		return @"superscript";
+	}
+	if (value < 0) {
+		return @"subscript";
+	}
+	return @"";
+}
+
+static inline NSDictionary* ui2_text_attrs(unsigned int color, double size, const char* family_name, bool bold, bool italic, bool underline, const char* vertical_align) {
 	NSFont *font = ui2_font_obj(size, bold, italic);
 	font = ui2_font_with_family(font, family_name, size);
 	NSMutableDictionary *attrs = [@{
@@ -97,10 +121,14 @@ static inline NSDictionary* ui2_text_attrs(unsigned int color, double size, cons
 	if (underline) {
 		attrs[NSUnderlineStyleAttributeName] = @(NSUnderlineStyleSingle);
 	}
+	int align = ui2_vertical_align_value(vertical_align);
+	if (align != 0) {
+		attrs[NSSuperscriptAttributeName] = @(align);
+	}
 	return [attrs autorelease];
 }
 
-static inline void ui2_text_view_set_attributed_string(void* tv_ptr, const char* utf8, unsigned int color, double size, const char* family_name, bool bold, bool italic, bool underline) {
+static inline void ui2_text_view_set_attributed_string(void* tv_ptr, const char* utf8, unsigned int color, double size, const char* family_name, bool bold, bool italic, bool underline, const char* vertical_align) {
 	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
 	if (tv == nil) {
 		return;
@@ -109,11 +137,11 @@ static inline void ui2_text_view_set_attributed_string(void* tv_ptr, const char*
 	if (s == nil) {
 		s = @"";
 	}
-	NSMutableAttributedString *attr = [[[NSMutableAttributedString alloc] initWithString:s attributes:ui2_text_attrs(color, size, family_name, bold, italic, underline)] autorelease];
+	NSMutableAttributedString *attr = [[[NSMutableAttributedString alloc] initWithString:s attributes:ui2_text_attrs(color, size, family_name, bold, italic, underline, vertical_align)] autorelease];
 	[[tv textStorage] setAttributedString:attr];
 }
 
-static inline void ui2_text_view_add_style(void* tv_ptr, unsigned long location, unsigned long length, unsigned int color, double size, const char* family_name, bool bold, bool italic, bool underline) {
+static inline void ui2_text_view_add_style(void* tv_ptr, unsigned long location, unsigned long length, unsigned int color, double size, const char* family_name, bool bold, bool italic, bool underline, const char* vertical_align) {
 	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
 	if (tv == nil || length == 0) {
 		return;
@@ -123,7 +151,7 @@ static inline void ui2_text_view_add_style(void* tv_ptr, unsigned long location,
 		return;
 	}
 	NSUInteger safe_len = MIN((NSUInteger)length, [storage length] - (NSUInteger)location);
-	[storage addAttributes:ui2_text_attrs(color, size, family_name, bold, italic, underline) range:NSMakeRange((NSUInteger)location, safe_len)];
+	[storage addAttributes:ui2_text_attrs(color, size, family_name, bold, italic, underline, vertical_align) range:NSMakeRange((NSUInteger)location, safe_len)];
 }
 
 static inline void* ui2_text_view_runs(void* tv_ptr) {
@@ -161,13 +189,16 @@ static inline void* ui2_text_view_runs(void* tv_ptr) {
 		bool italic = (traits & NSItalicFontMask) != 0;
 		NSNumber *underline = attrs[NSUnderlineStyleAttributeName];
 		bool underlined = underline != nil && [underline integerValue] != 0;
-		[out appendFormat:@"%@\t%@\t%.3f\t%d\t%d\t%d\n",
+		NSNumber *superscript = attrs[NSSuperscriptAttributeName];
+		NSString *vertical_align = ui2_vertical_align_name(superscript == nil ? 0 : [superscript integerValue]);
+		[out appendFormat:@"%@\t%@\t%.3f\t%d\t%d\t%d\t%@\n",
 			ui2_base64_utf8(text),
 			ui2_base64_utf8(family),
 			size,
 			bold ? 1 : 0,
 			italic ? 1 : 0,
-			underlined ? 1 : 0];
+			underlined ? 1 : 0,
+			vertical_align];
 		cursor = NSMaxRange(effective);
 	}
 	return (__bridge void*)out;
@@ -182,7 +213,7 @@ static inline void ui2_control_set_attributed_title(void* control_ptr, const cha
 	if (s == nil) {
 		s = @"";
 	}
-	NSAttributedString *attr = [[[NSAttributedString alloc] initWithString:s attributes:ui2_text_attrs(color, size, NULL, bold, italic, underline)] autorelease];
+	NSAttributedString *attr = [[[NSAttributedString alloc] initWithString:s attributes:ui2_text_attrs(color, size, NULL, bold, italic, underline, NULL)] autorelease];
 	if ([control respondsToSelector:@selector(setAttributedTitle:)]) {
 		[(id)control setAttributedTitle:attr];
 	} else if ([control respondsToSelector:@selector(setAttributedStringValue:)]) {
@@ -299,6 +330,26 @@ static inline bool ui2_text_view_format_active(void* tv_ptr, int format) {
 	return false;
 }
 
+static inline int ui2_text_view_vertical_align_active(void* tv_ptr) {
+	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
+	NSDictionary *attrs = ui2_text_view_current_attrs(tv);
+	if (attrs == nil) {
+		return 0;
+	}
+	NSNumber *superscript = attrs[NSSuperscriptAttributeName];
+	if (superscript == nil) {
+		return 0;
+	}
+	NSInteger value = [superscript integerValue];
+	if (value > 0) {
+		return 1;
+	}
+	if (value < 0) {
+		return -1;
+	}
+	return 0;
+}
+
 static inline NSFont* ui2_font_with_format(NSFont *font, int format, bool enabled, double fallback_size) {
 	if (font == nil) {
 		if (fallback_size <= 0) {
@@ -406,6 +457,24 @@ static inline void ui2_apply_typing_font_size(NSTextView *tv, double size) {
 	[attrs release];
 }
 
+static inline void ui2_apply_typing_vertical_align(NSTextView *tv, int align) {
+	NSDictionary *current = ui2_text_view_current_attrs(tv);
+	NSMutableDictionary *attrs = current == nil ? [[tv typingAttributes] mutableCopy] : [current mutableCopy];
+	if (attrs == nil) {
+		attrs = [[NSMutableDictionary alloc] init];
+	}
+	if (attrs[NSFontAttributeName] == nil && [tv font] != nil) {
+		attrs[NSFontAttributeName] = [tv font];
+	}
+	if (align == 0) {
+		[attrs removeObjectForKey:NSSuperscriptAttributeName];
+	} else {
+		attrs[NSSuperscriptAttributeName] = @(align);
+	}
+	[tv setTypingAttributes:attrs];
+	[attrs release];
+}
+
 static inline void ui2_apply_range_format(NSTextView *tv, NSRange range, int format, bool enabled) {
 	NSTextStorage *storage = [tv textStorage];
 	if (storage == nil || [storage length] == 0 || range.length == 0 || range.location >= [storage length]) {
@@ -436,6 +505,25 @@ static inline void ui2_apply_range_format(NSTextView *tv, NSRange range, int for
 			[storage addAttribute:NSFontAttributeName value:converted range:apply];
 			cursor = NSMaxRange(apply);
 		}
+	}
+	[storage endEditing];
+	[tv setSelectedRange:range];
+}
+
+static inline void ui2_apply_range_vertical_align(NSTextView *tv, NSRange range, int align) {
+	NSTextStorage *storage = [tv textStorage];
+	if (storage == nil || [storage length] == 0 || range.length == 0 || range.location >= [storage length]) {
+		return;
+	}
+	NSUInteger max_len = [storage length] - range.location;
+	if (range.length > max_len) {
+		range.length = max_len;
+	}
+	[storage beginEditing];
+	if (align == 0) {
+		[storage removeAttribute:NSSuperscriptAttributeName range:range];
+	} else {
+		[storage addAttribute:NSSuperscriptAttributeName value:@(align) range:range];
 	}
 	[storage endEditing];
 	[tv setSelectedRange:range];
@@ -532,6 +620,21 @@ static inline void ui2_text_view_set_font_size(void* tv_ptr, double size) {
 		return;
 	}
 	ui2_apply_range_font_size(tv, selected, size);
+}
+
+static inline void ui2_text_view_toggle_vertical_align(void* tv_ptr, int align) {
+	NSTextView *tv = ui2_text_view_obj(tv_ptr);
+	if (tv == nil || align == 0) {
+		return;
+	}
+	int current = ui2_text_view_vertical_align_active(tv_ptr);
+	int next = current == align ? 0 : align;
+	NSRange selected = [tv selectedRange];
+	if (selected.length == 0) {
+		ui2_apply_typing_vertical_align(tv, next);
+		return;
+	}
+	ui2_apply_range_vertical_align(tv, selected, next);
 }
 
 static inline bool ui2_view_save_png(void* view_ptr, const char* path) {
