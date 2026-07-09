@@ -1440,7 +1440,7 @@ fn ui2_window_perform_key_equiv(_self voidptr, _cmd voidptr, event voidptr) bool
 		return true
 	}
 	st := state()
-	if voidptr(st.key_handler) == unsafe { nil } || !s.starts_with('cmd+') {
+	if voidptr(st.key_handler) == unsafe { nil } || !s.starts_with('cmd+') || s == 'cmd+q' {
 		return false
 	}
 	st.key_handler(s)
