@@ -61,6 +61,7 @@ const ns_window_style_closable = u64(2)
 const ns_window_style_miniaturizable = u64(4)
 const ns_window_style_resizable = u64(8)
 const ns_backing_store_buffered = u64(2)
+const ns_button_type_momentary_change = i64(5)
 
 type NativeView = voidptr
 
@@ -1040,6 +1041,7 @@ fn native_new_button(frame NativeRect, title string, bg_hex u32, text_hex u32, s
 
 fn native_update_button(button_view NativeView, frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int, image_name string) {
 	native_set_frame(button_view, frame)
+	macos.msg_void_i64(button_view, 'setButtonType:', ns_button_type_momentary_change)
 	macos.msg_void1(button_view, 'setTitle:', macos.nsstring(title))
 	macos.msg_void_u64(button_view, 'setBezelStyle:', 1)
 	macos.msg_void_bool(button_view, 'setBordered:', false)
@@ -1052,6 +1054,7 @@ fn native_update_button(button_view NativeView, frame NativeRect, title string, 
 	macos.msg_void_i64(cell, 'setLineBreakMode:', 4)
 	macos.msg_void_bool(cell, 'setUsesSingleLineMode:', lines == 1)
 	native_update_button_image(button_view, frame, image_name)
+	native_clear_control_state(button_view)
 }
 
 fn native_update_button_image(button_view NativeView, frame NativeRect, image_name string) {
@@ -1205,6 +1208,11 @@ fn native_set_control_target(control NativeView, target NativeView) {
 	macos.msg_void1(control, 'setAction:', macos.sel('handleTap:'))
 }
 
+fn native_clear_control_state(control NativeView) {
+	macos.msg_void_i64(control, 'setState:', 0)
+	macos.msg_void_bool(control, 'highlight:', false)
+}
+
 fn native_text(view NativeView) string {
 	return macos.utf8_string(macos.msg_id(view, 'stringValue'))
 }
@@ -1328,7 +1336,9 @@ fn ui2_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
 	native := NativeView(sender)
 	id := st.control_ids[u64(voidptr(native))] or { '' }
 	if id.len > 0 {
+		native_clear_control_state(native)
 		st.event_handler(id)
+		native_clear_control_state(native)
 		return
 	}
 	tag := native_tag(native)
