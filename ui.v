@@ -20,6 +20,7 @@ enum Kind {
 	screen
 	view
 	label
+	image
 	button
 	text_field
 	text_area
@@ -43,11 +44,32 @@ pub:
 
 pub struct TextStyle {
 pub:
-	color u32 = 0x111111
-	size  f64 = 15.0
-	bold  bool
-	align Align
-	lines int = 1
+	color     u32 = 0x111111
+	size      f64 = 15.0
+	bold      bool
+	italic    bool
+	underline bool
+	align     Align
+	lines     int = 1
+}
+
+pub struct TextRun {
+pub:
+	text  string
+	style TextStyle
+}
+
+pub enum TextFormat {
+	bold
+	italic
+	underline
+}
+
+pub struct TextFormatState {
+pub:
+	bold      bool
+	italic    bool
+	underline bool
 }
 
 pub struct BoxStyle {
@@ -62,10 +84,12 @@ pub:
 	id          string
 	key         string // stable identity for reconciliation (falls back to child index)
 	text        string
+	image_path  string
 	placeholder string
 	frame       Rect
 	box         BoxStyle
 	text_style  TextStyle
+	text_runs   []TextRun // text_area: optional rich text style runs
 	keyboard    int
 	emit_change bool
 	long_press  bool
@@ -153,6 +177,15 @@ pub fn label(id string, text string, frame Rect, style TextStyle) Element {
 	}
 }
 
+pub fn image(id string, path string, frame Rect) Element {
+	return Element{
+		kind:       .image
+		id:         id
+		image_path: path
+		frame:      frame
+	}
+}
+
 pub fn button(id string, title string, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
 		kind:       .button
@@ -199,6 +232,18 @@ pub fn text_area(id string, text string, frame Rect, box_ BoxStyle, style TextSt
 		frame:      frame
 		box:        box_
 		text_style: style
+	}
+}
+
+pub fn rich_text_area(id string, text string, runs []TextRun, frame Rect, box_ BoxStyle, style TextStyle) Element {
+	return Element{
+		kind:       .text_area
+		id:         id
+		text:       text
+		frame:      frame
+		box:        box_
+		text_style: style
+		text_runs:  runs
 	}
 }
 

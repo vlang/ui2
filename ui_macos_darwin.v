@@ -1,6 +1,7 @@
 module ui2
 
 import macos
+import os
 
 #flag darwin -framework Cocoa
 #insert "@DIR/macos/native_helpers.h"
@@ -19,6 +20,14 @@ fn C.ui2_text_view_changed(self voidptr, cmd voidptr, notification voidptr)
 fn C.ui2_bounds_changed(self voidptr, cmd voidptr, notification voidptr)
 fn C.ui2_dispatch_main(cb voidptr)
 fn C.ui2_observe_bounds(observer voidptr, view voidptr)
+fn C.ui2_text_view_set_attributed_string(tv voidptr, utf8 &char, color u32, size f64, bold bool, italic bool, underline bool)
+fn C.ui2_text_view_add_style(tv voidptr, location u64, length u64, color u32, size f64, bold bool, italic bool, underline bool)
+fn C.ui2_control_set_attributed_title(control voidptr, utf8 &char, color u32, size f64, bold bool, italic bool, underline bool)
+fn C.ui2_text_view_toggle_format(tv voidptr, format int)
+fn C.ui2_text_view_format_active(tv voidptr, format int) bool
+fn C.ui2_view_save_png(view voidptr, path &char) bool
+fn C.ui2_app_send_edit_command(command int) bool
+fn C.ui2_utf16_length(utf8 &char) u64
 
 const ns_window_style_titled = u64(1)
 const ns_window_style_closable = u64(2)
@@ -44,23 +53,25 @@ struct RunConfig {
 @[heap]
 struct RuntimeState {
 mut:
-	build_screen   BuildFn  = BuildFn(unsafe { nil })
-	event_handler  EventFn  = EventFn(unsafe { nil })
-	key_handler    KeyFn    = KeyFn(unsafe { nil })
-	scroll_handler ScrollFn = ScrollFn(unsafe { nil })
-	window         NativeView
-	root_view      NativeView
-	button_handler NativeView
-	app_delegate   NativeView
-	views          map[string]NativeView
-	view_kinds     map[string]Kind
-	nodes          map[string]NativeView
-	node_kinds     map[string]Kind
-	textview_ids   map[u64]string // NSTextView pointer -> element id (no tag on NSView)
-	scroll_ids     map[u64]string // NSClipView pointer -> Scroll element id
-	observed       map[u64]bool   // clip views we already observe for scroll changes
-	button_ids     []string
-	run_config     RunConfig
+	build_screen        BuildFn  = BuildFn(unsafe { nil })
+	event_handler       EventFn  = EventFn(unsafe { nil })
+	key_handler         KeyFn    = KeyFn(unsafe { nil })
+	scroll_handler      ScrollFn = ScrollFn(unsafe { nil })
+	window              NativeView
+	root_view           NativeView
+	button_handler      NativeView
+	app_delegate        NativeView
+	views               map[string]NativeView
+	view_kinds          map[string]Kind
+	nodes               map[string]NativeView
+	node_kinds          map[string]Kind
+	textview_ids        map[u64]string // NSTextView pointer -> element id (no tag on NSView)
+	scroll_ids          map[u64]string // NSClipView pointer -> Scroll element id
+	observed            map[u64]bool   // clip views we already observe for scroll changes
+	button_ids          []string
+	run_config          RunConfig
+	screenshot_pending  bool
+	screenshot_captured bool
 }
 
 const runtime_state_singleton = &RuntimeState{
@@ -122,6 +133,7 @@ pub fn refresh() {
 	}
 	root := st.build_screen()
 	render_root(root)
+	schedule_screenshot_capture()
 }
 
 // on_key registers a handler for key events that reach the window
@@ -220,6 +232,80 @@ pub fn start_barcode_scan() {
 	}
 }
 
+fn screenshot_path() string {
+	office_path := os.getenv('OFFICE_SCREENSHOT_PATH')
+	if office_path.trim_space() != '' {
+		return office_path
+	}
+	return os.getenv('UI2_SCREENSHOT_PATH')
+}
+
+fn screenshot_should_exit() bool {
+	return (os.getenv_opt('OFFICE_EXIT_AFTER_SCREENSHOT') or { '0' }) == '1' || (os.getenv_opt('UI2_EXIT_AFTER_SCREENSHOT') or {
+		'0'
+	}) == '1'
+}
+
+fn schedule_screenshot_capture() {
+	mut st := state()
+	if st.screenshot_captured || st.screenshot_pending || screenshot_path().trim_space() == '' {
+		return
+	}
+	st.screenshot_pending = true
+	cb := capture_screenshot_on_main
+	C.ui2_dispatch_main(voidptr(cb))
+}
+
+fn capture_screenshot_on_main() {
+	mut st := state()
+	st.screenshot_pending = false
+	if st.screenshot_captured || native_is_nil(st.root_view) {
+		return
+	}
+	path := screenshot_path().trim_space()
+	if path == '' {
+		return
+	}
+	if os.exists(path) {
+		os.rm(path) or {}
+	}
+	if !C.ui2_view_save_png(voidptr(st.root_view), &char(path.str)) {
+		eprintln('ui2 screenshot failed: ${path}')
+	}
+	st.screenshot_captured = true
+	if screenshot_should_exit() {
+		native_terminate_app()
+	}
+}
+
+pub fn toggle_text_area_format(id string, format TextFormat) TextFormatState {
+	tv := text_area_document_view(id) or { return TextFormatState{} }
+	C.ui2_text_view_toggle_format(voidptr(tv), int(format))
+	return text_area_format_state(id)
+}
+
+pub fn text_area_format_state(id string) TextFormatState {
+	tv := text_area_document_view(id) or { return TextFormatState{} }
+	return TextFormatState{
+		bold:      C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.bold))
+		italic:    C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.italic))
+		underline: C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.underline))
+	}
+}
+
+fn text_area_document_view(id string) ?NativeView {
+	st := state()
+	native := st.views[id] or { return none }
+	if (st.view_kinds[id] or { Kind.view }) != .text_area {
+		return none
+	}
+	tv := macos.msg_id(native, 'documentView')
+	if native_is_nil(tv) {
+		return none
+	}
+	return tv
+}
+
 fn ensure_runtime_classes() {
 	if macos.get_class('UI2FlippedView') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSView'), 'UI2FlippedView')
@@ -238,8 +324,7 @@ fn ensure_runtime_classes() {
 	if macos.get_class('UI2ButtonHandler') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSObject'), 'UI2ButtonHandler')
 		macos.add_method(cls, 'handleTap:', voidptr(C.ui2_button_tap), 'v@:@')
-		macos.add_method(cls, 'controlTextDidChange:', voidptr(C.ui2_control_text_changed),
-			'v@:@')
+		macos.add_method(cls, 'controlTextDidChange:', voidptr(C.ui2_control_text_changed), 'v@:@')
 		macos.add_method(cls, 'textDidChange:', voidptr(C.ui2_text_view_changed), 'v@:@')
 		macos.add_method(cls, 'ui2BoundsChanged:', voidptr(C.ui2_bounds_changed), 'v@:@')
 		macos.register_class_pair(cls)
@@ -354,6 +439,9 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		.label {
 			// Labels are updated by native_update_element.
 		}
+		.image {
+			// Images are updated by native_update_element.
+		}
 	}
 
 	if el.menu.len > 0 {
@@ -397,12 +485,16 @@ fn native_create_element(el Element) NativeView {
 		}
 		.label {
 			native_new_label(element_rect(el.frame), el.text, el.text_style.color,
-				el.text_style.size, el.text_style.bold, align_value(el.text_style.align),
-				el.text_style.lines)
+				el.text_style.size, el.text_style.bold, el.text_style.italic,
+				el.text_style.underline, align_value(el.text_style.align), el.text_style.lines)
+		}
+		.image {
+			native_new_image(element_rect(el.frame), el.image_path)
 		}
 		.button {
 			native_new_button(element_rect(el.frame), el.text, el.box.bg, el.text_style.color,
-				el.text_style.size, el.text_style.bold, el.box.radius, el.text_style.lines)
+				el.text_style.size, el.text_style.bold, el.text_style.italic,
+				el.text_style.underline, el.box.radius, el.text_style.lines)
 		}
 		.text_field {
 			native_new_text_field(el)
@@ -427,12 +519,16 @@ fn native_update_element(native NativeView, el Element) {
 		}
 		.label {
 			native_update_label(native, element_rect(el.frame), el.text, el.text_style.color,
-				el.text_style.size, el.text_style.bold, align_value(el.text_style.align),
-				el.text_style.lines)
+				el.text_style.size, el.text_style.bold, el.text_style.italic,
+				el.text_style.underline, align_value(el.text_style.align), el.text_style.lines)
+		}
+		.image {
+			native_update_image(native, element_rect(el.frame), el.image_path)
 		}
 		.button {
 			native_update_button(native, element_rect(el.frame), el.text, el.box.bg,
-				el.text_style.size, el.text_style.bold, el.box.radius, el.text_style.lines)
+				el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic,
+				el.text_style.underline, el.box.radius, el.text_style.lines)
 		}
 		.text_field {
 			native_update_text_field(native, element_rect(el.frame), el.placeholder, el.text,
@@ -625,14 +721,33 @@ fn native_set_scroll_background(scroll NativeView, bg u32) {
 	macos.msg_void1(scroll, 'setBackgroundColor:', native_color(bg))
 }
 
-fn native_new_label(frame NativeRect, text string, text_hex u32, size f64, bold bool, align int, lines int) NativeView {
+fn native_new_image(frame NativeRect, path string) NativeView {
+	image_view := macos.msg_id_rect(macos.alloc('NSImageView'), 'initWithFrame:',
+		appkit_rect(frame))
+	native_update_image(image_view, frame, path)
+	return image_view
+}
+
+fn native_update_image(image_view NativeView, frame NativeRect, path string) {
+	native_set_frame(image_view, frame)
+	macos.msg_void_i64(image_view, 'setImageScaling:', 3)
+	if path.trim_space() == '' {
+		macos.msg_void1(image_view, 'setImage:', macos.Id(unsafe { nil }))
+		return
+	}
+	img := macos.msg_id1(macos.alloc('NSImage'), 'initWithContentsOfFile:', macos.nsstring(path))
+	macos.msg_void1(image_view, 'setImage:', img)
+}
+
+fn native_new_label(frame NativeRect, text string, text_hex u32, size f64, bold bool, italic bool, underline bool, align int, lines int) NativeView {
 	label_view := macos.msg_id_rect(macos.alloc('NSTextField'), 'initWithFrame:',
 		appkit_rect(frame))
-	native_update_label(label_view, frame, text, text_hex, size, bold, align, lines)
+	native_update_label(label_view, frame, text, text_hex, size, bold, italic, underline, align,
+		lines)
 	return label_view
 }
 
-fn native_update_label(label_view NativeView, frame NativeRect, text string, text_hex u32, size f64, bold bool, align int, lines int) {
+fn native_update_label(label_view NativeView, frame NativeRect, text string, text_hex u32, size f64, bold bool, italic bool, underline bool, align int, lines int) {
 	native_set_frame(label_view, frame)
 	macos.msg_void1(label_view, 'setStringValue:', macos.nsstring(text))
 	macos.msg_void_bool(label_view, 'setEditable:', false)
@@ -641,26 +756,32 @@ fn native_update_label(label_view NativeView, frame NativeRect, text string, tex
 	macos.msg_void_bool(label_view, 'setBezeled:', false)
 	macos.msg_void_bool(label_view, 'setDrawsBackground:', false)
 	macos.msg_void1(label_view, 'setTextColor:', native_color(text_hex))
-	macos.msg_void1(label_view, 'setFont:', native_font(size, bold))
+	macos.msg_void1(label_view, 'setFont:', native_font(size, bold, italic))
+	if italic || underline {
+		C.ui2_control_set_attributed_title(voidptr(label_view), &char(text.str), text_hex, size,
+			bold, italic, underline)
+	}
 	macos.msg_void_i64(label_view, 'setAlignment:', i64(align))
 	cell := macos.msg_id(label_view, 'cell')
 	macos.msg_void_i64(cell, 'setLineBreakMode:', 4)
 	macos.msg_void_bool(cell, 'setUsesSingleLineMode:', lines == 1)
 }
 
-fn native_new_button(frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, radius f64, lines int) NativeView {
+fn native_new_button(frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int) NativeView {
 	button_view := macos.msg_id_rect(macos.alloc('NSButton'), 'initWithFrame:', appkit_rect(frame))
-	native_update_button(button_view, frame, title, bg_hex, size, bold, radius, lines)
-	_ = text_hex
+	native_update_button(button_view, frame, title, bg_hex, text_hex, size, bold, italic,
+		underline, radius, lines)
 	return button_view
 }
 
-fn native_update_button(button_view NativeView, frame NativeRect, title string, bg_hex u32, size f64, bold bool, radius f64, lines int) {
+fn native_update_button(button_view NativeView, frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int) {
 	native_set_frame(button_view, frame)
 	macos.msg_void1(button_view, 'setTitle:', macos.nsstring(title))
 	macos.msg_void_u64(button_view, 'setBezelStyle:', 1)
-	macos.msg_void_bool(button_view, 'setBordered:', true)
-	macos.msg_void1(button_view, 'setFont:', native_font(size, bold))
+	macos.msg_void_bool(button_view, 'setBordered:', false)
+	macos.msg_void1(button_view, 'setFont:', native_font(size, bold, italic))
+	C.ui2_control_set_attributed_title(voidptr(button_view), &char(title.str), text_hex, size,
+		bold, italic, underline)
 	native_set_background(button_view, bg_hex)
 	native_set_corner_radius(button_view, radius)
 	cell := macos.msg_id(button_view, 'cell')
@@ -687,7 +808,7 @@ fn native_update_text_field(field NativeView, frame NativeRect, placeholder stri
 	}
 	macos.msg_void1(field, 'setPlaceholderString:', macos.nsstring(placeholder))
 	macos.msg_void1(field, 'setTextColor:', native_color(text_hex))
-	macos.msg_void1(field, 'setFont:', native_font(size, false))
+	macos.msg_void1(field, 'setFont:', native_font(size, false, false))
 	macos.msg_void_bool(field, 'setBordered:', true)
 	macos.msg_void_bool(field, 'setDrawsBackground:', true)
 	macos.msg_void1(field, 'setBackgroundColor:', native_color(bg_hex))
@@ -702,10 +823,11 @@ fn native_new_text_area(el Element) NativeView {
 		appkit_rect(frame))
 	macos.msg_void_bool(scroll_view, 'setHasVerticalScroller:', true)
 	macos.msg_void_bool(scroll_view, 'setAutohidesScrollers:', true)
-	tv := macos.msg_id_rect(macos.alloc('NSTextView'), 'initWithFrame:', macos.rect(0,
-		0, frame.width, frame.height))
-	macos.msg_void1(tv, 'setFont:', native_font(el.text_style.size, el.text_style.bold))
-	macos.msg_void_bool(tv, 'setRichText:', false)
+	tv := macos.msg_id_rect(macos.alloc('NSTextView'), 'initWithFrame:', macos.rect(0, 0,
+		frame.width, frame.height))
+	macos.msg_void1(tv, 'setFont:', native_font(el.text_style.size, el.text_style.bold,
+		el.text_style.italic))
+	macos.msg_void_bool(tv, 'setRichText:', el.text_runs.len > 0)
 	macos.msg_void_bool(tv, 'setAllowsUndo:', true)
 	macos.msg_void_bool(tv, 'setVerticallyResizable:', true)
 	macos.msg_void_bool(tv, 'setHorizontallyResizable:', false)
@@ -714,7 +836,7 @@ fn native_new_text_area(el Element) NativeView {
 	macos.msg_void1(tv, 'setTextColor:', native_color(el.text_style.color))
 	macos.msg_void_bool(tv, 'setEditable:', !el.readonly)
 	macos.msg_void_bool(tv, 'setSelectable:', true)
-	macos.msg_void1(tv, 'setString:', macos.nsstring(el.text))
+	native_set_text_area_content(tv, el)
 	st := state()
 	macos.msg_void1(tv, 'setDelegate:', st.button_handler)
 	macos.msg_void1(scroll_view, 'setDocumentView:', tv)
@@ -732,7 +854,27 @@ fn native_update_text_area(native NativeView, el Element) {
 	// Same guard as text fields: don't clobber an active editing session
 	cur := macos.utf8_string(macos.msg_id(tv, 'string'))
 	if cur != el.text {
+		native_set_text_area_content(tv, el)
+	}
+}
+
+fn native_set_text_area_content(tv NativeView, el Element) {
+	if el.text_runs.len == 0 {
+		macos.msg_void_bool(tv, 'setRichText:', false)
 		macos.msg_void1(tv, 'setString:', macos.nsstring(el.text))
+		return
+	}
+	macos.msg_void_bool(tv, 'setRichText:', true)
+	C.ui2_text_view_set_attributed_string(voidptr(tv), &char(el.text.str), el.text_style.color,
+		el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline)
+	mut location := u64(0)
+	for run in el.text_runs {
+		length := C.ui2_utf16_length(&char(run.text.str))
+		if length > 0 {
+			C.ui2_text_view_add_style(voidptr(tv), location, length, run.style.color,
+				run.style.size, run.style.bold, run.style.italic, run.style.underline)
+		}
+		location += length
 	}
 }
 
@@ -762,6 +904,10 @@ fn native_end_editing(view NativeView) {
 	macos.msg_bool(view, 'resignFirstResponder')
 }
 
+fn native_terminate_app() {
+	macos.msg_void1(native_current_app(), 'terminate:', macos.Id(unsafe { nil }))
+}
+
 fn native_set_frame(view NativeView, frame NativeRect) {
 	macos.msg_void_rect(view, 'setFrame:', appkit_rect(frame))
 }
@@ -779,7 +925,8 @@ fn native_set_corner_radius(view NativeView, radius f64) {
 	macos.msg_void_bool(layer, 'setMasksToBounds:', radius > 0)
 }
 
-fn native_font(size f64, bold bool) NativeView {
+fn native_font(size f64, bold bool, italic bool) NativeView {
+	_ = italic
 	if bold {
 		return macos.msg_id_f64(macos.get_class('NSFont'), 'boldSystemFontOfSize:', size)
 	}
@@ -877,22 +1024,32 @@ fn ui2_window_key_down(_self voidptr, _cmd voidptr, event voidptr) {
 	st.key_handler(key_event_string(macos.Id(event)))
 }
 
-// Cmd chords the menu bar owns (clipboard, undo, quit) pass through so the
-// focused field keeps native editing behavior; everything else goes to the app.
-const menu_owned_chords = ['cmd+c', 'cmd+v', 'cmd+x', 'cmd+a', 'cmd+z', 'cmd+shift+z', 'cmd+q']
-
 @[export: 'ui2_window_perform_key_equiv']
 fn ui2_window_perform_key_equiv(_self voidptr, _cmd voidptr, event voidptr) bool {
-	st := state()
-	if voidptr(st.key_handler) == unsafe { nil } {
-		return false
-	}
 	s := key_event_string(macos.Id(event))
-	if !s.starts_with('cmd+') || s in menu_owned_chords {
+	if handle_native_edit_key(s) {
+		return true
+	}
+	st := state()
+	if voidptr(st.key_handler) == unsafe { nil } || !s.starts_with('cmd+') || s == 'cmd+q' {
 		return false
 	}
 	st.key_handler(s)
 	return true
+}
+
+fn handle_native_edit_key(key string) bool {
+	command := match key {
+		'cmd+a' { 0 }
+		'cmd+x' { 1 }
+		'cmd+c' { 2 }
+		'cmd+v' { 3 }
+		'cmd+z' { 4 }
+		'cmd+y', 'cmd+shift+z' { 5 }
+		else { return false }
+	}
+
+	return C.ui2_app_send_edit_command(command)
 }
 
 // key_event_string normalizes an NSEvent into 'cmd+shift+r' style strings.

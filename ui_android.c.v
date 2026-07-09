@@ -382,6 +382,11 @@ fn render_element(ctx &gg.Context, el Element, off_x f64, off_y f64) {
 			y := el.frame.y + off_y
 			draw_text(ctx, el.text, x, y, el.frame.width, el.frame.height, el.text_style)
 		}
+		.image {
+			x := el.frame.x + off_x
+			y := el.frame.y + off_y
+			draw_rect(ctx, x, y, el.frame.width, el.frame.height, 0xe8ecef, 0)
+		}
 		.button {
 			x := el.frame.x + off_x
 			y := el.frame.y + off_y

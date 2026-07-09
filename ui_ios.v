@@ -483,6 +483,10 @@ fn render_element(parent View, el Element) View {
 				el.text_style.bold, align_value(el.text_style.align), el.text_style.lines)
 			macos.msg_void1(parent, 'addSubview:', native)
 		}
+		.image {
+			native = new_native_view(el.frame, 0xe8ecef)
+			macos.msg_void1(parent, 'addSubview:', native)
+		}
 		.button {
 			native = new_button_view(el.frame, el.text, el.box.bg, el.text_style.color,
 				el.text_style.size, el.text_style.bold, el.box.radius, el.text_style.lines)

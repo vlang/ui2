@@ -338,6 +338,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'Label' {
 			return label(node.id, node.prop('text'), q_frame(node, frame), q_text_style(node))
 		}
+		'Image' {
+			return image(node.id, node.prop_or('source', node.prop('path')), q_frame(node, frame))
+		}
 		'Button' {
 			id := node.prop_or('on_tap', node.id)
 			return button(id, node.prop('text'), q_frame(node, frame), q_box(node),
