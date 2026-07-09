@@ -81,23 +81,24 @@ pub:
 pub struct Element {
 	kind Kind
 pub:
-	id          string
-	key         string // stable identity for reconciliation (falls back to child index)
-	text        string
-	image_path  string
-	placeholder string
-	frame       Rect
-	box         BoxStyle
-	text_style  TextStyle
-	text_runs   []TextRun // text_area: optional rich text style runs
-	keyboard    int
-	emit_change bool
-	long_press  bool
-	swipe_left  bool
-	readonly    bool // text_area: selectable but not editable
-	secure      bool // text_field: password entry (NSSecureTextField)
-	menu        []MenuEntry
-	children    []Element
+	id             string
+	key            string // stable identity for reconciliation (falls back to child index)
+	text           string
+	image_path     string
+	placeholder    string
+	frame          Rect
+	box            BoxStyle
+	text_style     TextStyle
+	text_runs      []TextRun // text_area: optional rich text style runs
+	keyboard       int
+	emit_change    bool
+	long_press     bool
+	swipe_left     bool
+	readonly       bool // text_area: selectable but not editable
+	disable_scroll bool // text_area: hide the internal scroll view scroller
+	secure         bool // text_field: password entry (NSSecureTextField)
+	menu           []MenuEntry
+	children       []Element
 }
 
 pub const keyboard_default = 0
@@ -235,6 +236,18 @@ pub fn text_area(id string, text string, frame Rect, box_ BoxStyle, style TextSt
 	}
 }
 
+pub fn text_area_without_scroll(id string, text string, frame Rect, box_ BoxStyle, style TextStyle) Element {
+	return Element{
+		kind:           .text_area
+		id:             id
+		text:           text
+		frame:          frame
+		box:            box_
+		text_style:     style
+		disable_scroll: true
+	}
+}
+
 pub fn rich_text_area(id string, text string, runs []TextRun, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
 		kind:       .text_area
@@ -244,6 +257,19 @@ pub fn rich_text_area(id string, text string, runs []TextRun, frame Rect, box_ B
 		box:        box_
 		text_style: style
 		text_runs:  runs
+	}
+}
+
+pub fn rich_text_area_without_scroll(id string, text string, runs []TextRun, frame Rect, box_ BoxStyle, style TextStyle) Element {
+	return Element{
+		kind:           .text_area
+		id:             id
+		text:           text
+		frame:          frame
+		box:            box_
+		text_style:     style
+		text_runs:      runs
+		disable_scroll: true
 	}
 }
 

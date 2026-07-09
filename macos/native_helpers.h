@@ -98,6 +98,21 @@ static inline NSTextView* ui2_text_view_obj(void* tv_ptr) {
 	return tv;
 }
 
+static inline void ui2_text_view_set_selected_range(void* tv_ptr, unsigned long location, unsigned long length) {
+	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
+	if (tv == nil) {
+		return;
+	}
+	NSString *text = [tv string];
+	NSUInteger text_len = text == nil ? 0 : [text length];
+	NSUInteger safe_location = MIN((NSUInteger)location, text_len);
+	NSUInteger safe_length = MIN((NSUInteger)length, text_len - safe_location);
+	[[tv window] makeFirstResponder:tv];
+	NSRange range = NSMakeRange(safe_location, safe_length);
+	[tv setSelectedRange:range];
+	[tv scrollRangeToVisible:range];
+}
+
 static inline NSDictionary* ui2_text_view_current_attrs(NSTextView *tv) {
 	if (tv == nil) {
 		return nil;
@@ -252,6 +267,47 @@ static inline bool ui2_view_save_png(void* view_ptr, const char* path) {
 	[view cacheDisplayInRect:bounds toBitmapImageRep:rep];
 	NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
 	if (png == nil || [png length] == 0) {
+		return false;
+	}
+	return [png writeToFile:out_path atomically:YES];
+}
+
+static inline NSImage* ui2_pasteboard_image(void) {
+	NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+	NSArray *objects = [pasteboard readObjectsForClasses:@[[NSImage class]] options:@{}];
+	if (objects == nil || [objects count] == 0) {
+		return nil;
+	}
+	NSImage *image = [objects objectAtIndex:0];
+	return image;
+}
+
+static inline bool ui2_pasteboard_has_image(void) {
+	return ui2_pasteboard_image() != nil;
+}
+
+static inline bool ui2_pasteboard_write_image_png(const char* path) {
+	if (path == NULL) {
+		return false;
+	}
+	NSImage *image = ui2_pasteboard_image();
+	if (image == nil) {
+		return false;
+	}
+	NSData *tiff = [image TIFFRepresentation];
+	if (tiff == nil || [tiff length] == 0) {
+		return false;
+	}
+	NSBitmapImageRep *rep = [NSBitmapImageRep imageRepWithData:tiff];
+	if (rep == nil) {
+		return false;
+	}
+	NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+	if (png == nil || [png length] == 0) {
+		return false;
+	}
+	NSString *out_path = [NSString stringWithUTF8String:path];
+	if (out_path == nil || [out_path length] == 0) {
 		return false;
 	}
 	return [png writeToFile:out_path atomically:YES];

@@ -25,7 +25,10 @@ fn C.ui2_text_view_add_style(tv voidptr, location u64, length u64, color u32, si
 fn C.ui2_control_set_attributed_title(control voidptr, utf8 &char, color u32, size f64, bold bool, italic bool, underline bool)
 fn C.ui2_text_view_toggle_format(tv voidptr, format int)
 fn C.ui2_text_view_format_active(tv voidptr, format int) bool
+fn C.ui2_text_view_set_selected_range(tv voidptr, location u64, length u64)
 fn C.ui2_view_save_png(view voidptr, path &char) bool
+fn C.ui2_pasteboard_has_image() bool
+fn C.ui2_pasteboard_write_image_png(path &char) bool
 fn C.ui2_app_send_edit_command(command int) bool
 fn C.ui2_utf16_length(utf8 &char) u64
 
@@ -211,7 +214,31 @@ pub fn set_text(id string, t string) {
 pub fn focus(id string) {
 	st := state()
 	native := st.views[id] or { return }
+	if (st.view_kinds[id] or { Kind.view }) == .text_area {
+		tv := macos.msg_id(native, 'documentView')
+		if native_is_nil(tv) {
+			return
+		}
+		native_focus(tv)
+		return
+	}
 	native_focus(native)
+}
+
+// text_area_set_caret positions the caret by UTF-16 offset, matching
+// NSTextView's native selection storage.
+pub fn text_area_set_caret(id string, pos int) {
+	tv := text_area_document_view(id) or { return }
+	location := if pos < 0 { u64(0) } else { u64(pos) }
+	C.ui2_text_view_set_selected_range(voidptr(tv), location, u64(0))
+}
+
+pub fn clipboard_has_image() bool {
+	return C.ui2_pasteboard_has_image()
+}
+
+pub fn save_clipboard_image_png(path string) bool {
+	return C.ui2_pasteboard_write_image_png(&char(path.str))
 }
 
 pub fn dismiss_keyboard() {
@@ -821,8 +848,8 @@ fn native_new_text_area(el Element) NativeView {
 	frame := element_rect(el.frame)
 	scroll_view := macos.msg_id_rect(macos.alloc('NSScrollView'), 'initWithFrame:',
 		appkit_rect(frame))
-	macos.msg_void_bool(scroll_view, 'setHasVerticalScroller:', true)
-	macos.msg_void_bool(scroll_view, 'setAutohidesScrollers:', true)
+	macos.msg_void_bool(scroll_view, 'setHasVerticalScroller:', !el.disable_scroll)
+	macos.msg_void_bool(scroll_view, 'setAutohidesScrollers:', !el.disable_scroll)
 	tv := macos.msg_id_rect(macos.alloc('NSTextView'), 'initWithFrame:', macos.rect(0, 0,
 		frame.width, frame.height))
 	macos.msg_void1(tv, 'setFont:', native_font(el.text_style.size, el.text_style.bold,
@@ -846,6 +873,8 @@ fn native_new_text_area(el Element) NativeView {
 
 fn native_update_text_area(native NativeView, el Element) {
 	native_set_frame(native, element_rect(el.frame))
+	macos.msg_void_bool(native, 'setHasVerticalScroller:', !el.disable_scroll)
+	macos.msg_void_bool(native, 'setAutohidesScrollers:', !el.disable_scroll)
 	tv := macos.msg_id(native, 'documentView')
 	if native_is_nil(tv) {
 		return
@@ -1027,6 +1056,13 @@ fn ui2_window_key_down(_self voidptr, _cmd voidptr, event voidptr) {
 @[export: 'ui2_window_perform_key_equiv']
 fn ui2_window_perform_key_equiv(_self voidptr, _cmd voidptr, event voidptr) bool {
 	s := key_event_string(macos.Id(event))
+	if s == 'cmd+v' && C.ui2_pasteboard_has_image() {
+		st := state()
+		if voidptr(st.key_handler) != unsafe { nil } {
+			st.key_handler(s)
+			return true
+		}
+	}
 	if handle_native_edit_key(s) {
 		return true
 	}

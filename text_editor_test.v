@@ -56,6 +56,16 @@ fn test_rich_text_area_keeps_runs() {
 	assert el.text_runs[1].style.underline
 }
 
+fn test_text_area_without_scroll_sets_disable_scroll() {
+	el := text_area_without_scroll('body', 'Hello', rect(0, 0, 200, 80), BoxStyle{}, TextStyle{})
+	assert el.kind == .text_area
+	assert el.disable_scroll
+	rich :=
+		rich_text_area_without_scroll('rich', 'Hello', []TextRun{}, rect(0, 0, 200, 80), BoxStyle{}, TextStyle{})
+	assert rich.kind == .text_area
+	assert rich.disable_scroll
+}
+
 fn test_image_element_keeps_path() {
 	el := image('preview', '/tmp/preview.png', rect(1, 2, 300, 200))
 	assert el.kind == .image
