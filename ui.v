@@ -101,18 +101,24 @@ pub:
 	emit_change    bool
 	long_press     bool
 	swipe_left     bool
-	readonly       bool // text_area: selectable but not editable
-	disable_scroll bool // text_area: hide the internal scroll view scroller
-	secure         bool // text_field: password entry (NSSecureTextField)
-	clickable      bool // view/image: emit pointer down/up events
-	draggable      bool // view/image: emit pointer drag events
-	rotation       f64  // image: clockwise degrees
+	readonly       bool   // text_area: selectable but not editable
+	disable_scroll bool   // text_area: hide the internal scroll view scroller
+	secure         bool   // text_field: password entry (NSSecureTextField)
+	clickable      bool   // view/image: emit pointer down/up events
+	draggable      bool   // view/image: emit pointer drag events
+	rotation       f64    // image: clockwise degrees
+	cursor         string // view/image: hover cursor hint
 	menu           []MenuEntry
 	children       []Element
 }
 
 pub const keyboard_default = 0
 pub const keyboard_decimal = 8
+pub const cursor_default = ''
+pub const cursor_pointing_hand = 'pointing_hand'
+pub const cursor_resize_nwse = 'resize_nwse'
+pub const cursor_resize_nesw = 'resize_nesw'
+pub const cursor_rotate = 'rotate'
 
 pub fn rect(x f64, y f64, width f64, height f64) Rect {
 	return Rect{
@@ -150,6 +156,18 @@ pub fn draggable_view(id string, frame Rect, box_ BoxStyle, children []Element) 
 		frame:     frame
 		box:       box_
 		draggable: true
+		children:  children
+	}
+}
+
+pub fn draggable_view_with_cursor(id string, frame Rect, box_ BoxStyle, cursor string, children []Element) Element {
+	return Element{
+		kind:      .view
+		id:        id
+		frame:     frame
+		box:       box_
+		draggable: true
+		cursor:    cursor
 		children:  children
 	}
 }
@@ -216,6 +234,18 @@ pub fn transformed_image(id string, path string, frame Rect, rotation f64, click
 		frame:      frame
 		rotation:   rotation
 		clickable:  clickable
+	}
+}
+
+pub fn transformed_image_with_cursor(id string, path string, frame Rect, rotation f64, clickable bool, cursor string) Element {
+	return Element{
+		kind:       .image
+		id:         id
+		image_path: path
+		frame:      frame
+		rotation:   rotation
+		clickable:  clickable
+		cursor:     cursor
 	}
 }
 

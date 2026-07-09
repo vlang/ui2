@@ -55,6 +55,9 @@ fn C.ui2_view_set_rotation(view voidptr, degrees f64)
 fn C.ui2_pointer_mouse_down(self voidptr, cmd voidptr, event voidptr)
 fn C.ui2_pointer_mouse_dragged(self voidptr, cmd voidptr, event voidptr)
 fn C.ui2_pointer_mouse_up(self voidptr, cmd voidptr, event voidptr)
+fn C.ui2_pointer_reset_cursor_rects(self voidptr, cmd voidptr)
+fn C.ui2_add_cursor_rect(view voidptr, cursor &char)
+fn C.ui2_invalidate_cursor_rects(view voidptr)
 
 const ns_window_style_titled = u64(1)
 const ns_window_style_closable = u64(2)
@@ -102,8 +105,9 @@ mut:
 	scroll_ids          map[u64]string // NSClipView pointer -> Scroll element id
 	pointer_ids         map[u64]string // NSView pointer -> element id
 	pointer_draggable   map[u64]bool
+	cursor_ids          map[u64]string // NSView pointer -> cursor name
 	control_ids         map[u64]string // NSControl pointer -> element id
-	observed            map[u64]bool // clip views we already observe for scroll changes
+	observed            map[u64]bool   // clip views we already observe for scroll changes
 	button_ids          []string
 	run_config          RunConfig
 	screenshot_pending  bool
@@ -122,6 +126,7 @@ const runtime_state_singleton = &RuntimeState{
 	scroll_ids:        map[u64]string{}
 	pointer_ids:       map[u64]string{}
 	pointer_draggable: map[u64]bool{}
+	cursor_ids:        map[u64]string{}
 	control_ids:       map[u64]string{}
 	observed:          map[u64]bool{}
 }
@@ -498,6 +503,7 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'mouseDown:', voidptr(C.ui2_pointer_mouse_down), 'v@:@')
 		macos.add_method(cls, 'mouseDragged:', voidptr(C.ui2_pointer_mouse_dragged), 'v@:@')
 		macos.add_method(cls, 'mouseUp:', voidptr(C.ui2_pointer_mouse_up), 'v@:@')
+		macos.add_method(cls, 'resetCursorRects', voidptr(C.ui2_pointer_reset_cursor_rects), 'v@:')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2PointerImageView') == unsafe { nil } {
@@ -505,6 +511,7 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'mouseDown:', voidptr(C.ui2_pointer_mouse_down), 'v@:@')
 		macos.add_method(cls, 'mouseDragged:', voidptr(C.ui2_pointer_mouse_dragged), 'v@:@')
 		macos.add_method(cls, 'mouseUp:', voidptr(C.ui2_pointer_mouse_up), 'v@:@')
+		macos.add_method(cls, 'resetCursorRects', voidptr(C.ui2_pointer_reset_cursor_rects), 'v@:')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2AppDelegate') == unsafe { nil } {
@@ -554,6 +561,7 @@ fn render_root(root Element) {
 	st.text_area_direct = map[string]bool{}
 	st.pointer_ids = map[u64]string{}
 	st.pointer_draggable = map[u64]bool{}
+	st.cursor_ids = map[u64]string{}
 	st.control_ids = map[u64]string{}
 	st.button_ids = []string{}
 	native_set_background(st.root_view, root.box.bg)
@@ -765,7 +773,7 @@ fn native_update_element(native NativeView, el Element) {
 }
 
 fn element_interactive(el Element) bool {
-	return el.clickable || el.draggable
+	return el.clickable || el.draggable || el.cursor.len > 0
 }
 
 // child_key prefers the element's explicit key over its index, so windowed
@@ -784,8 +792,14 @@ fn register_pointer(native NativeView, el Element) {
 	}
 	mut st := state()
 	key := u64(voidptr(native))
-	st.pointer_ids[key] = el.id
-	st.pointer_draggable[key] = el.draggable
+	if el.clickable || el.draggable {
+		st.pointer_ids[key] = el.id
+		st.pointer_draggable[key] = el.draggable
+	}
+	if el.cursor.len > 0 {
+		st.cursor_ids[key] = el.cursor
+	}
+	native_invalidate_cursor_rects(native)
 }
 
 fn register_button(native NativeView, id string) {
@@ -929,6 +943,13 @@ fn native_remove_from_superview(view NativeView) {
 		return
 	}
 	macos.msg_void(view, 'removeFromSuperview')
+}
+
+fn native_invalidate_cursor_rects(view NativeView) {
+	if native_is_nil(view) {
+		return
+	}
+	C.ui2_invalidate_cursor_rects(voidptr(view))
 }
 
 fn native_new_object(class_name string) NativeView {
@@ -1325,6 +1346,16 @@ fn ui2_pointer_mouse_dragged(self voidptr, _cmd voidptr, event voidptr) {
 @[export: 'ui2_pointer_mouse_up']
 fn ui2_pointer_mouse_up(self voidptr, _cmd voidptr, event voidptr) {
 	fire_pointer_event(NativeView(self), 'up', event)
+}
+
+@[export: 'ui2_pointer_reset_cursor_rects']
+fn ui2_pointer_reset_cursor_rects(self voidptr, _cmd voidptr) {
+	st := state()
+	cursor := st.cursor_ids[u64(self)] or { return }
+	if cursor.len == 0 {
+		return
+	}
+	C.ui2_add_cursor_rect(self, &char(cursor.str))
 }
 
 @[export: 'ui2_button_tap']

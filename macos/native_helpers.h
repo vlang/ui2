@@ -71,6 +71,55 @@ static inline unsigned long ui2_utf16_length(const char* utf8) {
 	return (unsigned long)[s length];
 }
 
+static inline NSCursor* ui2_private_cursor(NSString *selector_name, NSCursor *fallback) {
+	SEL selector = NSSelectorFromString(selector_name);
+	if ([NSCursor respondsToSelector:selector]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+		NSCursor *cursor = [NSCursor performSelector:selector];
+#pragma clang diagnostic pop
+		if (cursor != nil) {
+			return cursor;
+		}
+	}
+	return fallback;
+}
+
+static inline NSCursor* ui2_cursor_for_name(const char* raw) {
+	if (raw == NULL || raw[0] == '\0') {
+		return [NSCursor arrowCursor];
+	}
+	if (strcmp(raw, "pointing_hand") == 0) {
+		return [NSCursor pointingHandCursor];
+	}
+	if (strcmp(raw, "resize_nwse") == 0) {
+		return ui2_private_cursor(@"_windowResizeNorthWestSouthEastCursor", [NSCursor crosshairCursor]);
+	}
+	if (strcmp(raw, "resize_nesw") == 0) {
+		return ui2_private_cursor(@"_windowResizeNorthEastSouthWestCursor", [NSCursor crosshairCursor]);
+	}
+	if (strcmp(raw, "rotate") == 0) {
+		return [NSCursor openHandCursor];
+	}
+	return [NSCursor arrowCursor];
+}
+
+static inline void ui2_add_cursor_rect(void* view_ptr, const char* raw) {
+	NSView *view = (__bridge NSView*)view_ptr;
+	if (view == nil) {
+		return;
+	}
+	[view addCursorRect:[view bounds] cursor:ui2_cursor_for_name(raw)];
+}
+
+static inline void ui2_invalidate_cursor_rects(void* view_ptr) {
+	NSView *view = (__bridge NSView*)view_ptr;
+	if (view == nil || [view window] == nil) {
+		return;
+	}
+	[[view window] invalidateCursorRectsForView:view];
+}
+
 static inline NSString* ui2_base64_utf8(NSString *s) {
 	if (s == nil) {
 		s = @"";
