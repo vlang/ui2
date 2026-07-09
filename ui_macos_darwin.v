@@ -981,9 +981,7 @@ fn native_new_image(frame NativeRect, path string, rotation f64) NativeView {
 
 fn native_update_image(image_view NativeView, frame NativeRect, path string, rotation f64) {
 	rotated := rotation < -0.001 || rotation > 0.001
-	if rotated {
-		C.ui2_view_reset_transform(voidptr(image_view))
-	}
+	C.ui2_view_reset_transform(voidptr(image_view))
 	native_set_frame(image_view, frame)
 	macos.msg_void_i64(image_view, 'setImageScaling:', 3)
 	if rotated {

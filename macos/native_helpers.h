@@ -770,6 +770,12 @@ static inline double ui2_event_y_in_view(void* view_ptr, void* event_ptr) {
 	return p.y;
 }
 
+static inline void ui2_layer_set_frame_geometry(CALayer *layer, NSRect frame) {
+	[layer setAnchorPoint:CGPointMake(0.5, 0.5)];
+	[layer setBounds:CGRectMake(0, 0, NSWidth(frame), NSHeight(frame))];
+	[layer setPosition:CGPointMake(NSMidX(frame), NSMidY(frame))];
+}
+
 static inline void ui2_view_set_rotation(void* view_ptr, double degrees) {
 	NSView *view = (__bridge NSView*)view_ptr;
 	if (view == nil) {
@@ -783,11 +789,11 @@ static inline void ui2_view_set_rotation(void* view_ptr, double degrees) {
 	}
 	[CATransaction begin];
 	[CATransaction setDisableActions:YES];
-	[layer setAnchorPoint:CGPointMake(0.5, 0.5)];
+	[layer setAffineTransform:CGAffineTransformIdentity];
+	ui2_layer_set_frame_geometry(layer, frame);
 	CGFloat radians = (CGFloat)(degrees * M_PI / 180.0);
 	[layer setAffineTransform:CGAffineTransformMakeRotation(radians)];
 	[CATransaction commit];
-	[view setFrame:frame];
 }
 
 static inline void ui2_view_reset_transform(void* view_ptr) {
@@ -804,6 +810,7 @@ static inline void ui2_view_reset_transform(void* view_ptr) {
 	[CATransaction begin];
 	[CATransaction setDisableActions:YES];
 	[layer setAffineTransform:CGAffineTransformIdentity];
+	ui2_layer_set_frame_geometry(layer, frame);
 	[CATransaction commit];
 	[view setFrame:frame];
 }
@@ -820,6 +827,7 @@ static inline void ui2_view_clear_rotation(void* view_ptr) {
 	[CATransaction begin];
 	[CATransaction setDisableActions:YES];
 	[layer setAffineTransform:CGAffineTransformIdentity];
+	ui2_layer_set_frame_geometry(layer, [view frame]);
 	[CATransaction commit];
 }
 
