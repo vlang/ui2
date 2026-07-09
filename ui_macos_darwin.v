@@ -101,6 +101,7 @@ mut:
 	scroll_ids          map[u64]string // NSClipView pointer -> Scroll element id
 	pointer_ids         map[u64]string // NSView pointer -> element id
 	pointer_draggable   map[u64]bool
+	control_ids         map[u64]string // NSControl pointer -> element id
 	observed            map[u64]bool // clip views we already observe for scroll changes
 	button_ids          []string
 	run_config          RunConfig
@@ -120,6 +121,7 @@ const runtime_state_singleton = &RuntimeState{
 	scroll_ids:        map[u64]string{}
 	pointer_ids:       map[u64]string{}
 	pointer_draggable: map[u64]bool{}
+	control_ids:       map[u64]string{}
 	observed:          map[u64]bool{}
 }
 
@@ -551,6 +553,7 @@ fn render_root(root Element) {
 	st.text_area_direct = map[string]bool{}
 	st.pointer_ids = map[u64]string{}
 	st.pointer_draggable = map[u64]bool{}
+	st.control_ids = map[u64]string{}
 	st.button_ids = []string{}
 	native_set_background(st.root_view, root.box.bg)
 	mut active := map[string]bool{}
@@ -788,6 +791,7 @@ fn register_button(native NativeView, id string) {
 	mut st := state()
 	tag := st.button_ids.len
 	st.button_ids << id
+	st.control_ids[u64(voidptr(native))] = id
 	native_set_tag(native, tag)
 	native_set_button_target(native, st.button_handler)
 	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
@@ -797,6 +801,7 @@ fn register_action_control(native NativeView, id string) {
 	mut st := state()
 	tag := st.button_ids.len
 	st.button_ids << id
+	st.control_ids[u64(voidptr(native))] = id
 	native_set_tag(native, tag)
 	native_set_control_target(native, st.button_handler)
 	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
@@ -806,6 +811,7 @@ fn register_control(native NativeView, id string) {
 	mut st := state()
 	tag := st.button_ids.len
 	st.button_ids << id
+	st.control_ids[u64(voidptr(native))] = id
 	native_set_tag(native, tag)
 	native_set_control_target(native, st.button_handler)
 	// Delegate delivers controlTextDidChange: for per-keystroke events
@@ -1319,7 +1325,13 @@ fn ui2_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
 	if voidptr(st.event_handler) == unsafe { nil } {
 		return
 	}
-	tag := native_tag(NativeView(sender))
+	native := NativeView(sender)
+	id := st.control_ids[u64(voidptr(native))] or { '' }
+	if id.len > 0 {
+		st.event_handler(id)
+		return
+	}
+	tag := native_tag(native)
 	if tag < 0 || tag >= st.button_ids.len {
 		return
 	}
@@ -1333,6 +1345,11 @@ fn ui2_control_text_changed(_self voidptr, _cmd voidptr, notification voidptr) {
 		return
 	}
 	field := macos.msg_id(macos.Id(notification), 'object')
+	id := st.control_ids[u64(voidptr(field))] or { '' }
+	if id.len > 0 {
+		st.event_handler(id)
+		return
+	}
 	tag := int(macos.msg_i64(field, 'tag'))
 	if tag < 0 || tag >= st.button_ids.len {
 		return
