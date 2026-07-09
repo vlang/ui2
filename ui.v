@@ -5,7 +5,8 @@ pub type BuildFn = fn () Element
 pub type EventFn = fn (string)
 
 // KeyFn receives normalized key strings: 'up', 'forward_delete',
-// 'cmd+shift+r', 'f5', or text-view commands like 'text:editor:backspace'.
+// 'cmd+shift+r', 'f5', or text-view commands like 'text:editor:backspace'
+// and 'text:editor:line_break'.
 pub type KeyFn = fn (string)
 
 // ScrollFn receives the id of the Scroll element whose position changed.
@@ -103,6 +104,9 @@ pub:
 	readonly       bool // text_area: selectable but not editable
 	disable_scroll bool // text_area: hide the internal scroll view scroller
 	secure         bool // text_field: password entry (NSSecureTextField)
+	clickable      bool // view/image: emit pointer down/up events
+	draggable      bool // view/image: emit pointer drag events
+	rotation       f64  // image: clockwise degrees
 	menu           []MenuEntry
 	children       []Element
 }
@@ -136,6 +140,17 @@ pub fn view(id string, frame Rect, box_ BoxStyle, children []Element) Element {
 		frame:    frame
 		box:      box_
 		children: children
+	}
+}
+
+pub fn draggable_view(id string, frame Rect, box_ BoxStyle, children []Element) Element {
+	return Element{
+		kind:      .view
+		id:        id
+		frame:     frame
+		box:       box_
+		draggable: true
+		children:  children
 	}
 }
 
@@ -190,6 +205,17 @@ pub fn image(id string, path string, frame Rect) Element {
 		id:         id
 		image_path: path
 		frame:      frame
+	}
+}
+
+pub fn transformed_image(id string, path string, frame Rect, rotation f64, clickable bool) Element {
+	return Element{
+		kind:       .image
+		id:         id
+		image_path: path
+		frame:      frame
+		rotation:   rotation
+		clickable:  clickable
 	}
 }
 

@@ -37,13 +37,21 @@ fn C.ui2_text_view_vertical_align_active(tv voidptr) int
 fn C.ui2_text_view_set_selected_range(tv voidptr, location u64, length u64)
 fn C.ui2_text_view_selected_location(tv voidptr) u64
 fn C.ui2_text_view_selected_length(tv voidptr) u64
+fn C.ui2_text_view_insert_text(tv voidptr, utf8 &char)
 fn C.ui2_text_view_text_length(tv voidptr) u64
 fn C.ui2_selector_name(selector voidptr) macos.Id
 fn C.ui2_view_save_png(view voidptr, path &char) bool
 fn C.ui2_pasteboard_has_image() bool
 fn C.ui2_pasteboard_write_image_png(path &char) bool
 fn C.ui2_app_send_edit_command(command int) bool
+fn C.ui2_current_event_modifier_flags() u64
 fn C.ui2_utf16_length(utf8 &char) u64
+fn C.ui2_event_x_in_view(view voidptr, event voidptr) f64
+fn C.ui2_event_y_in_view(view voidptr, event voidptr) f64
+fn C.ui2_view_set_rotation(view voidptr, degrees f64)
+fn C.ui2_pointer_mouse_down(self voidptr, cmd voidptr, event voidptr)
+fn C.ui2_pointer_mouse_dragged(self voidptr, cmd voidptr, event voidptr)
+fn C.ui2_pointer_mouse_up(self voidptr, cmd voidptr, event voidptr)
 
 const ns_window_style_titled = u64(1)
 const ns_window_style_closable = u64(2)
@@ -85,9 +93,12 @@ mut:
 	nodes               map[string]NativeView
 	node_kinds          map[string]Kind
 	node_text_direct    map[string]bool
+	node_interactive    map[string]bool
 	textview_ids        map[u64]string // NSTextView pointer -> element id (no tag on NSView)
 	scroll_ids          map[u64]string // NSClipView pointer -> Scroll element id
-	observed            map[u64]bool   // clip views we already observe for scroll changes
+	pointer_ids         map[u64]string // NSView pointer -> element id
+	pointer_draggable   map[u64]bool
+	observed            map[u64]bool // clip views we already observe for scroll changes
 	button_ids          []string
 	run_config          RunConfig
 	screenshot_pending  bool
@@ -95,15 +106,18 @@ mut:
 }
 
 const runtime_state_singleton = &RuntimeState{
-	views:            map[string]NativeView{}
-	view_kinds:       map[string]Kind{}
-	text_area_direct: map[string]bool{}
-	nodes:            map[string]NativeView{}
-	node_kinds:       map[string]Kind{}
-	node_text_direct: map[string]bool{}
-	textview_ids:     map[u64]string{}
-	scroll_ids:       map[u64]string{}
-	observed:         map[u64]bool{}
+	views:             map[string]NativeView{}
+	view_kinds:        map[string]Kind{}
+	text_area_direct:  map[string]bool{}
+	nodes:             map[string]NativeView{}
+	node_kinds:        map[string]Kind{}
+	node_text_direct:  map[string]bool{}
+	node_interactive:  map[string]bool{}
+	textview_ids:      map[u64]string{}
+	scroll_ids:        map[u64]string{}
+	pointer_ids:       map[u64]string{}
+	pointer_draggable: map[u64]bool{}
+	observed:          map[u64]bool{}
 }
 
 fn state() &RuntimeState {
@@ -257,6 +271,11 @@ pub fn text_area_caret(id string) int {
 	return int(C.ui2_text_view_selected_location(voidptr(tv)))
 }
 
+pub fn insert_text_area_text(id string, text string) {
+	tv := text_area_document_view(id) or { return }
+	C.ui2_text_view_insert_text(voidptr(tv), &char(text.str))
+}
+
 // consume_text_key tells the current text-view key delegate call that the app
 // handled the key and native NSTextView deletion should not also run.
 pub fn consume_text_key() {
@@ -284,6 +303,10 @@ pub fn dismiss_keyboard() {
 	if !native_is_nil(st.root_view) {
 		native_end_editing(st.root_view)
 	}
+}
+
+pub fn quit() {
+	native_terminate_app()
 }
 
 pub fn safe_area_top() f64 {
@@ -463,6 +486,21 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'isFlipped', voidptr(C.ui2_view_is_flipped), 'B@:')
 		macos.register_class_pair(cls)
 	}
+	if macos.get_class('UI2PointerView') == unsafe { nil } {
+		cls := macos.allocate_class_pair(macos.get_class('NSView'), 'UI2PointerView')
+		macos.add_method(cls, 'isFlipped', voidptr(C.ui2_view_is_flipped), 'B@:')
+		macos.add_method(cls, 'mouseDown:', voidptr(C.ui2_pointer_mouse_down), 'v@:@')
+		macos.add_method(cls, 'mouseDragged:', voidptr(C.ui2_pointer_mouse_dragged), 'v@:@')
+		macos.add_method(cls, 'mouseUp:', voidptr(C.ui2_pointer_mouse_up), 'v@:@')
+		macos.register_class_pair(cls)
+	}
+	if macos.get_class('UI2PointerImageView') == unsafe { nil } {
+		cls := macos.allocate_class_pair(macos.get_class('NSImageView'), 'UI2PointerImageView')
+		macos.add_method(cls, 'mouseDown:', voidptr(C.ui2_pointer_mouse_down), 'v@:@')
+		macos.add_method(cls, 'mouseDragged:', voidptr(C.ui2_pointer_mouse_dragged), 'v@:@')
+		macos.add_method(cls, 'mouseUp:', voidptr(C.ui2_pointer_mouse_up), 'v@:@')
+		macos.register_class_pair(cls)
+	}
 	if macos.get_class('UI2AppDelegate') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSObject'), 'UI2AppDelegate')
 		macos.add_method(cls, 'applicationDidFinishLaunching:',
@@ -508,6 +546,8 @@ fn render_root(root Element) {
 	st.views = map[string]NativeView{}
 	st.view_kinds = map[string]Kind{}
 	st.text_area_direct = map[string]bool{}
+	st.pointer_ids = map[u64]string{}
+	st.pointer_draggable = map[u64]bool{}
 	st.button_ids = []string{}
 	native_set_background(st.root_view, root.box.bg)
 	mut active := map[string]bool{}
@@ -523,15 +563,21 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 	mut native := st.nodes[key] or { native_nil_view() }
 	existing_kind := st.node_kinds[key] or { Kind.screen }
 	existing_direct := st.node_text_direct[key] or { false }
+	existing_interactive := st.node_interactive[key] or { false }
+	interactive := element_interactive(el)
 	text_area_mode_changed := el.kind == .text_area && existing_kind == .text_area
 		&& existing_direct != el.disable_scroll
-	if native_is_nil(native) || existing_kind != el.kind || text_area_mode_changed {
+	interactive_changed := (el.kind == .view || el.kind == .image) && existing_kind == el.kind
+		&& existing_interactive != interactive
+	if native_is_nil(native) || existing_kind != el.kind || text_area_mode_changed
+		|| interactive_changed {
 		if !native_is_nil(native) {
 			native_remove_from_superview(native)
 		}
 		native = native_create_element(el)
 		st.nodes[key] = native
 		st.node_kinds[key] = el.kind
+		st.node_interactive[key] = interactive
 		if el.kind == .text_area {
 			st.node_text_direct[key] = el.disable_scroll
 		}
@@ -550,6 +596,7 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			}
 		}
 		.view {
+			register_pointer(native, el)
 			for i, child in el.children {
 				render_element(native, child, child_key(key, i, child), mut active)
 			}
@@ -604,7 +651,7 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			// Labels are updated by native_update_element.
 		}
 		.image {
-			// Images are updated by native_update_element.
+			register_pointer(native, el)
 		}
 	}
 
@@ -642,7 +689,7 @@ fn native_create_element(el Element) NativeView {
 			native_nil_view()
 		}
 		.view {
-			native_new_flipped_view(element_rect(el.frame), el.box.bg)
+			native_new_view(element_rect(el.frame), el.box.bg, element_interactive(el))
 		}
 		.scroll {
 			native_new_scroll(element_rect(el.frame), el.box.bg)
@@ -653,7 +700,7 @@ fn native_create_element(el Element) NativeView {
 				el.text_style.underline, align_value(el.text_style.align), el.text_style.lines)
 		}
 		.image {
-			native_new_image(element_rect(el.frame), el.image_path)
+			native_new_image(element_rect(el.frame), el.image_path, el.rotation)
 		}
 		.button {
 			native_new_button(element_rect(el.frame), el.text, el.box.bg, el.text_style.color,
@@ -690,7 +737,7 @@ fn native_update_element(native NativeView, el Element) {
 				el.text_style.underline, align_value(el.text_style.align), el.text_style.lines)
 		}
 		.image {
-			native_update_image(native, element_rect(el.frame), el.image_path)
+			native_update_image(native, element_rect(el.frame), el.image_path, el.rotation)
 		}
 		.button {
 			native_update_button(native, element_rect(el.frame), el.text, el.box.bg,
@@ -710,6 +757,10 @@ fn native_update_element(native NativeView, el Element) {
 	}
 }
 
+fn element_interactive(el Element) bool {
+	return el.clickable || el.draggable
+}
+
 // child_key prefers the element's explicit key over its index, so windowed
 // lists keep native-view identity while scrolling.
 fn child_key(parent string, index int, el Element) string {
@@ -718,6 +769,16 @@ fn child_key(parent string, index int, el Element) string {
 		return suffix
 	}
 	return parent + '/' + suffix
+}
+
+fn register_pointer(native NativeView, el Element) {
+	if el.id.len == 0 || !element_interactive(el) {
+		return
+	}
+	mut st := state()
+	key := u64(voidptr(native))
+	st.pointer_ids[key] = el.id
+	st.pointer_draggable[key] = el.draggable
 }
 
 fn register_button(native NativeView, id string) {
@@ -762,6 +823,7 @@ fn remove_stale_nodes(active map[string]bool) {
 		native_remove_from_superview(native)
 		st.nodes.delete(key)
 		st.node_kinds.delete(key)
+		st.node_interactive.delete(key)
 	}
 }
 
@@ -881,6 +943,13 @@ fn native_new_flipped_view(frame NativeRect, bg u32) NativeView {
 	return native
 }
 
+fn native_new_view(frame NativeRect, bg u32, interactive bool) NativeView {
+	class_name := if interactive { 'UI2PointerView' } else { 'UI2FlippedView' }
+	native := macos.msg_id_rect(macos.alloc(class_name), 'initWithFrame:', appkit_rect(frame))
+	native_set_background(native, bg)
+	return native
+}
+
 fn native_new_scroll(frame NativeRect, bg u32) NativeView {
 	scroll_view := macos.msg_id_rect(macos.alloc('NSScrollView'), 'initWithFrame:',
 		appkit_rect(frame))
@@ -900,16 +969,17 @@ fn native_set_scroll_background(scroll NativeView, bg u32) {
 	macos.msg_void1(scroll, 'setBackgroundColor:', native_color(bg))
 }
 
-fn native_new_image(frame NativeRect, path string) NativeView {
-	image_view := macos.msg_id_rect(macos.alloc('NSImageView'), 'initWithFrame:',
+fn native_new_image(frame NativeRect, path string, rotation f64) NativeView {
+	image_view := macos.msg_id_rect(macos.alloc('UI2PointerImageView'), 'initWithFrame:',
 		appkit_rect(frame))
-	native_update_image(image_view, frame, path)
+	native_update_image(image_view, frame, path, rotation)
 	return image_view
 }
 
-fn native_update_image(image_view NativeView, frame NativeRect, path string) {
+fn native_update_image(image_view NativeView, frame NativeRect, path string, rotation f64) {
 	native_set_frame(image_view, frame)
 	macos.msg_void_i64(image_view, 'setImageScaling:', 3)
+	C.ui2_view_set_rotation(voidptr(image_view), rotation)
 	if path.trim_space() == '' {
 		macos.msg_void1(image_view, 'setImage:', macos.Id(unsafe { nil }))
 		return
@@ -1205,6 +1275,35 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 	refresh()
 }
 
+fn fire_pointer_event(native NativeView, phase string, event voidptr) {
+	st := state()
+	id := st.pointer_ids[u64(voidptr(native))] or { return }
+	if phase == 'drag' && !(st.pointer_draggable[u64(voidptr(native))] or { false }) {
+		return
+	}
+	if voidptr(st.event_handler) == unsafe { nil } {
+		return
+	}
+	x := C.ui2_event_x_in_view(voidptr(st.root_view), event)
+	y := C.ui2_event_y_in_view(voidptr(st.root_view), event)
+	st.event_handler('pointer:${phase}:${id}:${x}:${y}')
+}
+
+@[export: 'ui2_pointer_mouse_down']
+fn ui2_pointer_mouse_down(self voidptr, _cmd voidptr, event voidptr) {
+	fire_pointer_event(NativeView(self), 'down', event)
+}
+
+@[export: 'ui2_pointer_mouse_dragged']
+fn ui2_pointer_mouse_dragged(self voidptr, _cmd voidptr, event voidptr) {
+	fire_pointer_event(NativeView(self), 'drag', event)
+}
+
+@[export: 'ui2_pointer_mouse_up']
+fn ui2_pointer_mouse_up(self voidptr, _cmd voidptr, event voidptr) {
+	fire_pointer_event(NativeView(self), 'up', event)
+}
+
 @[export: 'ui2_button_tap']
 fn ui2_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
 	st := state()
@@ -1249,7 +1348,7 @@ fn ui2_text_view_do_command(_self voidptr, _cmd voidptr, text_view voidptr, comm
 	if voidptr(st.key_handler) == unsafe { nil } {
 		return false
 	}
-	key := text_command_key(command) or { return false }
+	key := text_command_key(command, C.ui2_current_event_modifier_flags()) or { return false }
 	id := st.textview_ids[u64(text_view)] or { return false }
 	boundary_noop := text_command_boundary_noop(text_view, key)
 	st.text_key_consumed = false
@@ -1259,12 +1358,29 @@ fn ui2_text_view_do_command(_self voidptr, _cmd voidptr, text_view voidptr, comm
 	return consumed
 }
 
-fn text_command_key(command voidptr) ?string {
+fn text_command_key(command voidptr, modifiers u64) ?string {
 	name := macos.utf8_string(C.ui2_selector_name(command))
+	shift := modifiers & 0x20000 != 0
 	return match name {
-		'deleteBackward:' { 'backspace' }
-		'deleteForward:' { 'forward_delete' }
-		else { none }
+		'deleteBackward:' {
+			'backspace'
+		}
+		'deleteForward:' {
+			'forward_delete'
+		}
+		'insertLineBreak:' {
+			'line_break'
+		}
+		'insertNewline:', 'insertParagraphSeparator:' {
+			if shift {
+				'line_break'
+			} else {
+				'enter'
+			}
+		}
+		else {
+			none
+		}
 	}
 }
 
@@ -1324,7 +1440,7 @@ fn ui2_window_perform_key_equiv(_self voidptr, _cmd voidptr, event voidptr) bool
 		return true
 	}
 	st := state()
-	if voidptr(st.key_handler) == unsafe { nil } || !s.starts_with('cmd+') || s == 'cmd+q' {
+	if voidptr(st.key_handler) == unsafe { nil } || !s.starts_with('cmd+') {
 		return false
 	}
 	st.key_handler(s)
@@ -1332,7 +1448,7 @@ fn ui2_window_perform_key_equiv(_self voidptr, _cmd voidptr, event voidptr) bool
 }
 
 fn dispatch_pre_native_command_key(key string) bool {
-	if key != 'cmd+z' && key != 'cmd+shift+z' && key != 'cmd+y' {
+	if key != 'cmd+z' && key != 'cmd+shift+z' && key != 'cmd+y' && key != 'cmd+q' {
 		return false
 	}
 	mut st := state()

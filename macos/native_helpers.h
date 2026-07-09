@@ -264,6 +264,18 @@ static inline unsigned long ui2_text_view_selected_length(void* tv_ptr) {
 	return selected.location == NSNotFound ? 0 : selected.length;
 }
 
+static inline void ui2_text_view_insert_text(void* tv_ptr, const char* utf8) {
+	NSTextView *tv = ui2_text_view_obj(tv_ptr);
+	if (tv == nil || utf8 == NULL) {
+		return;
+	}
+	NSString *text = [NSString stringWithUTF8String:utf8];
+	if (text == nil) {
+		return;
+	}
+	[tv insertText:text replacementRange:[tv selectedRange]];
+}
+
 static inline unsigned long ui2_text_view_text_length(void* tv_ptr) {
 	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
 	if (tv == nil) {
@@ -730,6 +742,46 @@ static inline bool ui2_app_send_edit_command(int command) {
 			return false;
 	}
 	return [[NSApplication sharedApplication] sendAction:action to:nil from:nil];
+}
+
+static inline unsigned long ui2_current_event_modifier_flags(void) {
+	NSEvent *event = [NSApp currentEvent];
+	return event == nil ? 0 : [event modifierFlags];
+}
+
+static inline double ui2_event_x_in_view(void* view_ptr, void* event_ptr) {
+	NSView *view = (__bridge NSView*)view_ptr;
+	NSEvent *event = (__bridge NSEvent*)event_ptr;
+	if (view == nil || event == nil) {
+		return 0;
+	}
+	NSPoint p = [view convertPoint:[event locationInWindow] fromView:nil];
+	return p.x;
+}
+
+static inline double ui2_event_y_in_view(void* view_ptr, void* event_ptr) {
+	NSView *view = (__bridge NSView*)view_ptr;
+	NSEvent *event = (__bridge NSEvent*)event_ptr;
+	if (view == nil || event == nil) {
+		return 0;
+	}
+	NSPoint p = [view convertPoint:[event locationInWindow] fromView:nil];
+	return p.y;
+}
+
+static inline void ui2_view_set_rotation(void* view_ptr, double degrees) {
+	NSView *view = (__bridge NSView*)view_ptr;
+	if (view == nil) {
+		return;
+	}
+	[view setWantsLayer:YES];
+	CALayer *layer = [view layer];
+	if (layer == nil) {
+		return;
+	}
+	[layer setAnchorPoint:CGPointMake(0.5, 0.5)];
+	CGFloat radians = (CGFloat)(degrees * M_PI / 180.0);
+	[layer setAffineTransform:CGAffineTransformMakeRotation(radians)];
 }
 
 typedef void (*ui2_void_cb)(void);
