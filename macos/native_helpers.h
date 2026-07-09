@@ -74,9 +74,24 @@ static inline unsigned long ui2_utf16_length(const char* utf8) {
 	return (unsigned long)[s length];
 }
 
-static inline NSDictionary* ui2_text_attrs(unsigned int color, double size, bool bold, bool italic, bool underline) {
+static inline NSString* ui2_base64_utf8(NSString *s) {
+	if (s == nil) {
+		s = @"";
+	}
+	NSData *data = [s dataUsingEncoding:NSUTF8StringEncoding];
+	if (data == nil) {
+		data = [NSData data];
+	}
+	return [data base64EncodedStringWithOptions:0];
+}
+
+static inline NSFont* ui2_font_with_family(NSFont *font, const char* family_name, double fallback_size);
+
+static inline NSDictionary* ui2_text_attrs(unsigned int color, double size, const char* family_name, bool bold, bool italic, bool underline) {
+	NSFont *font = ui2_font_obj(size, bold, italic);
+	font = ui2_font_with_family(font, family_name, size);
 	NSMutableDictionary *attrs = [@{
-		NSFontAttributeName: ui2_font_obj(size, bold, italic),
+		NSFontAttributeName: font,
 		NSForegroundColorAttributeName: ui2_nscolor_obj(color)
 	} mutableCopy];
 	if (underline) {
@@ -85,7 +100,7 @@ static inline NSDictionary* ui2_text_attrs(unsigned int color, double size, bool
 	return [attrs autorelease];
 }
 
-static inline void ui2_text_view_set_attributed_string(void* tv_ptr, const char* utf8, unsigned int color, double size, bool bold, bool italic, bool underline) {
+static inline void ui2_text_view_set_attributed_string(void* tv_ptr, const char* utf8, unsigned int color, double size, const char* family_name, bool bold, bool italic, bool underline) {
 	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
 	if (tv == nil) {
 		return;
@@ -94,11 +109,11 @@ static inline void ui2_text_view_set_attributed_string(void* tv_ptr, const char*
 	if (s == nil) {
 		s = @"";
 	}
-	NSMutableAttributedString *attr = [[[NSMutableAttributedString alloc] initWithString:s attributes:ui2_text_attrs(color, size, bold, italic, underline)] autorelease];
+	NSMutableAttributedString *attr = [[[NSMutableAttributedString alloc] initWithString:s attributes:ui2_text_attrs(color, size, family_name, bold, italic, underline)] autorelease];
 	[[tv textStorage] setAttributedString:attr];
 }
 
-static inline void ui2_text_view_add_style(void* tv_ptr, unsigned long location, unsigned long length, unsigned int color, double size, bool bold, bool italic, bool underline) {
+static inline void ui2_text_view_add_style(void* tv_ptr, unsigned long location, unsigned long length, unsigned int color, double size, const char* family_name, bool bold, bool italic, bool underline) {
 	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
 	if (tv == nil || length == 0) {
 		return;
@@ -108,7 +123,54 @@ static inline void ui2_text_view_add_style(void* tv_ptr, unsigned long location,
 		return;
 	}
 	NSUInteger safe_len = MIN((NSUInteger)length, [storage length] - (NSUInteger)location);
-	[storage addAttributes:ui2_text_attrs(color, size, bold, italic, underline) range:NSMakeRange((NSUInteger)location, safe_len)];
+	[storage addAttributes:ui2_text_attrs(color, size, family_name, bold, italic, underline) range:NSMakeRange((NSUInteger)location, safe_len)];
+}
+
+static inline void* ui2_text_view_runs(void* tv_ptr) {
+	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
+	if (tv == nil) {
+		return (__bridge void*)@"";
+	}
+	NSTextStorage *storage = [tv textStorage];
+	if (storage == nil || [storage length] == 0) {
+		return (__bridge void*)@"";
+	}
+	NSString *full = [storage string];
+	if (full == nil) {
+		return (__bridge void*)@"";
+	}
+	NSMutableString *out = [NSMutableString string];
+	NSFontManager *manager = [NSFontManager sharedFontManager];
+	NSUInteger cursor = 0;
+	NSUInteger length = [storage length];
+	while (cursor < length) {
+		NSRange effective = NSMakeRange(cursor, length - cursor);
+		NSDictionary *attrs = [storage attributesAtIndex:cursor longestEffectiveRange:&effective inRange:NSMakeRange(cursor, length - cursor)];
+		if (effective.length == 0) {
+			effective = NSMakeRange(cursor, 1);
+		}
+		NSString *text = [full substringWithRange:effective];
+		NSFont *font = attrs[NSFontAttributeName];
+		if (font == nil) {
+			font = [tv font];
+		}
+		NSString *family = font == nil ? @"" : [font familyName];
+		double size = font == nil ? 0.0 : [font pointSize];
+		NSFontTraitMask traits = font == nil ? 0 : [manager traitsOfFont:font];
+		bool bold = (traits & NSBoldFontMask) != 0;
+		bool italic = (traits & NSItalicFontMask) != 0;
+		NSNumber *underline = attrs[NSUnderlineStyleAttributeName];
+		bool underlined = underline != nil && [underline integerValue] != 0;
+		[out appendFormat:@"%@\t%@\t%.3f\t%d\t%d\t%d\n",
+			ui2_base64_utf8(text),
+			ui2_base64_utf8(family),
+			size,
+			bold ? 1 : 0,
+			italic ? 1 : 0,
+			underlined ? 1 : 0];
+		cursor = NSMaxRange(effective);
+	}
+	return (__bridge void*)out;
 }
 
 static inline void ui2_control_set_attributed_title(void* control_ptr, const char* utf8, unsigned int color, double size, bool bold, bool italic, bool underline) {
@@ -120,7 +182,7 @@ static inline void ui2_control_set_attributed_title(void* control_ptr, const cha
 	if (s == nil) {
 		s = @"";
 	}
-	NSAttributedString *attr = [[[NSAttributedString alloc] initWithString:s attributes:ui2_text_attrs(color, size, bold, italic, underline)] autorelease];
+	NSAttributedString *attr = [[[NSAttributedString alloc] initWithString:s attributes:ui2_text_attrs(color, size, NULL, bold, italic, underline)] autorelease];
 	if ([control respondsToSelector:@selector(setAttributedTitle:)]) {
 		[(id)control setAttributedTitle:attr];
 	} else if ([control respondsToSelector:@selector(setAttributedStringValue:)]) {
@@ -151,6 +213,44 @@ static inline void ui2_text_view_set_selected_range(void* tv_ptr, unsigned long 
 	NSRange range = NSMakeRange(safe_location, safe_length);
 	[tv setSelectedRange:range];
 	[tv scrollRangeToVisible:range];
+}
+
+static inline unsigned long ui2_text_view_selected_location(void* tv_ptr) {
+	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
+	if (tv == nil) {
+		return 0;
+	}
+	NSRange selected = [tv selectedRange];
+	return selected.location == NSNotFound ? 0 : selected.location;
+}
+
+static inline unsigned long ui2_text_view_selected_length(void* tv_ptr) {
+	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
+	if (tv == nil) {
+		return 0;
+	}
+	NSRange selected = [tv selectedRange];
+	return selected.location == NSNotFound ? 0 : selected.length;
+}
+
+static inline unsigned long ui2_text_view_text_length(void* tv_ptr) {
+	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
+	if (tv == nil) {
+		return 0;
+	}
+	NSString *text = [tv string];
+	return text == nil ? 0 : [text length];
+}
+
+static inline void* ui2_selector_name(void* selector_ptr) {
+	if (selector_ptr == NULL) {
+		return (__bridge void*)@"";
+	}
+	const char *name = sel_getName((SEL)selector_ptr);
+	if (name == NULL) {
+		return (__bridge void*)@"";
+	}
+	return (__bridge void*)[NSString stringWithUTF8String:name];
 }
 
 static inline NSDictionary* ui2_text_view_current_attrs(NSTextView *tv) {

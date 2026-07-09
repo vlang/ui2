@@ -1,5 +1,6 @@
 module ui2
 
+import encoding.base64
 import macos
 import os
 
@@ -19,17 +20,23 @@ fn C.ui2_window_perform_key_equiv(self voidptr, cmd voidptr, event voidptr) bool
 fn C.ui2_window_did_resize(self voidptr, cmd voidptr, notification voidptr)
 fn C.ui2_control_text_changed(self voidptr, cmd voidptr, notification voidptr)
 fn C.ui2_text_view_changed(self voidptr, cmd voidptr, notification voidptr)
+fn C.ui2_text_view_do_command(self voidptr, cmd voidptr, text_view voidptr, command voidptr) bool
 fn C.ui2_bounds_changed(self voidptr, cmd voidptr, notification voidptr)
 fn C.ui2_dispatch_main(cb voidptr)
 fn C.ui2_observe_bounds(observer voidptr, view voidptr)
-fn C.ui2_text_view_set_attributed_string(tv voidptr, utf8 &char, color u32, size f64, bold bool, italic bool, underline bool)
-fn C.ui2_text_view_add_style(tv voidptr, location u64, length u64, color u32, size f64, bold bool, italic bool, underline bool)
+fn C.ui2_text_view_set_attributed_string(tv voidptr, utf8 &char, color u32, size f64, family &char, bold bool, italic bool, underline bool)
+fn C.ui2_text_view_add_style(tv voidptr, location u64, length u64, color u32, size f64, family &char, bold bool, italic bool, underline bool)
+fn C.ui2_text_view_runs(tv voidptr) macos.Id
 fn C.ui2_control_set_attributed_title(control voidptr, utf8 &char, color u32, size f64, bold bool, italic bool, underline bool)
 fn C.ui2_text_view_toggle_format(tv voidptr, format int)
 fn C.ui2_text_view_set_font_family(tv voidptr, family &char)
 fn C.ui2_text_view_set_font_size(tv voidptr, size f64)
 fn C.ui2_text_view_format_active(tv voidptr, format int) bool
 fn C.ui2_text_view_set_selected_range(tv voidptr, location u64, length u64)
+fn C.ui2_text_view_selected_location(tv voidptr) u64
+fn C.ui2_text_view_selected_length(tv voidptr) u64
+fn C.ui2_text_view_text_length(tv voidptr) u64
+fn C.ui2_selector_name(selector voidptr) macos.Id
 fn C.ui2_view_save_png(view voidptr, path &char) bool
 fn C.ui2_pasteboard_has_image() bool
 fn C.ui2_pasteboard_write_image_png(path &char) bool
@@ -60,9 +67,10 @@ struct RunConfig {
 @[heap]
 struct RuntimeState {
 mut:
-	build_screen        BuildFn  = BuildFn(unsafe { nil })
-	event_handler       EventFn  = EventFn(unsafe { nil })
-	key_handler         KeyFn    = KeyFn(unsafe { nil })
+	build_screen        BuildFn = BuildFn(unsafe { nil })
+	event_handler       EventFn = EventFn(unsafe { nil })
+	key_handler         KeyFn   = KeyFn(unsafe { nil })
+	text_key_consumed   bool
 	scroll_handler      ScrollFn = ScrollFn(unsafe { nil })
 	window              NativeView
 	root_view           NativeView
@@ -241,6 +249,18 @@ pub fn text_area_set_caret(id string, pos int) {
 	C.ui2_text_view_set_selected_range(voidptr(tv), location, u64(0))
 }
 
+pub fn text_area_caret(id string) int {
+	tv := text_area_document_view(id) or { return 0 }
+	return int(C.ui2_text_view_selected_location(voidptr(tv)))
+}
+
+// consume_text_key tells the current text-view key delegate call that the app
+// handled the key and native NSTextView deletion should not also run.
+pub fn consume_text_key() {
+	mut st := state()
+	st.text_key_consumed = true
+}
+
 pub fn clipboard_has_image() bool {
 	return C.ui2_pasteboard_has_image()
 }
@@ -331,6 +351,40 @@ pub fn set_text_area_font_size(id string, size f64) TextFormatState {
 	return text_area_format_state(id)
 }
 
+pub fn text_area_runs(id string) []TextRun {
+	tv := text_area_document_view(id) or { return []TextRun{} }
+	raw := macos.utf8_string(C.ui2_text_view_runs(voidptr(tv)))
+	return parse_text_area_runs(raw)
+}
+
+fn parse_text_area_runs(raw string) []TextRun {
+	mut runs := []TextRun{}
+	for line in raw.split_into_lines() {
+		if line.len == 0 {
+			continue
+		}
+		parts := line.split('\t')
+		if parts.len < 6 {
+			continue
+		}
+		run_text := base64.decode_str(parts[0])
+		if run_text.len == 0 {
+			continue
+		}
+		runs << TextRun{
+			text:  run_text
+			style: TextStyle{
+				font_family: base64.decode_str(parts[1])
+				size:        parts[2].f64()
+				bold:        parts[3] == '1'
+				italic:      parts[4] == '1'
+				underline:   parts[5] == '1'
+			}
+		}
+	}
+	return runs
+}
+
 pub fn text_area_format_state(id string) TextFormatState {
 	tv := text_area_document_view(id) or { return TextFormatState{} }
 	return TextFormatState{
@@ -380,6 +434,8 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'handleTap:', voidptr(C.ui2_button_tap), 'v@:@')
 		macos.add_method(cls, 'controlTextDidChange:', voidptr(C.ui2_control_text_changed), 'v@:@')
 		macos.add_method(cls, 'textDidChange:', voidptr(C.ui2_text_view_changed), 'v@:@')
+		macos.add_method(cls, 'textView:doCommandBySelector:', voidptr(C.ui2_text_view_do_command),
+			'B@:@:')
 		macos.add_method(cls, 'ui2BoundsChanged:', voidptr(C.ui2_bounds_changed), 'v@:@')
 		macos.register_class_pair(cls)
 	}
@@ -997,13 +1053,15 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 	}
 	macos.msg_void_bool(tv, 'setRichText:', true)
 	C.ui2_text_view_set_attributed_string(voidptr(tv), &char(el.text.str), el.text_style.color,
-		el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline)
+		el.text_style.size, &char(el.text_style.font_family.str), el.text_style.bold,
+		el.text_style.italic, el.text_style.underline)
 	mut location := u64(0)
 	for run in el.text_runs {
 		length := C.ui2_utf16_length(&char(run.text.str))
 		if length > 0 {
 			C.ui2_text_view_add_style(voidptr(tv), location, length, run.style.color,
-				run.style.size, run.style.bold, run.style.italic, run.style.underline)
+				run.style.size, &char(run.style.font_family.str), run.style.bold, run.style.italic,
+				run.style.underline)
 		}
 		location += length
 	}
@@ -1140,6 +1198,45 @@ fn ui2_text_view_changed(_self voidptr, _cmd voidptr, notification voidptr) {
 	tv := macos.msg_id(macos.Id(notification), 'object')
 	id := st.textview_ids[u64(voidptr(tv))] or { return }
 	st.event_handler(id)
+}
+
+@[export: 'ui2_text_view_do_command']
+fn ui2_text_view_do_command(_self voidptr, _cmd voidptr, text_view voidptr, command voidptr) bool {
+	mut st := state()
+	if voidptr(st.key_handler) == unsafe { nil } {
+		return false
+	}
+	key := text_command_key(command) or { return false }
+	id := st.textview_ids[u64(text_view)] or { return false }
+	boundary_noop := text_command_boundary_noop(text_view, key)
+	st.text_key_consumed = false
+	st.key_handler('text:${id}:${key}')
+	consumed := st.text_key_consumed || boundary_noop
+	st.text_key_consumed = false
+	return consumed
+}
+
+fn text_command_key(command voidptr) ?string {
+	name := macos.utf8_string(C.ui2_selector_name(command))
+	return match name {
+		'deleteBackward:' { 'backspace' }
+		'deleteForward:' { 'forward_delete' }
+		else { none }
+	}
+}
+
+fn text_command_boundary_noop(text_view voidptr, key string) bool {
+	selected_length := C.ui2_text_view_selected_length(text_view)
+	if selected_length > 0 {
+		return false
+	}
+	location := C.ui2_text_view_selected_location(text_view)
+	text_length := C.ui2_text_view_text_length(text_view)
+	return match key {
+		'backspace' { location == 0 }
+		'forward_delete' { location >= text_length }
+		else { false }
+	}
 }
 
 @[export: 'ui2_bounds_changed']

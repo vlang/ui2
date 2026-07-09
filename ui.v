@@ -4,7 +4,8 @@ pub type BuildFn = fn () Element
 
 pub type EventFn = fn (string)
 
-// KeyFn receives normalized key strings: 'up', 'forward_delete', 'cmd+shift+r', 'f5', ...
+// KeyFn receives normalized key strings: 'up', 'forward_delete',
+// 'cmd+shift+r', 'f5', or text-view commands like 'text:editor:backspace'.
 pub type KeyFn = fn (string)
 
 // ScrollFn receives the id of the Scroll element whose position changed.
@@ -45,13 +46,14 @@ pub:
 
 pub struct TextStyle {
 pub:
-	color     u32 = 0x111111
-	size      f64 = 15.0
-	bold      bool
-	italic    bool
-	underline bool
-	align     Align
-	lines     int = 1
+	color       u32 = 0x111111
+	size        f64 = 15.0
+	font_family string
+	bold        bool
+	italic      bool
+	underline   bool
+	align       Align
+	lines       int = 1
 }
 
 pub struct TextRun {
