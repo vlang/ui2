@@ -1085,7 +1085,11 @@ fn native_update_button_image(button_view NativeView, frame NativeRect, image_na
 		macos.msg_void_i64(button_view, 'setImagePosition:', 0)
 		return
 	}
-	icon_size := if frame.height >= 42 { 28.0 } else { 13.0 }
+	icon_size := if frame.height >= 42 {
+		if frame.height - 12 < 46.0 { frame.height - 12 } else { 46.0 }
+	} else {
+		13.0
+	}
 	icon_image := C.ui2_image_from_name_sized(&char(image_name.str), icon_size, icon_size)
 	macos.msg_void1(button_view, 'setImage:', icon_image)
 	macos.msg_void_i64(button_view, 'setImagePosition:', if frame.height >= 42 {
