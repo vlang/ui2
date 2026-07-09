@@ -70,6 +70,7 @@ mut:
 	build_screen        BuildFn = BuildFn(unsafe { nil })
 	event_handler       EventFn = EventFn(unsafe { nil })
 	key_handler         KeyFn   = KeyFn(unsafe { nil })
+	key_consumed        bool
 	text_key_consumed   bool
 	scroll_handler      ScrollFn = ScrollFn(unsafe { nil })
 	window              NativeView
@@ -259,6 +260,13 @@ pub fn text_area_caret(id string) int {
 pub fn consume_text_key() {
 	mut st := state()
 	st.text_key_consumed = true
+}
+
+// consume_key tells the current key handler dispatch that the app handled the
+// key and ui2 should not run its default native command.
+pub fn consume_key() {
+	mut st := state()
+	st.key_consumed = true
 }
 
 pub fn clipboard_has_image() bool {
@@ -1274,6 +1282,9 @@ fn ui2_window_perform_key_equiv(_self voidptr, _cmd voidptr, event voidptr) bool
 			return true
 		}
 	}
+	if dispatch_pre_native_command_key(s) {
+		return true
+	}
 	if handle_native_edit_key(s) {
 		return true
 	}
@@ -1283,6 +1294,21 @@ fn ui2_window_perform_key_equiv(_self voidptr, _cmd voidptr, event voidptr) bool
 	}
 	st.key_handler(s)
 	return true
+}
+
+fn dispatch_pre_native_command_key(key string) bool {
+	if key != 'cmd+z' && key != 'cmd+shift+z' && key != 'cmd+y' {
+		return false
+	}
+	mut st := state()
+	if voidptr(st.key_handler) == unsafe { nil } {
+		return false
+	}
+	st.key_consumed = false
+	st.key_handler(key)
+	consumed := st.key_consumed
+	st.key_consumed = false
+	return consumed
 }
 
 fn handle_native_edit_key(key string) bool {
