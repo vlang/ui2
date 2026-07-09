@@ -199,6 +199,29 @@ static inline void ui2_text_view_add_style(void* tv_ptr, unsigned long location,
 	[storage addAttributes:ui2_text_attrs(color, size, family_name, bold, italic, underline, vertical_align) range:NSMakeRange((NSUInteger)location, safe_len)];
 }
 
+static inline void ui2_text_view_add_link(void* tv_ptr, unsigned long location, unsigned long length, const char* utf8) {
+	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
+	if (tv == nil || length == 0 || utf8 == NULL) {
+		return;
+	}
+	NSTextStorage *storage = [tv textStorage];
+	if (storage == nil || location >= [storage length]) {
+		return;
+	}
+	NSString *target = [NSString stringWithUTF8String:utf8];
+	if (target == nil || [target length] == 0) {
+		return;
+	}
+	NSUInteger safe_len = MIN((NSUInteger)length, [storage length] - (NSUInteger)location);
+	NSRange range = NSMakeRange((NSUInteger)location, safe_len);
+	[storage addAttribute:NSLinkAttributeName value:target range:range];
+	NSDictionary *attrs = @{
+		NSForegroundColorAttributeName: ui2_nscolor_obj(0x0563c1),
+		NSUnderlineStyleAttributeName: @(NSUnderlineStyleSingle)
+	};
+	[tv setLinkTextAttributes:attrs];
+}
+
 static inline void* ui2_text_view_runs(void* tv_ptr) {
 	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
 	if (tv == nil) {

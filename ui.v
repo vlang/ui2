@@ -54,6 +54,7 @@ pub:
 	italic         bool
 	underline      bool
 	vertical_align string
+	link           string
 	align          Align
 	lines          int = 1
 }

@@ -22,11 +22,13 @@ fn C.ui2_window_did_resize(self voidptr, cmd voidptr, notification voidptr)
 fn C.ui2_control_text_changed(self voidptr, cmd voidptr, notification voidptr)
 fn C.ui2_text_view_changed(self voidptr, cmd voidptr, notification voidptr)
 fn C.ui2_text_view_do_command(self voidptr, cmd voidptr, text_view voidptr, command voidptr) bool
+fn C.ui2_text_view_clicked_on_link(self voidptr, cmd voidptr, text_view voidptr, link voidptr, char_index u64) bool
 fn C.ui2_bounds_changed(self voidptr, cmd voidptr, notification voidptr)
 fn C.ui2_dispatch_main(cb voidptr)
 fn C.ui2_observe_bounds(observer voidptr, view voidptr)
 fn C.ui2_text_view_set_attributed_string(tv voidptr, utf8 &char, color u32, size f64, family &char, bold bool, italic bool, underline bool, vertical_align &char)
 fn C.ui2_text_view_add_style(tv voidptr, location u64, length u64, color u32, size f64, family &char, bold bool, italic bool, underline bool, vertical_align &char)
+fn C.ui2_text_view_add_link(tv voidptr, location u64, length u64, link &char)
 fn C.ui2_text_view_runs(tv voidptr) macos.Id
 fn C.ui2_control_set_attributed_title(control voidptr, utf8 &char, color u32, size f64, bold bool, italic bool, underline bool)
 fn C.ui2_text_view_toggle_format(tv voidptr, format int)
@@ -530,6 +532,8 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'textDidChange:', voidptr(C.ui2_text_view_changed), 'v@:@')
 		macos.add_method(cls, 'textView:doCommandBySelector:', voidptr(C.ui2_text_view_do_command),
 			'B@:@:')
+		macos.add_method(cls, 'textView:clickedOnLink:atIndex:',
+			voidptr(C.ui2_text_view_clicked_on_link), 'B@:@@Q')
 		macos.add_method(cls, 'ui2BoundsChanged:', voidptr(C.ui2_bounds_changed), 'v@:@')
 		macos.register_class_pair(cls)
 	}
@@ -1218,6 +1222,9 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 			C.ui2_text_view_add_style(voidptr(tv), location, length, run.style.color,
 				run.style.size, &char(run.style.font_family.str), run.style.bold, run.style.italic,
 				run.style.underline, &char(run.style.vertical_align.str))
+			if run.style.link.len > 0 {
+				C.ui2_text_view_add_link(voidptr(tv), location, length, &char(run.style.link.str))
+			}
 		}
 		location += length
 	}
@@ -1427,6 +1434,21 @@ fn ui2_text_view_do_command(_self voidptr, _cmd voidptr, text_view voidptr, comm
 	consumed := st.text_key_consumed || boundary_noop
 	st.text_key_consumed = false
 	return consumed
+}
+
+@[export: 'ui2_text_view_clicked_on_link']
+fn ui2_text_view_clicked_on_link(_self voidptr, _cmd voidptr, text_view voidptr, link voidptr, _char_index u64) bool {
+	st := state()
+	if voidptr(st.event_handler) == unsafe { nil } {
+		return false
+	}
+	id := st.textview_ids[u64(text_view)] or { return false }
+	target := macos.utf8_string(macos.msg_id(macos.Id(link), 'description'))
+	if target.len == 0 {
+		return false
+	}
+	st.event_handler('link:${id}:${base64.encode_str(target)}')
+	return true
 }
 
 fn text_command_key(command voidptr, modifiers u64) ?string {
