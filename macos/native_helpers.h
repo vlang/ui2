@@ -43,15 +43,10 @@ static inline void* ui2_image_from_name_sized(const char* raw, double width, dou
 	if (image == nil) {
 		return nil;
 	}
-	NSImage *scaled = [[[NSImage alloc] initWithSize:NSMakeSize(width, height)] autorelease];
-	[scaled lockFocus];
-	[image drawInRect:NSMakeRect(0, 0, width, height)
-	         fromRect:NSZeroRect
-	        operation:NSCompositingOperationSourceOver
-	         fraction:1.0];
-	[scaled unlockFocus];
-	[scaled setTemplate:[image isTemplate]];
-	return (__bridge void*)scaled;
+	NSImage *sized = [[image copy] autorelease];
+	[sized setSize:NSMakeSize(width, height)];
+	[sized setTemplate:[image isTemplate]];
+	return (__bridge void*)sized;
 }
 
 static inline NSFont* ui2_font_obj(double size, bool bold, bool italic) {
