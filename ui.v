@@ -22,6 +22,7 @@ enum Kind {
 	label
 	image
 	button
+	dropdown
 	text_field
 	text_area
 	scroll
@@ -198,6 +199,18 @@ pub fn button(id string, title string, frame Rect, box_ BoxStyle, style TextStyl
 	}
 }
 
+pub fn button_with_image(id string, title string, image_name string, frame Rect, box_ BoxStyle, style TextStyle) Element {
+	return Element{
+		kind:       .button
+		id:         id
+		text:       title
+		image_path: image_name
+		frame:      frame
+		box:        box_
+		text_style: style
+	}
+}
+
 pub fn button_with_long_press(id string, title string, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
 		kind:       .button
@@ -207,6 +220,25 @@ pub fn button_with_long_press(id string, title string, frame Rect, box_ BoxStyle
 		box:        box_
 		text_style: style
 		long_press: true
+	}
+}
+
+pub fn dropdown(id string, selected string, options []string, frame Rect, box_ BoxStyle, style TextStyle) Element {
+	mut entries := []MenuEntry{}
+	for option in options {
+		entries << MenuEntry{
+			id:    option
+			title: option
+		}
+	}
+	return Element{
+		kind:       .dropdown
+		id:         id
+		text:       selected
+		frame:      frame
+		box:        box_
+		text_style: style
+		menu:       entries
 	}
 }
 

@@ -7,6 +7,8 @@ import os
 #insert "@DIR/macos/native_helpers.h"
 
 fn C.macos_objc_msg_id_rect_u64_u64_bool(obj macos.Id, selector macos.Sel, rect macos.Rect, a1 u64, a2 u64, a3 bool) macos.Id
+fn C.ui2_image_from_name(raw &char) macos.Id
+fn C.ui2_image_from_name_sized(raw &char, width f64, height f64) macos.Id
 fn C.ui2_nscolor_rgb(hex u32) macos.Id
 fn C.ui2_app_did_finish_launching(self voidptr, cmd voidptr, notification voidptr)
 fn C.ui2_app_should_terminate_after_last_window_closed(self voidptr, cmd voidptr, sender voidptr) bool
@@ -24,6 +26,8 @@ fn C.ui2_text_view_set_attributed_string(tv voidptr, utf8 &char, color u32, size
 fn C.ui2_text_view_add_style(tv voidptr, location u64, length u64, color u32, size f64, bold bool, italic bool, underline bool)
 fn C.ui2_control_set_attributed_title(control voidptr, utf8 &char, color u32, size f64, bold bool, italic bool, underline bool)
 fn C.ui2_text_view_toggle_format(tv voidptr, format int)
+fn C.ui2_text_view_set_font_family(tv voidptr, family &char)
+fn C.ui2_text_view_set_font_size(tv voidptr, size f64)
 fn C.ui2_text_view_format_active(tv voidptr, format int) bool
 fn C.ui2_text_view_set_selected_range(tv voidptr, location u64, length u64)
 fn C.ui2_view_save_png(view voidptr, path &char) bool
@@ -66,8 +70,10 @@ mut:
 	app_delegate        NativeView
 	views               map[string]NativeView
 	view_kinds          map[string]Kind
+	text_area_direct    map[string]bool
 	nodes               map[string]NativeView
 	node_kinds          map[string]Kind
+	node_text_direct    map[string]bool
 	textview_ids        map[u64]string // NSTextView pointer -> element id (no tag on NSView)
 	scroll_ids          map[u64]string // NSClipView pointer -> Scroll element id
 	observed            map[u64]bool   // clip views we already observe for scroll changes
@@ -78,13 +84,15 @@ mut:
 }
 
 const runtime_state_singleton = &RuntimeState{
-	views:        map[string]NativeView{}
-	view_kinds:   map[string]Kind{}
-	nodes:        map[string]NativeView{}
-	node_kinds:   map[string]Kind{}
-	textview_ids: map[u64]string{}
-	scroll_ids:   map[u64]string{}
-	observed:     map[u64]bool{}
+	views:            map[string]NativeView{}
+	view_kinds:       map[string]Kind{}
+	text_area_direct: map[string]bool{}
+	nodes:            map[string]NativeView{}
+	node_kinds:       map[string]Kind{}
+	node_text_direct: map[string]bool{}
+	textview_ids:     map[u64]string{}
+	scroll_ids:       map[u64]string{}
+	observed:         map[u64]bool{}
 }
 
 fn state() &RuntimeState {
@@ -187,12 +195,13 @@ pub fn scroll_to_rect(id string, x f64, y f64, width f64, height f64) {
 pub fn text(id string) string {
 	st := state()
 	native := st.views[id] or { return '' }
-	if (st.view_kinds[id] or { Kind.view }) == .text_area {
-		tv := macos.msg_id(native, 'documentView')
-		if native_is_nil(tv) {
-			return ''
-		}
+	kind := st.view_kinds[id] or { Kind.view }
+	if kind == .text_area {
+		tv := text_area_text_view(native, st.text_area_direct[id] or { false })
 		return macos.utf8_string(macos.msg_id(tv, 'string'))
+	}
+	if kind == .dropdown {
+		return native_dropdown_text(native)
 	}
 	return native_text(native)
 }
@@ -200,12 +209,14 @@ pub fn text(id string) string {
 pub fn set_text(id string, t string) {
 	st := state()
 	native := st.views[id] or { return }
-	if (st.view_kinds[id] or { Kind.view }) == .text_area {
-		tv := macos.msg_id(native, 'documentView')
-		if native_is_nil(tv) {
-			return
-		}
+	kind := st.view_kinds[id] or { Kind.view }
+	if kind == .text_area {
+		tv := text_area_text_view(native, st.text_area_direct[id] or { false })
 		macos.msg_void1(tv, 'setString:', macos.nsstring(t))
+		return
+	}
+	if kind == .dropdown {
+		native_select_dropdown_item(native, t)
 		return
 	}
 	native_set_text(native, t)
@@ -215,10 +226,7 @@ pub fn focus(id string) {
 	st := state()
 	native := st.views[id] or { return }
 	if (st.view_kinds[id] or { Kind.view }) == .text_area {
-		tv := macos.msg_id(native, 'documentView')
-		if native_is_nil(tv) {
-			return
-		}
+		tv := text_area_text_view(native, st.text_area_direct[id] or { false })
 		native_focus(tv)
 		return
 	}
@@ -311,6 +319,18 @@ pub fn toggle_text_area_format(id string, format TextFormat) TextFormatState {
 	return text_area_format_state(id)
 }
 
+pub fn set_text_area_font_family(id string, family string) TextFormatState {
+	tv := text_area_document_view(id) or { return TextFormatState{} }
+	C.ui2_text_view_set_font_family(voidptr(tv), &char(family.str))
+	return text_area_format_state(id)
+}
+
+pub fn set_text_area_font_size(id string, size f64) TextFormatState {
+	tv := text_area_document_view(id) or { return TextFormatState{} }
+	C.ui2_text_view_set_font_size(voidptr(tv), size)
+	return text_area_format_state(id)
+}
+
 pub fn text_area_format_state(id string) TextFormatState {
 	tv := text_area_document_view(id) or { return TextFormatState{} }
 	return TextFormatState{
@@ -326,11 +346,18 @@ fn text_area_document_view(id string) ?NativeView {
 	if (st.view_kinds[id] or { Kind.view }) != .text_area {
 		return none
 	}
-	tv := macos.msg_id(native, 'documentView')
+	tv := text_area_text_view(native, st.text_area_direct[id] or { false })
 	if native_is_nil(tv) {
 		return none
 	}
 	return tv
+}
+
+fn text_area_text_view(native NativeView, direct bool) NativeView {
+	if direct {
+		return native
+	}
+	return macos.msg_id(native, 'documentView')
 }
 
 fn ensure_runtime_classes() {
@@ -381,6 +408,7 @@ fn render_root(root Element) {
 	mut st := state()
 	st.views = map[string]NativeView{}
 	st.view_kinds = map[string]Kind{}
+	st.text_area_direct = map[string]bool{}
 	st.button_ids = []string{}
 	native_set_background(st.root_view, root.box.bg)
 	mut active := map[string]bool{}
@@ -395,13 +423,19 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 	mut st := state()
 	mut native := st.nodes[key] or { native_nil_view() }
 	existing_kind := st.node_kinds[key] or { Kind.screen }
-	if native_is_nil(native) || existing_kind != el.kind {
+	existing_direct := st.node_text_direct[key] or { false }
+	text_area_mode_changed := el.kind == .text_area && existing_kind == .text_area
+		&& existing_direct != el.disable_scroll
+	if native_is_nil(native) || existing_kind != el.kind || text_area_mode_changed {
 		if !native_is_nil(native) {
 			native_remove_from_superview(native)
 		}
 		native = native_create_element(el)
 		st.nodes[key] = native
 		st.node_kinds[key] = el.kind
+		if el.kind == .text_area {
+			st.node_text_direct[key] = el.disable_scroll
+		}
 		if el.kind != .screen {
 			native_add_subview(parent, native)
 		}
@@ -452,6 +486,9 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		.button {
 			register_button(native, el.id)
 		}
+		.dropdown {
+			register_action_control(native, el.id)
+		}
 		.text_field {
 			if el.emit_change {
 				register_control(native, el.id)
@@ -459,8 +496,9 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		}
 		.text_area {
 			if el.id.len > 0 {
-				tv := macos.msg_id(native, 'documentView')
+				tv := text_area_text_view(native, el.disable_scroll)
 				st.textview_ids[u64(voidptr(tv))] = el.id
+				st.text_area_direct[el.id] = el.disable_scroll
 			}
 		}
 		.label {
@@ -471,7 +509,7 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		}
 	}
 
-	if el.menu.len > 0 {
+	if el.menu.len > 0 && el.kind != .dropdown {
 		attach_menu(native, el.menu)
 	}
 
@@ -521,7 +559,10 @@ fn native_create_element(el Element) NativeView {
 		.button {
 			native_new_button(element_rect(el.frame), el.text, el.box.bg, el.text_style.color,
 				el.text_style.size, el.text_style.bold, el.text_style.italic,
-				el.text_style.underline, el.box.radius, el.text_style.lines)
+				el.text_style.underline, el.box.radius, el.text_style.lines, el.image_path)
+		}
+		.dropdown {
+			native_new_dropdown(el)
 		}
 		.text_field {
 			native_new_text_field(el)
@@ -555,7 +596,10 @@ fn native_update_element(native NativeView, el Element) {
 		.button {
 			native_update_button(native, element_rect(el.frame), el.text, el.box.bg,
 				el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic,
-				el.text_style.underline, el.box.radius, el.text_style.lines)
+				el.text_style.underline, el.box.radius, el.text_style.lines, el.image_path)
+		}
+		.dropdown {
+			native_update_dropdown(native, el)
 		}
 		.text_field {
 			native_update_text_field(native, element_rect(el.frame), el.placeholder, el.text,
@@ -583,6 +627,15 @@ fn register_button(native NativeView, id string) {
 	st.button_ids << id
 	native_set_tag(native, tag)
 	native_set_button_target(native, st.button_handler)
+	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
+}
+
+fn register_action_control(native NativeView, id string) {
+	mut st := state()
+	tag := st.button_ids.len
+	st.button_ids << id
+	native_set_tag(native, tag)
+	native_set_control_target(native, st.button_handler)
 	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
 }
 
@@ -794,14 +847,14 @@ fn native_update_label(label_view NativeView, frame NativeRect, text string, tex
 	macos.msg_void_bool(cell, 'setUsesSingleLineMode:', lines == 1)
 }
 
-fn native_new_button(frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int) NativeView {
+fn native_new_button(frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int, image_name string) NativeView {
 	button_view := macos.msg_id_rect(macos.alloc('NSButton'), 'initWithFrame:', appkit_rect(frame))
 	native_update_button(button_view, frame, title, bg_hex, text_hex, size, bold, italic,
-		underline, radius, lines)
+		underline, radius, lines, image_name)
 	return button_view
 }
 
-fn native_update_button(button_view NativeView, frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int) {
+fn native_update_button(button_view NativeView, frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int, image_name string) {
 	native_set_frame(button_view, frame)
 	macos.msg_void1(button_view, 'setTitle:', macos.nsstring(title))
 	macos.msg_void_u64(button_view, 'setBezelStyle:', 1)
@@ -814,6 +867,44 @@ fn native_update_button(button_view NativeView, frame NativeRect, title string, 
 	cell := macos.msg_id(button_view, 'cell')
 	macos.msg_void_i64(cell, 'setLineBreakMode:', 4)
 	macos.msg_void_bool(cell, 'setUsesSingleLineMode:', lines == 1)
+	native_update_button_image(button_view, frame, image_name)
+}
+
+fn native_update_button_image(button_view NativeView, frame NativeRect, image_name string) {
+	if image_name.trim_space() == '' {
+		macos.msg_void1(button_view, 'setImage:', macos.Id(unsafe { nil }))
+		macos.msg_void_i64(button_view, 'setImagePosition:', 0)
+		return
+	}
+	icon_size := if frame.height >= 42 { 28.0 } else { 13.0 }
+	icon_image := C.ui2_image_from_name_sized(&char(image_name.str), icon_size, icon_size)
+	macos.msg_void1(button_view, 'setImage:', icon_image)
+	macos.msg_void_i64(button_view, 'setImagePosition:', if frame.height >= 42 {
+		i64(5)
+	} else {
+		i64(2)
+	})
+	macos.msg_void_i64(button_view, 'setImageScaling:', 3)
+}
+
+fn native_new_dropdown(el Element) NativeView {
+	popup := macos.msg_id_rect(macos.alloc('NSPopUpButton'), 'initWithFrame:',
+		appkit_rect(element_rect(el.frame)))
+	native_update_dropdown(popup, el)
+	return popup
+}
+
+fn native_update_dropdown(popup NativeView, el Element) {
+	native_set_frame(popup, element_rect(el.frame))
+	macos.msg_void(popup, 'removeAllItems')
+	for item in el.menu {
+		macos.msg_void1(popup, 'addItemWithTitle:', macos.nsstring(item.title))
+	}
+	native_select_dropdown_item(popup, el.text)
+	macos.msg_void1(popup, 'setFont:', native_font(el.text_style.size, el.text_style.bold,
+		el.text_style.italic))
+	macos.msg_void_bool(popup, 'setBordered:', true)
+	macos.msg_void_u64(popup, 'setBezelStyle:', 1)
 }
 
 fn native_new_text_field(el Element) NativeView {
@@ -846,12 +937,22 @@ fn native_update_text_field(field NativeView, frame NativeRect, placeholder stri
 // native multi-line editing with wrapping, selection, clipboard and undo.
 fn native_new_text_area(el Element) NativeView {
 	frame := element_rect(el.frame)
+	if el.disable_scroll {
+		tv := native_new_text_view(appkit_rect(frame), el)
+		return tv
+	}
 	scroll_view := macos.msg_id_rect(macos.alloc('NSScrollView'), 'initWithFrame:',
 		appkit_rect(frame))
-	macos.msg_void_bool(scroll_view, 'setHasVerticalScroller:', !el.disable_scroll)
-	macos.msg_void_bool(scroll_view, 'setAutohidesScrollers:', !el.disable_scroll)
-	tv := macos.msg_id_rect(macos.alloc('NSTextView'), 'initWithFrame:', macos.rect(0, 0,
-		frame.width, frame.height))
+	macos.msg_void_bool(scroll_view, 'setHasVerticalScroller:', true)
+	macos.msg_void_bool(scroll_view, 'setAutohidesScrollers:', true)
+	tv := native_new_text_view(macos.rect(0, 0, frame.width, frame.height), el)
+	macos.msg_void1(scroll_view, 'setDocumentView:', tv)
+	native_set_corner_radius(scroll_view, el.box.radius)
+	return scroll_view
+}
+
+fn native_new_text_view(frame macos.Rect, el Element) NativeView {
+	tv := macos.msg_id_rect(macos.alloc('NSTextView'), 'initWithFrame:', frame)
 	macos.msg_void1(tv, 'setFont:', native_font(el.text_style.size, el.text_style.bold,
 		el.text_style.italic))
 	macos.msg_void_bool(tv, 'setRichText:', el.text_runs.len > 0)
@@ -866,16 +967,17 @@ fn native_new_text_area(el Element) NativeView {
 	native_set_text_area_content(tv, el)
 	st := state()
 	macos.msg_void1(tv, 'setDelegate:', st.button_handler)
-	macos.msg_void1(scroll_view, 'setDocumentView:', tv)
-	native_set_corner_radius(scroll_view, el.box.radius)
-	return scroll_view
+	return tv
 }
 
 fn native_update_text_area(native NativeView, el Element) {
-	native_set_frame(native, element_rect(el.frame))
-	macos.msg_void_bool(native, 'setHasVerticalScroller:', !el.disable_scroll)
-	macos.msg_void_bool(native, 'setAutohidesScrollers:', !el.disable_scroll)
-	tv := macos.msg_id(native, 'documentView')
+	frame := element_rect(el.frame)
+	native_set_frame(native, frame)
+	if !el.disable_scroll {
+		macos.msg_void_bool(native, 'setHasVerticalScroller:', true)
+		macos.msg_void_bool(native, 'setAutohidesScrollers:', true)
+	}
+	tv := text_area_text_view(native, el.disable_scroll)
 	if native_is_nil(tv) {
 		return
 	}
@@ -921,8 +1023,20 @@ fn native_text(view NativeView) string {
 	return macos.utf8_string(macos.msg_id(view, 'stringValue'))
 }
 
+fn native_dropdown_text(view NativeView) string {
+	item := macos.msg_id(view, 'selectedItem')
+	if native_is_nil(item) {
+		return ''
+	}
+	return macos.utf8_string(macos.msg_id(item, 'title'))
+}
+
 fn native_set_text(view NativeView, text string) {
 	macos.msg_void1(view, 'setStringValue:', macos.nsstring(text))
+}
+
+fn native_select_dropdown_item(view NativeView, text string) {
+	macos.msg_void1(view, 'selectItemWithTitle:', macos.nsstring(text))
 }
 
 fn native_focus(view NativeView) {

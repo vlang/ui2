@@ -12,6 +12,46 @@ static inline void* ui2_nscolor_rgb(unsigned int hex) {
 	return (__bridge void*)ui2_nscolor_obj(hex);
 }
 
+static inline void* ui2_image_from_name(const char* raw) {
+	if (raw == NULL) {
+		return nil;
+	}
+	NSString *name = [NSString stringWithUTF8String:raw];
+	if (name == nil || [name length] == 0) {
+		return nil;
+	}
+	if ([name hasPrefix:@"symbol:"]) {
+		NSString *symbol = [name substringFromIndex:[@"symbol:" length]];
+		if ([NSImage respondsToSelector:@selector(imageWithSystemSymbolName:accessibilityDescription:)]) {
+			NSImage *symbolImage = [NSImage imageWithSystemSymbolName:symbol accessibilityDescription:nil];
+			if (symbolImage != nil) {
+				return (__bridge void*)symbolImage;
+			}
+		}
+	}
+	NSImage *fileImage = [[[NSImage alloc] initWithContentsOfFile:name] autorelease];
+	if (fileImage != nil) {
+		return (__bridge void*)fileImage;
+	}
+	return (__bridge void*)[NSImage imageNamed:name];
+}
+
+static inline void* ui2_image_from_name_sized(const char* raw, double width, double height) {
+	NSImage *image = (__bridge NSImage*)ui2_image_from_name(raw);
+	if (image == nil) {
+		return nil;
+	}
+	NSImage *scaled = [[[NSImage alloc] initWithSize:NSMakeSize(width, height)] autorelease];
+	[scaled lockFocus];
+	[image drawInRect:NSMakeRect(0, 0, width, height)
+	         fromRect:NSZeroRect
+	        operation:NSCompositingOperationSourceOver
+	         fraction:1.0];
+	[scaled unlockFocus];
+	[scaled setTemplate:[image isTemplate]];
+	return (__bridge void*)scaled;
+}
+
 static inline NSFont* ui2_font_obj(double size, bool bold, bool italic) {
 	NSFont *font = bold ? [NSFont boldSystemFontOfSize:size] : [NSFont systemFontOfSize:size];
 	if (italic) {
@@ -174,6 +214,48 @@ static inline NSFont* ui2_font_with_format(NSFont *font, int format, bool enable
 	return converted == nil ? font : converted;
 }
 
+static inline NSFont* ui2_font_with_family(NSFont *font, const char* family_name, double fallback_size) {
+	if (fallback_size <= 0) {
+		fallback_size = [NSFont systemFontSize];
+	}
+	CGFloat size = font == nil ? fallback_size : [font pointSize];
+	NSString *family = family_name == NULL ? nil : [NSString stringWithUTF8String:family_name];
+	if (family == nil || [family length] == 0) {
+		return font == nil ? [NSFont systemFontOfSize:size] : font;
+	}
+	NSFont *base = [NSFont fontWithName:family size:size];
+	if (base == nil) {
+		base = [[NSFontManager sharedFontManager] fontWithFamily:family traits:0 weight:5 size:size];
+	}
+	if (base == nil) {
+		return font == nil ? [NSFont systemFontOfSize:size] : font;
+	}
+	if (font == nil) {
+		return base;
+	}
+	NSFontManager *manager = [NSFontManager sharedFontManager];
+	NSFontTraitMask traits = [manager traitsOfFont:font];
+	NSFont *converted = base;
+	if ((traits & NSBoldFontMask) != 0) {
+		converted = [manager convertFont:converted toHaveTrait:NSBoldFontMask] ?: converted;
+	}
+	if ((traits & NSItalicFontMask) != 0) {
+		converted = [manager convertFont:converted toHaveTrait:NSItalicFontMask] ?: converted;
+	}
+	return converted;
+}
+
+static inline NSFont* ui2_font_with_size(NSFont *font, double size) {
+	if (size <= 0) {
+		size = [NSFont systemFontSize];
+	}
+	if (font == nil) {
+		return [NSFont systemFontOfSize:size];
+	}
+	NSFont *converted = [[NSFontManager sharedFontManager] convertFont:font toSize:size];
+	return converted == nil ? font : converted;
+}
+
 static inline void ui2_apply_typing_format(NSTextView *tv, int format, bool enabled) {
 	NSMutableDictionary *attrs = [[tv typingAttributes] mutableCopy];
 	if (attrs == nil) {
@@ -192,6 +274,34 @@ static inline void ui2_apply_typing_format(NSTextView *tv, int format, bool enab
 		}
 		attrs[NSFontAttributeName] = ui2_font_with_format(font, format, enabled, [tv font] == nil ? [NSFont systemFontSize] : [[tv font] pointSize]);
 	}
+	[tv setTypingAttributes:attrs];
+	[attrs release];
+}
+
+static inline void ui2_apply_typing_font_family(NSTextView *tv, const char* family_name) {
+	NSMutableDictionary *attrs = [[tv typingAttributes] mutableCopy];
+	if (attrs == nil) {
+		attrs = [[NSMutableDictionary alloc] init];
+	}
+	NSFont *font = attrs[NSFontAttributeName];
+	if (font == nil) {
+		font = [tv font];
+	}
+	attrs[NSFontAttributeName] = ui2_font_with_family(font, family_name, [tv font] == nil ? [NSFont systemFontSize] : [[tv font] pointSize]);
+	[tv setTypingAttributes:attrs];
+	[attrs release];
+}
+
+static inline void ui2_apply_typing_font_size(NSTextView *tv, double size) {
+	NSMutableDictionary *attrs = [[tv typingAttributes] mutableCopy];
+	if (attrs == nil) {
+		attrs = [[NSMutableDictionary alloc] init];
+	}
+	NSFont *font = attrs[NSFontAttributeName];
+	if (font == nil) {
+		font = [tv font];
+	}
+	attrs[NSFontAttributeName] = ui2_font_with_size(font, size);
 	[tv setTypingAttributes:attrs];
 	[attrs release];
 }
@@ -231,6 +341,59 @@ static inline void ui2_apply_range_format(NSTextView *tv, NSRange range, int for
 	[tv setSelectedRange:range];
 }
 
+static inline void ui2_apply_range_font_family(NSTextView *tv, NSRange range, const char* family_name) {
+	NSTextStorage *storage = [tv textStorage];
+	if (storage == nil || [storage length] == 0 || range.length == 0 || range.location >= [storage length]) {
+		return;
+	}
+	NSUInteger max_len = [storage length] - range.location;
+	if (range.length > max_len) {
+		range.length = max_len;
+	}
+	[storage beginEditing];
+	NSUInteger end = NSMaxRange(range);
+	NSUInteger cursor = range.location;
+	while (cursor < end) {
+		NSRange effective = NSMakeRange(cursor, end - cursor);
+		NSFont *font = [storage attribute:NSFontAttributeName atIndex:cursor longestEffectiveRange:&effective inRange:range];
+		NSRange apply = NSIntersectionRange(effective, range);
+		if (apply.length == 0) {
+			apply = NSMakeRange(cursor, 1);
+		}
+		NSFont *converted = ui2_font_with_family(font == nil ? [tv font] : font, family_name, [tv font] == nil ? [NSFont systemFontSize] : [[tv font] pointSize]);
+		[storage addAttribute:NSFontAttributeName value:converted range:apply];
+		cursor = NSMaxRange(apply);
+	}
+	[storage endEditing];
+	[tv setSelectedRange:range];
+}
+
+static inline void ui2_apply_range_font_size(NSTextView *tv, NSRange range, double size) {
+	NSTextStorage *storage = [tv textStorage];
+	if (storage == nil || [storage length] == 0 || range.length == 0 || range.location >= [storage length]) {
+		return;
+	}
+	NSUInteger max_len = [storage length] - range.location;
+	if (range.length > max_len) {
+		range.length = max_len;
+	}
+	[storage beginEditing];
+	NSUInteger end = NSMaxRange(range);
+	NSUInteger cursor = range.location;
+	while (cursor < end) {
+		NSRange effective = NSMakeRange(cursor, end - cursor);
+		NSFont *font = [storage attribute:NSFontAttributeName atIndex:cursor longestEffectiveRange:&effective inRange:range];
+		NSRange apply = NSIntersectionRange(effective, range);
+		if (apply.length == 0) {
+			apply = NSMakeRange(cursor, 1);
+		}
+		[storage addAttribute:NSFontAttributeName value:ui2_font_with_size(font == nil ? [tv font] : font, size) range:apply];
+		cursor = NSMaxRange(apply);
+	}
+	[storage endEditing];
+	[tv setSelectedRange:range];
+}
+
 static inline void ui2_text_view_toggle_format(void* tv_ptr, int format) {
 	NSTextView *tv = ui2_text_view_obj(tv_ptr);
 	if (tv == nil) {
@@ -243,6 +406,32 @@ static inline void ui2_text_view_toggle_format(void* tv_ptr, int format) {
 		return;
 	}
 	ui2_apply_range_format(tv, selected, format, enabled);
+}
+
+static inline void ui2_text_view_set_font_family(void* tv_ptr, const char* family_name) {
+	NSTextView *tv = ui2_text_view_obj(tv_ptr);
+	if (tv == nil) {
+		return;
+	}
+	NSRange selected = [tv selectedRange];
+	if (selected.length == 0) {
+		ui2_apply_typing_font_family(tv, family_name);
+		return;
+	}
+	ui2_apply_range_font_family(tv, selected, family_name);
+}
+
+static inline void ui2_text_view_set_font_size(void* tv_ptr, double size) {
+	NSTextView *tv = ui2_text_view_obj(tv_ptr);
+	if (tv == nil) {
+		return;
+	}
+	NSRange selected = [tv selectedRange];
+	if (selected.length == 0) {
+		ui2_apply_typing_font_size(tv, size);
+		return;
+	}
+	ui2_apply_range_font_size(tv, selected, size);
 }
 
 static inline bool ui2_view_save_png(void* view_ptr, const char* path) {
