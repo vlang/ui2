@@ -5,6 +5,7 @@ import macos
 import os
 
 #flag darwin -framework Cocoa
+#flag darwin -framework QuartzCore
 #insert "@DIR/macos/native_helpers.h"
 
 fn C.macos_objc_msg_id_rect_u64_u64_bool(obj macos.Id, selector macos.Sel, rect macos.Rect, a1 u64, a2 u64, a3 bool) macos.Id
@@ -48,6 +49,8 @@ fn C.ui2_current_event_modifier_flags() u64
 fn C.ui2_utf16_length(utf8 &char) u64
 fn C.ui2_event_x_in_view(view voidptr, event voidptr) f64
 fn C.ui2_event_y_in_view(view voidptr, event voidptr) f64
+fn C.ui2_view_clear_rotation(view voidptr)
+fn C.ui2_view_reset_transform(view voidptr)
 fn C.ui2_view_set_rotation(view voidptr, degrees f64)
 fn C.ui2_pointer_mouse_down(self voidptr, cmd voidptr, event voidptr)
 fn C.ui2_pointer_mouse_dragged(self voidptr, cmd voidptr, event voidptr)
@@ -977,9 +980,17 @@ fn native_new_image(frame NativeRect, path string, rotation f64) NativeView {
 }
 
 fn native_update_image(image_view NativeView, frame NativeRect, path string, rotation f64) {
+	rotated := rotation < -0.001 || rotation > 0.001
+	if rotated {
+		C.ui2_view_reset_transform(voidptr(image_view))
+	}
 	native_set_frame(image_view, frame)
 	macos.msg_void_i64(image_view, 'setImageScaling:', 3)
-	C.ui2_view_set_rotation(voidptr(image_view), rotation)
+	if rotated {
+		C.ui2_view_set_rotation(voidptr(image_view), rotation)
+	} else {
+		C.ui2_view_clear_rotation(voidptr(image_view))
+	}
 	if path.trim_space() == '' {
 		macos.msg_void1(image_view, 'setImage:', macos.Id(unsafe { nil }))
 		return

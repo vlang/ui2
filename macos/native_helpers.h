@@ -1,4 +1,5 @@
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #include <dispatch/dispatch.h>
 #include <string.h>
 
@@ -774,14 +775,52 @@ static inline void ui2_view_set_rotation(void* view_ptr, double degrees) {
 	if (view == nil) {
 		return;
 	}
+	NSRect frame = [view frame];
 	[view setWantsLayer:YES];
 	CALayer *layer = [view layer];
 	if (layer == nil) {
 		return;
 	}
+	[CATransaction begin];
+	[CATransaction setDisableActions:YES];
 	[layer setAnchorPoint:CGPointMake(0.5, 0.5)];
 	CGFloat radians = (CGFloat)(degrees * M_PI / 180.0);
 	[layer setAffineTransform:CGAffineTransformMakeRotation(radians)];
+	[CATransaction commit];
+	[view setFrame:frame];
+}
+
+static inline void ui2_view_reset_transform(void* view_ptr) {
+	NSView *view = (__bridge NSView*)view_ptr;
+	if (view == nil) {
+		return;
+	}
+	NSRect frame = [view frame];
+	[view setWantsLayer:YES];
+	CALayer *layer = [view layer];
+	if (layer == nil) {
+		return;
+	}
+	[CATransaction begin];
+	[CATransaction setDisableActions:YES];
+	[layer setAffineTransform:CGAffineTransformIdentity];
+	[CATransaction commit];
+	[view setFrame:frame];
+}
+
+static inline void ui2_view_clear_rotation(void* view_ptr) {
+	NSView *view = (__bridge NSView*)view_ptr;
+	if (view == nil || ![view wantsLayer]) {
+		return;
+	}
+	CALayer *layer = [view layer];
+	if (layer == nil) {
+		return;
+	}
+	[CATransaction begin];
+	[CATransaction setDisableActions:YES];
+	[layer setAffineTransform:CGAffineTransformIdentity];
+	[CATransaction commit];
 }
 
 typedef void (*ui2_void_cb)(void);
