@@ -538,8 +538,8 @@ fn ensure_runtime_classes() {
 fn align_value(a Align) int {
 	return match a {
 		.left { 0 }
-		.right { 1 }
-		.center { 2 }
+		.center { 1 }
+		.right { 2 }
 	}
 }
 
