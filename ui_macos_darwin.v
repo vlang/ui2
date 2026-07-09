@@ -65,7 +65,6 @@ const ns_window_style_miniaturizable = u64(4)
 const ns_window_style_resizable = u64(8)
 const ns_backing_store_buffered = u64(2)
 const ns_button_type_momentary_change = i64(5)
-const ns_image_scale_none = i64(2)
 
 type NativeView = voidptr
 
@@ -1097,7 +1096,7 @@ fn native_update_button_image(button_view NativeView, frame NativeRect, image_na
 	} else {
 		i64(2)
 	})
-	macos.msg_void_i64(button_view, 'setImageScaling:', ns_image_scale_none)
+	macos.msg_void_i64(button_view, 'setImageScaling:', 3)
 }
 
 fn native_new_dropdown(el Element) NativeView {
