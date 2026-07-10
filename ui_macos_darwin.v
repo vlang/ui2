@@ -36,6 +36,9 @@ fn C.ui2_text_view_set_font_family(tv voidptr, family &char)
 fn C.ui2_text_view_set_font_size(tv voidptr, size f64)
 fn C.ui2_text_view_set_color(tv voidptr, color u32)
 fn C.ui2_text_view_set_background_color(tv voidptr, color u32)
+fn C.ui2_text_view_add_effect(tv voidptr, location u64, length u64, effect int)
+fn C.ui2_text_view_set_effect(tv voidptr, effect int)
+fn C.ui2_text_view_effect_active(tv voidptr) int
 fn C.ui2_text_view_format_active(tv voidptr, format int) bool
 fn C.ui2_text_view_toggle_vertical_align(tv voidptr, align int)
 fn C.ui2_text_view_vertical_align_active(tv voidptr) int
@@ -416,6 +419,20 @@ pub fn set_text_area_background_color(id string, color u32) TextFormatState {
 	return text_area_format_state(id)
 }
 
+pub fn set_text_area_effect(id string, effect string) TextFormatState {
+	tv := text_area_document_view(id) or { return TextFormatState{} }
+	C.ui2_text_view_set_effect(voidptr(tv), text_effect_value(effect))
+	return text_area_format_state(id)
+}
+
+fn text_effect_value(effect string) int {
+	return match effect {
+		'shadow' { 1 }
+		'outline' { 2 }
+		else { 0 }
+	}
+}
+
 pub fn toggle_text_area_superscript(id string) TextFormatState {
 	return toggle_text_area_vertical_align(id, 'superscript')
 }
@@ -470,6 +487,8 @@ fn parse_text_area_runs(raw string) []TextRun {
 				strikethrough:    parts.len > 7 && parts[7] == '1'
 				color:            if parts.len > 8 { u32(parts[8].u64()) } else { u32(0x111111) }
 				background_color: if parts.len > 9 { u32(parts[9].u64()) } else { u32(0) }
+				shadow:           parts.len > 10 && parts[10] == '1'
+				outline:          parts.len > 10 && parts[10] == '2'
 			}
 		}
 	}
@@ -486,11 +505,14 @@ fn text_run_vertical_align(value string) string {
 pub fn text_area_format_state(id string) TextFormatState {
 	tv := text_area_document_view(id) or { return TextFormatState{} }
 	vertical := C.ui2_text_view_vertical_align_active(voidptr(tv))
+	effect := C.ui2_text_view_effect_active(voidptr(tv))
 	return TextFormatState{
 		bold:          C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.bold))
 		italic:        C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.italic))
 		underline:     C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.underline))
 		strikethrough: C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.strikethrough))
+		shadow:        effect == 1
+		outline:       effect == 2
 		subscript:     vertical < 0
 		superscript:   vertical > 0
 	}
@@ -1246,6 +1268,11 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 		el.text_style.background_color, el.text_style.size, &char(el.text_style.font_family.str),
 		el.text_style.bold, el.text_style.italic, el.text_style.underline,
 		el.text_style.strikethrough, &char(el.text_style.vertical_align.str))
+	base_length := C.ui2_utf16_length(&char(el.text.str))
+	if base_length > 0 {
+		C.ui2_text_view_add_effect(voidptr(tv), 0, base_length,
+			text_style_effect_value(el.text_style))
+	}
 	mut location := u64(0)
 	for run in el.text_runs {
 		length := C.ui2_utf16_length(&char(run.text.str))
@@ -1254,12 +1281,24 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 				run.style.background_color, run.style.size, &char(run.style.font_family.str),
 				run.style.bold, run.style.italic, run.style.underline, run.style.strikethrough,
 				&char(run.style.vertical_align.str))
+			C.ui2_text_view_add_effect(voidptr(tv), location, length,
+				text_style_effect_value(run.style))
 			if run.style.link.len > 0 {
 				C.ui2_text_view_add_link(voidptr(tv), location, length, &char(run.style.link.str))
 			}
 		}
 		location += length
 	}
+}
+
+fn text_style_effect_value(style TextStyle) int {
+	if style.shadow {
+		return 1
+	}
+	if style.outline {
+		return 2
+	}
+	return 0
 }
 
 fn native_set_button_target(button NativeView, target NativeView) {

@@ -198,6 +198,27 @@ static inline NSDictionary* ui2_text_attrs(unsigned int color, unsigned int back
 	return [attrs autorelease];
 }
 
+static inline NSShadow* ui2_text_shadow_obj(void) {
+	NSShadow *shadow = [[[NSShadow alloc] init] autorelease];
+	[shadow setShadowColor:[NSColor colorWithCalibratedWhite:0.0 alpha:0.45]];
+	[shadow setShadowOffset:NSMakeSize(1.25, -1.25)];
+	[shadow setShadowBlurRadius:1.0];
+	return shadow;
+}
+
+static inline void ui2_apply_text_effect_attrs(NSMutableDictionary *attrs, int effect) {
+	[attrs removeObjectForKey:NSShadowAttributeName];
+	[attrs removeObjectForKey:NSStrokeWidthAttributeName];
+	[attrs removeObjectForKey:NSStrokeColorAttributeName];
+	if (effect == 1) {
+		attrs[NSShadowAttributeName] = ui2_text_shadow_obj();
+	} else if (effect == 2) {
+		attrs[NSStrokeWidthAttributeName] = @(-2.0);
+		NSColor *color = attrs[NSForegroundColorAttributeName];
+		attrs[NSStrokeColorAttributeName] = color == nil ? [NSColor blackColor] : color;
+	}
+}
+
 static inline void ui2_text_view_set_attributed_string(void* tv_ptr, const char* utf8, unsigned int color, unsigned int background_color, double size, const char* family_name, bool bold, bool italic, bool underline, bool strikethrough, const char* vertical_align) {
 	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
 	if (tv == nil) {
@@ -286,9 +307,11 @@ static inline void* ui2_text_view_runs(void* tv_ptr) {
 		bool struck = strike != nil && [strike integerValue] != 0;
 		unsigned int color = ui2_nscolor_hex(attrs[NSForegroundColorAttributeName], 0x111111);
 		unsigned int background_color = ui2_nscolor_hex(attrs[NSBackgroundColorAttributeName], 0);
+		int effect = attrs[NSShadowAttributeName] != nil ? 1 :
+			(attrs[NSStrokeWidthAttributeName] != nil && [attrs[NSStrokeWidthAttributeName] doubleValue] != 0.0 ? 2 : 0);
 		NSNumber *superscript = attrs[NSSuperscriptAttributeName];
 		NSString *vertical_align = ui2_vertical_align_name(superscript == nil ? 0 : [superscript integerValue]);
-		[out appendFormat:@"%@\t%@\t%.3f\t%d\t%d\t%d\t%@\t%d\t%u\t%u\n",
+		[out appendFormat:@"%@\t%@\t%.3f\t%d\t%d\t%d\t%@\t%d\t%u\t%u\t%d\n",
 			ui2_base64_utf8(text),
 			ui2_base64_utf8(family),
 			size,
@@ -298,7 +321,8 @@ static inline void* ui2_text_view_runs(void* tv_ptr) {
 			vertical_align,
 			struck ? 1 : 0,
 			color,
-			background_color];
+			background_color,
+			effect];
 		cursor = NSMaxRange(effective);
 	}
 	return (__bridge void*)out;
@@ -466,6 +490,19 @@ static inline int ui2_text_view_vertical_align_active(void* tv_ptr) {
 	return 0;
 }
 
+static inline int ui2_text_view_effect_active(void* tv_ptr) {
+	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
+	NSDictionary *attrs = ui2_text_view_current_attrs(tv);
+	if (attrs == nil) {
+		return 0;
+	}
+	if (attrs[NSShadowAttributeName] != nil) {
+		return 1;
+	}
+	NSNumber *stroke_width = attrs[NSStrokeWidthAttributeName];
+	return stroke_width != nil && [stroke_width doubleValue] != 0.0 ? 2 : 0;
+}
+
 static inline NSFont* ui2_font_with_format(NSFont *font, int format, bool enabled, double fallback_size) {
 	if (font == nil) {
 		if (fallback_size <= 0) {
@@ -562,6 +599,16 @@ static inline void ui2_apply_typing_color(NSTextView *tv, unsigned int color, bo
 	} else {
 		attrs[key] = ui2_nscolor_obj(color);
 	}
+	[tv setTypingAttributes:attrs];
+	[attrs release];
+}
+
+static inline void ui2_apply_typing_effect(NSTextView *tv, int effect) {
+	NSMutableDictionary *attrs = [[tv typingAttributes] mutableCopy];
+	if (attrs == nil) {
+		attrs = [[NSMutableDictionary alloc] init];
+	}
+	ui2_apply_text_effect_attrs(attrs, effect);
 	[tv setTypingAttributes:attrs];
 	[attrs release];
 }
@@ -667,6 +714,27 @@ static inline void ui2_apply_range_color(NSTextView *tv, NSRange range, unsigned
 		[storage removeAttribute:key range:range];
 	} else {
 		[storage addAttribute:key value:ui2_nscolor_obj(color) range:range];
+	}
+	[tv setSelectedRange:range];
+}
+
+static inline void ui2_apply_range_effect(NSTextView *tv, NSRange range, int effect) {
+	NSTextStorage *storage = [tv textStorage];
+	if (storage == nil || [storage length] == 0 || range.length == 0 || range.location >= [storage length]) {
+		return;
+	}
+	NSUInteger max_len = [storage length] - range.location;
+	if (range.length > max_len) {
+		range.length = max_len;
+	}
+	[storage removeAttribute:NSShadowAttributeName range:range];
+	[storage removeAttribute:NSStrokeWidthAttributeName range:range];
+	[storage removeAttribute:NSStrokeColorAttributeName range:range];
+	if (effect == 1) {
+		[storage addAttribute:NSShadowAttributeName value:ui2_text_shadow_obj() range:range];
+	} else if (effect == 2) {
+		[storage addAttribute:NSStrokeWidthAttributeName value:@(-2.0) range:range];
+		[storage addAttribute:NSStrokeColorAttributeName value:[NSColor blackColor] range:range];
 	}
 	[tv setSelectedRange:range];
 }
@@ -807,6 +875,27 @@ static inline void ui2_text_view_set_background_color(void* tv_ptr, unsigned int
 		return;
 	}
 	ui2_apply_range_color(tv, selected, color, true);
+}
+
+static inline void ui2_text_view_add_effect(void* tv_ptr, unsigned long location, unsigned long length, int effect) {
+	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
+	if (tv == nil || length == 0) {
+		return;
+	}
+	ui2_apply_range_effect(tv, NSMakeRange((NSUInteger)location, (NSUInteger)length), effect);
+}
+
+static inline void ui2_text_view_set_effect(void* tv_ptr, int effect) {
+	NSTextView *tv = ui2_text_view_obj(tv_ptr);
+	if (tv == nil) {
+		return;
+	}
+	NSRange selected = [tv selectedRange];
+	if (selected.length == 0) {
+		ui2_apply_typing_effect(tv, effect);
+		return;
+	}
+	ui2_apply_range_effect(tv, selected, effect);
 }
 
 static inline void ui2_text_view_toggle_vertical_align(void* tv_ptr, int align) {

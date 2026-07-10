@@ -55,6 +55,8 @@ pub:
 	italic           bool
 	underline        bool
 	strikethrough    bool
+	shadow           bool
+	outline          bool
 	vertical_align   string
 	link             string
 	align            Align
@@ -80,6 +82,8 @@ pub:
 	italic        bool
 	underline     bool
 	strikethrough bool
+	shadow        bool
+	outline       bool
 	subscript     bool
 	superscript   bool
 }
