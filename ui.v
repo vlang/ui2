@@ -86,8 +86,9 @@ pub:
 
 pub struct BoxStyle {
 pub:
-	bg     u32 = 0xffffff
-	radius f64
+	bg          u32 = 0xffffff
+	radius      f64
+	transparent bool
 }
 
 pub struct Element {

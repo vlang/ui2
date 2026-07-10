@@ -1199,7 +1199,10 @@ fn native_new_text_view(frame macos.Rect, el Element) NativeView {
 	macos.msg_void_bool(tv, 'setVerticallyResizable:', true)
 	macos.msg_void_bool(tv, 'setHorizontallyResizable:', false)
 	macos.msg_void_u64(tv, 'setAutoresizingMask:', 2) // NSViewWidthSizable
-	macos.msg_void1(tv, 'setBackgroundColor:', native_color(el.box.bg))
+	macos.msg_void_bool(tv, 'setDrawsBackground:', !el.box.transparent)
+	if !el.box.transparent {
+		macos.msg_void1(tv, 'setBackgroundColor:', native_color(el.box.bg))
+	}
 	macos.msg_void1(tv, 'setTextColor:', native_color(el.text_style.color))
 	macos.msg_void_bool(tv, 'setEditable:', !el.readonly)
 	macos.msg_void_bool(tv, 'setSelectable:', true)
@@ -1221,6 +1224,10 @@ fn native_update_text_area(native NativeView, el Element) {
 		return
 	}
 	macos.msg_void_bool(tv, 'setEditable:', !el.readonly)
+	macos.msg_void_bool(tv, 'setDrawsBackground:', !el.box.transparent)
+	if !el.box.transparent {
+		macos.msg_void1(tv, 'setBackgroundColor:', native_color(el.box.bg))
+	}
 	// Same guard as text fields: don't clobber an active editing session
 	cur := macos.utf8_string(macos.msg_id(tv, 'string'))
 	if cur != el.text {
