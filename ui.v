@@ -47,22 +47,23 @@ pub:
 
 pub struct TextStyle {
 pub:
-	color             u32 = 0x111111
-	background_color  u32
-	size              f64 = 15.0
-	font_family       string
-	bold              bool
-	italic            bool
-	underline         bool
-	strikethrough     bool
-	shadow            bool
-	outline           bool
-	vertical_align    string
-	link              string
-	align             Align
-	head_indent       f64
-	first_line_indent f64
-	lines             int = 1
+	color              u32 = 0x111111
+	background_color   u32
+	size               f64 = 15.0
+	font_family        string
+	bold               bool
+	italic             bool
+	underline          bool
+	strikethrough      bool
+	shadow             bool
+	outline            bool
+	vertical_align     string
+	link               string
+	align              Align
+	head_indent        f64
+	first_line_indent  f64
+	hyphenation_factor f64
+	lines              int = 1
 }
 
 pub struct TextRun {

@@ -233,7 +233,7 @@ static inline void ui2_text_view_set_attributed_string(void* tv_ptr, const char*
 	[[tv textStorage] setAttributedString:attr];
 }
 
-static inline void ui2_text_view_set_paragraph_style(void* tv_ptr, int alignment, double head_indent, double first_line_indent) {
+static inline void ui2_text_view_set_paragraph_style(void* tv_ptr, int alignment, double head_indent, double first_line_indent, double hyphenation_factor) {
 	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
 	if (tv == nil) {
 		return;
@@ -252,6 +252,7 @@ static inline void ui2_text_view_set_paragraph_style(void* tv_ptr, int alignment
 	[style setHeadIndent:MAX(head_indent, 0.0)];
 	[style setFirstLineHeadIndent:MAX(first_line_indent, 0.0)];
 	[style setTailIndent:0.0];
+	[style setHyphenationFactor:MIN(MAX(hyphenation_factor, 0.0), 1.0)];
 	[tv setDefaultParagraphStyle:style];
 	NSTextStorage *storage = [tv textStorage];
 	if (storage != nil && [storage length] > 0) {
