@@ -487,8 +487,8 @@ fn parse_text_area_runs(raw string) []TextRun {
 				strikethrough:    parts.len > 7 && parts[7] == '1'
 				color:            if parts.len > 8 { u32(parts[8].u64()) } else { u32(0x111111) }
 				background_color: if parts.len > 9 { u32(parts[9].u64()) } else { u32(0) }
-				shadow:           parts.len > 10 && parts[10] == '1'
-				outline:          parts.len > 10 && parts[10] == '2'
+				shadow:           parts.len > 10 && (parts[10].int() & 1) != 0
+				outline:          parts.len > 10 && (parts[10].int() & 2) != 0
 			}
 		}
 	}
@@ -511,8 +511,8 @@ pub fn text_area_format_state(id string) TextFormatState {
 		italic:        C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.italic))
 		underline:     C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.underline))
 		strikethrough: C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.strikethrough))
-		shadow:        effect == 1
-		outline:       effect == 2
+		shadow:        (effect & 1) != 0
+		outline:       (effect & 2) != 0
 		subscript:     vertical < 0
 		superscript:   vertical > 0
 	}
@@ -1292,13 +1292,15 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 }
 
 fn text_style_effect_value(style TextStyle) int {
-	if style.shadow {
-		return 1
-	}
-	if style.outline {
-		return 2
-	}
-	return 0
+	return (if style.shadow {
+		1
+	} else {
+		0
+	}) | (if style.outline {
+		2
+	} else {
+		0
+	})
 }
 
 fn native_set_button_target(button NativeView, target NativeView) {
