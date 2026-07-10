@@ -286,6 +286,11 @@ pub fn text_area_caret(id string) int {
 	return int(C.ui2_text_view_selected_location(voidptr(tv)))
 }
 
+pub fn text_area_selection_length(id string) int {
+	tv := text_area_document_view(id) or { return 0 }
+	return int(C.ui2_text_view_selected_length(voidptr(tv)))
+}
+
 pub fn insert_text_area_text(id string, text string) {
 	tv := text_area_document_view(id) or { return }
 	C.ui2_text_view_insert_text(voidptr(tv), &char(text.str))
