@@ -114,6 +114,7 @@ pub struct Element {
 	kind Kind
 pub:
 	id             string
+	submit_id      string // text_field: optional event id emitted when Return submits
 	key            string // stable identity for reconciliation (falls back to child index)
 	text           string
 	image_path     string
@@ -392,9 +393,15 @@ pub fn rich_text_area_without_scroll(id string, text string, runs []TextRun, fra
 }
 
 pub fn text_field_with_change(id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int) Element {
+	return text_field_with_change_and_submit(id, '', placeholder, text, frame, box_, style,
+		keyboard)
+}
+
+pub fn text_field_with_change_and_submit(id string, submit_id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int) Element {
 	return Element{
 		kind:        .text_field
 		id:          id
+		submit_id:   submit_id
 		text:        text
 		placeholder: placeholder
 		frame:       frame

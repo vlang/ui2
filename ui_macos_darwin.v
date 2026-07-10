@@ -123,7 +123,8 @@ mut:
 	pointer_ids         map[u64]string // NSView pointer -> element id
 	pointer_draggable   map[u64]bool
 	cursor_ids          map[u64]string // NSView pointer -> cursor name
-	control_ids         map[u64]string // NSControl pointer -> element id
+	control_ids         map[u64]string // NSControl pointer -> action event id
+	control_change_ids  map[u64]string // NSTextField pointer -> change event id
 	observed            map[u64]bool   // clip views we already observe for scroll changes
 	button_ids          []string
 	run_config          RunConfig
@@ -132,20 +133,21 @@ mut:
 }
 
 const runtime_state_singleton = &RuntimeState{
-	views:             map[string]NativeView{}
-	view_kinds:        map[string]Kind{}
-	text_area_direct:  map[string]bool{}
-	nodes:             map[string]NativeView{}
-	node_kinds:        map[string]Kind{}
-	node_text_direct:  map[string]bool{}
-	node_interactive:  map[string]bool{}
-	textview_ids:      map[u64]string{}
-	scroll_ids:        map[u64]string{}
-	pointer_ids:       map[u64]string{}
-	pointer_draggable: map[u64]bool{}
-	cursor_ids:        map[u64]string{}
-	control_ids:       map[u64]string{}
-	observed:          map[u64]bool{}
+	views:              map[string]NativeView{}
+	view_kinds:         map[string]Kind{}
+	text_area_direct:   map[string]bool{}
+	nodes:              map[string]NativeView{}
+	node_kinds:         map[string]Kind{}
+	node_text_direct:   map[string]bool{}
+	node_interactive:   map[string]bool{}
+	textview_ids:       map[u64]string{}
+	scroll_ids:         map[u64]string{}
+	pointer_ids:        map[u64]string{}
+	pointer_draggable:  map[u64]bool{}
+	cursor_ids:         map[u64]string{}
+	control_ids:        map[u64]string{}
+	control_change_ids: map[u64]string{}
+	observed:           map[u64]bool{}
 }
 
 fn state() &RuntimeState {
@@ -631,6 +633,7 @@ fn render_root(root Element) {
 	st.pointer_draggable = map[u64]bool{}
 	st.cursor_ids = map[u64]string{}
 	st.control_ids = map[u64]string{}
+	st.control_change_ids = map[u64]string{}
 	st.button_ids = []string{}
 	native_set_background(st.root_view, root.box.bg)
 	mut active := map[string]bool{}
@@ -720,7 +723,7 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		}
 		.text_field {
 			if el.emit_change {
-				register_control(native, el.id)
+				register_control(native, el.id, el.submit_id)
 			}
 		}
 		.text_area {
@@ -890,11 +893,13 @@ fn register_action_control(native NativeView, id string) {
 	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
 }
 
-fn register_control(native NativeView, id string) {
+fn register_control(native NativeView, id string, submit_id string) {
 	mut st := state()
+	action_id := if submit_id.len > 0 { submit_id } else { id }
 	tag := st.button_ids.len
-	st.button_ids << id
-	st.control_ids[u64(voidptr(native))] = id
+	st.button_ids << action_id
+	st.control_ids[u64(voidptr(native))] = action_id
+	st.control_change_ids[u64(voidptr(native))] = id
 	native_set_tag(native, tag)
 	native_set_control_target(native, st.button_handler)
 	// Delegate delivers controlTextDidChange: for per-keystroke events
@@ -1535,7 +1540,7 @@ fn ui2_control_text_changed(_self voidptr, _cmd voidptr, notification voidptr) {
 		return
 	}
 	field := macos.msg_id(macos.Id(notification), 'object')
-	id := st.control_ids[u64(voidptr(field))] or { '' }
+	id := st.control_change_ids[u64(voidptr(field))] or { '' }
 	if id.len > 0 {
 		st.event_handler(id)
 		return
