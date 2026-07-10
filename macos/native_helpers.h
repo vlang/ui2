@@ -233,6 +233,39 @@ static inline void ui2_text_view_set_attributed_string(void* tv_ptr, const char*
 	[[tv textStorage] setAttributedString:attr];
 }
 
+static inline void ui2_text_view_set_paragraph_style(void* tv_ptr, int alignment, double head_indent, double first_line_indent) {
+	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
+	if (tv == nil) {
+		return;
+	}
+	NSMutableParagraphStyle *style = [[[tv defaultParagraphStyle] mutableCopy] autorelease];
+	if (style == nil) {
+		style = [[[NSMutableParagraphStyle alloc] init] autorelease];
+	}
+	NSTextAlignment native_alignment = NSTextAlignmentLeft;
+	if (alignment == 1) {
+		native_alignment = NSTextAlignmentCenter;
+	} else if (alignment == 2) {
+		native_alignment = NSTextAlignmentRight;
+	}
+	[style setAlignment:native_alignment];
+	[style setHeadIndent:MAX(head_indent, 0.0)];
+	[style setFirstLineHeadIndent:MAX(first_line_indent, 0.0)];
+	[style setTailIndent:0.0];
+	[tv setDefaultParagraphStyle:style];
+	NSTextStorage *storage = [tv textStorage];
+	if (storage != nil && [storage length] > 0) {
+		[storage addAttribute:NSParagraphStyleAttributeName value:style range:NSMakeRange(0, [storage length])];
+	}
+	NSMutableDictionary *typing = [[tv typingAttributes] mutableCopy];
+	if (typing == nil) {
+		typing = [[NSMutableDictionary alloc] init];
+	}
+	typing[NSParagraphStyleAttributeName] = style;
+	[tv setTypingAttributes:typing];
+	[typing release];
+}
+
 static inline void ui2_text_view_add_style(void* tv_ptr, unsigned long location, unsigned long length, unsigned int color, unsigned int background_color, double size, const char* family_name, bool bold, bool italic, bool underline, bool strikethrough, const char* vertical_align) {
 	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
 	if (tv == nil || length == 0) {

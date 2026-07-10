@@ -27,6 +27,7 @@ fn C.ui2_bounds_changed(self voidptr, cmd voidptr, notification voidptr)
 fn C.ui2_dispatch_main(cb voidptr)
 fn C.ui2_observe_bounds(observer voidptr, view voidptr)
 fn C.ui2_text_view_set_attributed_string(tv voidptr, utf8 &char, color u32, background_color u32, size f64, family &char, bold bool, italic bool, underline bool, strikethrough bool, vertical_align &char)
+fn C.ui2_text_view_set_paragraph_style(tv voidptr, alignment int, head_indent f64, first_line_indent f64)
 fn C.ui2_text_view_add_style(tv voidptr, location u64, length u64, color u32, background_color u32, size f64, family &char, bold bool, italic bool, underline bool, strikethrough bool, vertical_align &char)
 fn C.ui2_text_view_add_link(tv voidptr, location u64, length u64, link &char)
 fn C.ui2_text_view_runs(tv voidptr) macos.Id
@@ -1229,6 +1230,8 @@ fn native_new_text_view(frame macos.Rect, el Element) NativeView {
 	macos.msg_void_bool(tv, 'setEditable:', !el.readonly)
 	macos.msg_void_bool(tv, 'setSelectable:', true)
 	native_set_text_area_content(tv, el)
+	C.ui2_text_view_set_paragraph_style(voidptr(tv), align_value(el.text_style.align),
+		el.text_style.head_indent, el.text_style.first_line_indent)
 	st := state()
 	macos.msg_void1(tv, 'setDelegate:', st.button_handler)
 	return tv
@@ -1255,6 +1258,8 @@ fn native_update_text_area(native NativeView, el Element) {
 	if cur != el.text {
 		native_set_text_area_content(tv, el)
 	}
+	C.ui2_text_view_set_paragraph_style(voidptr(tv), align_value(el.text_style.align),
+		el.text_style.head_indent, el.text_style.first_line_indent)
 }
 
 fn native_set_text_area_content(tv NativeView, el Element) {
