@@ -64,8 +64,16 @@ fn C.ui2_pointer_mouse_down(self voidptr, cmd voidptr, event voidptr)
 fn C.ui2_pointer_mouse_dragged(self voidptr, cmd voidptr, event voidptr)
 fn C.ui2_pointer_mouse_up(self voidptr, cmd voidptr, event voidptr)
 fn C.ui2_pointer_reset_cursor_rects(self voidptr, cmd voidptr)
+fn C.ui2_dragging_entered(self voidptr, cmd voidptr, dragging_info voidptr) u64
+fn C.ui2_perform_drag_operation(self voidptr, cmd voidptr, dragging_info voidptr) bool
 fn C.ui2_add_cursor_rect(view voidptr, cursor &char)
 fn C.ui2_invalidate_cursor_rects(view voidptr)
+fn C.ui2_register_drop_types(view voidptr)
+fn C.ui2_dragging_file_count(dragging_info voidptr) u64
+fn C.ui2_dragging_file_path(dragging_info voidptr, index u64) &char
+fn C.ui2_dragging_text(dragging_info voidptr) &char
+fn C.ui2_dragging_x_in_view(view voidptr, dragging_info voidptr) f64
+fn C.ui2_dragging_y_in_view(view voidptr, dragging_info voidptr) f64
 
 const ns_window_style_titled = u64(1)
 const ns_window_style_closable = u64(2)
@@ -98,6 +106,7 @@ mut:
 	key_consumed        bool
 	text_key_consumed   bool
 	scroll_handler      ScrollFn = ScrollFn(unsafe { nil })
+	drop_handler        DropFn   = DropFn(unsafe { nil })
 	window              NativeView
 	root_view           NativeView
 	button_handler      NativeView
@@ -204,6 +213,12 @@ pub fn on_key(handler KeyFn) {
 pub fn on_scroll(handler ScrollFn) {
 	mut st := state()
 	st.scroll_handler = handler
+}
+
+// on_drop registers a handler for files or plain text dropped on the window.
+pub fn on_drop(handler DropFn) {
+	mut st := state()
+	st.drop_handler = handler
 }
 
 fn refresh_on_main() {
@@ -543,6 +558,9 @@ fn ensure_runtime_classes() {
 	if macos.get_class('UI2FlippedView') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSView'), 'UI2FlippedView')
 		macos.add_method(cls, 'isFlipped', voidptr(C.ui2_view_is_flipped), 'B@:')
+		macos.add_method(cls, 'draggingEntered:', voidptr(C.ui2_dragging_entered), 'Q@:@')
+		macos.add_method(cls, 'performDragOperation:', voidptr(C.ui2_perform_drag_operation),
+			'B@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2PointerView') == unsafe { nil } {
@@ -1401,6 +1419,7 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 	macos.msg_void1(st.window, 'setDelegate:', st.app_delegate)
 	root_frame := native_rect(0, 0, f64(st.run_config.width), f64(st.run_config.height))
 	st.root_view = native_new_flipped_view(root_frame, 0xffffff)
+	C.ui2_register_drop_types(voidptr(st.root_view))
 	native_set_content_view(st.window, st.root_view)
 	if native_is_nil(st.button_handler) {
 		st.button_handler = native_new_object('UI2ButtonHandler')
@@ -1447,6 +1466,45 @@ fn ui2_pointer_reset_cursor_rects(self voidptr, _cmd voidptr) {
 		return
 	}
 	C.ui2_add_cursor_rect(self, &char(cursor.str))
+}
+
+@[export: 'ui2_dragging_entered']
+fn ui2_dragging_entered(_self voidptr, _cmd voidptr, _dragging_info voidptr) u64 {
+	st := state()
+	return if voidptr(st.drop_handler) == unsafe { nil } { u64(0) } else { u64(1) }
+}
+
+@[export: 'ui2_perform_drag_operation']
+fn ui2_perform_drag_operation(self voidptr, _cmd voidptr, dragging_info voidptr) bool {
+	st := state()
+	if voidptr(st.drop_handler) == unsafe { nil } {
+		return false
+	}
+	raw_count := int(C.ui2_dragging_file_count(dragging_info))
+	count := if raw_count > 256 { 256 } else { raw_count }
+	mut paths := []string{cap: count}
+	for index in 0 .. count {
+		value := C.ui2_dragging_file_path(dragging_info, u64(index))
+		if value != unsafe { nil } {
+			path := unsafe { value.vstring().clone() }
+			if path.len > 0 {
+				paths << path
+			}
+		}
+	}
+	text_value := C.ui2_dragging_text(dragging_info)
+	dropped_text := if text_value != unsafe { nil } {
+		unsafe { text_value.vstring().clone() }
+	} else {
+		''
+	}
+	st.drop_handler(DropEvent{
+		paths: paths
+		text:  dropped_text
+		x:     C.ui2_dragging_x_in_view(self, dragging_info)
+		y:     C.ui2_dragging_y_in_view(self, dragging_info)
+	})
+	return paths.len > 0 || dropped_text.len > 0
 }
 
 @[export: 'ui2_button_tap']

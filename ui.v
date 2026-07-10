@@ -12,6 +12,18 @@ pub type KeyFn = fn (string)
 // ScrollFn receives the id of the Scroll element whose position changed.
 pub type ScrollFn = fn (string)
 
+// DropFn receives file URLs and/or plain text dropped on the application
+// window, plus the pointer location in root-view coordinates.
+pub type DropFn = fn (DropEvent)
+
+pub struct DropEvent {
+pub:
+	paths []string
+	text  string
+	x     f64
+	y     f64
+}
+
 pub enum Align {
 	left
 	center

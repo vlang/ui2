@@ -150,6 +150,70 @@ static inline NSString* ui2_base64_utf8(NSString *s) {
 	return [data base64EncodedStringWithOptions:0];
 }
 
+static inline void ui2_register_drop_types(void *view_ptr) {
+	NSView *view = (__bridge NSView *)view_ptr;
+	if (view == nil) {
+		return;
+	}
+	[view registerForDraggedTypes:@[NSPasteboardTypeFileURL, NSPasteboardTypeString]];
+}
+
+static inline NSPasteboard *ui2_dragging_pasteboard(void *dragging_info_ptr) {
+	id<NSDraggingInfo> info = (__bridge id<NSDraggingInfo>)dragging_info_ptr;
+	return info == nil ? nil : [info draggingPasteboard];
+}
+
+static inline NSArray<NSURL *> *ui2_dragging_file_urls(void *dragging_info_ptr) {
+	NSPasteboard *pasteboard = ui2_dragging_pasteboard(dragging_info_ptr);
+	if (pasteboard == nil) {
+		return @[];
+	}
+	NSDictionary *options = @{NSPasteboardURLReadingFileURLsOnlyKey: @YES};
+	NSArray *urls = [pasteboard readObjectsForClasses:@[[NSURL class]] options:options];
+	return urls ?: @[];
+}
+
+static inline unsigned long ui2_dragging_file_count(void *dragging_info_ptr) {
+	return (unsigned long)[ui2_dragging_file_urls(dragging_info_ptr) count];
+}
+
+static inline const char *ui2_dragging_file_path(void *dragging_info_ptr, unsigned long index) {
+	NSArray<NSURL *> *urls = ui2_dragging_file_urls(dragging_info_ptr);
+	if (index >= [urls count]) {
+		return "";
+	}
+	const char *path = [[[urls objectAtIndex:index] path] UTF8String];
+	return path == NULL ? "" : path;
+}
+
+static inline const char *ui2_dragging_text(void *dragging_info_ptr) {
+	NSPasteboard *pasteboard = ui2_dragging_pasteboard(dragging_info_ptr);
+	if (pasteboard == nil) {
+		return "";
+	}
+	NSString *text = [pasteboard stringForType:NSPasteboardTypeString] ?: @"";
+	const char *utf8 = [text UTF8String];
+	return utf8 == NULL ? "" : utf8;
+}
+
+static inline double ui2_dragging_x_in_view(void *view_ptr, void *dragging_info_ptr) {
+	NSView *view = (__bridge NSView *)view_ptr;
+	id<NSDraggingInfo> info = (__bridge id<NSDraggingInfo>)dragging_info_ptr;
+	if (view == nil || info == nil) {
+		return 0.0;
+	}
+	return [view convertPoint:[info draggingLocation] fromView:nil].x;
+}
+
+static inline double ui2_dragging_y_in_view(void *view_ptr, void *dragging_info_ptr) {
+	NSView *view = (__bridge NSView *)view_ptr;
+	id<NSDraggingInfo> info = (__bridge id<NSDraggingInfo>)dragging_info_ptr;
+	if (view == nil || info == nil) {
+		return 0.0;
+	}
+	return [view convertPoint:[info draggingLocation] fromView:nil].y;
+}
+
 static inline NSFont* ui2_font_with_family(NSFont *font, const char* family_name, double fallback_size);
 
 static inline int ui2_vertical_align_value(const char* vertical_align) {
