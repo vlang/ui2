@@ -118,6 +118,7 @@ pub:
 	key            string // stable identity for reconciliation (falls back to child index)
 	text           string
 	image_path     string
+	tooltip        string
 	placeholder    string
 	frame          Rect
 	box            BoxStyle
@@ -295,6 +296,14 @@ pub fn button_with_image(id string, title string, image_name string, frame Rect,
 		frame:      frame
 		box:        box_
 		text_style: style
+	}
+}
+
+// with_tooltip adds hover help without changing an element's visible text.
+pub fn with_tooltip(el Element, tooltip string) Element {
+	return Element{
+		...el
+		tooltip: tooltip
 	}
 }
 

@@ -744,6 +744,9 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 	if el.menu.len > 0 && el.kind != .dropdown {
 		attach_menu(native, el.menu)
 	}
+	if el.kind != .screen {
+		macos.msg_void1(native, 'setToolTip:', macos.nsstring(el.tooltip))
+	}
 
 	if el.id.len > 0 {
 		st.views[el.id] = native
