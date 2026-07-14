@@ -74,3 +74,16 @@ fn test_image_element_keeps_path() {
 	assert el.frame.width == 300
 	assert el.frame.height == 200
 }
+
+fn test_portable_text_area_range_uses_utf16_and_keeps_selection_length() {
+	selection := clamped_text_area_selection('A🙂BC', 1, 2)
+	assert selection.location == 1
+	assert selection.length == 2
+	assert text_area_utf16_length('A🙂BC') == 5
+
+	clamped := clamped_text_area_selection('A🙂BC', 4, 99)
+	assert clamped.location == 4
+	assert clamped.length == 1
+	record_portable_text_area_selection('portable-editor', clamped)
+	assert portable_text_area_selection('portable-editor') == clamped
+}

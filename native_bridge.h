@@ -219,4 +219,36 @@ void vui_present_barcode_scanner(void *root_ptr) {
 	});
 }
 
+static inline void vui_text_view_set_selected_range(void *view_ptr, unsigned long location, unsigned long length) {
+	UITextView *view = (UITextView *)view_ptr;
+	if (view == nil || ![view isKindOfClass:[UITextView class]]) {
+		return;
+	}
+	NSUInteger text_length = view.text == nil ? 0 : view.text.length;
+	NSUInteger safe_location = MIN((NSUInteger)location, text_length);
+	NSUInteger safe_length = MIN((NSUInteger)length, text_length - safe_location);
+	NSRange range = NSMakeRange(safe_location, safe_length);
+	[view becomeFirstResponder];
+	view.selectedRange = range;
+	[view scrollRangeToVisible:range];
+}
+
+static inline unsigned long vui_text_view_selected_location(void *view_ptr) {
+	UITextView *view = (UITextView *)view_ptr;
+	if (view == nil || ![view isKindOfClass:[UITextView class]]) {
+		return 0;
+	}
+	NSRange range = view.selectedRange;
+	return range.location == NSNotFound ? 0 : range.location;
+}
+
+static inline unsigned long vui_text_view_selected_length(void *view_ptr) {
+	UITextView *view = (UITextView *)view_ptr;
+	if (view == nil || ![view isKindOfClass:[UITextView class]]) {
+		return 0;
+	}
+	NSRange range = view.selectedRange;
+	return range.location == NSNotFound ? 0 : range.length;
+}
+
 #endif
