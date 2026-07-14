@@ -294,12 +294,18 @@ pub fn focus(id string) {
 	native_focus(native)
 }
 
-// text_area_set_caret positions the caret by UTF-16 offset, matching
-// NSTextView's native selection storage.
-pub fn text_area_set_caret(id string, pos int) {
+// text_area_set_selection selects a UTF-16 range, matching NSTextView's native
+// selection storage and the offsets exposed by text_area_caret.
+pub fn text_area_set_selection(id string, location int, length int) {
 	tv := text_area_document_view(id) or { return }
-	location := if pos < 0 { u64(0) } else { u64(pos) }
-	C.ui2_text_view_set_selected_range(voidptr(tv), location, u64(0))
+	start := if location < 0 { u64(0) } else { u64(location) }
+	selection_length := if length < 0 { u64(0) } else { u64(length) }
+	C.ui2_text_view_set_selected_range(voidptr(tv), start, selection_length)
+}
+
+// text_area_set_caret positions and collapses the selection at a UTF-16 offset.
+pub fn text_area_set_caret(id string, pos int) {
+	text_area_set_selection(id, pos, 0)
 }
 
 pub fn text_area_caret(id string) int {
