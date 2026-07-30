@@ -112,6 +112,7 @@ mut:
 	button_handler      NativeView
 	app_delegate        NativeView
 	views               map[string]NativeView
+	view_keys           map[string]string
 	view_kinds          map[string]Kind
 	text_area_direct    map[string]bool
 	nodes               map[string]NativeView
@@ -134,6 +135,7 @@ mut:
 
 const runtime_state_singleton = &RuntimeState{
 	views:              map[string]NativeView{}
+	view_keys:          map[string]string{}
 	view_kinds:         map[string]Kind{}
 	text_area_direct:   map[string]bool{}
 	nodes:              map[string]NativeView{}
@@ -199,6 +201,24 @@ pub fn refresh() {
 	}
 	root := st.build_screen()
 	render_root(root)
+	schedule_screenshot_capture()
+}
+
+// refresh_element reconciles one existing keyed subtree without rebuilding the
+// rest of the window. It is intended for high-frequency virtualized content
+// such as a spreadsheet surface during native scrollbar tracking.
+pub fn refresh_element(id string, element Element) {
+	mut st := state()
+	key := st.view_keys[id] or { return }
+	native := st.nodes[key] or { return }
+	parent := NativeView(macos.msg_id(native, 'superview'))
+	if native_is_nil(parent) {
+		return
+	}
+	clear_subtree_registrations(key)
+	mut active := map[string]bool{}
+	render_element(parent, element, key, mut active)
+	remove_stale_nodes_below(key, active)
 	schedule_screenshot_capture()
 }
 
@@ -633,6 +653,7 @@ fn element_rect(r Rect) NativeRect {
 fn render_root(root Element) {
 	mut st := state()
 	st.views = map[string]NativeView{}
+	st.view_keys = map[string]string{}
 	st.view_kinds = map[string]Kind{}
 	st.text_area_direct = map[string]bool{}
 	st.pointer_ids = map[u64]string{}
@@ -756,6 +777,7 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 
 	if el.id.len > 0 {
 		st.views[el.id] = native
+		st.view_keys[el.id] = key
 		st.view_kinds[el.id] = el.kind
 	}
 	return native
@@ -884,9 +906,15 @@ fn register_pointer(native NativeView, el Element) {
 
 fn register_button(native NativeView, id string) {
 	mut st := state()
-	tag := st.button_ids.len
-	st.button_ids << id
-	st.control_ids[u64(voidptr(native))] = id
+	pointer := u64(voidptr(native))
+	mut tag := if pointer in st.control_ids { native_tag(native) } else { -1 }
+	if tag < 0 || tag >= st.button_ids.len {
+		tag = st.button_ids.len
+		st.button_ids << id
+	} else {
+		st.button_ids[tag] = id
+	}
+	st.control_ids[pointer] = id
 	native_set_tag(native, tag)
 	native_set_button_target(native, st.button_handler)
 	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
@@ -894,9 +922,15 @@ fn register_button(native NativeView, id string) {
 
 fn register_action_control(native NativeView, id string) {
 	mut st := state()
-	tag := st.button_ids.len
-	st.button_ids << id
-	st.control_ids[u64(voidptr(native))] = id
+	pointer := u64(voidptr(native))
+	mut tag := if pointer in st.control_ids { native_tag(native) } else { -1 }
+	if tag < 0 || tag >= st.button_ids.len {
+		tag = st.button_ids.len
+		st.button_ids << id
+	} else {
+		st.button_ids[tag] = id
+	}
+	st.control_ids[pointer] = id
 	native_set_tag(native, tag)
 	native_set_control_target(native, st.button_handler)
 	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
@@ -905,10 +939,16 @@ fn register_action_control(native NativeView, id string) {
 fn register_control(native NativeView, id string, submit_id string) {
 	mut st := state()
 	action_id := if submit_id.len > 0 { submit_id } else { id }
-	tag := st.button_ids.len
-	st.button_ids << action_id
-	st.control_ids[u64(voidptr(native))] = action_id
-	st.control_change_ids[u64(voidptr(native))] = id
+	pointer := u64(voidptr(native))
+	mut tag := if pointer in st.control_ids { native_tag(native) } else { -1 }
+	if tag < 0 || tag >= st.button_ids.len {
+		tag = st.button_ids.len
+		st.button_ids << action_id
+	} else {
+		st.button_ids[tag] = action_id
+	}
+	st.control_ids[pointer] = action_id
+	st.control_change_ids[pointer] = id
 	native_set_tag(native, tag)
 	native_set_control_target(native, st.button_handler)
 	// Delegate delivers controlTextDidChange: for per-keystroke events
@@ -926,6 +966,60 @@ fn remove_stale_nodes(active map[string]bool) {
 	}
 	for key in stale {
 		native := st.nodes[key] or { continue }
+		pointer := u64(voidptr(native))
+		st.pointer_ids.delete(pointer)
+		st.pointer_draggable.delete(pointer)
+		st.cursor_ids.delete(pointer)
+		st.control_ids.delete(pointer)
+		st.control_change_ids.delete(pointer)
+		native_remove_from_superview(native)
+		st.nodes.delete(key)
+		st.node_kinds.delete(key)
+		st.node_interactive.delete(key)
+	}
+}
+
+fn clear_subtree_registrations(root_key string) {
+	mut st := state()
+	prefix := root_key + '/'
+	mut ids := []string{}
+	for id, key in st.view_keys {
+		if key == root_key || key.starts_with(prefix) {
+			ids << id
+		}
+	}
+	for id in ids {
+		native := st.views[id] or { native_nil_view() }
+		if !native_is_nil(native) {
+			pointer := u64(voidptr(native))
+			st.pointer_ids.delete(pointer)
+			st.pointer_draggable.delete(pointer)
+			st.cursor_ids.delete(pointer)
+		}
+		st.views.delete(id)
+		st.view_keys.delete(id)
+		st.view_kinds.delete(id)
+		st.text_area_direct.delete(id)
+	}
+}
+
+fn remove_stale_nodes_below(root_key string, active map[string]bool) {
+	mut st := state()
+	prefix := root_key + '/'
+	mut stale := []string{}
+	for key, _ in st.nodes {
+		if key.starts_with(prefix) && key !in active {
+			stale << key
+		}
+	}
+	for key in stale {
+		native := st.nodes[key] or { continue }
+		pointer := u64(voidptr(native))
+		st.pointer_ids.delete(pointer)
+		st.pointer_draggable.delete(pointer)
+		st.cursor_ids.delete(pointer)
+		st.control_ids.delete(pointer)
+		st.control_change_ids.delete(pointer)
 		native_remove_from_superview(native)
 		st.nodes.delete(key)
 		st.node_kinds.delete(key)
