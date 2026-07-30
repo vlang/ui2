@@ -12,6 +12,7 @@ fn C.macos_objc_msg_id_rect_u64_u64_bool(obj macos.Id, selector macos.Sel, rect 
 fn C.ui2_image_from_name(raw &char) macos.Id
 fn C.ui2_image_from_name_sized(raw &char, width f64, height f64) macos.Id
 fn C.ui2_nscolor_rgb(hex u32) macos.Id
+fn C.ui2_font(size f64, bold bool, italic bool) macos.Id
 fn C.ui2_app_did_finish_launching(self voidptr, cmd voidptr, notification voidptr)
 fn C.ui2_app_should_terminate_after_last_window_closed(self voidptr, cmd voidptr, sender voidptr) bool
 fn C.ui2_button_tap(self voidptr, cmd voidptr, sender voidptr)
@@ -119,6 +120,7 @@ mut:
 	node_kinds          map[string]Kind
 	node_text_direct    map[string]bool
 	node_interactive    map[string]bool
+	node_tooltips       map[string]string
 	textview_ids        map[u64]string // NSTextView pointer -> element id (no tag on NSView)
 	scroll_ids          map[u64]string // NSClipView pointer -> Scroll element id
 	pointer_ids         map[u64]string // NSView pointer -> element id
@@ -142,6 +144,7 @@ const runtime_state_singleton = &RuntimeState{
 	node_kinds:         map[string]Kind{}
 	node_text_direct:   map[string]bool{}
 	node_interactive:   map[string]bool{}
+	node_tooltips:      map[string]string{}
 	textview_ids:       map[u64]string{}
 	scroll_ids:         map[u64]string{}
 	pointer_ids:        map[u64]string{}
@@ -687,6 +690,7 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		if !native_is_nil(native) {
 			native_remove_from_superview(native)
 		}
+		st.node_tooltips.delete(key)
 		native = native_create_element(el)
 		st.nodes[key] = native
 		st.node_kinds[key] = el.kind
@@ -771,8 +775,9 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 	if el.menu.len > 0 && el.kind != .dropdown {
 		attach_menu(native, el.menu)
 	}
-	if el.kind != .screen {
+	if el.kind != .screen && (key !in st.node_tooltips || st.node_tooltips[key] != el.tooltip) {
 		macos.msg_void1(native, 'setToolTip:', macos.nsstring(el.tooltip))
+		st.node_tooltips[key] = el.tooltip
 	}
 
 	if el.id.len > 0 {
@@ -976,6 +981,7 @@ fn remove_stale_nodes(active map[string]bool) {
 		st.nodes.delete(key)
 		st.node_kinds.delete(key)
 		st.node_interactive.delete(key)
+		st.node_tooltips.delete(key)
 	}
 }
 
@@ -1024,6 +1030,7 @@ fn remove_stale_nodes_below(root_key string, active map[string]bool) {
 		st.nodes.delete(key)
 		st.node_kinds.delete(key)
 		st.node_interactive.delete(key)
+		st.node_tooltips.delete(key)
 	}
 }
 
@@ -1501,11 +1508,7 @@ fn native_set_corner_radius(view NativeView, radius f64) {
 }
 
 fn native_font(size f64, bold bool, italic bool) NativeView {
-	_ = italic
-	if bold {
-		return macos.msg_id_f64(macos.get_class('NSFont'), 'boldSystemFontOfSize:', size)
-	}
-	return macos.msg_id_f64(macos.get_class('NSFont'), 'systemFontOfSize:', size)
+	return NativeView(C.ui2_font(size, bold, italic))
 }
 
 @[export: 'ui2_view_is_flipped']

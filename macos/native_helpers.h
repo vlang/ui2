@@ -3,11 +3,27 @@
 #include <dispatch/dispatch.h>
 #include <string.h>
 
+typedef struct {
+	unsigned int hex;
+	NSColor *color;
+} UI2ColorCacheEntry;
+
 static inline NSColor* ui2_nscolor_obj(unsigned int hex) {
+	static UI2ColorCacheEntry cache[512];
+	unsigned int index = (hex * 2654435761u) % (sizeof(cache) / sizeof(cache[0]));
+	if (cache[index].color != nil && cache[index].hex == hex) {
+		return cache[index].color;
+	}
 	double r = ((hex >> 16) & 0xff) / 255.0;
 	double g = ((hex >> 8) & 0xff) / 255.0;
 	double b = (hex & 0xff) / 255.0;
-	return [NSColor colorWithCalibratedRed:r green:g blue:b alpha:1.0];
+	NSColor *color = [NSColor colorWithCalibratedRed:r green:g blue:b alpha:1.0];
+	if (cache[index].color != nil) {
+		[cache[index].color release];
+	}
+	cache[index].hex = hex;
+	cache[index].color = [color retain];
+	return color;
 }
 
 static inline unsigned int ui2_nscolor_hex(NSColor *color, unsigned int fallback) {
@@ -68,7 +84,22 @@ static inline void* ui2_image_from_name_sized(const char* raw, double width, dou
 	return (__bridge void*)sized;
 }
 
+typedef struct {
+	double size;
+	bool bold;
+	bool italic;
+	NSFont *font;
+} UI2FontCacheEntry;
+
 static inline NSFont* ui2_font_obj(double size, bool bold, bool italic) {
+	static UI2FontCacheEntry cache[64];
+	static unsigned int cache_count = 0;
+	for (unsigned int index = 0; index < cache_count; index++) {
+		if (cache[index].size == size && cache[index].bold == bold
+			&& cache[index].italic == italic) {
+			return cache[index].font;
+		}
+	}
 	NSFont *font = bold ? [NSFont boldSystemFontOfSize:size] : [NSFont systemFontOfSize:size];
 	if (italic) {
 		NSFont *italic_font = [[NSFontManager sharedFontManager] convertFont:font toHaveTrait:NSItalicFontMask];
@@ -76,7 +107,18 @@ static inline NSFont* ui2_font_obj(double size, bool bold, bool italic) {
 			font = italic_font;
 		}
 	}
+	if (cache_count < sizeof(cache) / sizeof(cache[0])) {
+		cache[cache_count].size = size;
+		cache[cache_count].bold = bold;
+		cache[cache_count].italic = italic;
+		cache[cache_count].font = [font retain];
+		cache_count++;
+	}
 	return font;
+}
+
+static inline void* ui2_font(double size, bool bold, bool italic) {
+	return (__bridge void*)ui2_font_obj(size, bold, italic);
 }
 
 static inline unsigned long ui2_utf16_length(const char* utf8) {
