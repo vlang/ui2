@@ -91,6 +91,10 @@ pub fn focus(id string) {
 	g_focused_field = id
 }
 
+pub fn focused_text_area_id() string {
+	return g_focused_field
+}
+
 pub fn dismiss_keyboard() {
 	g_focused_field = ''
 }

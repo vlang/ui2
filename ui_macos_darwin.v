@@ -348,6 +348,23 @@ pub fn focus(id string) {
 	native_focus(native)
 }
 
+// focused_text_area_id returns the id of the text area that currently holds
+// keyboard focus (is the window's first responder), or '' when no registered
+// text view is focused. Clicking or selecting inside a text view emits no app
+// event, so this lets callers target the editor the user is actually editing
+// instead of tracking focus changes manually.
+pub fn focused_text_area_id() string {
+	st := state()
+	if native_is_nil(st.window) {
+		return ''
+	}
+	responder := macos.msg_id(st.window, 'firstResponder')
+	if native_is_nil(NativeView(responder)) {
+		return ''
+	}
+	return st.textview_ids[u64(voidptr(responder))] or { '' }
+}
+
 // text_area_set_selection selects a UTF-16 range, matching NSTextView's native
 // selection storage and the offsets exposed by text_area_caret.
 pub fn text_area_set_selection(id string, location int, length int) {
@@ -1627,8 +1644,19 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 
 fn fire_pointer_event(native NativeView, phase string, event voidptr) {
 	st := state()
-	id := st.pointer_ids[u64(voidptr(native))] or { return }
-	if phase == 'drag' && !(st.pointer_draggable[u64(voidptr(native))] or { false }) {
+	// A non-interactive child (e.g. an icon image) sits on top of its pointer
+	// view and receives the click first. Walk up the view hierarchy to the
+	// nearest registered pointer target so the enclosing button still fires.
+	mut target := native
+	mut id := st.pointer_ids[u64(voidptr(target))] or { '' }
+	for id.len == 0 {
+		target = NativeView(macos.msg_id(target, 'superview'))
+		if native_is_nil(target) {
+			return
+		}
+		id = st.pointer_ids[u64(voidptr(target))] or { '' }
+	}
+	if phase == 'drag' && !(st.pointer_draggable[u64(voidptr(target))] or { false }) {
 		return
 	}
 	if voidptr(st.event_handler) == unsafe { nil } {

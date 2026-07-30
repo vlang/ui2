@@ -98,6 +98,10 @@ pub fn focus(id string) {
 	macos.msg_bool(view, 'becomeFirstResponder')
 }
 
+pub fn focused_text_area_id() string {
+	return ''
+}
+
 pub fn dismiss_keyboard() {
 	if g_root_view != unsafe { nil } {
 		macos.msg_void_bool(g_root_view, 'endEditing:', true)
