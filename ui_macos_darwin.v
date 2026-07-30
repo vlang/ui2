@@ -825,11 +825,21 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 	if el.menu.len > 0 && el.kind != .dropdown {
 		attach_menu(native, el.menu)
 	}
-	if el.kind != .screen && (key !in st.node_tooltips || st.node_tooltips[key] != el.tooltip) {
-		macos.msg_void1(native, 'setToolTip:', macos.nsstring(el.tooltip))
-		st.node_tooltips[key] = el.tooltip
-		if st.refresh_debug.active {
-			st.refresh_debug.tooltips_set++
+	if el.kind != .screen {
+		previous_tooltip := st.node_tooltips[key] or { '' }
+		if previous_tooltip != el.tooltip {
+			macos.msg_void1(native, 'setToolTip:', macos.nsstring(el.tooltip))
+			if st.refresh_debug.active {
+				st.refresh_debug.tooltips_set++
+			}
+		}
+		if el.tooltip.len > 0 {
+			st.node_tooltips[key] = el.tooltip
+		} else {
+			// Do not cache the default empty value. Apart from avoiding a map entry
+			// per node, this keeps newly-created views from installing thousands of
+			// empty AppKit tooltip tracking areas during virtual-list refreshes.
+			st.node_tooltips.delete(key)
 		}
 	}
 
@@ -1017,9 +1027,11 @@ fn register_control(native NativeView, id string, submit_id string) {
 fn remove_stale_nodes(active map[string]bool) {
 	mut st := state()
 	mut stale := []string{}
+	mut stale_set := map[string]bool{}
 	for key, _ in st.nodes {
 		if key !in active {
 			stale << key
+			stale_set[key] = true
 		}
 	}
 	for key in stale {
@@ -1030,7 +1042,11 @@ fn remove_stale_nodes(active map[string]bool) {
 		st.cursor_ids.delete(pointer)
 		st.control_ids.delete(pointer)
 		st.control_change_ids.delete(pointer)
-		native_remove_from_superview(native)
+		if !node_has_ancestor_in_set(key, stale_set) {
+			// Removing a native parent already removes its whole subtree. Avoid
+			// making the same AppKit call again for every stale descendant.
+			native_remove_from_superview(native)
+		}
 		st.nodes.delete(key)
 		st.node_kinds.delete(key)
 		st.node_interactive.delete(key)
@@ -1066,9 +1082,11 @@ fn remove_stale_nodes_below(root_key string, active map[string]bool) {
 	mut st := state()
 	prefix := root_key + '/'
 	mut stale := []string{}
+	mut stale_set := map[string]bool{}
 	for key, _ in st.nodes {
 		if key.starts_with(prefix) && key !in active {
 			stale << key
+			stale_set[key] = true
 		}
 	}
 	for key in stale {
@@ -1079,12 +1097,26 @@ fn remove_stale_nodes_below(root_key string, active map[string]bool) {
 		st.cursor_ids.delete(pointer)
 		st.control_ids.delete(pointer)
 		st.control_change_ids.delete(pointer)
-		native_remove_from_superview(native)
+		if !node_has_ancestor_in_set(key, stale_set) {
+			native_remove_from_superview(native)
+		}
 		st.nodes.delete(key)
 		st.node_kinds.delete(key)
 		st.node_interactive.delete(key)
 		st.node_tooltips.delete(key)
 	}
+}
+
+fn node_has_ancestor_in_set(key string, keys map[string]bool) bool {
+	mut ancestor := key
+	for {
+		separator := ancestor.last_index('/') or { return false }
+		ancestor = ancestor[..separator]
+		if ancestor in keys {
+			return true
+		}
+	}
+	return false
 }
 
 fn content_height(children []Element) f64 {
