@@ -3,6 +3,7 @@ module ui2
 import encoding.base64
 import macos
 import os
+import time
 
 #flag darwin -framework Cocoa
 #flag darwin -framework QuartzCore
@@ -98,6 +99,20 @@ struct RunConfig {
 	height int    = 800
 }
 
+struct RefreshDebug {
+mut:
+	active           bool
+	nodes_visited    int
+	nodes_created    int
+	nodes_updated    int
+	tooltips_set     int
+	native_create_ns u64
+	native_update_ns u64
+	label_update_ns  u64
+	view_update_ns   u64
+	other_update_ns  u64
+}
+
 @[heap]
 struct RuntimeState {
 mut:
@@ -133,6 +148,7 @@ mut:
 	run_config          RunConfig
 	screenshot_pending  bool
 	screenshot_captured bool
+	refresh_debug       RefreshDebug
 }
 
 const runtime_state_singleton = &RuntimeState{
@@ -218,11 +234,26 @@ pub fn refresh_element(id string, element Element) {
 	if native_is_nil(parent) {
 		return
 	}
+	started := time.sys_mono_now()
+	st.refresh_debug = RefreshDebug{
+		active: true
+	}
 	clear_subtree_registrations(key)
+	cleared := time.sys_mono_now()
 	mut active := map[string]bool{}
 	render_element(parent, element, key, mut active)
+	rendered := time.sys_mono_now()
 	remove_stale_nodes_below(key, active)
+	finished := time.sys_mono_now()
+	st.refresh_debug.active = false
 	schedule_screenshot_capture()
+	total_ns := finished - started
+	budget := if total_ns > u64(16_666_667) { 'OVER' } else { 'ok' }
+	println('[ui2 subtree] id=${id} total=${debug_milliseconds(total_ns):.2f}ms ${budget} clear=${debug_milliseconds(cleared - started):.2f}ms render=${debug_milliseconds(rendered - cleared):.2f}ms stale=${debug_milliseconds(finished - rendered):.2f}ms nodes=${st.refresh_debug.nodes_visited} create=${st.refresh_debug.nodes_created}/${debug_milliseconds(st.refresh_debug.native_create_ns):.2f}ms update=${st.refresh_debug.nodes_updated}/${debug_milliseconds(st.refresh_debug.native_update_ns):.2f}ms labels=${debug_milliseconds(st.refresh_debug.label_update_ns):.2f}ms views=${debug_milliseconds(st.refresh_debug.view_update_ns):.2f}ms other=${debug_milliseconds(st.refresh_debug.other_update_ns):.2f}ms tooltips=${st.refresh_debug.tooltips_set}')
+}
+
+fn debug_milliseconds(nanoseconds u64) f64 {
+	return f64(nanoseconds) / 1_000_000.0
 }
 
 // on_key registers a handler for key events that reach the window
@@ -676,6 +707,9 @@ fn render_root(root Element) {
 fn render_element(parent NativeView, el Element, key string, mut active map[string]bool) NativeView {
 	active[key] = true
 	mut st := state()
+	if st.refresh_debug.active {
+		st.refresh_debug.nodes_visited++
+	}
 	mut native := st.nodes[key] or { native_nil_view() }
 	existing_kind := st.node_kinds[key] or { Kind.screen }
 	existing_direct := st.node_text_direct[key] or { false }
@@ -691,7 +725,12 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			native_remove_from_superview(native)
 		}
 		st.node_tooltips.delete(key)
+		create_started := if st.refresh_debug.active { time.sys_mono_now() } else { u64(0) }
 		native = native_create_element(el)
+		if st.refresh_debug.active {
+			st.refresh_debug.nodes_created++
+			st.refresh_debug.native_create_ns += time.sys_mono_now() - create_started
+		}
 		st.nodes[key] = native
 		st.node_kinds[key] = el.kind
 		st.node_interactive[key] = interactive
@@ -702,7 +741,18 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			native_add_subview(parent, native)
 		}
 	} else {
+		update_started := if st.refresh_debug.active { time.sys_mono_now() } else { u64(0) }
 		native_update_element(native, el)
+		if st.refresh_debug.active {
+			elapsed := time.sys_mono_now() - update_started
+			st.refresh_debug.nodes_updated++
+			st.refresh_debug.native_update_ns += elapsed
+			match el.kind {
+				.label { st.refresh_debug.label_update_ns += elapsed }
+				.view { st.refresh_debug.view_update_ns += elapsed }
+				else { st.refresh_debug.other_update_ns += elapsed }
+			}
+		}
 	}
 
 	match el.kind {
@@ -778,6 +828,9 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 	if el.kind != .screen && (key !in st.node_tooltips || st.node_tooltips[key] != el.tooltip) {
 		macos.msg_void1(native, 'setToolTip:', macos.nsstring(el.tooltip))
 		st.node_tooltips[key] = el.tooltip
+		if st.refresh_debug.active {
+			st.refresh_debug.tooltips_set++
+		}
 	}
 
 	if el.id.len > 0 {
