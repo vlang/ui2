@@ -891,7 +891,7 @@ fn native_create_element(el Element) NativeView {
 			native_nil_view()
 		}
 		.view {
-			native_new_view(element_rect(el.frame), el.box.bg, element_interactive(el))
+			native_new_view(element_rect(el.frame), el.box, element_interactive(el))
 		}
 		.scroll {
 			native_new_scroll(element_rect(el.frame), el.box.bg)
@@ -926,7 +926,7 @@ fn native_update_element(native NativeView, el Element) {
 		.screen {}
 		.view {
 			native_set_frame(native, element_rect(el.frame))
-			native_set_background(native, el.box.bg)
+			native_set_box_background(native, el.box)
 			native_set_corner_radius(native, el.box.radius)
 		}
 		.scroll {
@@ -1259,10 +1259,10 @@ fn native_new_flipped_view(frame NativeRect, bg u32) NativeView {
 	return native
 }
 
-fn native_new_view(frame NativeRect, bg u32, interactive bool) NativeView {
+fn native_new_view(frame NativeRect, box BoxStyle, interactive bool) NativeView {
 	class_name := if interactive { 'UI2PointerView' } else { 'UI2FlippedView' }
 	native := macos.msg_id_rect(macos.alloc(class_name), 'initWithFrame:', appkit_rect(frame))
-	native_set_background(native, bg)
+	native_set_box_background(native, box)
 	return native
 }
 
@@ -1600,6 +1600,16 @@ fn native_set_background(view NativeView, hex u32) {
 	macos.msg_void_bool(view, 'setWantsLayer:', true)
 	layer := macos.msg_id(view, 'layer')
 	macos.msg_void1(layer, 'setBackgroundColor:', macos.msg_id(native_color(hex), 'CGColor'))
+}
+
+fn native_set_box_background(view NativeView, box BoxStyle) {
+	if !box.transparent {
+		native_set_background(view, box.bg)
+		return
+	}
+	macos.msg_void_bool(view, 'setWantsLayer:', true)
+	layer := macos.msg_id(view, 'layer')
+	macos.msg_void1(layer, 'setBackgroundColor:', macos.Id(unsafe { nil }))
 }
 
 fn native_set_corner_radius(view NativeView, radius f64) {
