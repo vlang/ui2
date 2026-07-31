@@ -159,6 +159,12 @@ static inline NSCursor* ui2_cursor_for_name(const char* raw) {
 	if (strcmp(raw, "resize_nesw") == 0) {
 		return ui2_private_cursor(@"_windowResizeNorthEastSouthWestCursor", [NSCursor crosshairCursor]);
 	}
+	if (strcmp(raw, "resize_ew") == 0) {
+		return [NSCursor resizeLeftRightCursor];
+	}
+	if (strcmp(raw, "resize_ns") == 0) {
+		return [NSCursor resizeUpDownCursor];
+	}
 	if (strcmp(raw, "rotate") == 0) {
 		return [NSCursor openHandCursor];
 	}
