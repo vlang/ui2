@@ -113,30 +113,31 @@ pub:
 pub struct Element {
 	kind Kind
 pub:
-	id             string
-	submit_id      string // text_field: optional event id emitted when Return submits
-	key            string // stable identity for reconciliation (falls back to child index)
-	text           string
-	image_path     string
-	tooltip        string
-	placeholder    string
-	frame          Rect
-	box            BoxStyle
-	text_style     TextStyle
-	text_runs      []TextRun // text_area: optional rich text style runs
-	keyboard       int
-	emit_change    bool
-	long_press     bool
-	swipe_left     bool
-	readonly       bool   // text_area: selectable but not editable
-	disable_scroll bool   // text_area: hide the internal scroll view scroller
-	secure         bool   // text_field: password entry (NSSecureTextField)
-	clickable      bool   // view/image: emit pointer down/up events
-	draggable      bool   // view/image: emit pointer drag events
-	rotation       f64    // image: clockwise degrees
-	cursor         string // view/image: hover cursor hint
-	menu           []MenuEntry
-	children       []Element
+	id                    string
+	submit_id             string // text_field: optional event id emitted when Return submits
+	key                   string // stable identity for reconciliation (falls back to child index)
+	text                  string
+	image_path            string
+	tooltip               string
+	placeholder           string
+	frame                 Rect
+	box                   BoxStyle
+	text_style            TextStyle
+	text_runs             []TextRun // text_area: optional rich text style runs
+	keyboard              int
+	emit_change           bool
+	long_press            bool
+	swipe_left            bool
+	readonly              bool   // text_area: selectable but not editable
+	disable_scroll        bool   // text_area: hide the internal scroll view scroller
+	persistent_scrollbars bool   // scroll: keep a legacy always-visible scroller instead of the auto-fading overlay one
+	secure                bool   // text_field: password entry (NSSecureTextField)
+	clickable             bool   // view/image: emit pointer down/up events
+	draggable             bool   // view/image: emit pointer drag events
+	rotation              f64    // image: clockwise degrees
+	cursor                string // view/image: hover cursor hint
+	menu                  []MenuEntry
+	children              []Element
 }
 
 pub const keyboard_default = 0
@@ -233,6 +234,23 @@ pub fn scroll(id string, frame Rect, bg u32, children []Element) Element {
 			bg: bg
 		}
 		children: children
+	}
+}
+
+// scroll_persistent behaves like scroll but keeps a legacy, always-visible
+// scroller (when the content overflows) rather than the system overlay scroller
+// that fades out once scrolling stops. Suited to spreadsheet-style grids where a
+// draggable scrollbar should stay on screen.
+pub fn scroll_persistent(id string, frame Rect, bg u32, children []Element) Element {
+	return Element{
+		kind:                  .scroll
+		id:                    id
+		frame:                 frame
+		box:                   BoxStyle{
+			bg: bg
+		}
+		children:              children
+		persistent_scrollbars: true
 	}
 }
 

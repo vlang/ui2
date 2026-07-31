@@ -894,7 +894,7 @@ fn native_create_element(el Element) NativeView {
 			native_new_view(element_rect(el.frame), el.box, element_interactive(el))
 		}
 		.scroll {
-			native_new_scroll(element_rect(el.frame), el.box.bg)
+			native_new_scroll(element_rect(el.frame), el.box.bg, el.persistent_scrollbars)
 		}
 		.label {
 			native_new_label(element_rect(el.frame), el.text, el.text_style.color,
@@ -1266,11 +1266,16 @@ fn native_new_view(frame NativeRect, box BoxStyle, interactive bool) NativeView 
 	return native
 }
 
-fn native_new_scroll(frame NativeRect, bg u32) NativeView {
+fn native_new_scroll(frame NativeRect, bg u32, persistent_scrollbars bool) NativeView {
 	scroll_view := macos.msg_id_rect(macos.alloc('NSScrollView'), 'initWithFrame:',
 		appkit_rect(frame))
 	macos.msg_void_bool(scroll_view, 'setHasVerticalScroller:', true)
 	macos.msg_void_bool(scroll_view, 'setAutohidesScrollers:', true)
+	if persistent_scrollbars {
+		// NSScrollerStyleLegacy (0) keeps the scroller on screen whenever the content
+		// overflows, instead of the overlay scroller that fades away after scrolling.
+		macos.msg_void_i64(scroll_view, 'setScrollerStyle:', 0)
+	}
 	macos.msg_void_bool(scroll_view, 'setDrawsBackground:', true)
 	native_set_scroll_background(scroll_view, bg)
 	return scroll_view
