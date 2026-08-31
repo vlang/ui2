@@ -229,3 +229,32 @@ fn test_parse_menu_items() {
 	// MenuItem children must not become subviews
 	assert el.children.len == 0
 }
+
+fn test_parse_text_field_change_and_submit_events() {
+	source := 'TextField {
+		id: message
+		text: "hello"
+		on_change: message_changed
+		on_submit: send_message
+		secure: true
+	}'
+	node := parse_qml(source) or { panic(err) }
+	el := element_from_qnode(node, rect(0, 0, 200, 40)) or { panic(err) }
+	assert el.kind == .text_field
+	assert el.id == 'message_changed'
+	assert el.submit_id == 'send_message'
+	assert el.emit_change
+	assert el.secure
+}
+
+fn test_parse_submit_only_text_field() {
+	source := 'TextField {
+		id: search
+		on_submit: run_search
+	}'
+	node := parse_qml(source) or { panic(err) }
+	el := element_from_qnode(node, rect(0, 0, 200, 40)) or { panic(err) }
+	assert el.id == 'search'
+	assert el.submit_id == 'run_search'
+	assert !el.emit_change
+}

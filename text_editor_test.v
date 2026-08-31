@@ -87,3 +87,13 @@ fn test_portable_text_area_range_uses_utf16_and_keeps_selection_length() {
 	record_portable_text_area_selection('portable-editor', clamped)
 	assert portable_text_area_selection('portable-editor') == clamped
 }
+
+fn test_submit_only_text_field_and_secure_display_text() {
+	el := text_field_with_submit('message', 'send_message', 'Message', 'Привет🙂',
+		rect(0, 0, 200, 40), BoxStyle{}, TextStyle{}, keyboard_default)
+	assert el.kind == .text_field
+	assert el.submit_id == 'send_message'
+	assert !el.emit_change
+	assert text_field_display_text(el.text, false) == 'Привет🙂'
+	assert text_field_display_text(el.text, true) == '•••••••'
+}

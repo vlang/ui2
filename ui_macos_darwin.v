@@ -820,8 +820,8 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			register_action_control(native, el.id)
 		}
 		.text_field {
-			if el.emit_change {
-				register_control(native, el.id, el.submit_id)
+			if el.emit_change || el.submit_id.len > 0 {
+				register_control(native, el.id, el.submit_id, el.emit_change)
 			}
 		}
 		.text_area {
@@ -1021,7 +1021,7 @@ fn register_action_control(native NativeView, id string) {
 	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
 }
 
-fn register_control(native NativeView, id string, submit_id string) {
+fn register_control(native NativeView, id string, submit_id string, emit_change bool) {
 	mut st := state()
 	action_id := if submit_id.len > 0 { submit_id } else { id }
 	pointer := u64(voidptr(native))
@@ -1033,11 +1033,19 @@ fn register_control(native NativeView, id string, submit_id string) {
 		st.button_ids[tag] = action_id
 	}
 	st.control_ids[pointer] = action_id
-	st.control_change_ids[pointer] = id
+	if emit_change {
+		st.control_change_ids[pointer] = id
+	} else {
+		st.control_change_ids.delete(pointer)
+	}
 	native_set_tag(native, tag)
 	native_set_control_target(native, st.button_handler)
-	// Delegate delivers controlTextDidChange: for per-keystroke events
-	macos.msg_void1(native, 'setDelegate:', st.button_handler)
+	if emit_change {
+		// Delegate delivers controlTextDidChange: for per-keystroke events.
+		macos.msg_void1(native, 'setDelegate:', st.button_handler)
+	} else {
+		macos.msg_void1(native, 'setDelegate:', native_nil_view())
+	}
 	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
 }
 
@@ -1087,6 +1095,8 @@ fn clear_subtree_registrations(root_key string) {
 			st.pointer_ids.delete(pointer)
 			st.pointer_draggable.delete(pointer)
 			st.cursor_ids.delete(pointer)
+			st.control_ids.delete(pointer)
+			st.control_change_ids.delete(pointer)
 		}
 		st.views.delete(id)
 		st.view_keys.delete(id)

@@ -5,6 +5,7 @@ import time
 
 struct HitTarget {
 	id          string
+	submit_id   string
 	x           f64
 	y           f64
 	w           f64
@@ -38,6 +39,7 @@ __global g_build_screen = BuildFn(unsafe { nil })
 __global g_event_handler = EventFn(unsafe { nil })
 __global g_gg_app = &GgApp{}
 __global g_text_values = map[string]string{}
+__global g_text_props = map[string]string{}
 __global g_focused_field = ''
 __global g_scroll_offsets = map[string]f64{}
 __global g_scroll_content_h = map[string]f64{}
@@ -302,13 +304,21 @@ fn handle_key_down(key gg.KeyCode) {
 	}
 	if key == .backspace {
 		current := g_text_values[g_focused_field] or { '' }
-		if current.len > 0 {
-			g_text_values[g_focused_field] = current[..current.len - 1]
+		runes := current.runes()
+		if runes.len > 0 {
+			g_text_values[g_focused_field] = runes[..runes.len - 1].string()
 			fire_field_change(g_focused_field)
 		}
 	}
 	if key == .enter || key == .kp_enter {
+		id := g_focused_field
 		g_focused_field = ''
+		for target in g_hit_targets {
+			if target.id == id && target.text_field && target.submit_id.len > 0 {
+				fire_event(target.submit_id)
+				break
+			}
+		}
 	}
 }
 
@@ -409,10 +419,16 @@ fn render_element(ctx &gg.Context, el Element, off_x f64, off_y f64) {
 			x := el.frame.x + off_x
 			y := el.frame.y + off_y
 			draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
+			previous_prop := g_text_props[el.id] or { el.text }
+			if el.id !in g_text_values || el.text != previous_prop {
+				g_text_values[el.id] = el.text
+			}
+			g_text_props[el.id] = el.text
 			current_text := g_text_values[el.id] or { el.text }
+			display_text := text_field_display_text(current_text, el.secure)
 			is_focused := g_focused_field == el.id
 			if current_text.len > 0 {
-				draw_text(ctx, current_text, x + 12, y, el.frame.width - 24, el.frame.height,
+				draw_text(ctx, display_text, x + 12, y, el.frame.width - 24, el.frame.height,
 					el.text_style)
 			} else if el.placeholder.len > 0 {
 				placeholder_style := TextStyle{
@@ -423,7 +439,7 @@ fn render_element(ctx &gg.Context, el Element, off_x f64, off_y f64) {
 					placeholder_style)
 			}
 			if is_focused {
-				text_w := estimate_text_width(current_text, el.text_style.size)
+				text_w := estimate_text_width(display_text, el.text_style.size)
 				cursor_x := x + 12 + text_w
 				cursor_y := y + el.frame.height * 0.2
 				cursor_h := el.frame.height * 0.6
@@ -431,6 +447,7 @@ fn render_element(ctx &gg.Context, el Element, off_x f64, off_y f64) {
 			}
 			g_hit_targets << HitTarget{
 				id:          el.id
+				submit_id:   el.submit_id
 				x:           x
 				y:           y
 				w:           el.frame.width
@@ -439,6 +456,7 @@ fn render_element(ctx &gg.Context, el Element, off_x f64, off_y f64) {
 				emit_change: el.emit_change
 			}
 		}
+		else {}
 	}
 }
 

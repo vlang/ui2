@@ -7,6 +7,8 @@ import ios
 
 fn C.vui_app_did_finish_launching(self voidptr, cmd voidptr, application voidptr, launch_options voidptr) bool
 fn C.vui_button_tap(self voidptr, cmd voidptr, sender voidptr)
+fn C.vui_text_field_changed(self voidptr, cmd voidptr, sender voidptr)
+fn C.vui_text_field_submitted(self voidptr, cmd voidptr, sender voidptr)
 fn C.vui_button_long_press(self voidptr, cmd voidptr, sender voidptr)
 fn C.vui_swipe_left(self voidptr, cmd voidptr, sender voidptr)
 fn C.vui_swipe_should_begin(self voidptr, cmd voidptr, sender voidptr) bool
@@ -42,6 +44,8 @@ __global g_long_press_handler = View(unsafe { nil })
 __global g_swipe_handler = View(unsafe { nil })
 __global g_views = map[string]View{}
 __global g_button_ids = []string{}
+__global g_text_change_ids = map[u64]string{}
+__global g_text_submit_ids = map[u64]string{}
 __global g_scroll_ids = map[string]bool{}
 __global g_scroll_offsets = map[string]f64{}
 __global g_view_translation_x = map[voidptr]f64{}
@@ -159,8 +163,8 @@ fn add_button_target(btn View, target View) {
 		macos.Id(usize(64)))
 }
 
-fn add_control_target(control View, target View, event_mask u64) {
-	macos.msg_void3(control, 'addTarget:action:forControlEvents:', target, macos.sel('handleTap:'),
+fn add_control_target_action(control View, target View, action string, event_mask u64) {
+	macos.msg_void3(control, 'addTarget:action:forControlEvents:', target, macos.sel(action),
 		macos.Id(usize(event_mask)))
 }
 
@@ -304,7 +308,7 @@ fn new_button_view(frame Rect, title string, bg_hex u32, text_hex u32, size f64,
 	return btn
 }
 
-fn new_text_field_view(frame Rect, placeholder string, t string, bg_hex u32, text_hex u32, size f64, radius f64, keyboard int) View {
+fn new_text_field_view(frame Rect, placeholder string, t string, bg_hex u32, text_hex u32, size f64, radius f64, keyboard int, secure bool) View {
 	field := macos.msg_id_rect(macos.alloc('UITextField'), 'initWithFrame:', native_rect(frame))
 	set_background(field, bg_hex)
 	macos.msg_void1(field, 'setTextColor:', ios.color(text_hex))
@@ -312,6 +316,7 @@ fn new_text_field_view(frame Rect, placeholder string, t string, bg_hex u32, tex
 	macos.msg_void1(field, 'setPlaceholder:', macos.nsstring(placeholder))
 	macos.msg_void1(field, 'setText:', macos.nsstring(t))
 	macos.msg_void_i64(field, 'setKeyboardType:', i64(keyboard))
+	macos.msg_void_bool(field, 'setSecureTextEntry:', secure)
 	macos.msg_void_i64(field, 'setClearButtonMode:', 1)
 	set_corner_radius(field, radius)
 	pad := macos.msg_id_rect(macos.alloc('UIView'), 'initWithFrame:', macos.rect(0, 0, 12,
@@ -351,6 +356,8 @@ fn ensure_runtime_classes() {
 	if macos.get_class('VuiButtonHandler') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSObject'), 'VuiButtonHandler')
 		macos.add_method(cls, 'handleTap:', voidptr(C.vui_button_tap), 'v@:@')
+		macos.add_method(cls, 'handleTextChange:', voidptr(C.vui_text_field_changed), 'v@:@')
+		macos.add_method(cls, 'handleTextSubmit:', voidptr(C.vui_text_field_submitted), 'v@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('VuiLongPressHandler') == unsafe { nil } {
@@ -417,6 +424,8 @@ fn render_root(root Element) {
 	remove_all_subviews(g_root_view)
 	g_views = map[string]View{}
 	g_button_ids = []string{}
+	g_text_change_ids = map[u64]string{}
+	g_text_submit_ids = map[u64]string{}
 	g_scroll_ids = map[string]bool{}
 	set_background(g_root_view, root.box.bg)
 	for child in root.children {
@@ -509,12 +518,17 @@ fn render_element(parent View, el Element) View {
 		}
 		.text_field {
 			native = new_text_field_view(el.frame, el.placeholder, el.text, el.box.bg,
-				el.text_style.color, el.text_style.size, el.box.radius, el.keyboard)
+				el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure)
+			pointer := u64(native)
 			if el.emit_change {
-				tag := g_button_ids.len
-				g_button_ids << el.id
-				set_tag(native, tag)
-				add_control_target(native, g_button_handler, 131072)
+				g_text_change_ids[pointer] = el.id
+				add_control_target_action(native, g_button_handler, 'handleTextChange:', 131072)
+			}
+			if el.submit_id.len > 0 {
+				g_text_submit_ids[pointer] = el.submit_id
+				add_control_target_action(native, g_button_handler, 'handleTextSubmit:', 524288)
+			}
+			if el.emit_change || el.submit_id.len > 0 {
 				macos.set_associated_object(native, assoc_handler_key(), g_button_handler,
 					macos.assoc_retain_nonatomic)
 			}
@@ -564,6 +578,24 @@ fn vui_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
 		return
 	}
 	g_event_handler(g_button_ids[tag])
+}
+
+@[export: 'vui_text_field_changed']
+fn vui_text_field_changed(_self voidptr, _cmd voidptr, sender voidptr) {
+	if voidptr(g_event_handler) == unsafe { nil } {
+		return
+	}
+	id := g_text_change_ids[u64(sender)] or { return }
+	g_event_handler(id)
+}
+
+@[export: 'vui_text_field_submitted']
+fn vui_text_field_submitted(_self voidptr, _cmd voidptr, sender voidptr) {
+	if voidptr(g_event_handler) == unsafe { nil } {
+		return
+	}
+	id := g_text_submit_ids[u64(sender)] or { return }
+	g_event_handler(id)
 }
 
 @[export: 'vui_button_long_press']

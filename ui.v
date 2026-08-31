@@ -426,6 +426,22 @@ pub fn text_field_with_change(id string, placeholder string, text string, frame 
 		keyboard)
 }
 
+// text_field_with_submit emits submit_id when Return/Enter is pressed without
+// also emitting a live change event for every edit.
+pub fn text_field_with_submit(id string, submit_id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int) Element {
+	return Element{
+		kind:        .text_field
+		id:          id
+		submit_id:   submit_id
+		text:        text
+		placeholder: placeholder
+		frame:       frame
+		box:         box_
+		text_style:  style
+		keyboard:    keyboard
+	}
+}
+
 pub fn text_field_with_change_and_submit(id string, submit_id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int) Element {
 	return Element{
 		kind:        .text_field
@@ -439,4 +455,17 @@ pub fn text_field_with_change_and_submit(id string, submit_id string, placeholde
 		keyboard:    keyboard
 		emit_change: true
 	}
+}
+
+// text_field_display_text preserves the number of Unicode code points while
+// keeping secure field contents out of the portable renderer.
+fn text_field_display_text(text string, secure bool) string {
+	if !secure || text.len == 0 {
+		return text
+	}
+	mut masked := []rune{cap: rune_len(text)}
+	for _ in text.runes() {
+		masked << `•`
+	}
+	return masked.string()
 }

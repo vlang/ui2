@@ -359,9 +359,14 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		}
 		'TextField' {
 			id := node.prop_or('on_change', node.id)
+			submit_id := node.prop('on_submit')
 			frame_ := q_frame(node, frame)
 			if node.prop_bool('emit_change') || node.prop('on_change').len > 0 {
-				return text_field_with_change(id, node.prop('placeholder'), node.prop('text'),
+				return text_field_with_change_and_submit(id, submit_id, node.prop('placeholder'),
+					node.prop('text'), frame_, q_box(node), q_text_style(node), keyboard_default)
+			}
+			if submit_id.len > 0 {
+				return text_field_with_submit(id, submit_id, node.prop('placeholder'), node.prop('text'),
 					frame_, q_box(node), q_text_style(node), keyboard_default)
 			}
 			return text_field(id, node.prop('placeholder'), node.prop('text'), frame_, q_box(node),
