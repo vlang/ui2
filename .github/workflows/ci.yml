@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '31 1,12 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-examples:
+    name: Build examples (${{ matrix.os }}${{ matrix.custom && ', custom renderer' || '' }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: macos-latest
+          - os: windows-latest
+          - os: macos-latest
+            custom: true
+          - os: windows-latest
+            custom: true
+    steps:
+      - name: Setup V
+        uses: vlang/setup-v@v1.3
+        with:
+          check-latest: true
+
+      # `import ui2` resolves through the checkout directory name, so the
+      # repository has to land in a directory called `ui2`.
+      - uses: actions/checkout@v4
+        with:
+          path: ui2
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --quiet -y --no-install-recommends \
+            libx11-dev libxcursor-dev libxi-dev libgl1-mesa-dev libasound2-dev
+
+      - name: Build all examples
+        run: v run ui2/examples/build_examples.vsh ${{ matrix.custom && '-d ui2_custom_rendering' || '' }}

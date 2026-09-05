@@ -234,7 +234,12 @@ vab run --device auto --name "ui2 counter" \
 
 ## Verification
 
-Run `make test` for portable and host-native tests. `make check-macos`,
+Run `make test` for portable and host-native tests. `make examples` compiles
+every example under `examples/` for the host platform and reports all failures
+at once; `make examples-custom` repeats that with the custom `gg` renderer.
+GitHub Actions runs `make examples` on Linux, macOS, and Windows, plus
+`make examples-custom` on macOS and Windows, for every push and pull request.
+`make check-macos`,
 `make check-ios`, `make check-android`, `make check-linux`, and
 `make check-windows` type-check each renderer; cross-target checks require their
 normal platform SDK/toolchain. `make check-custom` additionally type-checks the
@@ -262,3 +267,7 @@ applications unless the final executable is linked without that dependency.
 Native objects returned by `alloc` follow a +1 creation contract. Renderers
 release that ownership after a retaining parent/property accepts the object and
 remove observers, delegates, actions, menus, and pointer registries on unmount.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

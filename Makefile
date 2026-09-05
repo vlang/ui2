@@ -1,9 +1,15 @@
 V ?= v
 
-.PHONY: test check-macos check-ios check-android check-linux check-windows check-custom-macos check-custom-windows check-custom check-backends
+.PHONY: test examples examples-custom check-macos check-ios check-android check-linux check-windows check-custom-macos check-custom-windows check-custom check-backends
 
 test:
 	$(V) test .
+
+examples:
+	$(V) run examples/build_examples.vsh
+
+examples-custom:
+	$(V) run examples/build_examples.vsh -d ui2_custom_rendering
 
 check-macos:
 	$(V) -shared -os macos -check .
