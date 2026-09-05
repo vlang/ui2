@@ -41,7 +41,6 @@ fn build_smoke_screen() ui2.Element {
 fn handle_smoke_event(_event string) {}
 
 fn verify_and_close_smoke_window() {
-	time.sleep(time.second)
 	mut state := unsafe { smoke_state }
 	checks := {
 		'title':        'ui2 native Windows smoke test'
@@ -51,21 +50,33 @@ fn verify_and_close_smoke_window() {
 		'area':         'Native multiline EDIT control'
 		'scroll-label': 'Native scrolling container'
 	}
-	for id, expected in checks {
-		actual := ui2.text(id)
-		if actual != expected {
-			state.error = '${id}: expected `${expected}`, got `${actual}`'
-			ui2.quit()
-			return
+	mut last_error := 'native controls were not built'
+	for _ in 0 .. 100 {
+		if state.built {
+			mut ready := true
+			for id, expected in checks {
+				actual := ui2.text(id)
+				if actual != expected {
+					last_error = '${id}: expected `${expected}`, got `${actual}`'
+					ready = false
+					break
+				}
+			}
+			if ready {
+				ui2.text_area_set_selection('area', 7, 9)
+				if ui2.text_area_caret('area') != 7
+					|| ui2.text_area_selection_length('area') != 9 {
+					last_error = 'native text-area selection did not round-trip'
+				} else {
+					state.verified = true
+					ui2.quit()
+					return
+				}
+			}
 		}
+		time.sleep(100 * time.millisecond)
 	}
-	ui2.text_area_set_selection('area', 7, 9)
-	if ui2.text_area_caret('area') != 7 || ui2.text_area_selection_length('area') != 9 {
-		state.error = 'native text-area selection did not round-trip'
-		ui2.quit()
-		return
-	}
-	state.verified = true
+	state.error = last_error
 	ui2.quit()
 }
 
