@@ -198,7 +198,84 @@ static inline COLORREF ui2_win_color(unsigned int rgb) {
 	return RGB((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff);
 }
 
+static HANDLE ui2_win_visual_styles_context = INVALID_HANDLE_VALUE;
+static ULONG_PTR ui2_win_visual_styles_cookie = 0;
+static int ui2_win_visual_styles_initialized = 0;
+
+static inline int ui2_win_enable_visual_styles(void) {
+	if (ui2_win_visual_styles_initialized) {
+		return ui2_win_visual_styles_context != INVALID_HANDLE_VALUE;
+	}
+	ui2_win_visual_styles_initialized = 1;
+
+	wchar_t directory[MAX_PATH + 1];
+	wchar_t path[MAX_PATH + 1];
+	DWORD directory_length = GetTempPathW(MAX_PATH, directory);
+	if (directory_length == 0 || directory_length > MAX_PATH
+		|| GetTempFileNameW(directory, L"ui2", 0, path) == 0) {
+		return 0;
+	}
+
+	static const char manifest[] =
+		"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+		"<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\" manifestVersion=\"1.0\">"
+		"<assemblyIdentity name=\"ui2.runtime\" processorArchitecture=\"*\" "
+			"version=\"1.0.0.0\" type=\"win32\"/>"
+		"<dependency><dependentAssembly><assemblyIdentity type=\"win32\" "
+			"name=\"Microsoft.Windows.Common-Controls\" version=\"6.0.0.0\" "
+			"processorArchitecture=\"*\" publicKeyToken=\"6595b64144ccf1df\" "
+			"language=\"*\"/></dependentAssembly></dependency></assembly>";
+
+	HANDLE file = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+		FILE_ATTRIBUTE_TEMPORARY, NULL);
+	if (file == INVALID_HANDLE_VALUE) {
+		DeleteFileW(path);
+		return 0;
+	}
+	DWORD written = 0;
+	BOOL wrote_manifest = WriteFile(file, manifest, (DWORD)(sizeof(manifest) - 1),
+		&written, NULL);
+	CloseHandle(file);
+	if (!wrote_manifest || written != sizeof(manifest) - 1) {
+		DeleteFileW(path);
+		return 0;
+	}
+
+	ACTCTXW activation;
+	ZeroMemory(&activation, sizeof(activation));
+	activation.cbSize = sizeof(activation);
+	activation.lpSource = path;
+	ui2_win_visual_styles_context = CreateActCtxW(&activation);
+	DeleteFileW(path);
+	if (ui2_win_visual_styles_context == INVALID_HANDLE_VALUE) return 0;
+	if (!ActivateActCtx(ui2_win_visual_styles_context, &ui2_win_visual_styles_cookie)) {
+		ReleaseActCtx(ui2_win_visual_styles_context);
+		ui2_win_visual_styles_context = INVALID_HANDLE_VALUE;
+		return 0;
+	}
+	return 1;
+}
+
+static inline int ui2_win_visual_styles_enabled(void) {
+	return ui2_win_visual_styles_context != INVALID_HANDLE_VALUE;
+}
+
+static inline HFONT ui2_win_system_font(void) {
+	static HFONT font = NULL;
+	if (font != NULL) return font;
+	NONCLIENTMETRICSW metrics;
+	ZeroMemory(&metrics, sizeof(metrics));
+	metrics.cbSize = sizeof(metrics);
+	if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0)) {
+		font = CreateFontIndirectW(&metrics.lfMessageFont);
+	}
+	return font == NULL ? (HFONT)GetStockObject(DEFAULT_GUI_FONT) : font;
+}
+
 static inline int ui2_win_register_classes(void) {
+	// Common Controls v6 supplies the current Windows button bezel and native
+	// hover/pressed states. Activate it before registering or creating controls.
+	ui2_win_enable_visual_styles();
 	INITCOMMONCONTROLSEX controls;
 	ZeroMemory(&controls, sizeof(controls));
 	controls.dwSize = sizeof(controls);
@@ -310,7 +387,7 @@ static inline void *ui2_win_create_widget(int kind, void *parent_ptr, int x, int
 	HWND hwnd = CreateWindowExW(ex_style, class_name, text == NULL ? L"" : text, style,
 		x, y, width, height, parent, NULL, GetModuleHandleW(NULL), NULL);
 	if (hwnd != NULL && kind != UI2_WIN_VIEW && kind != UI2_WIN_SCROLL) {
-		SendMessageW(hwnd, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+		SendMessageW(hwnd, WM_SETFONT, (WPARAM)ui2_win_system_font(), TRUE);
 		SetWindowSubclass(hwnd, ui2_win_control_subclass, 1, 0);
 	}
 	return hwnd;

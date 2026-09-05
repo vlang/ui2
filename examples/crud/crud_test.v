@@ -46,7 +46,12 @@ fn test_crud_qml_builds_filtered_list_and_native_actions() {
 	assert list.children.len == 6
 	assert list.children[0].text == 'Man, Iron'
 	assert list.children[0].native_style
-	assert (find_crud_element(root, 'create') or { panic('missing Create button') }).native_style
+	create := find_crud_element(root, 'create') or { panic('missing Create button') }
+	assert create.native_style
+	assert create.frame.y == 184
+	filter := find_crud_element(root, 'filter') or { panic('missing filter field') }
+	assert filter.frame.height == 32
+	assert filter.text_style.size == 13
 	assert !(find_crud_element(root, 'update') or { panic('missing Update button') }).enabled
 	assert !(find_crud_element(root, 'delete') or { panic('missing Delete button') }).enabled
 }

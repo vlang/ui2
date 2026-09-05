@@ -16,6 +16,8 @@ $if !ui2_custom_rendering ? {
 
 fn C.ui2_win_register_classes() int
 
+fn C.ui2_win_visual_styles_enabled() int
+
 fn C.ui2_win_create_main_window(title &u16, width int, height int) voidptr
 
 fn C.ui2_win_create_widget(kind int, parent voidptr, x int, y int, width int, height int, text &u16, alignment int, secure int, readonly int, disable_scroll int) voidptr
@@ -621,7 +623,7 @@ fn windows_widget_kind(kind Kind) int {
 }
 
 fn windows_structural_signature(el Element) string {
-	return '${int(el.kind)}:${windows_bool(el.secure)}:${windows_align(el.text_style.align)}:${windows_bool(el.disable_scroll)}'
+	return '${int(el.kind)}:${windows_bool(el.secure)}:${windows_align(el.text_style.align)}:${windows_bool(el.disable_scroll)}:${windows_bool(el.native_style)}'
 }
 
 fn windows_content_height(children []Element) int {
@@ -736,7 +738,8 @@ fn windows_update_tooltip(key string, hwnd voidptr, tooltip string) {
 
 fn windows_update_style(key string, hwnd voidptr, el Element) {
 	mut st := windows_state()
-	if el.kind != .view && el.kind != .scroll && el.kind != .image {
+	if el.kind != .view && el.kind != .scroll && el.kind != .image
+		&& !(el.kind == .button && el.native_style) {
 		font_sig := '${el.text_style.size}:${el.text_style.font_family.bytes().hex()}:${windows_bool(el.text_style.bold)}:${windows_bool(el.text_style.italic)}:${windows_bool(el.text_style.underline)}:${windows_bool(el.text_style.strikethrough)}'
 		if (st.font_sigs[key] or { '' }) != font_sig {
 			wide_family := el.text_style.font_family.to_wide()

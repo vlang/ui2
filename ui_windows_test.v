@@ -32,6 +32,15 @@ $if !ui2_custom_rendering ? {
 			disable_scroll: true
 		}
 		assert windows_structural_signature(area) != windows_structural_signature(area_without_scroll)
+
+		styled_button := Element{
+			kind: .button
+			native_style: true
+		}
+		plain_button := Element{
+			kind: .button
+		}
+		assert windows_structural_signature(styled_button) != windows_structural_signature(plain_button)
 	}
 
 	fn test_windows_scroll_content_height_uses_child_extent() {
@@ -50,6 +59,7 @@ $if !ui2_custom_rendering ? {
 
 	fn test_windows_native_controls_keep_compact_text_layout() {
 		assert C.ui2_win_register_classes() != 0
+		assert C.ui2_win_visual_styles_enabled() != 0
 		title := 'layout test'.to_wide()
 		root := C.ui2_win_create_main_window(title, 320, 200)
 		unsafe {

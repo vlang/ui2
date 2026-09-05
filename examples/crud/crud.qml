@@ -16,32 +16,33 @@ Screen {
             x: 16
             y: 14
             width: 210
-            height: 24
+            height: 28
             color: #111827
-            font_size: 18
+            font_size: 17
             bold: true
         }
 
-        Label { text: "Filter prefix" x: 16 y: 46 width: 210 height: 18 color: #475569 }
+        Label { text: "Filter prefix" x: 16 y: 48 width: 210 height: 20 color: #475569 font_size: 12 }
         TextField {
             id: filter
             bind.text: app.filter
             on_change: app.filter_changed()
             placeholder: "Surname prefix"
             x: 16
-            y: 66
+            y: 70
             width: 210
-            height: 28
+            height: 32
             background: #F8FAFC
             corner_radius: 7
+            font_size: 13
         }
 
         Scroll {
             id: people_list
             x: 16
-            y: 106
+            y: 112
             width: 210
-            height: card.height - 164
+            height: card.height - 176
             background: #F8FAFC
 
             Repeater {
@@ -59,6 +60,7 @@ Screen {
                     background: item.id == app.selected_id ? #DBEAFE : #FFFFFF
                     color: #111827
                     corner_radius: 6
+                    font_size: 13
                 }
             }
         }
@@ -68,12 +70,12 @@ Screen {
             x: 246
             y: 14
             width: card.width - 262
-            height: 24
+            height: 28
             color: #111827
-            font_size: 18
+            font_size: 17
             bold: true
         }
-        Label { text: "Name" x: 246 y: 50 width: card.width - 262 height: 18 color: #475569 }
+        Label { text: "Name" x: 246 y: 48 width: card.width - 262 height: 20 color: #475569 font_size: 12 }
         TextField {
             id: name
             bind.text: app.name
@@ -81,21 +83,23 @@ Screen {
             x: 246
             y: 70
             width: card.width - 262
-            height: 28
+            height: 32
             background: #F8FAFC
             corner_radius: 7
+            font_size: 13
         }
-        Label { text: "Surname" x: 246 y: 112 width: card.width - 262 height: 18 color: #475569 }
+        Label { text: "Surname" x: 246 y: 114 width: card.width - 262 height: 20 color: #475569 font_size: 12 }
         TextField {
             id: surname
             bind.text: app.surname
             placeholder: "Surname"
             x: 246
-            y: 132
+            y: 136
             width: card.width - 262
-            height: 28
+            height: 32
             background: #F8FAFC
             corner_radius: 7
+            font_size: 13
         }
 
         Button {
@@ -104,7 +108,7 @@ Screen {
             on_tap: app.create_person()
             native: true
             x: 246
-            y: 180
+            y: 184
             width: (card.width - 278) / 3
             height: 34
             background: #3478D4
@@ -118,7 +122,7 @@ Screen {
             native: true
             enabled: app.selected_id >= 0
             x: 254 + (card.width - 278) / 3
-            y: 180
+            y: 184
             width: (card.width - 278) / 3
             height: 34
             background: #E2E8F0
@@ -131,7 +135,7 @@ Screen {
             native: true
             enabled: app.selected_id >= 0
             x: 262 + (card.width - 278) / 3 * 2
-            y: 180
+            y: 184
             width: (card.width - 278) / 3
             height: 34
             background: #FEE2E2
@@ -143,7 +147,7 @@ Screen {
             id: message
             text: app.message
             x: 246
-            y: 232
+            y: 234
             width: card.width - 262
             height: 40
             color: #166534
