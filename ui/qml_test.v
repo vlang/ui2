@@ -274,6 +274,28 @@ fn test_qml_applies_shared_control_state_properties() {
 	assert el.accessibility_label == 'Email'
 }
 
+fn test_qml_applies_pointer_and_transform_properties() {
+	node := parse_qml('Image {
+		id: movable_logo
+		path: "logo.png"
+		on_tap: move_logo
+		clickable: true
+		draggable: true
+		long_press: true
+		swipe_left: true
+		rotation: 37.5
+		cursor: "rotate"
+	}') or { panic(err) }
+	el := element_from_qnode(node, rect(0, 0, 100, 100)) or { panic(err) }
+	assert el.action_id == 'move_logo'
+	assert el.clickable
+	assert el.draggable
+	assert el.long_press
+	assert el.swipe_left
+	assert el.rotation == 37.5
+	assert el.cursor == cursor_rotate
+}
+
 fn test_qml_applies_extended_text_style_properties() {
 	node := parse_qml('Label {
 		text: "Styled"

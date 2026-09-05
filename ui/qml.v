@@ -680,6 +680,12 @@ fn node_to_element(node &QNode, frame Rect) !Element {
 		key: key
 		menu: if menu.len > 0 { menu } else { el.menu }
 		secure: secure
+		clickable: node.prop_bool('clickable')
+		draggable: node.prop_bool('draggable')
+		long_press: node.prop_bool('long_press')
+		swipe_left: node.prop_bool('swipe_left')
+		rotation: node.prop_or('rotation', '0').f64()
+		cursor: node.prop('cursor')
 		tooltip: node.prop('tooltip')
 		hidden: node.prop_bool('hidden')
 		enabled: node.prop('enabled') != 'false'

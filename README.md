@@ -184,6 +184,16 @@ Typed-QML ports from `v-ui` include:
   image frame.
 - `v run examples/resizable_menu_window/main.v` — resize a native context-menu
   control between compact and stretched layouts.
+- `v run examples/filebrowser/main.v` — browse folders, select files, and
+  confirm or cancel the current selection.
+- `v run examples/splitpanel/main.v` — adjust nested responsive panes around
+  editable text and a scrollable data grid.
+- `v run examples/row_layout/main.v` — experiment with row proportions,
+  margins, spacing, and control height.
+- `v run examples/demo_event/main.v` — inspect normalized pointer and keyboard
+  events in a live event log.
+- `v run examples/demo_chunkview/main.v` — compose nested styled text chunks
+  and toggle their visibility and alignment.
 
 Run the calculator demo with:
 
