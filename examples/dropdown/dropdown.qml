@@ -54,9 +54,9 @@ Screen {
                 id: selection-message
                 text: app.message
                 x: 10
-                y: 0
+                y: 13
                 width: card.width - 52
-                height: 56
+                height: 30
                 color: #166534
                 font_size: 13
                 align: center
