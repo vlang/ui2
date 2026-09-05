@@ -164,6 +164,16 @@ Typed-QML ports from `v-ui` include:
   between compact horizontal and vertical layouts.
 - `v run examples/demo_style_4colors/main.v` — select four-color palettes and
   preview them across portable and native controls.
+- `v run examples/box_layout_inside_row/main.v` — proportional box layout
+  inside an inset row, with switchable text-area bounds.
+- `v run examples/rectangles_resizable/main.v` — four rounded color boxes that
+  share the available width as the window resizes.
+- `v run examples/accordion/main.v` — collapsible component pages with one
+  active section at a time.
+- `v run examples/tabs/main.v` — three keyed pages selected through a native
+  tab-style button bar.
+- `v run examples/double_listbox/main.v` — transfer keyed values between two
+  scrollable lists and inspect the result.
 
 Run the calculator demo with:
 
