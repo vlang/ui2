@@ -3,6 +3,16 @@ module main
 import os
 import ui2
 
+fn users_test_data_path(name string) string {
+	return os.join_path(os.temp_dir(), 'ui2-users-example-test-${os.getpid()}-${name}.json')
+}
+
+fn reset_test_users_data(path string) {
+	if os.exists(path) {
+		os.rm(path) or { panic(err) }
+	}
+}
+
 fn test_numeric_age_discards_non_digits_and_limits_length() {
 	assert numeric_age('2a9🙂7') == '297'
 	assert numeric_age('12345') == '123'
@@ -38,11 +48,18 @@ fn find_element_by_text(element ui2.Element, text string) ?ui2.Element {
 }
 
 fn test_users_screen_is_evaluated_from_model_qml() {
+	data_path := users_test_data_path('screen')
+	reset_test_users_data(data_path)
+	defer {
+		reset_test_users_data(data_path)
+	}
+	app := app_with_data_path(data_path)
+	assert os.exists(data_path)
 	bounds := ui2.rect(0, 0, window_width, window_height)
 	assert users_qml_source.contains('bind.text: app.first_name')
 	assert users_qml_source.contains('Repeater {')
 	assert !users_qml_source.contains('__USER_ROWS__')
-	root := ui2.element_from_qml_model(users_qml_source, initial_app(), bounds) or { panic(err) }
+	root := ui2.element_from_qml_model(users_qml_source, app, bounds) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	add_user := find_element_by_id(root, 'add-user') or { panic('missing Add user button') }
@@ -56,7 +73,7 @@ fn test_users_screen_is_evaluated_from_model_qml() {
 	assert find_element_by_text(table, 'Sam') != none
 	assert find_element_by_text(table, 'Kate') != none
 	logo := find_element_by_id(root, 'v_logo') or { panic('missing V logo') }
-	assert logo.image_path == initial_app().logo_path
+	assert logo.image_path == app.logo_path
 	assert os.exists(logo.image_path)
 	assert logo.frame == ui2.rect(window_width - 66, window_height - 66, 50, 50)
 	country := find_element_by_text(root, 'United States') or { panic('missing country dropdown') }
@@ -65,7 +82,12 @@ fn test_users_screen_is_evaluated_from_model_qml() {
 }
 
 fn test_app_add_user_is_only_business_logic() {
-	mut app := initial_app()
+	data_path := users_test_data_path('add')
+	reset_test_users_data(data_path)
+	defer {
+		reset_test_users_data(data_path)
+	}
+	mut app := app_with_data_path(data_path)
 	app.first_name = ' Grace '
 	app.last_name = ' Hopper '
 	app.age = '8x5'
@@ -81,14 +103,45 @@ fn test_app_add_user_is_only_business_logic() {
 	}
 	assert app.first_name == ''
 	assert app.age == ''
+	stored_users := load_users(data_path) or { panic(err) }
+	assert stored_users == app.users
 }
 
 fn test_app_validation_and_stable_removal() {
-	mut app := initial_app()
+	data_path := users_test_data_path('remove')
+	reset_test_users_data(data_path)
+	defer {
+		reset_test_users_data(data_path)
+	}
+	mut app := app_with_data_path(data_path)
 	app.add_user()
 	assert app.is_error
 	assert app.users.len == 2
 	app.remove_user(1)
 	assert app.users.len == 1
 	assert app.users[0].id == 2
+	stored_users := load_users(data_path) or { panic(err) }
+	assert stored_users == app.users
+}
+
+fn test_users_reload_from_os_temp_json_without_password_data() {
+	data_path := users_test_data_path('reload')
+	reset_test_users_data(data_path)
+	defer {
+		reset_test_users_data(data_path)
+	}
+	assert users_data_path() == os.join_path(os.temp_dir(), users_data_directory, users_data_filename)
+	mut app := app_with_data_path(data_path)
+	app.first_name = 'Ada'
+	app.last_name = 'Lovelace'
+	app.age = '36'
+	app.password = 'not persisted'
+	app.country = 'United Kingdom'
+	app.add_user()
+
+	contents := os.read_file(data_path) or { panic(err) }
+	assert !contents.contains('password')
+	reloaded := app_with_data_path(data_path)
+	assert reloaded.users == app.users
+	assert reloaded.next_id == 4
 }
