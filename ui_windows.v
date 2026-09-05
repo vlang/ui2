@@ -1,4 +1,8 @@
+// vfmt off
+// Keep Win32 declarations out of opt-in custom-renderer builds.
 module ui2
+
+$if !ui2_custom_rendering ? {
 
 #flag windows -luser32
 
@@ -1319,4 +1323,5 @@ fn windows_native_get_selection(hwnd voidptr) TextAreaSelectionRange {
 fn windows_native_set_selection(hwnd voidptr, selection TextAreaSelectionRange) {
 	start := u32(selection.location)
 	C.ui2_win_set_selection(hwnd, start, start + u32(selection.length), 0)
+}
 }

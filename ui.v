@@ -159,14 +159,19 @@ pub enum BackendSupport {
 // control_support makes backend differences explicit. Partial means the
 // control works but lacks some native behavior (for example Android rich text).
 pub fn control_support(kind Kind) BackendSupport {
-	$if macos {
+	$if ( macos || windows ) && ui2_custom_rendering ? {
+		return match kind {
+			.text_area, .dropdown { .partial }
+			else { .supported }
+		}
+	} $else $if macos {
 		return .supported
 	} $else $if ios {
 		return match kind {
 			.text_area, .checkbox { .partial }
 			else { .supported }
 		}
-	} $else $if android {
+	} $else $if android || linux {
 		return match kind {
 			.text_area, .dropdown { .partial }
 			else { .supported }

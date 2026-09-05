@@ -58,7 +58,7 @@ fn test_rect_intersection_clips_partial_and_disjoint_bounds() {
 }
 
 fn test_native_rich_text_run_decoder_preserves_link_metadata() {
-	$if macos {
+	$if macos && !ui2_custom_rendering ? {
 		raw := 'SGVsbG8=\tSGVsdmV0aWNh\t15.000\t0\t0\t1\t\t0\t1118481\t0\t0\taHR0cHM6Ly9leGFtcGxlLmNvbQ==\n'
 		runs := parse_text_area_runs(raw)
 		assert runs.len == 1

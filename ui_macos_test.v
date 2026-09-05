@@ -1,4 +1,8 @@
+// vfmt off
+// These tests exercise the native backend and do not apply to custom builds.
 module ui2
+
+$if !ui2_custom_rendering ? {
 
 import macos
 
@@ -32,4 +36,5 @@ fn test_macos_text_field_uses_native_bezel_without_layer_mask() {
 	// AppKit owns the bezel shape. A custom backing layer was what produced
 	// the clipped corner gaps in the rendered field.
 	assert !macos.msg_bool(field, 'wantsLayer')
+}
 }

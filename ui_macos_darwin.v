@@ -1,4 +1,9 @@
+// vfmt off
+// Keep native imports and declarations inside the backend switch. Hoisting
+// them makes AppKit's MRC bridge conflict with gg/Sokol's ARC build.
 module ui2
+
+$if !ui2_custom_rendering ? {
 
 import encoding.base64
 import macos
@@ -2380,4 +2385,5 @@ fn key_event_string(event macos.Id) string {
 		prefix += 'shift+'
 	}
 	return prefix + name
+}
 }

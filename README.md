@@ -1,7 +1,18 @@
 # ui2
 
 `ui2` is a compact declarative UI module for V. It uses retained native controls
-on macOS, iOS, and Windows and an immediate-mode `gg` renderer on Android.
+on macOS, iOS, and Windows and a custom immediate-mode `gg` renderer on Linux
+and Android.
+
+The Linux backend draws and handles widgets directly through `gg`/Sokol; it has
+no GTK dependency.
+
+macOS and Windows use native widgets by default. Pass the compile-time define
+`-d ui2_custom_rendering` to use the same custom `gg` renderer there instead:
+
+```sh
+v -d ui2_custom_rendering run examples/users.v
+```
 
 ## State and identity
 
@@ -68,12 +79,13 @@ Repeater {
 
 Call `control_support(kind)` to query support. macOS implements every shared
 control kind. iOS implements every kind, with text areas reported as `partial`
-because rich runs are currently rendered as plain text. Android implements every
-kind; dropdowns and text areas are also `partial` because dropdown presentation
-is a compact cycling control and rich text-area runs are rendered as plain text.
+because rich runs are currently rendered as plain text. Linux, Android, and
+opt-in custom desktop builds implement every kind through custom rendering;
+dropdowns and text areas are `partial` because dropdown presentation is a
+compact cycling control and rich text-area runs are rendered as plain text.
 
-Images load from `image_path` on every backend. Android caches decoded images.
-Scroll viewports clip both drawing and hit testing.
+Images load from `image_path` on every backend. The custom renderer caches
+decoded images. Scroll viewports clip both drawing and hit testing.
 
 The Windows backend uses retained Win32 `BUTTON`, `EDIT`, `COMBOBOX`, `STATIC`,
 and custom container windows. Its image control currently loads BMP files and
@@ -123,8 +135,10 @@ and a keyed, scrollable user table.
 ## Verification
 
 Run `make test` for portable and host-native tests. `make check-macos`,
-`make check-ios`, `make check-android`, and `make check-windows` type-check each
-renderer; cross-target checks require their normal platform SDK/toolchain.
+`make check-ios`, `make check-android`, `make check-linux`, and
+`make check-windows` type-check each renderer; cross-target checks require their
+normal platform SDK/toolchain. `make check-custom` additionally type-checks the
+opt-in custom macOS and Windows builds.
 
 The Windows backend also has an executable Wine smoke test. It creates every
 native widget kind, reads text back from the Win32 controls, verifies text-area
