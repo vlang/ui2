@@ -49,6 +49,8 @@ extern int ui2_windows_context_menu(void *hwnd, int screen_x, int screen_y);
 extern int ui2_windows_cursor(void *hwnd);
 extern void ui2_windows_control_pointer(void *hwnd, unsigned int message, int x, int y);
 
+static inline void ui2_win_refresh_text_font(HWND hwnd);
+
 static const wchar_t *ui2_win_placeholder_property(void) {
 	return L"ui2.placeholder";
 }
@@ -142,7 +144,13 @@ static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM
 	}
 	if (message == WM_SETFOCUS || message == WM_KILLFOCUS || message == WM_SETTEXT) {
 		LRESULT result = DefSubclassProc(hwnd, message, wparam, lparam);
+		if (message == WM_SETTEXT && IsWindow(hwnd)) ui2_win_refresh_text_font(hwnd);
 		InvalidateRect(hwnd, NULL, TRUE);
+		return result;
+	}
+	if (message == WM_CHAR || message == WM_PASTE || message == EM_REPLACESEL) {
+		LRESULT result = DefSubclassProc(hwnd, message, wparam, lparam);
+		if (IsWindow(hwnd)) ui2_win_refresh_text_font(hwnd);
 		return result;
 	}
 	if (message == WM_MOUSEWHEEL) {
@@ -267,6 +275,10 @@ static inline HFONT ui2_win_system_font(void) {
 	ZeroMemory(&metrics, sizeof(metrics));
 	metrics.cbSize = sizeof(metrics);
 	if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0)) {
+		// The message font is reported with the locale charset, which switches
+		// GDI font association off and paints a box for anything the face is
+		// missing. DEFAULT_CHARSET lets GDI link to other installed fonts.
+		metrics.lfMessageFont.lfCharSet = DEFAULT_CHARSET;
 		font = CreateFontIndirectW(&metrics.lfMessageFont);
 	}
 	return font == NULL ? (HFONT)GetStockObject(DEFAULT_GUI_FONT) : font;
@@ -638,8 +650,114 @@ static inline void ui2_win_combo_select_text(void *hwnd, const wchar_t *text) {
 	SendMessageW((HWND)hwnd, CB_SETCURSEL, index == CB_ERR ? (WPARAM)-1 : (WPARAM)index, 0);
 }
 
+// Segoe UI, the Windows UI font, has no dingbats, no arrows and no emoji, so
+// GDI paints a .notdef box for a check mark or a smiley. These families cover
+// those ranges and keep the Segoe design for the rest of the string.
+typedef struct {
+	const wchar_t *family;
+	int covers_astral;
+} ui2_win_font_fallback;
+
+static const ui2_win_font_fallback ui2_win_font_fallbacks[] = {
+	{L"Segoe UI Symbol", 0},
+	{L"Segoe UI Emoji", 1},
+	{L"Segoe UI Historic", 0},
+};
+
+#define UI2_WIN_FONT_FALLBACK_COUNT \
+	((int)(sizeof(ui2_win_font_fallbacks) / sizeof(ui2_win_font_fallbacks[0])))
+// Control text is short; stop scanning long text area documents.
+#define UI2_WIN_GLYPH_SCAN_LIMIT 1024
+
+// Missing from some of the leaner Windows headers shipped with C compilers.
+#ifndef GGI_MARK_NONEXISTING_GLYPHS
+#define GGI_MARK_NONEXISTING_GLYPHS 1
+#endif
+
+// Characters that carry no glyph of their own, such as the variation selector
+// that follows an emoji, are missing from every font by design.
+static inline int ui2_win_glyph_optional(unsigned int unit) {
+	if (unit < 0x20 || unit == 0x7f) return 1;
+	if (unit >= 0x200b && unit <= 0x200f) return 1;
+	if (unit >= 0x202a && unit <= 0x202e) return 1;
+	if (unit >= 0xfe00 && unit <= 0xfe0f) return 1;
+	return unit == 0xfeff;
+}
+
+// Counts the characters of `text` that `font` has no glyph for, or -1 when the
+// font is unusable. `family`, when given, rejects a font the GDI mapper
+// substituted because the requested family is not installed. `astral` reports
+// characters above the BMP: GDI resolves glyphs per UTF-16 unit, so it always
+// reports the surrogate halves of an emoji as missing.
+static int ui2_win_font_gaps(HFONT font, const wchar_t *text, const wchar_t *family,
+		int *astral) {
+	if (astral != NULL) *astral = 0;
+	if (font == NULL) return -1;
+	HDC dc = CreateCompatibleDC(NULL);
+	if (dc == NULL) return -1;
+	HGDIOBJ previous = SelectObject(dc, font);
+	int gaps = 0;
+	if (family != NULL) {
+		wchar_t face[LF_FACESIZE];
+		face[0] = 0;
+		if (GetTextFaceW(dc, LF_FACESIZE, face) == 0 || wcscmp(face, family) != 0) gaps = -1;
+	}
+	int index = 0;
+	while (gaps >= 0 && text != NULL && text[index] != 0 && index < UI2_WIN_GLYPH_SCAN_LIMIT) {
+		WORD glyphs[64];
+		int count = 0;
+		while (count < 64 && text[index + count] != 0) count++;
+		if (GetGlyphIndicesW(dc, text + index, count, glyphs, GGI_MARK_NONEXISTING_GLYPHS)
+			== GDI_ERROR) break;
+		for (int i = 0; i < count; i++) {
+			unsigned int unit = (unsigned int)text[index + i];
+			if (unit >= 0xd800 && unit <= 0xdfff) {
+				if (astral != NULL) *astral = 1;
+			} else if (!ui2_win_glyph_optional(unit) && glyphs[i] == 0xffff) {
+				gaps++;
+			}
+		}
+		index += count;
+	}
+	SelectObject(dc, previous);
+	DeleteDC(dc);
+	return gaps;
+}
+
+static HFONT ui2_win_font_with_family(const LOGFONTW *base, const wchar_t *family) {
+	LOGFONTW description = *base;
+	description.lfCharSet = DEFAULT_CHARSET;
+	lstrcpynW(description.lfFaceName, family, LF_FACESIZE);
+	return CreateFontIndirectW(&description);
+}
+
+// Returns the family that can draw all of `text`, or NULL when `font` already
+// can. A family is only picked when it has a glyph for every character, so the
+// emoji font, which carries no letters, never takes over a mixed string.
+static const wchar_t *ui2_win_fallback_family(HFONT font, const wchar_t *text) {
+	if (text == NULL || text[0] == 0) return NULL;
+	int astral = 0;
+	int gaps = ui2_win_font_gaps(font, text, NULL, &astral);
+	if (gaps <= 0 && !astral) return NULL;
+	LOGFONTW base;
+	if (GetObjectW(font, sizeof(base), &base) == 0) return NULL;
+	const wchar_t *best = NULL;
+	for (int i = 0; i < UI2_WIN_FONT_FALLBACK_COUNT; i++) {
+		const ui2_win_font_fallback *candidate = &ui2_win_font_fallbacks[i];
+		HFONT probe = ui2_win_font_with_family(&base, candidate->family);
+		if (probe == NULL) continue;
+		int probe_gaps = ui2_win_font_gaps(probe, text, candidate->family, NULL);
+		DeleteObject(probe);
+		if (probe_gaps != 0) continue;
+		if (!astral || candidate->covers_astral) return candidate->family;
+		if (gaps > 0 && best == NULL) best = candidate->family;
+	}
+	return best;
+}
+
 static inline void *ui2_win_create_font(void *hwnd, double point_size,
-		const wchar_t *family, int bold, int italic, int underline, int strikeout) {
+		const wchar_t *family, int bold, int italic, int underline, int strikeout,
+		const wchar_t *text) {
 	UINT dpi = 96;
 	if (hwnd != NULL) {
 		HDC dc = GetDC((HWND)hwnd);
@@ -650,16 +768,101 @@ static inline void *ui2_win_create_font(void *hwnd, double point_size,
 	}
 	double size = point_size > 0 ? point_size : 15.0;
 	int height = -MulDiv((int)(size * 10.0), (int)dpi, 720);
-	return CreateFontW(height, 0, 0, 0, bold ? FW_BOLD : FW_NORMAL,
+	HFONT font = CreateFontW(height, 0, 0, 0, bold ? FW_BOLD : FW_NORMAL,
 		italic ? TRUE : FALSE, underline ? TRUE : FALSE, strikeout ? TRUE : FALSE,
 		DEFAULT_CHARSET,
 		OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
 		DEFAULT_PITCH | FF_DONTCARE,
 		family == NULL || family[0] == 0 ? L"Segoe UI" : family);
+	if (font == NULL) return NULL;
+	const wchar_t *fallback = ui2_win_fallback_family(font, text);
+	if (fallback == NULL) return font;
+	LOGFONTW base;
+	if (GetObjectW(font, sizeof(base), &base) == 0) return font;
+	HFONT replacement = ui2_win_font_with_family(&base, fallback);
+	if (replacement == NULL) return font;
+	DeleteObject(font);
+	return replacement;
+}
+
+// Reports how many characters of `text` the font cannot draw, so tests can
+// assert that a control ended up with a font that covers its text.
+static inline int ui2_win_font_missing_glyphs(void *font, const wchar_t *text) {
+	return ui2_win_font_gaps((HFONT)font, text, NULL, NULL);
+}
+
+static inline void ui2_win_font_family(void *font, wchar_t *buffer, int capacity) {
+	if (buffer == NULL || capacity <= 0) return;
+	buffer[0] = 0;
+	LOGFONTW description;
+	if (font == NULL || GetObjectW((HFONT)font, sizeof(description), &description) == 0) return;
+	lstrcpynW(buffer, description.lfFaceName, capacity);
+}
+
+static inline void *ui2_win_widget_font(void *hwnd) {
+	return hwnd == NULL ? NULL : (void *)SendMessageW((HWND)hwnd, WM_GETFONT, 0, 0);
 }
 
 static inline void ui2_win_apply_font(void *hwnd, void *font) {
 	if (hwnd != NULL && font != NULL) SendMessageW((HWND)hwnd, WM_SETFONT, (WPARAM)font, TRUE);
+}
+
+// Fallbacks are shared by every control that borrows them and are never
+// destroyed, so a control can keep one for as long as it lives.
+#define UI2_WIN_FONT_VARIANT_LIMIT 32
+
+static HFONT ui2_win_font_variant(HFONT base, const wchar_t *family) {
+	static LOGFONTW descriptions[UI2_WIN_FONT_VARIANT_LIMIT];
+	static HFONT fonts[UI2_WIN_FONT_VARIANT_LIMIT];
+	static int count = 0;
+	LOGFONTW description;
+	if (base == NULL || GetObjectW(base, sizeof(description), &description) == 0) return NULL;
+	description.lfCharSet = DEFAULT_CHARSET;
+	ZeroMemory(description.lfFaceName, sizeof(description.lfFaceName));
+	lstrcpynW(description.lfFaceName, family, LF_FACESIZE);
+	for (int i = 0; i < count; i++) {
+		if (memcmp(&descriptions[i], &description, sizeof(LOGFONTW)) == 0) return fonts[i];
+	}
+	if (count == UI2_WIN_FONT_VARIANT_LIMIT) return NULL;
+	HFONT font = CreateFontIndirectW(&description);
+	if (font == NULL) return NULL;
+	descriptions[count] = description;
+	fonts[count] = font;
+	count++;
+	return font;
+}
+
+// Keeps the native system font on controls that render with the platform look,
+// switching to a fallback family only for text the message font cannot draw.
+static inline void ui2_win_apply_text_font(void *hwnd_ptr, const wchar_t *text) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	if (hwnd == NULL) return;
+	HFONT font = ui2_win_system_font();
+	const wchar_t *family = ui2_win_fallback_family(font, text);
+	if (family != NULL) {
+		HFONT variant = ui2_win_font_variant(font, family);
+		if (variant != NULL) font = variant;
+	}
+	if ((HFONT)SendMessageW(hwnd, WM_GETFONT, 0, 0) != font) {
+		SendMessageW(hwnd, WM_SETFONT, (WPARAM)font, TRUE);
+	}
+}
+
+// Text typed or pasted into an edit control never passes through the element
+// tree, so the control picks its own fallback family for what it now holds.
+static inline void ui2_win_refresh_text_font(HWND hwnd) {
+	int length = GetWindowTextLengthW(hwnd);
+	if (length <= 0 || length > UI2_WIN_GLYPH_SCAN_LIMIT) return;
+	wchar_t text[UI2_WIN_GLYPH_SCAN_LIMIT + 1];
+	if (GetWindowTextW(hwnd, text, length + 1) <= 0) return;
+	HFONT base = (HFONT)SendMessageW(hwnd, WM_GETFONT, 0, 0);
+	if (base == NULL) base = ui2_win_system_font();
+	const wchar_t *family = ui2_win_fallback_family(base, text);
+	if (family == NULL) return;
+	HFONT variant = ui2_win_font_variant(base, family);
+	if (variant != NULL && variant != base) {
+		SendMessageW(hwnd, WM_SETFONT, (WPARAM)variant, TRUE);
+	}
 }
 
 static inline void *ui2_win_create_brush(unsigned int color) {

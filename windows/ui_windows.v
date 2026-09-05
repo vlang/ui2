@@ -90,7 +90,15 @@ fn C.ui2_win_combo_add(hwnd voidptr, text &u16)
 
 fn C.ui2_win_combo_select_text(hwnd voidptr, text &u16)
 
-fn C.ui2_win_create_font(hwnd voidptr, point_size f64, family &u16, bold int, italic int, underline int, strikeout int) voidptr
+fn C.ui2_win_create_font(hwnd voidptr, point_size f64, family &u16, bold int, italic int, underline int, strikeout int, text &u16) voidptr
+
+fn C.ui2_win_apply_text_font(hwnd voidptr, text &u16)
+
+fn C.ui2_win_font_missing_glyphs(font voidptr, text &u16) int
+
+fn C.ui2_win_font_family(font voidptr, buffer &u16, capacity int)
+
+fn C.ui2_win_widget_font(hwnd voidptr) voidptr
 
 fn C.ui2_win_apply_font(hwnd voidptr, font voidptr)
 
@@ -736,15 +744,58 @@ fn windows_update_tooltip(key string, hwnd voidptr, tooltip string) {
 	}
 }
 
+// windows_font_text returns every string the control draws with its own font,
+// so a fallback family is picked for placeholders and dropdown items too.
+fn windows_font_text(el Element) string {
+	mut drawn := el.text
+	drawn += el.placeholder
+	if el.kind == .dropdown {
+		for entry in el.menu {
+			drawn += entry.title
+		}
+	}
+	return drawn
+}
+
+// windows_font_glyph_key keeps the font signature stable for ordinary text and
+// only changes when characters that may need a fallback family come and go.
+fn windows_font_glyph_key(text string) string {
+	mut codes := map[u32]bool{}
+	for letter in text.runes() {
+		code := u32(letter)
+		if code >= 0x2000 {
+			codes[code] = true
+		}
+	}
+	if codes.len == 0 {
+		return ''
+	}
+	mut sorted := codes.keys()
+	sorted.sort()
+	return sorted.map(it.hex()).join('.')
+}
+
 fn windows_update_style(key string, hwnd voidptr, el Element) {
 	mut st := windows_state()
-	if el.kind != .view && el.kind != .scroll && el.kind != .image
-		&& !(el.kind == .button && el.native_style) {
-		font_sig := '${el.text_style.size}:${el.text_style.font_family.bytes().hex()}:${windows_bool(el.text_style.bold)}:${windows_bool(el.text_style.italic)}:${windows_bool(el.text_style.underline)}:${windows_bool(el.text_style.strikethrough)}'
+	if el.kind == .button && el.native_style {
+		// Native buttons keep the system font. Only its family may have to
+		// change, so a check mark is not painted as an empty box.
+		font_sig := 'native:${windows_font_glyph_key(el.text)}'
+		if (st.font_sigs[key] or { '' }) != font_sig {
+			wide_text := el.text.to_wide()
+			C.ui2_win_apply_text_font(hwnd, wide_text)
+			unsafe { free(wide_text) }
+			st.font_sigs[key] = font_sig
+		}
+	} else if el.kind != .view && el.kind != .scroll && el.kind != .image {
+		font_text := windows_font_text(el)
+		font_sig := '${el.text_style.size}:${el.text_style.font_family.bytes().hex()}:${windows_bool(el.text_style.bold)}:${windows_bool(el.text_style.italic)}:${windows_bool(el.text_style.underline)}:${windows_bool(el.text_style.strikethrough)}:${windows_font_glyph_key(font_text)}'
 		if (st.font_sigs[key] or { '' }) != font_sig {
 			wide_family := el.text_style.font_family.to_wide()
-			font := C.ui2_win_create_font(hwnd, el.text_style.size, wide_family, windows_bool(el.text_style.bold), windows_bool(el.text_style.italic), windows_bool(el.text_style.underline), windows_bool(el.text_style.strikethrough))
+			wide_text := font_text.to_wide()
+			font := C.ui2_win_create_font(hwnd, el.text_style.size, wide_family, windows_bool(el.text_style.bold), windows_bool(el.text_style.italic), windows_bool(el.text_style.underline), windows_bool(el.text_style.strikethrough), wide_text)
 			unsafe { free(wide_family) }
+			unsafe { free(wide_text) }
 			if font != unsafe { nil } {
 				C.ui2_win_apply_font(hwnd, font)
 				old_font := st.fonts[key] or { voidptr(unsafe { nil }) }
