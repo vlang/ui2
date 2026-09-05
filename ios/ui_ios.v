@@ -1,7 +1,7 @@
 module ui2
 
 import encoding.base64
-import macos
+import internal.macos
 import ios
 
 #insert "@DIR/native_bridge.h"

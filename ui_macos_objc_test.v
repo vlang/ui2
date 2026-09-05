@@ -3,7 +3,7 @@ module ui2
 
 $if !ui2_custom_rendering ? {
 
-import macos
+import internal.macos
 import math
 
 fn test_macos_v_objc_rich_text_bridge_round_trips_attributes() {
