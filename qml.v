@@ -6,6 +6,39 @@ pub mut:
 	id       string
 	props    map[string]string
 	children []&QNode
+mut:
+	expressions    map[string]&QExpression
+	property_types map[string]string
+	property_order []string
+	line           int
+	path           string
+}
+
+enum QExpressionKind {
+	literal
+	path
+	call
+	unary
+	binary
+	conditional
+	interpolation
+}
+
+struct QInterpolationPart {
+	text string
+	expr &QExpression = unsafe { nil }
+}
+
+struct QExpression {
+	kind   QExpressionKind
+	value  string
+	line   int
+	left   &QExpression = unsafe { nil }
+	right  &QExpression = unsafe { nil }
+	third  &QExpression = unsafe { nil }
+	args   []&QExpression
+	parts  []QInterpolationPart
+	quoted bool
 }
 
 pub fn (node &QNode) find(id string) ?&QNode {
@@ -75,6 +108,24 @@ enum TokenKind {
 	lbrace
 	rbrace
 	colon
+	lparen
+	rparen
+	comma
+	question
+	plus
+	minus
+	star
+	slash
+	percent
+	bang
+	eq_eq
+	bang_eq
+	lt
+	lte
+	gt
+	gte
+	and_and
+	or_or
 	eof
 }
 
@@ -151,19 +202,43 @@ fn is_ident_char(c u8) bool {
 		|| c == `_` || c == `-` || c == `.` || c == `#`
 }
 
+fn is_digit(c u8) bool {
+	return c >= `0` && c <= `9`
+}
+
 fn (mut l Lexer) read_ident() Token {
 	line := l.line
 	start := l.pos
 	for l.pos < l.src.len && is_ident_char(l.src[l.pos]) {
+		if l.src[l.pos] == `-` && l.pos > start {
+			prefix := unsafe { l.src[start..l.pos] }
+			// Keep legacy hyphenated ids (`first-name`) while still allowing
+			// compact model arithmetic (`app.count-1`, `index-1`).
+			if prefix.contains('.') || prefix == 'index' {
+				break
+			}
+		}
 		l.pos++
 	}
-	val := l.src[start..l.pos]
-	kind := if val.len > 0 && ((val[0] >= `0` && val[0] <= `9`) || (val[0] == `-` && val.len > 1)) {
-		TokenKind.number
-	} else {
-		TokenKind.ident
+	return Token{.ident, l.src[start..l.pos].clone(), line}
+}
+
+fn (mut l Lexer) read_number() Token {
+	line := l.line
+	start := l.pos
+	mut saw_dot := false
+	for l.pos < l.src.len {
+		c := l.src[l.pos]
+		if is_digit(c) {
+			l.pos++
+		} else if c == `.` && !saw_dot {
+			saw_dot = true
+			l.pos++
+		} else {
+			break
+		}
 	}
-	return Token{kind, val, line}
+	return Token{.number, l.src[start..l.pos].clone(), line}
 }
 
 fn tokenize(source string) ![]Token {
@@ -191,11 +266,106 @@ fn tokenize(source string) ![]Token {
 				tokens << Token{.colon, ':', l.line}
 				l.advance()
 			}
+			`(` {
+				tokens << Token{.lparen, '(', l.line}
+				l.advance()
+			}
+			`)` {
+				tokens << Token{.rparen, ')', l.line}
+				l.advance()
+			}
+			`,` {
+				tokens << Token{.comma, ',', l.line}
+				l.advance()
+			}
+			`?` {
+				tokens << Token{.question, '?', l.line}
+				l.advance()
+			}
+			`+` {
+				tokens << Token{.plus, '+', l.line}
+				l.advance()
+			}
+			`-` {
+				tokens << Token{.minus, '-', l.line}
+				l.advance()
+			}
+			`*` {
+				tokens << Token{.star, '*', l.line}
+				l.advance()
+			}
+			`%` {
+				tokens << Token{.percent, '%', l.line}
+				l.advance()
+			}
+			`/` {
+				tokens << Token{.slash, '/', l.line}
+				l.advance()
+			}
+			`!` {
+				line := l.line
+				l.advance()
+				if l.peek() == `=` {
+					l.advance()
+					tokens << Token{.bang_eq, '!=', line}
+				} else {
+					tokens << Token{.bang, '!', line}
+				}
+			}
+			`=` {
+				line := l.line
+				l.advance()
+				if l.peek() != `=` {
+					return error('expected `==` at line ${line}')
+				}
+				l.advance()
+				tokens << Token{.eq_eq, '==', line}
+			}
+			`<` {
+				line := l.line
+				l.advance()
+				if l.peek() == `=` {
+					l.advance()
+					tokens << Token{.lte, '<=', line}
+				} else {
+					tokens << Token{.lt, '<', line}
+				}
+			}
+			`>` {
+				line := l.line
+				l.advance()
+				if l.peek() == `=` {
+					l.advance()
+					tokens << Token{.gte, '>=', line}
+				} else {
+					tokens << Token{.gt, '>', line}
+				}
+			}
+			`&` {
+				line := l.line
+				l.advance()
+				if l.peek() != `&` {
+					return error('expected `&&` at line ${line}')
+				}
+				l.advance()
+				tokens << Token{.and_and, '&&', line}
+			}
+			`|` {
+				line := l.line
+				l.advance()
+				if l.peek() != `|` {
+					return error('expected `||` at line ${line}')
+				}
+				l.advance()
+				tokens << Token{.or_or, '||', line}
+			}
 			`"` {
 				tokens << l.read_string()!
 			}
 			else {
-				if is_ident_char(c) {
+				if is_digit(c) {
+					tokens << l.read_number()
+				} else if is_ident_char(c) {
 					tokens << l.read_ident()
 				} else {
 					return error('unexpected character `${[c].bytestr()}` at line ${l.line}')
@@ -233,21 +403,37 @@ fn (mut p Parser) parse_node() !&QNode {
 	p.eat(.lbrace)!
 	mut node := &QNode{
 		tag: tag.val
+		line: tag.line
 	}
 	for p.at().kind != .rbrace && p.at().kind != .eof {
 		// Lookahead: if IDENT followed by '{', it's a child node; if followed by ':', it's a property
 		if p.at().kind == .ident {
-			if p.pos + 1 < p.tokens.len && p.tokens[p.pos + 1].kind == .lbrace {
+			if p.at().val == 'property' {
+				p.eat(.ident)!
+				type_token := p.eat(.ident)!
+				name_token := p.eat(.ident)!
+				p.eat(.colon)!
+				expr := p.parse_expression()!
+				node.expressions[name_token.val] = expr
+				node.property_types[name_token.val] = type_token.val
+				node.property_order << name_token.val
+				node.props[name_token.val] = expression_text(expr)
+			} else if p.pos + 1 < p.tokens.len && p.tokens[p.pos + 1].kind == .lbrace {
 				child := p.parse_node()!
 				node.children << child
 			} else if p.pos + 1 < p.tokens.len && p.tokens[p.pos + 1].kind == .colon {
 				key := p.eat(.ident)!
 				p.eat(.colon)!
-				val := p.parse_value()!
+				expr := p.parse_expression()!
+				val := expression_text(expr)
 				if key.val == 'id' {
+					if expr.kind !in [.literal, .path] {
+						return error('id must be a literal identifier at line ${key.line}')
+					}
 					node.id = val
 				}
 				node.props[key.val] = val
+				node.expressions[key.val] = expr
 			} else {
 				return error('unexpected token "${p.at().val}" at line ${p.at().line}')
 			}
@@ -259,17 +445,200 @@ fn (mut p Parser) parse_node() !&QNode {
 	return node
 }
 
-fn (mut p Parser) parse_value() !string {
-	t := p.at()
-	match t.kind {
-		.string_lit, .ident, .number {
-			p.pos++
-			return t.val
+fn expression_text(expr &QExpression) string {
+	return match expr.kind {
+		.literal, .path { expr.value }
+		.call { expr.value + '(' + expr.args.map(expression_text(it)).join(', ') + ')' }
+		.unary { expr.value + expression_text(expr.left) }
+		.binary { '${expression_text(expr.left)} ${expr.value} ${expression_text(expr.right)}' }
+		.conditional {
+			'${expression_text(expr.left)} ? ${expression_text(expr.right)} : ${expression_text(expr.third)}'
 		}
-		else {
-			return error('expected value, got ${t.kind} ("${t.val}") at line ${t.line}')
+		.interpolation {
+			mut out := ''
+			for part in expr.parts {
+				out += if isnil(part.expr) {
+					part.text
+				} else {
+					r'${' + expression_text(part.expr) + '}'
+				}
+			}
+			out
 		}
 	}
+}
+
+fn (mut p Parser) parse_expression() !&QExpression {
+	return p.parse_conditional()
+}
+
+fn (mut p Parser) parse_conditional() !&QExpression {
+	condition := p.parse_or()!
+	if p.at().kind != .question {
+		return condition
+	}
+	line := p.eat(.question)!.line
+	when_true := p.parse_expression()!
+	p.eat(.colon)!
+	when_false := p.parse_expression()!
+	return &QExpression{
+		kind: .conditional
+		line: line
+		left: condition
+		right: when_true
+		third: when_false
+	}
+}
+
+fn (mut p Parser) parse_or() !&QExpression {
+	mut left := p.parse_and()!
+	for p.at().kind == .or_or {
+		op := p.at()
+		p.pos++
+		left = &QExpression{ kind: .binary, value: op.val, line: op.line, left: left, right: p.parse_and()! }
+	}
+	return left
+}
+
+fn (mut p Parser) parse_and() !&QExpression {
+	mut left := p.parse_equality()!
+	for p.at().kind == .and_and {
+		op := p.at()
+		p.pos++
+		left = &QExpression{ kind: .binary, value: op.val, line: op.line, left: left, right: p.parse_equality()! }
+	}
+	return left
+}
+
+fn (mut p Parser) parse_equality() !&QExpression {
+	mut left := p.parse_comparison()!
+	for p.at().kind in [.eq_eq, .bang_eq] {
+		op := p.at()
+		p.pos++
+		left = &QExpression{ kind: .binary, value: op.val, line: op.line, left: left, right: p.parse_comparison()! }
+	}
+	return left
+}
+
+fn (mut p Parser) parse_comparison() !&QExpression {
+	mut left := p.parse_term()!
+	for p.at().kind in [.lt, .lte, .gt, .gte] {
+		op := p.at()
+		p.pos++
+		left = &QExpression{ kind: .binary, value: op.val, line: op.line, left: left, right: p.parse_term()! }
+	}
+	return left
+}
+
+fn (mut p Parser) parse_term() !&QExpression {
+	mut left := p.parse_factor()!
+	for p.at().kind in [.plus, .minus] {
+		op := p.at()
+		p.pos++
+		left = &QExpression{ kind: .binary, value: op.val, line: op.line, left: left, right: p.parse_factor()! }
+	}
+	return left
+}
+
+fn (mut p Parser) parse_factor() !&QExpression {
+	mut left := p.parse_unary()!
+	for p.at().kind in [.star, .slash, .percent] {
+		op := p.at()
+		p.pos++
+		left = &QExpression{ kind: .binary, value: op.val, line: op.line, left: left, right: p.parse_unary()! }
+	}
+	return left
+}
+
+fn (mut p Parser) parse_unary() !&QExpression {
+	if p.at().kind in [.bang, .minus] {
+		op := p.at()
+		p.pos++
+		return &QExpression{ kind: .unary, value: op.val, line: op.line, left: p.parse_unary()! }
+	}
+	return p.parse_primary()
+}
+
+fn (mut p Parser) parse_primary() !&QExpression {
+	t := p.at()
+	match t.kind {
+		.string_lit {
+			p.pos++
+			return parse_interpolated_string(t.val, t.line)!
+		}
+		.ident, .number {
+			p.pos++
+			if p.at().kind == .lparen {
+				p.pos++
+				mut args := []&QExpression{}
+				if p.at().kind != .rparen {
+					for {
+						args << p.parse_expression()!
+						if p.at().kind != .comma {
+							break
+						}
+						p.pos++
+					}
+				}
+				p.eat(.rparen)!
+				return &QExpression{ kind: .call, value: t.val, line: t.line, args: args }
+			}
+			return &QExpression{
+				kind: if t.kind == .number || t.val in ['true', 'false'] {
+					QExpressionKind.literal
+				} else {
+					QExpressionKind.path
+				}
+				value: t.val
+				line: t.line
+			}
+		}
+		.lparen {
+			p.pos++
+			expr := p.parse_expression()!
+			p.eat(.rparen)!
+			return expr
+		}
+		else {
+			return error('expected expression, got ${t.kind} ("${t.val}") at line ${t.line}')
+		}
+	}
+}
+
+fn parse_interpolated_string(value string, line int) !&QExpression {
+	if !value.contains(r'${') {
+		return &QExpression{ kind: .literal, value: value, line: line, quoted: true }
+	}
+	mut parts := []QInterpolationPart{}
+	mut cursor := 0
+	for cursor < value.len {
+		start_relative := value[cursor..].index(r'${') or {
+			parts << QInterpolationPart{ text: value[cursor..] }
+			break
+		}
+		start := cursor + start_relative
+		if start > cursor {
+			parts << QInterpolationPart{ text: value[cursor..start] }
+		}
+		end_relative := value[start + 2..].index('}') or {
+			return error('unterminated interpolation at line ${line}')
+		}
+		end := start + 2 + end_relative
+		raw_tokens := tokenize(value[start + 2..end])!
+		mut tokens := []Token{cap: raw_tokens.len}
+		for token in raw_tokens {
+			tokens << Token{
+				...token
+				line: line + token.line - 1
+			}
+		}
+		mut parser := Parser{ tokens: tokens }
+		expr := parser.parse_expression()!
+		parser.eat(.eof) or { return error('invalid interpolation at line ${line}: ${err}') }
+		parts << QInterpolationPart{ expr: expr }
+		cursor = end + 1
+	}
+	return &QExpression{ kind: .interpolation, line: line, parts: parts }
 }
 
 pub fn parse_qml(source string) !&QNode {
@@ -277,9 +646,17 @@ pub fn parse_qml(source string) !&QNode {
 	mut p := Parser{
 		tokens: tokens
 	}
-	node := p.parse_node()!
+	mut node := p.parse_node()!
 	p.eat(.eof)!
+	assign_qml_paths(mut node, '0')
 	return node
+}
+
+fn assign_qml_paths(mut node QNode, path string) {
+	node.path = path
+	for index, mut child in node.children {
+		assign_qml_paths(mut child, '${path}.${index}')
+	}
 }
 
 pub fn element_from_qml(source string, frame Rect) !Element {

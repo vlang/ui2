@@ -1,113 +1,113 @@
 Screen {
+    id: root
     background: #F1F5F9
 
+    property bool compact: root.width < 700
+    property f64 form_width: root.compact ? root.width - 32 : 210
+    property f64 table_left: root.compact ? 16 : 244
+    property f64 table_top: root.compact ? 414 : 16
+    property f64 table_width: root.compact ? root.form_width : root.width - 260
+    property f64 table_height: root.compact && root.height - root.table_top - 16 > 220 ? root.height - root.table_top - 16 : 270
+    property f64 first_width: root.table_width * 0.23
+    property f64 last_width: root.table_width * 0.23
+    property f64 age_width: root.table_width * 0.12
+    property f64 country_width: root.table_width - root.first_width - root.last_width - root.age_width
+
     Label {
-        id: form-title
         text: "Add user"
         x: 16
         y: 8
-        width: __FORM_WIDTH__
+        width: root.form_width
         height: 26
         font_size: 18
         bold: true
     }
 
     TextField {
-        id: first-name
-        text: __FIRST_NAME__
+        id: first_name
+        bind.text: app.first_name
+        on_change: app.clear_error()
         placeholder: "First name"
-        on_change: first-name
         x: 16
         y: 40
-        width: __FORM_WIDTH__
+        width: root.form_width
         height: 32
-        background: __INPUT_BACKGROUND__
+        background: app.is_error ? #FFEEEE : #FFFFFF
         corner_radius: 6
     }
 
     TextField {
-        id: last-name
-        text: __LAST_NAME__
+        bind.text: app.last_name
+        on_change: app.clear_error()
         placeholder: "Last name"
-        on_change: last-name
         x: 16
         y: 80
-        width: __FORM_WIDTH__
+        width: root.form_width
         height: 32
-        background: __INPUT_BACKGROUND__
+        background: app.is_error ? #FFEEEE : #FFFFFF
         corner_radius: 6
     }
 
     TextField {
-        id: age
-        text: __AGE__
+        bind.text: app.age
+        on_change: app.clear_error()
         placeholder: "Age"
-        on_change: age
         keyboard: decimal
         x: 16
         y: 120
-        width: __FORM_WIDTH__
+        width: root.form_width
         height: 32
-        background: __INPUT_BACKGROUND__
+        background: app.is_error ? #FFEEEE : #FFFFFF
         corner_radius: 6
     }
 
     TextField {
-        id: password
-        text: __PASSWORD__
+        bind.text: app.password
         placeholder: "Password"
-        on_change: password
         secure: true
         x: 16
         y: 160
-        width: __FORM_WIDTH__
+        width: root.form_width
         height: 32
         background: #FFFFFF
         corner_radius: 6
     }
 
     Checkbox {
-        id: online-registration
         text: "Online registration"
-        checked: __ONLINE_CHECKED__
-        on_tap: online-registration
+        bind.checked: app.online_registration
         x: 16
         y: 201
-        width: __FORM_WIDTH__
+        width: root.form_width
         height: 30
         font_size: 13
     }
 
     Checkbox {
-        id: subscribe
         text: "Subscribe to the newsletter"
-        checked: __SUBSCRIBE_CHECKED__
-        on_tap: subscribe
+        bind.checked: app.subscribe
         x: 16
         y: 239
-        width: __FORM_WIDTH__
+        width: root.form_width
         height: 30
         font_size: 13
     }
 
     Label {
-        id: country-label
         text: "Country"
         x: 16
         y: 276
-        width: __FORM_WIDTH__
+        width: root.form_width
         height: 18
         color: #475569
         font_size: 12
     }
 
     Dropdown {
-        id: country
-        text: __COUNTRY__
-        on_change: country
+        bind.text: app.country
         x: 16
         y: 296
-        width: __FORM_WIDTH__
+        width: root.form_width
         height: 32
         background: #FFFFFF
         corner_radius: 6
@@ -119,9 +119,9 @@ Screen {
     }
 
     Button {
-        id: add-user
         text: "Add user"
-        on_tap: add-user
+        enabled: app.users.len < app.max_users
+        on_tap: app.add_user()
         x: 16
         y: 337
         width: 140
@@ -134,9 +134,8 @@ Screen {
     }
 
     Button {
-        id: help
         text: "?"
-        on_tap: help
+        on_tap: app.open_help()
         tooltip: "About this example"
         x: 178
         y: 337
@@ -149,7 +148,6 @@ Screen {
     }
 
     Rectangle {
-        id: progress-track
         x: 16
         y: 371
         width: 170
@@ -158,10 +156,9 @@ Screen {
         corner_radius: 8
 
         Rectangle {
-            id: progress-fill
             x: 0
             y: 0
-            width: __PROGRESS_WIDTH__
+            width: 170 * app.users.len / app.max_users
             height: 16
             background: #3478D4
             corner_radius: 8
@@ -169,74 +166,65 @@ Screen {
     }
 
     Label {
-        id: progress-label
-        text: "__USER_COUNT__/__MAXIMUM_USERS__"
+        text: "${app.users.len}/${app.max_users}"
         x: 192
         y: 368
-        width: __PROGRESS_LABEL_WIDTH__
+        width: root.form_width - 176
         height: 22
         font_size: 13
     }
 
     Scroll {
-        id: users-table
-        x: __TABLE_LEFT__
-        y: __TABLE_TOP__
-        width: __TABLE_WIDTH__
-        height: __TABLE_HEIGHT__
+        id: users_table
+        x: root.table_left
+        y: root.table_top
+        width: root.table_width
+        height: root.table_height
         background: #FFFFFF
         persistent: true
 
         Rectangle {
-            id: table-header
             x: 0
             y: 0
-            width: __TABLE_WIDTH__
+            width: root.table_width
             height: 32
             background: #334155
 
             Label {
-                id: header-first
                 text: "First name"
-                x: __TABLE_FIRST_X__
+                x: 7
                 y: 0
-                width: __TABLE_FIRST_WIDTH__
+                width: root.first_width - 14
                 height: 32
                 color: #FFFFFF
                 font_size: 13
                 bold: true
             }
-
             Label {
-                id: header-last
                 text: "Last name"
-                x: __TABLE_LAST_X__
+                x: root.first_width + 7
                 y: 0
-                width: __TABLE_LAST_WIDTH__
+                width: root.last_width - 14
                 height: 32
                 color: #FFFFFF
                 font_size: 13
                 bold: true
             }
-
             Label {
-                id: header-age
                 text: "Age"
-                x: __TABLE_AGE_X__
+                x: root.first_width + root.last_width + 7
                 y: 0
-                width: __TABLE_AGE_WIDTH__
+                width: root.age_width - 14
                 height: 32
                 color: #FFFFFF
                 font_size: 13
                 bold: true
             }
-
             Label {
-                id: header-country
                 text: "Country"
-                x: __TABLE_COUNTRY_X__
+                x: root.first_width + root.last_width + root.age_width + 7
                 y: 0
-                width: __TABLE_COUNTRY_WIDTH__
+                width: root.country_width - 14
                 height: 32
                 color: #FFFFFF
                 font_size: 13
@@ -244,13 +232,60 @@ Screen {
             }
         }
 
-        __USER_ROWS__
+        Repeater {
+            model: app.users
+            key: item.id
+
+            Rectangle {
+                x: 0
+                y: 32 + index * 34
+                width: root.table_width
+                height: 32
+                background: index % 2 == 0 ? #FFFFFF : #F1F5F9
+
+                Label {
+                    text: item.first_name
+                    x: 7
+                    y: 0
+                    width: root.first_width - 14
+                    height: 32
+                    color: #1F2937
+                    font_size: 13
+                }
+                Label {
+                    text: item.last_name
+                    x: root.first_width + 7
+                    y: 0
+                    width: root.last_width - 14
+                    height: 32
+                    color: #1F2937
+                    font_size: 13
+                }
+                Label {
+                    text: "${item.age}"
+                    x: root.first_width + root.last_width + 7
+                    y: 0
+                    width: root.age_width - 14
+                    height: 32
+                    color: #1F2937
+                    font_size: 13
+                }
+                Label {
+                    text: item.country
+                    x: root.first_width + root.last_width + root.age_width + 7
+                    y: 0
+                    width: root.country_width - 14
+                    height: 32
+                    color: #1F2937
+                    font_size: 13
+                }
+            }
+        }
     }
 
     Rectangle {
-        id: logo-tile
-        hidden: __LOGO_HIDDEN__
-        x: __LOGO_X__
+        hidden: root.compact
+        x: root.table_left + root.table_width - 92
         y: 304
         width: 92
         height: 84
@@ -258,7 +293,6 @@ Screen {
         corner_radius: 12
 
         Label {
-            id: logo-letter
             text: "V"
             x: 0
             y: 4
@@ -272,21 +306,19 @@ Screen {
     }
 
     Label {
-        id: validation-error
-        hidden: __VALIDATION_HIDDEN__
+        hidden: !app.is_error
         text: "First name, last name and age are required."
-        x: __VALIDATION_LEFT__
-        y: __VALIDATION_TOP__
-        width: __VALIDATION_WIDTH__
+        x: root.compact ? 16 : root.table_left
+        y: root.compact ? 390 : 302
+        width: root.compact ? root.form_width : root.table_width - 112
         height: 24
         color: #B42318
         font_size: 13
     }
 
     Rectangle {
-        id: help-panel
-        hidden: __HELP_HIDDEN__
-        x: __HELP_LEFT__
+        hidden: !app.show_help
+        x: root.width > 320 ? (root.width - 320) / 2 : 0
         y: 118
         width: 320
         height: 145
@@ -294,7 +326,6 @@ Screen {
         corner_radius: 10
 
         Label {
-            id: help-title
             text: "V UI Demo"
             x: 20
             y: 16
@@ -304,9 +335,7 @@ Screen {
             bold: true
             align: center
         }
-
         Label {
-            id: help-copy
             text: "Built with V, ui2 QML, and native controls."
             x: 20
             y: 52
@@ -315,11 +344,9 @@ Screen {
             font_size: 14
             align: center
         }
-
         Button {
-            id: close-help
             text: "Close"
-            on_tap: close-help
+            on_tap: app.close_help()
             x: 100
             y: 94
             width: 120

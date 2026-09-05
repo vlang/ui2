@@ -18,6 +18,52 @@ applies that value, while a refresh with the same declaration preserves the
 current native/local edit, selection, focus, and (on native controls) input
 method composition. Use `set_text` for an explicit imperative replacement.
 
+## Typed QML models
+
+`run_qml[T]` parses the document once, owns a model for the window, and exposes
+its public fields as `app`:
+
+```v
+ui2.run_qml[App](
+    source: $embed_file('app.qml').to_string()
+    model: App{}
+    title: 'My app'
+    width: 780
+    height: 420
+)!
+```
+
+Ordinary properties are one-way expressions. `bind.text` and `bind.checked`
+write control edits back to a public mutable top-level model field. Public model
+methods with no arguments, one `int`, or one `string` argument can be used as
+actions:
+
+```qml
+TextField { bind.text: app.name }
+Button {
+    text: "Add"
+    enabled: app.users.len < app.max_users
+    on_tap: app.add_user()
+}
+```
+
+Expressions support property paths, arithmetic, comparisons, boolean operators,
+conditionals, parentheses, and string interpolation. They are side-effect-free;
+calls are restricted to event handlers. Unknown model paths, non-writable
+binding targets, and invalid action signatures fail document loading.
+
+Use a keyed `Repeater` for model collections. `item` and `index` are scoped to
+each instance, and the evaluated key becomes `Element.key` for reconciliation:
+
+```qml
+Repeater {
+    model: app.users
+    key: item.id
+
+    Label { text: "${item.name}" }
+}
+```
+
 ## Backend capabilities
 
 Call `control_support(kind)` to query support. macOS implements every shared
@@ -65,14 +111,14 @@ recovery.
 Run the responsive users demo with:
 
 ```sh
-v -enable-globals run examples/users.v
+v run examples/users.v
 ```
 
 It ports the native-widget users example from `v-ui`. The complete screen is
-declared in `examples/users.qml`, embedded into the executable with
-`$embed_file` (with V supplying dynamic state and table rows), and includes
-validated text entry, password masking, country selection, toggles, a progress
-indicator, and a scrollable user table.
+declared in `examples/users.qml` and embedded once with `$embed_file`; V only
+contains the typed model and business actions. The example includes validated
+text entry, password masking, country selection, toggles, a progress indicator,
+and a keyed, scrollable user table.
 
 ## Verification
 
