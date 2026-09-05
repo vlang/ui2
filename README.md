@@ -115,6 +115,16 @@ outside the portable editor's current contract.
 
 ## Examples
 
+Five additional typed-QML ports from `v-ui` are available:
+
+- `v run examples/counter/main.v` — the 7GUIs counter.
+- `v run examples/temperature_converter/main.v` — the two-way 7GUIs
+  temperature converter.
+- `v run examples/flight_booker/main.v` — the validated 7GUIs flight booker.
+- `v run examples/dropdown/main.v` — a dropdown with selection feedback.
+- `v run examples/switch/main.v` — a boolean switch represented by the
+  portable checkbox control.
+
 Run the calculator demo with:
 
 ```sh
