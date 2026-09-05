@@ -119,7 +119,7 @@ outside the portable editor's current contract.
 
 ## Examples
 
-Five additional typed-QML ports from `v-ui` are available:
+Typed-QML ports from `v-ui` include:
 
 - `v run examples/counter/main.v` — the 7GUIs counter.
 - `v run examples/temperature_converter/main.v` — the two-way 7GUIs
@@ -128,6 +128,14 @@ Five additional typed-QML ports from `v-ui` are available:
 - `v run examples/dropdown/main.v` — a dropdown with selection feedback.
 - `v run examples/switch/main.v` — a boolean switch represented by the
   portable checkbox control.
+- `v run examples/crud/main.v` — create, filter, update, and delete people.
+- `v run examples/rgb_color/main.v` — validate RGB components and preview the
+  resulting color.
+- `v run examples/group/main.v` — grouped text fields, checkboxes, and form
+  validation.
+- `v run examples/rectangles/main.v` — the original four-color rectangle row.
+- `v run examples/textbox/main.v` — editable and read-only multiline text
+  areas with live character counts.
 
 Run the calculator demo with:
 
