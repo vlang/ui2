@@ -44,10 +44,10 @@ fn test_flight_booker_qml_controls_return_field_and_booking() {
 		panic('missing return date field')
 	}
 	assert !return_field.enabled
-	assert return_field.frame.height == 32
+	assert return_field.frame.height == 28
 	assert (find_flight_element(root, 'departure') or {
 		panic('missing departure field')
-	}).frame.height == 32
+	}).frame.height == 28
 	assert (find_flight_element(root, 'book') or { panic('missing Book button') }).enabled
 
 	app.flight_type = 'return flight'

@@ -60,7 +60,7 @@ Screen {
             x: 16
             y: 128
             width: card.width - 32
-            height: 32
+            height: 28
             background: app.departure_valid ? #F8FAFC : #FED7AA
             color: #111827
             corner_radius: 7
@@ -84,7 +84,7 @@ Screen {
             x: 16
             y: 202
             width: card.width - 32
-            height: 32
+            height: 28
             background: app.return_valid ? #F8FAFC : #FED7AA
             color: #111827
             corner_radius: 7
