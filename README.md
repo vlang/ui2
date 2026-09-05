@@ -11,7 +11,7 @@ macOS and Windows use native widgets by default. Pass the compile-time define
 `-d ui2_custom_rendering` to use the same custom `gg` renderer there instead:
 
 ```sh
-v -d ui2_custom_rendering run examples/users.v
+v -d ui2_custom_rendering run examples/users/main.v
 ```
 
 ## State and identity
@@ -139,11 +139,11 @@ controls, exponentiation, repeated equals, and division-by-zero recovery.
 Run the responsive users demo with:
 
 ```sh
-v run examples/users.v
+v run examples/users/main.v
 ```
 
 It ports the native-widget users example from `v-ui`. The complete screen is
-declared in `examples/users.qml` and embedded once with `$embed_file`; V only
+declared in `examples/users/users.qml` and embedded once with `$embed_file`; V only
 contains the typed model and business actions. The example includes validated
 text entry, password masking, country selection, toggles, a progress indicator,
 and a keyed, scrollable user table.
