@@ -116,9 +116,10 @@ Run the calculator demo with:
 v run examples/calculator/main.v
 ```
 
-It ports the `v-ui` calculator to `ui2`, including decimal input, sign and
-percentage controls, exponentiation, repeated equals, and division-by-zero
-recovery.
+It ports the `v-ui` calculator to typed QML: the display reads from the model,
+a keyed `Repeater` builds the keypad, and button actions call the calculator's
+business logic directly. It includes decimal input, sign and percentage
+controls, exponentiation, repeated equals, and division-by-zero recovery.
 
 Run the responsive users demo with:
 

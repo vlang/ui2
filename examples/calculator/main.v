@@ -5,11 +5,22 @@ import ui2
 
 const window_width = 284
 const window_height = 364
+const calculator_qml_source = $embed_file('calculator.qml').to_string()
 
-@[heap]
-struct Calculator {
+pub struct CalculatorKey {
+pub:
+	text   string
+	row    int
+	column int
+	role   string
+}
+
+pub struct Calculator {
+pub:
+	keys []CalculatorKey
+pub mut:
+	display string = '0'
 mut:
-	display          string = '0'
 	accumulator      f64
 	pending_operator string
 	last_operator    string
@@ -19,16 +30,38 @@ mut:
 	has_error        bool
 }
 
-const calculator_state = &Calculator{}
-
-fn calculator_keys() [][]string {
-	return [
+fn calculator_keys() []CalculatorKey {
+	rows := [
 		['C', '%', '^', '÷'],
 		['7', '8', '9', '*'],
 		['4', '5', '6', '-'],
 		['1', '2', '3', '+'],
 		['0', '.', '±', '='],
 	]
+	mut keys := []CalculatorKey{cap: 20}
+	for row, values in rows {
+		for column, text in values {
+			role := match text {
+				'C' { 'clear' }
+				'=', '+', '-', '*', '÷', '^' { 'operator' }
+				'%', '±' { 'utility' }
+				else { 'digit' }
+			}
+			keys << CalculatorKey{
+				text: text
+				row: row
+				column: column
+				role: role
+			}
+		}
+	}
+	return keys
+}
+
+fn initial_calculator() Calculator {
+	return Calculator{
+		keys: calculator_keys()
+	}
 }
 
 fn format_number(value f64) string {
@@ -211,7 +244,7 @@ fn (mut calculator Calculator) percent() {
 	calculator.replace_input = false
 }
 
-fn (mut calculator Calculator) press(key string) {
+pub fn (mut calculator Calculator) press(key string) {
 	if key.len == 1 && key[0].is_digit() {
 		calculator.input_digit(key)
 		return
@@ -227,83 +260,12 @@ fn (mut calculator Calculator) press(key string) {
 	}
 }
 
-fn key_background(key string) u32 {
-	return match key {
-		'C' { u32(0xef4444) }
-		'=', '+', '-', '*', '÷', '^' { u32(0x3478d4) }
-		'%', '±' { u32(0xcbd5e1) }
-		else { u32(0xf8fafc) }
-	}
-}
-
-fn key_color(key string) u32 {
-	return if key in ['C', '=', '+', '-', '*', '÷', '^'] { u32(0xffffff) } else { u32(0x111827) }
-}
-
-fn calculator_screen(bounds ui2.Rect, calculator &Calculator) ui2.Element {
-	outer_margin := 12.0
-	available_width := bounds.width - outer_margin * 2
-	panel_width := if available_width < 260 { available_width } else { 260.0 }
-	panel_height := 340.0
-	panel_x := if bounds.width > panel_width { (bounds.width - panel_width) / 2 } else { 0.0 }
-	panel_y := if bounds.height > panel_height { (bounds.height - panel_height) / 2 } else { 0.0 }
-	padding := 12.0
-	spacing := 8.0
-	content_width := panel_width - padding * 2
-	button_width := (content_width - spacing * 3) / 4
-	button_height := 44.0
-
-	mut children := []ui2.Element{}
-	children << ui2.view('display-frame', ui2.rect(padding, padding, content_width, 56), ui2.BoxStyle{
-		bg: 0xffffff
-		radius: 8
-	}, [
-		ui2.label('display', calculator.display, ui2.rect(10, 0, content_width - 20, 56), ui2.TextStyle{
-			color: 0x111827
-			size: 28
-			align: .right
-		}),
-	])
-
-	for row_index, row in calculator_keys() {
-		for column_index, key in row {
-			x := padding + f64(column_index) * (button_width + spacing)
-			y := 76.0 + f64(row_index) * (button_height + spacing)
-			button := ui2.button('key-${row_index}-${column_index}', key, ui2.rect(x, y, button_width, button_height), ui2.BoxStyle{
-				bg: key_background(key)
-				radius: 8
-			}, ui2.TextStyle{
-				color: key_color(key)
-				size: 18
-				bold: key == '='
-				align: .center
-			})
-			children << ui2.with_action(button, key)
-		}
-	}
-
-	panel := ui2.view('calculator', ui2.rect(panel_x, panel_y, panel_width, panel_height), ui2.BoxStyle{
-		bg: 0x1f2937
-		radius: 12
-	}, children)
-	return ui2.screen(0xf1f5f9, [panel])
-}
-
-fn build_screen() ui2.Element {
-	state := unsafe { calculator_state }
-	return calculator_screen(ui2.bounds(), state)
-}
-
-fn handle_event(event string) {
-	mut state := unsafe { calculator_state }
-	state.press(event)
-	ui2.refresh()
-}
-
 fn main() {
-	$if macos || linux || windows {
-		ui2.run_window('V Calc', window_width, window_height, build_screen, handle_event)
-	} $else {
-		ui2.run(build_screen, handle_event)
-	}
+	ui2.run_qml[Calculator](
+		source: calculator_qml_source
+		model: initial_calculator()
+		title: 'V Calc'
+		width: window_width
+		height: window_height
+	) or { panic(err) }
 }
