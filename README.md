@@ -174,6 +174,16 @@ Typed-QML ports from `v-ui` include:
   tab-style button bar.
 - `v run examples/double_listbox/main.v` — transfer keyed values between two
   scrollable lists and inspect the result.
+- `v run examples/treeview/main.v` — expand nested folders and select files in
+  a keyed, scrollable tree.
+- `v run examples/dirbrowser/main.v` — browse and choose folders from the local
+  filesystem.
+- `v run examples/fontchooser/main.v` — apply font family, size, color, and
+  emphasis choices to an editable preview.
+- `v run examples/rasterview/main.v` — show a bundled bitmap in a responsive
+  image frame.
+- `v run examples/resizable_menu_window/main.v` — resize a native context-menu
+  control between compact and stretched layouts.
 
 Run the calculator demo with:
 

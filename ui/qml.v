@@ -880,9 +880,21 @@ fn q_box(node &QNode) BoxStyle {
 fn q_text_style(node &QNode) TextStyle {
 	return TextStyle{
 		color: q_color(node, 'color', 0x111111)
+		background_color: q_color(node, 'background_color', 0)
 		size: node.prop_or('font_size', node.prop_or('size', '15')).f64()
+		font_family: node.prop('font_family')
 		bold: node.prop_bool('bold')
+		italic: node.prop_bool('italic')
+		underline: node.prop_bool('underline')
+		strikethrough: node.prop_bool('strikethrough')
+		shadow: node.prop_bool('shadow')
+		outline: node.prop_bool('outline')
+		vertical_align: node.prop('vertical_align')
+		link: node.prop('link')
 		align: q_align(node.prop('align'))
+		head_indent: node.prop_or('head_indent', '0').f64()
+		first_line_indent: node.prop_or('first_line_indent', '0').f64()
+		hyphenation_factor: node.prop_or('hyphenation_factor', '0').f64()
 		lines: node.prop_or('lines', '1').int()
 	}
 }

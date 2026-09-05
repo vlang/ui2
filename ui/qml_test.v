@@ -274,6 +274,43 @@ fn test_qml_applies_shared_control_state_properties() {
 	assert el.accessibility_label == 'Email'
 }
 
+fn test_qml_applies_extended_text_style_properties() {
+	node := parse_qml('Label {
+		text: "Styled"
+		color: #123456
+		background_color: #F0F1F2
+		font_size: 22
+		font_family: "Courier New"
+		bold: true
+		italic: true
+		underline: true
+		strikethrough: true
+		shadow: true
+		outline: true
+		vertical_align: superscript
+		link: "https://vlang.io"
+		head_indent: 12
+		first_line_indent: 4
+		hyphenation_factor: 0.5
+	}') or { panic(err) }
+	el := element_from_qnode(node, rect(0, 0, 200, 40)) or { panic(err) }
+	assert el.text_style.color == 0x123456
+	assert el.text_style.background_color == 0xf0f1f2
+	assert el.text_style.size == 22
+	assert el.text_style.font_family == 'Courier New'
+	assert el.text_style.bold
+	assert el.text_style.italic
+	assert el.text_style.underline
+	assert el.text_style.strikethrough
+	assert el.text_style.shadow
+	assert el.text_style.outline
+	assert el.text_style.vertical_align == 'superscript'
+	assert el.text_style.link == 'https://vlang.io'
+	assert el.text_style.head_indent == 12
+	assert el.text_style.first_line_indent == 4
+	assert el.text_style.hyphenation_factor == 0.5
+}
+
 fn test_parse_text_field_change_and_submit_events() {
 	source := 'TextField {
 		id: message
