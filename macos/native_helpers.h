@@ -1,5 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
+#import <objc/runtime.h>
 #include <dispatch/dispatch.h>
 #include <string.h>
 
@@ -185,6 +186,145 @@ static inline void ui2_invalidate_cursor_rects(void* view_ptr) {
 		return;
 	}
 	[[view window] invalidateCursorRectsForView:view];
+}
+
+// Positions a child deterministically in its parent's retained subview list.
+// Re-adding an existing child this way also repairs a stale native parent.
+static inline void ui2_place_subview(void *parent_ptr, void *child_ptr, void *previous_ptr) {
+	NSView *parent = (__bridge NSView *)parent_ptr;
+	NSView *child = (__bridge NSView *)child_ptr;
+	NSView *previous = (__bridge NSView *)previous_ptr;
+	if (parent == nil || child == nil) {
+		return;
+	}
+	if (previous == nil) {
+		[parent addSubview:child positioned:NSWindowBelow relativeTo:nil];
+	} else {
+		[parent addSubview:child positioned:NSWindowAbove relativeTo:previous];
+	}
+}
+
+static inline NSString *ui2_accessibility_role(const char *raw) {
+	if (raw == NULL || raw[0] == '\0') {
+		return nil;
+	}
+	if (strcmp(raw, "button") == 0) return NSAccessibilityButtonRole;
+	if (strcmp(raw, "text") == 0 || strcmp(raw, "label") == 0) return NSAccessibilityStaticTextRole;
+	if (strcmp(raw, "text_field") == 0) return NSAccessibilityTextFieldRole;
+	if (strcmp(raw, "image") == 0) return NSAccessibilityImageRole;
+	if (strcmp(raw, "link") == 0) return NSAccessibilityLinkRole;
+	return [NSString stringWithUTF8String:raw];
+}
+
+static char ui2_original_accessibility_role_key;
+static char ui2_original_accessibility_label_key;
+static char ui2_original_accessibility_value_key;
+
+static inline id ui2_saved_accessibility_value(id value) {
+	return value == nil ? [NSNull null] : value;
+}
+
+static inline id ui2_restored_accessibility_value(id value) {
+	return value == [NSNull null] ? nil : value;
+}
+
+static inline void ui2_apply_common_view_state(void *view_ptr, bool hidden, bool enabled,
+		const char *role_raw, const char *label_raw, const char *value_raw) {
+	NSView *view = (__bridge NSView *)view_ptr;
+	if (view == nil) {
+		return;
+	}
+	[view setHidden:hidden];
+	if ([view respondsToSelector:@selector(setEnabled:)]) {
+		[(id)view setEnabled:enabled];
+	}
+	NSString *role = ui2_accessibility_role(role_raw);
+	id saved_role = objc_getAssociatedObject(view, &ui2_original_accessibility_role_key);
+	if (role != nil) {
+		if (saved_role == nil) {
+			objc_setAssociatedObject(view, &ui2_original_accessibility_role_key,
+				ui2_saved_accessibility_value([view accessibilityRole]), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		}
+		[view setAccessibilityRole:role];
+	} else if (saved_role != nil) {
+		[view setAccessibilityRole:ui2_restored_accessibility_value(saved_role)];
+		objc_setAssociatedObject(view, &ui2_original_accessibility_role_key, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	}
+	NSString *label = label_raw == NULL || label_raw[0] == '\0' ? nil : [NSString stringWithUTF8String:label_raw];
+	id saved_label = objc_getAssociatedObject(view, &ui2_original_accessibility_label_key);
+	if (label != nil) {
+		if (saved_label == nil) {
+			objc_setAssociatedObject(view, &ui2_original_accessibility_label_key,
+				ui2_saved_accessibility_value([view accessibilityLabel]), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		}
+		[view setAccessibilityLabel:label];
+	} else if (saved_label != nil) {
+		[view setAccessibilityLabel:ui2_restored_accessibility_value(saved_label)];
+		objc_setAssociatedObject(view, &ui2_original_accessibility_label_key, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	}
+	NSString *value = value_raw == NULL || value_raw[0] == '\0' ? nil : [NSString stringWithUTF8String:value_raw];
+	id saved_value = objc_getAssociatedObject(view, &ui2_original_accessibility_value_key);
+	if (value != nil) {
+		if (saved_value == nil) {
+			objc_setAssociatedObject(view, &ui2_original_accessibility_value_key,
+				ui2_saved_accessibility_value([view accessibilityValue]), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		}
+		[view setAccessibilityValue:value];
+	} else if (saved_value != nil) {
+		[view setAccessibilityValue:ui2_restored_accessibility_value(saved_value)];
+		objc_setAssociatedObject(view, &ui2_original_accessibility_value_key, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	}
+}
+
+static inline void ui2_clear_control_state(void *control_ptr) {
+	id control = (__bridge id)control_ptr;
+	if ([control isKindOfClass:[NSButton class]]) {
+		NSButton *button = (NSButton *)control;
+		[button setState:NSControlStateValueOff];
+		[button highlight:NO];
+	}
+}
+
+static inline bool ui2_control_is_editing(void *control_ptr) {
+	NSControl *control = (__bridge NSControl *)control_ptr;
+	return control != nil && [control currentEditor] != nil;
+}
+
+static inline unsigned long ui2_control_selected_location(void *control_ptr) {
+	NSControl *control = (__bridge NSControl *)control_ptr;
+	NSText *editor = control == nil ? nil : [control currentEditor];
+	return editor == nil ? 0 : (unsigned long)[editor selectedRange].location;
+}
+
+static inline unsigned long ui2_control_selected_length(void *control_ptr) {
+	NSControl *control = (__bridge NSControl *)control_ptr;
+	NSText *editor = control == nil ? nil : [control currentEditor];
+	return editor == nil ? 0 : (unsigned long)[editor selectedRange].length;
+}
+
+static inline bool ui2_focus_view(void *view_ptr) {
+	NSView *view = (__bridge NSView *)view_ptr;
+	return view != nil && [view window] != nil && [[view window] makeFirstResponder:view];
+}
+
+static inline void ui2_restore_control_selection(void *control_ptr, unsigned long location,
+		unsigned long length) {
+	NSControl *control = (__bridge NSControl *)control_ptr;
+	if (control == nil || !ui2_focus_view(control_ptr)) {
+		return;
+	}
+	NSText *editor = [control currentEditor];
+	NSUInteger text_length = [[control stringValue] length];
+	NSUInteger safe_location = MIN((NSUInteger)location, text_length);
+	NSUInteger safe_length = MIN((NSUInteger)length, text_length - safe_location);
+	[editor setSelectedRange:NSMakeRange(safe_location, safe_length)];
+}
+
+static inline void ui2_end_window_editing(void *window_ptr) {
+	NSWindow *window = (__bridge NSWindow *)window_ptr;
+	if (window != nil) {
+		[window makeFirstResponder:nil];
+	}
 }
 
 static inline NSString* ui2_base64_utf8(NSString *s) {
@@ -460,7 +600,9 @@ static inline void* ui2_text_view_runs(void* tv_ptr) {
 		}
 		NSNumber *superscript = attrs[NSSuperscriptAttributeName];
 		NSString *vertical_align = ui2_vertical_align_name(superscript == nil ? 0 : [superscript integerValue]);
-		[out appendFormat:@"%@\t%@\t%.3f\t%d\t%d\t%d\t%@\t%d\t%u\t%u\t%d\n",
+		id link_value = attrs[NSLinkAttributeName];
+		NSString *link = link_value == nil ? @"" : [link_value description];
+		[out appendFormat:@"%@\t%@\t%.3f\t%d\t%d\t%d\t%@\t%d\t%u\t%u\t%d\t%@\n",
 			ui2_base64_utf8(text),
 			ui2_base64_utf8(family),
 			size,
@@ -471,7 +613,8 @@ static inline void* ui2_text_view_runs(void* tv_ptr) {
 			struck ? 1 : 0,
 			color,
 			background_color,
-			effect];
+			effect,
+			ui2_base64_utf8(link)];
 		cursor = NSMaxRange(effective);
 	}
 	return (__bridge void*)out;
@@ -517,6 +660,22 @@ static inline void ui2_text_view_set_selected_range(void* tv_ptr, unsigned long 
 	NSRange range = NSMakeRange(safe_location, safe_length);
 	[tv setSelectedRange:range];
 	[tv scrollRangeToVisible:range];
+}
+
+static inline void ui2_text_view_restore_selected_range(void* tv_ptr, unsigned long location,
+		unsigned long length, bool restore_focus) {
+	NSTextView *tv = (__bridge NSTextView*)tv_ptr;
+	if (tv == nil) {
+		return;
+	}
+	NSString *text = [tv string];
+	NSUInteger text_len = text == nil ? 0 : [text length];
+	NSUInteger safe_location = MIN((NSUInteger)location, text_len);
+	NSUInteger safe_length = MIN((NSUInteger)length, text_len - safe_location);
+	if (restore_focus && [tv window] != nil) {
+		[[tv window] makeFirstResponder:tv];
+	}
+	[tv setSelectedRange:NSMakeRange(safe_location, safe_length)];
 }
 
 static inline unsigned long ui2_text_view_selected_location(void* tv_ptr) {
@@ -1262,4 +1421,10 @@ static inline void ui2_observe_bounds(void* observer, void* view) {
 	                                         selector:@selector(ui2BoundsChanged:)
 	                                             name:NSViewBoundsDidChangeNotification
 	                                           object:(__bridge id)view];
+}
+
+static inline void ui2_unobserve_bounds(void* observer, void* view) {
+	[[NSNotificationCenter defaultCenter] removeObserver:(__bridge id)observer
+	                                                name:NSViewBoundsDidChangeNotification
+	                                              object:(__bridge id)view];
 }

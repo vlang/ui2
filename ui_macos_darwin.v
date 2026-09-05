@@ -6,75 +6,165 @@ import os
 import time
 
 #flag darwin -framework Cocoa
+
 #flag darwin -framework QuartzCore
+
 #insert "@DIR/macos/native_helpers.h"
 
 fn C.macos_objc_msg_id_rect_u64_u64_bool(obj macos.Id, selector macos.Sel, rect macos.Rect, a1 u64, a2 u64, a3 bool) macos.Id
+
 fn C.ui2_image_from_name(raw &char) macos.Id
+
 fn C.ui2_image_from_name_sized(raw &char, width f64, height f64) macos.Id
+
 fn C.ui2_nscolor_rgb(hex u32) macos.Id
+
 fn C.ui2_font(size f64, bold bool, italic bool) macos.Id
+
 fn C.ui2_app_did_finish_launching(self voidptr, cmd voidptr, notification voidptr)
+
 fn C.ui2_app_should_terminate_after_last_window_closed(self voidptr, cmd voidptr, sender voidptr) bool
+
 fn C.ui2_button_tap(self voidptr, cmd voidptr, sender voidptr)
+
 fn C.ui2_view_is_flipped(self voidptr, cmd voidptr) bool
+
 fn C.ui2_window_key_down(self voidptr, cmd voidptr, event voidptr)
+
 fn C.ui2_window_perform_key_equiv(self voidptr, cmd voidptr, event voidptr) bool
+
 fn C.ui2_window_did_resize(self voidptr, cmd voidptr, notification voidptr)
+
 fn C.ui2_control_text_changed(self voidptr, cmd voidptr, notification voidptr)
+
 fn C.ui2_text_view_changed(self voidptr, cmd voidptr, notification voidptr)
+
 fn C.ui2_text_view_do_command(self voidptr, cmd voidptr, text_view voidptr, command voidptr) bool
+
 fn C.ui2_text_view_clicked_on_link(self voidptr, cmd voidptr, text_view voidptr, link voidptr, char_index u64) bool
+
 fn C.ui2_bounds_changed(self voidptr, cmd voidptr, notification voidptr)
+
 fn C.ui2_dispatch_main(cb voidptr)
+
 fn C.ui2_observe_bounds(observer voidptr, view voidptr)
+
+fn C.ui2_unobserve_bounds(observer voidptr, view voidptr)
+
+fn C.ui2_place_subview(parent voidptr, child voidptr, previous voidptr)
+
+fn C.ui2_apply_common_view_state(view voidptr, hidden bool, enabled bool, role &char, label &char, value &char)
+
+fn C.ui2_clear_control_state(control voidptr)
+
+fn C.ui2_control_is_editing(control voidptr) bool
+
+fn C.ui2_control_selected_location(control voidptr) u64
+
+fn C.ui2_control_selected_length(control voidptr) u64
+
+fn C.ui2_focus_view(view voidptr) bool
+
+fn C.ui2_restore_control_selection(control voidptr, location u64, length u64)
+
+fn C.ui2_end_window_editing(window voidptr)
+
 fn C.ui2_text_view_set_attributed_string(tv voidptr, utf8 &char, color u32, background_color u32, size f64, family &char, bold bool, italic bool, underline bool, strikethrough bool, vertical_align &char)
+
 fn C.ui2_text_view_set_paragraph_style(tv voidptr, alignment int, head_indent f64, first_line_indent f64, hyphenation_factor f64)
+
 fn C.ui2_text_view_add_style(tv voidptr, location u64, length u64, color u32, background_color u32, size f64, family &char, bold bool, italic bool, underline bool, strikethrough bool, vertical_align &char)
+
 fn C.ui2_text_view_add_link(tv voidptr, location u64, length u64, link &char)
+
 fn C.ui2_text_view_runs(tv voidptr) macos.Id
+
 fn C.ui2_control_set_attributed_title(control voidptr, utf8 &char, color u32, size f64, bold bool, italic bool, underline bool)
+
 fn C.ui2_text_view_toggle_format(tv voidptr, format int)
+
 fn C.ui2_text_view_set_font_family(tv voidptr, family &char)
+
 fn C.ui2_text_view_set_font_size(tv voidptr, size f64)
+
 fn C.ui2_text_view_set_color(tv voidptr, color u32)
+
 fn C.ui2_text_view_set_background_color(tv voidptr, color u32)
+
 fn C.ui2_text_view_add_effect(tv voidptr, location u64, length u64, effect int)
+
 fn C.ui2_text_view_set_effect(tv voidptr, effect int)
+
 fn C.ui2_text_view_effect_active(tv voidptr) int
+
 fn C.ui2_text_view_format_active(tv voidptr, format int) bool
+
 fn C.ui2_text_view_toggle_vertical_align(tv voidptr, align int)
+
 fn C.ui2_text_view_vertical_align_active(tv voidptr) int
+
 fn C.ui2_text_view_set_selected_range(tv voidptr, location u64, length u64)
+
+fn C.ui2_text_view_restore_selected_range(tv voidptr, location u64, length u64, restore_focus bool)
+
 fn C.ui2_text_view_selected_location(tv voidptr) u64
+
 fn C.ui2_text_view_selected_length(tv voidptr) u64
+
 fn C.ui2_text_view_insert_text(tv voidptr, utf8 &char)
+
 fn C.ui2_text_view_text_length(tv voidptr) u64
+
 fn C.ui2_selector_name(selector voidptr) macos.Id
+
 fn C.ui2_view_save_png(view voidptr, path &char) bool
+
 fn C.ui2_pasteboard_has_image() bool
+
 fn C.ui2_pasteboard_write_image_png(path &char) bool
+
 fn C.ui2_app_send_edit_command(command int) bool
+
 fn C.ui2_current_event_modifier_flags() u64
+
 fn C.ui2_utf16_length(utf8 &char) u64
+
 fn C.ui2_event_x_in_view(view voidptr, event voidptr) f64
+
 fn C.ui2_event_y_in_view(view voidptr, event voidptr) f64
+
 fn C.ui2_view_clear_rotation(view voidptr)
+
 fn C.ui2_view_reset_transform(view voidptr)
+
 fn C.ui2_view_set_rotation(view voidptr, degrees f64)
+
 fn C.ui2_pointer_mouse_down(self voidptr, cmd voidptr, event voidptr)
+
 fn C.ui2_pointer_mouse_dragged(self voidptr, cmd voidptr, event voidptr)
+
 fn C.ui2_pointer_mouse_up(self voidptr, cmd voidptr, event voidptr)
+
 fn C.ui2_pointer_reset_cursor_rects(self voidptr, cmd voidptr)
+
 fn C.ui2_dragging_entered(self voidptr, cmd voidptr, dragging_info voidptr) u64
+
 fn C.ui2_perform_drag_operation(self voidptr, cmd voidptr, dragging_info voidptr) bool
+
 fn C.ui2_add_cursor_rect(view voidptr, cursor &char)
+
 fn C.ui2_invalidate_cursor_rects(view voidptr)
+
 fn C.ui2_register_drop_types(view voidptr)
+
 fn C.ui2_dragging_file_count(dragging_info voidptr) u64
+
 fn C.ui2_dragging_file_path(dragging_info voidptr, index u64) &char
+
 fn C.ui2_dragging_text(dragging_info voidptr) &char
+
 fn C.ui2_dragging_x_in_view(view voidptr, dragging_info voidptr) f64
+
 fn C.ui2_dragging_y_in_view(view voidptr, dragging_info voidptr) f64
 
 const ns_window_style_titled = u64(1)
@@ -83,6 +173,7 @@ const ns_window_style_miniaturizable = u64(4)
 const ns_window_style_resizable = u64(8)
 const ns_backing_store_buffered = u64(2)
 const ns_button_type_momentary_change = i64(5)
+const ns_button_type_switch = i64(3)
 
 type NativeView = voidptr
 
@@ -95,8 +186,8 @@ struct NativeRect {
 
 struct RunConfig {
 	title  string = 'App'
-	width  int    = 400
-	height int    = 800
+	width  int = 400
+	height int = 800
 }
 
 struct RefreshDebug {
@@ -118,11 +209,11 @@ struct RuntimeState {
 mut:
 	build_screen        BuildFn = BuildFn(unsafe { nil })
 	event_handler       EventFn = EventFn(unsafe { nil })
-	key_handler         KeyFn   = KeyFn(unsafe { nil })
+	key_handler         KeyFn = KeyFn(unsafe { nil })
 	key_consumed        bool
 	text_key_consumed   bool
 	scroll_handler      ScrollFn = ScrollFn(unsafe { nil })
-	drop_handler        DropFn   = DropFn(unsafe { nil })
+	drop_handler        DropFn = DropFn(unsafe { nil })
 	window              NativeView
 	root_view           NativeView
 	button_handler      NativeView
@@ -135,16 +226,22 @@ mut:
 	node_kinds          map[string]Kind
 	node_text_direct    map[string]bool
 	node_interactive    map[string]bool
+	node_secure         map[string]bool
+	node_declared_text  map[string]string
+	node_content_sig    map[string]string
 	node_tooltips       map[string]string
-	textview_ids        map[u64]string // NSTextView pointer -> element id (no tag on NSView)
+	node_menu_sig       map[string]string
+	node_menu_items     map[string][]u64
+	textview_ids        map[u64]string // NSTextView pointer -> lookup id (no tag on NSView)
+	textview_action_ids map[u64]string // NSTextView pointer -> change event id
 	scroll_ids          map[u64]string // NSClipView pointer -> Scroll element id
 	pointer_ids         map[u64]string // NSView pointer -> element id
 	pointer_draggable   map[u64]bool
 	cursor_ids          map[u64]string // NSView pointer -> cursor name
 	control_ids         map[u64]string // NSControl pointer -> action event id
+	checkbox_controls   map[u64]bool // NSButton pointers whose state is persistent
 	control_change_ids  map[u64]string // NSTextField pointer -> change event id
-	observed            map[u64]bool   // clip views we already observe for scroll changes
-	button_ids          []string
+	observed            map[u64]bool // clip views we already observe for scroll changes
 	run_config          RunConfig
 	screenshot_pending  bool
 	screenshot_captured bool
@@ -152,23 +249,30 @@ mut:
 }
 
 const runtime_state_singleton = &RuntimeState{
-	views:              map[string]NativeView{}
-	view_keys:          map[string]string{}
-	view_kinds:         map[string]Kind{}
-	text_area_direct:   map[string]bool{}
-	nodes:              map[string]NativeView{}
-	node_kinds:         map[string]Kind{}
-	node_text_direct:   map[string]bool{}
-	node_interactive:   map[string]bool{}
-	node_tooltips:      map[string]string{}
-	textview_ids:       map[u64]string{}
-	scroll_ids:         map[u64]string{}
-	pointer_ids:        map[u64]string{}
-	pointer_draggable:  map[u64]bool{}
-	cursor_ids:         map[u64]string{}
-	control_ids:        map[u64]string{}
+	views: map[string]NativeView{}
+	view_keys: map[string]string{}
+	view_kinds: map[string]Kind{}
+	text_area_direct: map[string]bool{}
+	nodes: map[string]NativeView{}
+	node_kinds: map[string]Kind{}
+	node_text_direct: map[string]bool{}
+	node_interactive: map[string]bool{}
+	node_secure: map[string]bool{}
+	node_declared_text: map[string]string{}
+	node_content_sig: map[string]string{}
+	node_tooltips: map[string]string{}
+	node_menu_sig: map[string]string{}
+	node_menu_items: map[string][]u64{}
+	textview_ids: map[u64]string{}
+	textview_action_ids: map[u64]string{}
+	scroll_ids: map[u64]string{}
+	pointer_ids: map[u64]string{}
+	pointer_draggable: map[u64]bool{}
+	cursor_ids: map[u64]string{}
+	control_ids: map[u64]string{}
+	checkbox_controls: map[u64]bool{}
 	control_change_ids: map[u64]string{}
-	observed:           map[u64]bool{}
+	observed: map[u64]bool{}
 }
 
 fn state() &RuntimeState {
@@ -179,15 +283,15 @@ pub fn bounds() Rect {
 	st := state()
 	if native_is_nil(st.root_view) {
 		return Rect{
-			width:  f64(st.run_config.width)
+			width: f64(st.run_config.width)
 			height: f64(st.run_config.height)
 		}
 	}
 	b := native_bounds(st.root_view)
 	return Rect{
-		x:      b.x
-		y:      b.y
-		width:  b.width
+		x: b.x
+		y: b.y
+		width: b.width
 		height: b.height
 	}
 }
@@ -201,8 +305,8 @@ pub fn run_window(title string, width int, height int, build_fn BuildFn, event_f
 	st.build_screen = build_fn
 	st.event_handler = event_fn
 	st.run_config = RunConfig{
-		title:  title
-		width:  width
+		title: title
+		width: width
 		height: height
 	}
 	ensure_runtime_classes()
@@ -234,6 +338,10 @@ pub fn refresh_element(id string, element Element) {
 	if native_is_nil(parent) {
 		return
 	}
+	validate_refresh_element_identity(key, element) or {
+		eprintln('ui2: ${err}')
+		return
+	}
 	started := time.sys_mono_now()
 	st.refresh_debug = RefreshDebug{
 		active: true
@@ -249,7 +357,32 @@ pub fn refresh_element(id string, element Element) {
 	schedule_screenshot_capture()
 	total_ns := finished - started
 	budget := if total_ns > u64(16_666_667) { 'OVER' } else { 'ok' }
-	println('[ui2 subtree] id=${id} total=${debug_milliseconds(total_ns):.2f}ms ${budget} clear=${debug_milliseconds(cleared - started):.2f}ms render=${debug_milliseconds(rendered - cleared):.2f}ms stale=${debug_milliseconds(finished - rendered):.2f}ms nodes=${st.refresh_debug.nodes_visited} create=${st.refresh_debug.nodes_created}/${debug_milliseconds(st.refresh_debug.native_create_ns):.2f}ms update=${st.refresh_debug.nodes_updated}/${debug_milliseconds(st.refresh_debug.native_update_ns):.2f}ms labels=${debug_milliseconds(st.refresh_debug.label_update_ns):.2f}ms views=${debug_milliseconds(st.refresh_debug.view_update_ns):.2f}ms other=${debug_milliseconds(st.refresh_debug.other_update_ns):.2f}ms tooltips=${st.refresh_debug.tooltips_set}')
+	if os.getenv('UI2_DEBUG_REFRESH') == '1' {
+		println('[ui2 subtree] id=${id} total=${debug_milliseconds(total_ns):.2f}ms ${budget} clear=${debug_milliseconds(cleared - started):.2f}ms render=${debug_milliseconds(rendered - cleared):.2f}ms stale=${debug_milliseconds(finished - rendered):.2f}ms nodes=${st.refresh_debug.nodes_visited} create=${st.refresh_debug.nodes_created}/${debug_milliseconds(st.refresh_debug.native_create_ns):.2f}ms update=${st.refresh_debug.nodes_updated}/${debug_milliseconds(st.refresh_debug.native_update_ns):.2f}ms labels=${debug_milliseconds(st.refresh_debug.label_update_ns):.2f}ms views=${debug_milliseconds(st.refresh_debug.view_update_ns):.2f}ms other=${debug_milliseconds(st.refresh_debug.other_update_ns):.2f}ms tooltips=${st.refresh_debug.tooltips_set}')
+	}
+}
+
+fn validate_refresh_element_identity(root_key string, element Element) ! {
+	validate_element_tree(element)!
+	st := state()
+	prefix := root_key + '/'
+	mut ids := []string{}
+	collect_element_ids(element, mut ids)
+	for id in ids {
+		existing_key := st.view_keys[id] or { continue }
+		if existing_key != root_key && !existing_key.starts_with(prefix) {
+			return error('duplicate element id `${id}` outside refreshed subtree')
+		}
+	}
+}
+
+fn collect_element_ids(element Element, mut ids []string) {
+	if element.id.len > 0 {
+		ids << element.id
+	}
+	for child in element.children {
+		collect_element_ids(child, mut ids)
+	}
 }
 
 fn debug_milliseconds(nanoseconds u64) f64 {
@@ -342,10 +475,14 @@ pub fn focus(id string) {
 	native := st.views[id] or { return }
 	if (st.view_kinds[id] or { Kind.view }) == .text_area {
 		tv := text_area_text_view(native, st.text_area_direct[id] or { false })
-		native_focus(tv)
+		if !native_focus(tv) {
+			return
+		}
 		return
 	}
-	native_focus(native)
+	if !native_focus(native) {
+		return
+	}
 }
 
 // focused_text_area_id returns the id of the text area that currently holds
@@ -472,11 +609,9 @@ fn capture_screenshot_on_main() {
 	if path == '' {
 		return
 	}
-	if os.exists(path) {
-		os.rm(path) or {}
-	}
 	if !C.ui2_view_save_png(voidptr(st.root_view), &char(path.str)) {
 		eprintln('ui2 screenshot failed: ${path}')
+		return
 	}
 	st.screenshot_captured = true
 	if screenshot_should_exit() {
@@ -571,19 +706,20 @@ fn parse_text_area_runs(raw string) []TextRun {
 			continue
 		}
 		runs << TextRun{
-			text:  run_text
+			text: run_text
 			style: TextStyle{
-				font_family:      base64.decode_str(parts[1])
-				size:             parts[2].f64()
-				bold:             parts[3] == '1'
-				italic:           parts[4] == '1'
-				underline:        parts[5] == '1'
-				vertical_align:   text_run_vertical_align(if parts.len > 6 { parts[6] } else { '' })
-				strikethrough:    parts.len > 7 && parts[7] == '1'
-				color:            if parts.len > 8 { u32(parts[8].u64()) } else { u32(0x111111) }
+				font_family: base64.decode_str(parts[1])
+				size: parts[2].f64()
+				bold: parts[3] == '1'
+				italic: parts[4] == '1'
+				underline: parts[5] == '1'
+				vertical_align: text_run_vertical_align(if parts.len > 6 { parts[6] } else { '' })
+				strikethrough: parts.len > 7 && parts[7] == '1'
+				color: if parts.len > 8 { u32(parts[8].u64()) } else { u32(0x111111) }
 				background_color: if parts.len > 9 { u32(parts[9].u64()) } else { u32(0) }
-				shadow:           parts.len > 10 && (parts[10].int() & 1) != 0
-				outline:          parts.len > 10 && (parts[10].int() & 2) != 0
+				shadow: parts.len > 10 && (parts[10].int() & 1) != 0
+				outline: parts.len > 10 && (parts[10].int() & 2) != 0
+				link: if parts.len > 11 { base64.decode_str(parts[11]) } else { '' }
 			}
 		}
 	}
@@ -602,14 +738,14 @@ pub fn text_area_format_state(id string) TextFormatState {
 	vertical := C.ui2_text_view_vertical_align_active(voidptr(tv))
 	effect := C.ui2_text_view_effect_active(voidptr(tv))
 	return TextFormatState{
-		bold:          C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.bold))
-		italic:        C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.italic))
-		underline:     C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.underline))
+		bold: C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.bold))
+		italic: C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.italic))
+		underline: C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.underline))
 		strikethrough: C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.strikethrough))
-		shadow:        (effect & 1) != 0
-		outline:       (effect & 2) != 0
-		subscript:     vertical < 0
-		superscript:   vertical > 0
+		shadow: (effect & 1) != 0
+		outline: (effect & 2) != 0
+		subscript: vertical < 0
+		superscript: vertical > 0
 	}
 }
 
@@ -638,8 +774,7 @@ fn ensure_runtime_classes() {
 		cls := macos.allocate_class_pair(macos.get_class('NSView'), 'UI2FlippedView')
 		macos.add_method(cls, 'isFlipped', voidptr(C.ui2_view_is_flipped), 'B@:')
 		macos.add_method(cls, 'draggingEntered:', voidptr(C.ui2_dragging_entered), 'Q@:@')
-		macos.add_method(cls, 'performDragOperation:', voidptr(C.ui2_perform_drag_operation),
-			'B@:@')
+		macos.add_method(cls, 'performDragOperation:', voidptr(C.ui2_perform_drag_operation), 'B@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2PointerView') == unsafe { nil } {
@@ -661,10 +796,8 @@ fn ensure_runtime_classes() {
 	}
 	if macos.get_class('UI2AppDelegate') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSObject'), 'UI2AppDelegate')
-		macos.add_method(cls, 'applicationDidFinishLaunching:',
-			voidptr(C.ui2_app_did_finish_launching), 'v@:@')
-		macos.add_method(cls, 'applicationShouldTerminateAfterLastWindowClosed:',
-			voidptr(C.ui2_app_should_terminate_after_last_window_closed), 'B@:@')
+		macos.add_method(cls, 'applicationDidFinishLaunching:', voidptr(C.ui2_app_did_finish_launching), 'v@:@')
+		macos.add_method(cls, 'applicationShouldTerminateAfterLastWindowClosed:', voidptr(C.ui2_app_should_terminate_after_last_window_closed), 'B@:@')
 		macos.add_method(cls, 'windowDidResize:', voidptr(C.ui2_window_did_resize), 'v@:@')
 		macos.register_class_pair(cls)
 	}
@@ -673,18 +806,15 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'handleTap:', voidptr(C.ui2_button_tap), 'v@:@')
 		macos.add_method(cls, 'controlTextDidChange:', voidptr(C.ui2_control_text_changed), 'v@:@')
 		macos.add_method(cls, 'textDidChange:', voidptr(C.ui2_text_view_changed), 'v@:@')
-		macos.add_method(cls, 'textView:doCommandBySelector:', voidptr(C.ui2_text_view_do_command),
-			'B@:@:')
-		macos.add_method(cls, 'textView:clickedOnLink:atIndex:',
-			voidptr(C.ui2_text_view_clicked_on_link), 'B@:@@Q')
+		macos.add_method(cls, 'textView:doCommandBySelector:', voidptr(C.ui2_text_view_do_command), 'B@:@:')
+		macos.add_method(cls, 'textView:clickedOnLink:atIndex:', voidptr(C.ui2_text_view_clicked_on_link), 'B@:@@Q')
 		macos.add_method(cls, 'ui2BoundsChanged:', voidptr(C.ui2_bounds_changed), 'v@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2Window') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSWindow'), 'UI2Window')
 		macos.add_method(cls, 'keyDown:', voidptr(C.ui2_window_key_down), 'v@:@')
-		macos.add_method(cls, 'performKeyEquivalent:', voidptr(C.ui2_window_perform_key_equiv),
-			'B@:@')
+		macos.add_method(cls, 'performKeyEquivalent:', voidptr(C.ui2_window_perform_key_equiv), 'B@:@')
 		macos.register_class_pair(cls)
 	}
 }
@@ -702,6 +832,10 @@ fn element_rect(r Rect) NativeRect {
 }
 
 fn render_root(root Element) {
+	validate_element_tree(root) or {
+		eprintln('ui2: ${err}')
+		return
+	}
 	mut st := state()
 	st.views = map[string]NativeView{}
 	st.view_keys = map[string]string{}
@@ -711,14 +845,28 @@ fn render_root(root Element) {
 	st.pointer_draggable = map[u64]bool{}
 	st.cursor_ids = map[u64]string{}
 	st.control_ids = map[u64]string{}
+	st.checkbox_controls = map[u64]bool{}
 	st.control_change_ids = map[u64]string{}
-	st.button_ids = []string{}
+	st.textview_ids = map[u64]string{}
+	st.textview_action_ids = map[u64]string{}
+	st.scroll_ids = map[u64]string{}
 	native_set_background(st.root_view, root.box.bg)
 	mut active := map[string]bool{}
-	for i, child in root.children {
-		render_element(st.root_view, child, child_key('', i, child), mut active)
-	}
+	render_children(st.root_view, root.children, '', mut active)
 	remove_stale_nodes(active)
+}
+
+fn render_children(parent NativeView, children []Element, parent_key string, mut active map[string]bool) {
+	mut previous := native_nil_view()
+	for i, child in children {
+		key := reconciliation_child_key(parent_key, i, child)
+		native := render_element(parent, child, key, mut active)
+		if child.kind == .screen {
+			continue
+		}
+		native_place_subview(parent, native, previous)
+		previous = native
+	}
 }
 
 fn render_element(parent NativeView, el Element, key string, mut active map[string]bool) NativeView {
@@ -731,19 +879,57 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 	existing_kind := st.node_kinds[key] or { Kind.screen }
 	existing_direct := st.node_text_direct[key] or { false }
 	existing_interactive := st.node_interactive[key] or { false }
+	existing_secure := st.node_secure[key] or { false }
 	interactive := element_interactive(el)
 	text_area_mode_changed := el.kind == .text_area && existing_kind == .text_area
 		&& existing_direct != el.disable_scroll
 	interactive_changed := (el.kind == .view || el.kind == .image) && existing_kind == el.kind
 		&& existing_interactive != interactive
+	secure_changed := el.kind == .text_field && existing_kind == .text_field
+		&& existing_secure != el.secure
+	declared_text_changed := key !in st.node_declared_text || (st.node_declared_text[key] or { '' }) != el.text
+	content_sig := text_area_content_signature(el)
+	content_changed := key !in st.node_content_sig || (st.node_content_sig[key] or { '' }) != content_sig
 	if native_is_nil(native) || existing_kind != el.kind || text_area_mode_changed
-		|| interactive_changed {
-		if !native_is_nil(native) {
-			native_remove_from_superview(native)
+		|| interactive_changed || secure_changed {
+		old_native := native
+		mut create_el := el
+		mut restore_editing := false
+		mut restore_location := u64(0)
+		mut restore_length := u64(0)
+		if !native_is_nil(old_native) && existing_kind == .text_field && el.kind == .text_field {
+			current := native_text(old_native)
+			if !declared_text_changed {
+				create_el = Element{
+					...el
+					text: current
+				}
+			}
+			restore_editing = C.ui2_control_is_editing(voidptr(old_native))
+			restore_location = C.ui2_control_selected_location(voidptr(old_native))
+			restore_length = C.ui2_control_selected_length(voidptr(old_native))
+		} else if !native_is_nil(old_native) && existing_kind == .text_area
+			&& el.kind == .text_area {
+			old_tv := text_area_text_view(old_native, existing_direct)
+			if !declared_text_changed {
+				create_el = Element{
+					...el
+					text: macos.utf8_string(macos.msg_id(old_tv, 'string'))
+				}
+			}
+			restore_editing = native_is_first_responder(old_tv)
+			restore_location = C.ui2_text_view_selected_location(voidptr(old_tv))
+			restore_length = C.ui2_text_view_selected_length(voidptr(old_tv))
+		}
+		if !native_is_nil(old_native) {
+			unregister_node(key, old_native, existing_kind, existing_direct)
+			if !interactive_changed && existing_kind in [.view, .scroll] {
+				forget_descendant_nodes(key)
+			}
 		}
 		st.node_tooltips.delete(key)
 		create_started := if st.refresh_debug.active { time.sys_mono_now() } else { u64(0) }
-		native = native_create_element(el)
+		native = native_create_element(create_el)
 		if st.refresh_debug.active {
 			st.refresh_debug.nodes_created++
 			st.refresh_debug.native_create_ns += time.sys_mono_now() - create_started
@@ -751,23 +937,49 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		st.nodes[key] = native
 		st.node_kinds[key] = el.kind
 		st.node_interactive[key] = interactive
+		st.node_secure[key] = el.secure
 		if el.kind == .text_area {
 			st.node_text_direct[key] = el.disable_scroll
+		} else {
+			st.node_text_direct.delete(key)
 		}
 		if el.kind != .screen {
 			native_add_subview(parent, native)
+			if interactive_changed && !native_is_nil(old_native) {
+				reparent_direct_children(key, native)
+			}
+			macos.release(native)
+		}
+		if !native_is_nil(old_native) {
+			native_remove_from_superview(old_native)
+		}
+		if restore_editing {
+			if el.kind == .text_field {
+				C.ui2_restore_control_selection(voidptr(native), restore_location, restore_length)
+			} else if el.kind == .text_area {
+				tv := text_area_text_view(native, el.disable_scroll)
+				if native_focus(tv) {
+					C.ui2_text_view_set_selected_range(voidptr(tv), restore_location, restore_length)
+				}
+			}
 		}
 	} else {
 		update_started := if st.refresh_debug.active { time.sys_mono_now() } else { u64(0) }
-		native_update_element(native, el)
+		native_update_element(native, el, declared_text_changed, content_changed)
 		if st.refresh_debug.active {
 			elapsed := time.sys_mono_now() - update_started
 			st.refresh_debug.nodes_updated++
 			st.refresh_debug.native_update_ns += elapsed
 			match el.kind {
-				.label { st.refresh_debug.label_update_ns += elapsed }
-				.view { st.refresh_debug.view_update_ns += elapsed }
-				else { st.refresh_debug.other_update_ns += elapsed }
+				.label {
+					st.refresh_debug.label_update_ns += elapsed
+				}
+				.view {
+					st.refresh_debug.view_update_ns += elapsed
+				}
+				else {
+					st.refresh_debug.other_update_ns += elapsed
+				}
 			}
 		}
 	}
@@ -775,15 +987,11 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 	match el.kind {
 		.screen {
 			native = parent
-			for i, child in el.children {
-				render_element(parent, child, child_key(key, i, child), mut active)
-			}
+			render_children(parent, el.children, key, mut active)
 		}
 		.view {
 			register_pointer(native, el)
-			for i, child in el.children {
-				render_element(native, child, child_key(key, i, child), mut active)
-			}
+			render_children(native, el.children, key, mut active)
 		}
 		.scroll {
 			// Observe scroll position changes for virtualized lists
@@ -805,30 +1013,33 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 				st.nodes[doc_key] = doc
 				st.node_kinds[doc_key] = .view
 				native_set_document_view(native, doc)
+				macos.release(doc)
 			} else {
 				native_set_frame(doc, native_rect(0, 0, el.frame.width, doc_h))
 				native_set_background(doc, el.box.bg)
 			}
-			for i, child in el.children {
-				render_element(doc, child, child_key(doc_key, i, child), mut active)
-			}
+			render_children(doc, el.children, doc_key, mut active)
 		}
 		.button {
-			register_button(native, el.id)
+			register_button(native, element_action_id(el))
+		}
+		.checkbox {
+			register_checkbox(native, element_action_id(el))
 		}
 		.dropdown {
-			register_action_control(native, el.id)
+			register_action_control(native, element_action_id(el))
 		}
 		.text_field {
-			if el.emit_change || el.submit_id.len > 0 {
-				register_control(native, el.id, el.submit_id, el.emit_change)
-			}
+			register_control(native, element_action_id(el), el.submit_id, el.emit_change)
 		}
 		.text_area {
+			tv := text_area_text_view(native, el.disable_scroll)
 			if el.id.len > 0 {
-				tv := text_area_text_view(native, el.disable_scroll)
 				st.textview_ids[u64(voidptr(tv))] = el.id
 				st.text_area_direct[el.id] = el.disable_scroll
+			}
+			if element_action_id(el).len > 0 {
+				st.textview_action_ids[u64(voidptr(tv))] = element_action_id(el)
 			}
 		}
 		.label {
@@ -839,8 +1050,10 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		}
 	}
 
-	if el.menu.len > 0 && el.kind != .dropdown {
-		attach_menu(native, el.menu)
+	if el.kind != .dropdown && el.enabled {
+		reconcile_menu(key, native, el.menu)
+	} else if el.kind != .dropdown {
+		clear_menu(key, native)
 	}
 	if el.kind != .screen {
 		previous_tooltip := st.node_tooltips[key] or { '' }
@@ -865,24 +1078,68 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		st.view_keys[el.id] = key
 		st.view_kinds[el.id] = el.kind
 	}
+	st.node_declared_text[key] = el.text
+	st.node_content_sig[key] = content_sig
+	apply_common_native_state(native, el)
 	return native
 }
 
-// attach_menu builds a right-click context menu for an element. Item taps
-// arrive through the same handler/tag registry as buttons.
-fn attach_menu(native NativeView, entries []MenuEntry) {
+fn menu_signature(entries []MenuEntry) string {
+	mut signature := ''
+	for entry in entries {
+		signature += '${entry.id.len}:${entry.id}${entry.title.len}:${entry.title};'
+	}
+	return signature
+}
+
+fn clear_menu(key string, native NativeView) {
+	mut st := state()
+	for pointer in st.node_menu_items[key] or { []u64{} } {
+		st.control_ids.delete(pointer)
+	}
+	st.node_menu_items.delete(key)
+	st.node_menu_sig.delete(key)
+	macos.msg_void1(native, 'setMenu:', native_nil_view())
+}
+
+fn reconcile_menu(key string, native NativeView, entries []MenuEntry) {
+	signature := menu_signature(entries)
+	mut st := state()
+	if (st.node_menu_sig[key] or { '' }) == signature {
+		pointers := st.node_menu_items[key] or { []u64{} }
+		for index, pointer in pointers {
+			if index < entries.len {
+				st.control_ids[pointer] = entries[index].id
+			}
+		}
+		return
+	}
+	clear_menu(key, native)
+	if entries.len == 0 {
+		return
+	}
+	attach_menu(key, native, entries, signature)
+}
+
+// attach_menu uses sender-pointer bindings, so a retained old item can never
+// dispatch through a refresh-local positional tag.
+fn attach_menu(key string, native NativeView, entries []MenuEntry, signature string) {
 	mut st := state()
 	menu := macos.msg_id(macos.alloc('NSMenu'), 'init')
+	mut pointers := []u64{cap: entries.len}
 	for e in entries {
-		tag := st.button_ids.len
-		st.button_ids << e.id
-		item := macos.msg_id3(macos.alloc('NSMenuItem'), 'initWithTitle:action:keyEquivalent:',
-			macos.nsstring(e.title), macos.Id(voidptr(macos.sel('handleTap:'))), macos.nsstring(''))
+		item := macos.msg_id3(macos.alloc('NSMenuItem'), 'initWithTitle:action:keyEquivalent:', macos.nsstring(e.title), macos.Id(voidptr(macos.sel('handleTap:'))), macos.nsstring(''))
 		macos.msg_void1(item, 'setTarget:', st.button_handler)
-		macos.msg_void_i64(item, 'setTag:', i64(tag))
+		pointer := u64(voidptr(item))
+		st.control_ids[pointer] = e.id
+		pointers << pointer
 		macos.msg_void1(menu, 'addItem:', item)
+		macos.release(item)
 	}
 	macos.msg_void1(native, 'setMenu:', menu)
+	macos.release(menu)
+	st.node_menu_items[key] = pointers
+	st.node_menu_sig[key] = signature
 }
 
 fn native_create_element(el Element) NativeView {
@@ -897,17 +1154,16 @@ fn native_create_element(el Element) NativeView {
 			native_new_scroll(element_rect(el.frame), el.box.bg, el.persistent_scrollbars)
 		}
 		.label {
-			native_new_label(element_rect(el.frame), el.text, el.text_style.color,
-				el.text_style.size, el.text_style.bold, el.text_style.italic,
-				el.text_style.underline, align_value(el.text_style.align), el.text_style.lines)
+			native_new_label(element_rect(el.frame), el.text, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, align_value(el.text_style.align), el.text_style.lines)
 		}
 		.image {
 			native_new_image(element_rect(el.frame), el.image_path, el.rotation)
 		}
 		.button {
-			native_new_button(element_rect(el.frame), el.text, el.box.bg, el.text_style.color,
-				el.text_style.size, el.text_style.bold, el.text_style.italic,
-				el.text_style.underline, el.box.radius, el.text_style.lines, el.image_path)
+			native_new_button(element_rect(el.frame), el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.box.radius, el.text_style.lines, el.image_path)
+		}
+		.checkbox {
+			native_new_checkbox(el)
 		}
 		.dropdown {
 			native_new_dropdown(el)
@@ -921,7 +1177,7 @@ fn native_create_element(el Element) NativeView {
 	}
 }
 
-fn native_update_element(native NativeView, el Element) {
+fn native_update_element(native NativeView, el Element, declared_text_changed bool, content_changed bool) {
 	match el.kind {
 		.screen {}
 		.view {
@@ -932,29 +1188,28 @@ fn native_update_element(native NativeView, el Element) {
 		.scroll {
 			native_set_frame(native, element_rect(el.frame))
 			native_set_scroll_background(native, el.box.bg)
+			native_set_scrollbar_mode(native, el.persistent_scrollbars)
 		}
 		.label {
-			native_update_label(native, element_rect(el.frame), el.text, el.text_style.color,
-				el.text_style.size, el.text_style.bold, el.text_style.italic,
-				el.text_style.underline, align_value(el.text_style.align), el.text_style.lines)
+			native_update_label(native, element_rect(el.frame), el.text, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, align_value(el.text_style.align), el.text_style.lines)
 		}
 		.image {
 			native_update_image(native, element_rect(el.frame), el.image_path, el.rotation)
 		}
 		.button {
-			native_update_button(native, element_rect(el.frame), el.text, el.box.bg,
-				el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic,
-				el.text_style.underline, el.box.radius, el.text_style.lines, el.image_path)
+			native_update_button(native, element_rect(el.frame), el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.box.radius, el.text_style.lines, el.image_path)
+		}
+		.checkbox {
+			native_update_checkbox(native, el)
 		}
 		.dropdown {
 			native_update_dropdown(native, el)
 		}
 		.text_field {
-			native_update_text_field(native, element_rect(el.frame), el.placeholder, el.text,
-				el.box.bg, el.text_style.color, el.text_style.size, el.box.radius)
+			native_update_text_field(native, element_rect(el.frame), el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, declared_text_changed)
 		}
 		.text_area {
-			native_update_text_area(native, el)
+			native_update_text_area(native, el, declared_text_changed, content_changed)
 		}
 	}
 }
@@ -963,44 +1218,38 @@ fn element_interactive(el Element) bool {
 	return el.clickable || el.draggable || el.cursor.len > 0
 }
 
-// child_key prefers the element's explicit key over its index, so windowed
-// lists keep native-view identity while scrolling.
-fn child_key(parent string, index int, el Element) string {
-	suffix := if el.key.len > 0 { 'k:' + el.key } else { index.str() }
-	if parent.len == 0 {
-		return suffix
-	}
-	return parent + '/' + suffix
-}
-
 fn register_pointer(native NativeView, el Element) {
-	if el.id.len == 0 || !element_interactive(el) {
-		return
-	}
 	mut st := state()
 	key := u64(voidptr(native))
-	if el.clickable || el.draggable {
-		st.pointer_ids[key] = el.id
+	st.pointer_ids.delete(key)
+	st.pointer_draggable.delete(key)
+	st.cursor_ids.delete(key)
+	if el.enabled && element_action_id(el).len > 0 && (el.clickable || el.draggable) {
+		st.pointer_ids[key] = element_action_id(el)
 		st.pointer_draggable[key] = el.draggable
 	}
 	if el.cursor.len > 0 {
 		st.cursor_ids[key] = el.cursor
 	}
-	native_invalidate_cursor_rects(native)
+	if element_interactive(el) {
+		native_invalidate_cursor_rects(native)
+	}
 }
 
 fn register_button(native NativeView, id string) {
 	mut st := state()
 	pointer := u64(voidptr(native))
-	mut tag := if pointer in st.control_ids { native_tag(native) } else { -1 }
-	if tag < 0 || tag >= st.button_ids.len {
-		tag = st.button_ids.len
-		st.button_ids << id
-	} else {
-		st.button_ids[tag] = id
-	}
 	st.control_ids[pointer] = id
-	native_set_tag(native, tag)
+	st.checkbox_controls.delete(pointer)
+	native_set_button_target(native, st.button_handler)
+	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
+}
+
+fn register_checkbox(native NativeView, id string) {
+	mut st := state()
+	pointer := u64(voidptr(native))
+	st.control_ids[pointer] = id
+	st.checkbox_controls[pointer] = true
 	native_set_button_target(native, st.button_handler)
 	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
 }
@@ -1008,45 +1257,131 @@ fn register_button(native NativeView, id string) {
 fn register_action_control(native NativeView, id string) {
 	mut st := state()
 	pointer := u64(voidptr(native))
-	mut tag := if pointer in st.control_ids { native_tag(native) } else { -1 }
-	if tag < 0 || tag >= st.button_ids.len {
-		tag = st.button_ids.len
-		st.button_ids << id
-	} else {
-		st.button_ids[tag] = id
-	}
 	st.control_ids[pointer] = id
-	native_set_tag(native, tag)
 	native_set_control_target(native, st.button_handler)
 	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
 }
 
 fn register_control(native NativeView, id string, submit_id string, emit_change bool) {
 	mut st := state()
-	action_id := if submit_id.len > 0 { submit_id } else { id }
 	pointer := u64(voidptr(native))
-	mut tag := if pointer in st.control_ids { native_tag(native) } else { -1 }
-	if tag < 0 || tag >= st.button_ids.len {
-		tag = st.button_ids.len
-		st.button_ids << action_id
-	} else {
-		st.button_ids[tag] = action_id
+	st.control_ids.delete(pointer)
+	st.control_change_ids.delete(pointer)
+	native_set_associated_object(native, assoc_handler_key(), native_nil_view())
+	if submit_id.len > 0 {
+		st.control_ids[pointer] = submit_id
 	}
-	st.control_ids[pointer] = action_id
 	if emit_change {
 		st.control_change_ids[pointer] = id
-	} else {
-		st.control_change_ids.delete(pointer)
 	}
-	native_set_tag(native, tag)
-	native_set_control_target(native, st.button_handler)
+	if submit_id.len > 0 {
+		native_set_control_target(native, st.button_handler)
+	} else {
+		native_clear_control_target(native)
+	}
 	if emit_change {
 		// Delegate delivers controlTextDidChange: for per-keystroke events.
 		macos.msg_void1(native, 'setDelegate:', st.button_handler)
 	} else {
 		macos.msg_void1(native, 'setDelegate:', native_nil_view())
 	}
-	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
+	if emit_change || submit_id.len > 0 {
+		native_set_associated_object(native, assoc_handler_key(), st.button_handler)
+	} else {
+		native_set_associated_object(native, assoc_handler_key(), native_nil_view())
+	}
+}
+
+fn unregister_node(key string, native NativeView, kind Kind, text_direct bool) {
+	mut st := state()
+	pointer := u64(voidptr(native))
+	st.pointer_ids.delete(pointer)
+	st.pointer_draggable.delete(pointer)
+	st.cursor_ids.delete(pointer)
+	st.control_ids.delete(pointer)
+	st.checkbox_controls.delete(pointer)
+	st.control_change_ids.delete(pointer)
+	if kind == .text_field {
+		native_clear_control_target(native)
+		macos.msg_void1(native, 'setDelegate:', native_nil_view())
+	}
+	if kind == .text_area {
+		tv := text_area_text_view(native, text_direct)
+		if !native_is_nil(tv) {
+			st.textview_ids.delete(u64(voidptr(tv)))
+			st.textview_action_ids.delete(u64(voidptr(tv)))
+			macos.msg_void1(tv, 'setDelegate:', native_nil_view())
+		}
+	}
+	if kind == .scroll {
+		clip := macos.msg_id(native, 'contentView')
+		clip_pointer := u64(voidptr(clip))
+		st.scroll_ids.delete(clip_pointer)
+		if clip_pointer in st.observed {
+			C.ui2_unobserve_bounds(voidptr(st.button_handler), voidptr(clip))
+			st.observed.delete(clip_pointer)
+		}
+	}
+	clear_menu(key, native)
+}
+
+fn reparent_direct_children(key string, new_parent NativeView) {
+	st := state()
+	prefix := key + '/'
+	for child_key_, child in st.nodes {
+		if !child_key_.starts_with(prefix) {
+			continue
+		}
+		remainder := child_key_[prefix.len..]
+		if !remainder.contains('/') {
+			native_add_subview(new_parent, child)
+		}
+	}
+}
+
+fn forget_descendant_nodes(key string) {
+	mut st := state()
+	prefix := key + '/'
+	mut descendants := []string{}
+	for child_key_, _ in st.nodes {
+		if child_key_.starts_with(prefix) {
+			descendants << child_key_
+		}
+	}
+	for child_key_ in descendants {
+		child := st.nodes[child_key_] or { continue }
+		unregister_node(child_key_, child, st.node_kinds[child_key_] or { Kind.view }, st.node_text_direct[child_key_] or { false })
+		st.nodes.delete(child_key_)
+		st.node_kinds.delete(child_key_)
+		st.node_text_direct.delete(child_key_)
+		st.node_interactive.delete(child_key_)
+		st.node_secure.delete(child_key_)
+		st.node_declared_text.delete(child_key_)
+		st.node_content_sig.delete(child_key_)
+		st.node_tooltips.delete(child_key_)
+	}
+}
+
+fn native_is_first_responder(view NativeView) bool {
+	st := state()
+	if native_is_nil(st.window) || native_is_nil(view) {
+		return false
+	}
+	return macos.msg_id(st.window, 'firstResponder') == view
+}
+
+fn text_area_content_signature(el Element) string {
+	if el.kind != .text_area {
+		return ''
+	}
+	return '${el.text_style}|${el.text_runs}'
+}
+
+fn apply_common_native_state(native NativeView, el Element) {
+	if native_is_nil(native) || el.kind == .screen {
+		return
+	}
+	C.ui2_apply_common_view_state(voidptr(native), el.hidden, el.enabled, &char(el.accessibility_role.str), &char(el.accessibility_label.str), &char(el.accessibility_value.str))
 }
 
 fn remove_stale_nodes(active map[string]bool) {
@@ -1061,20 +1396,26 @@ fn remove_stale_nodes(active map[string]bool) {
 	}
 	for key in stale {
 		native := st.nodes[key] or { continue }
-		pointer := u64(voidptr(native))
-		st.pointer_ids.delete(pointer)
-		st.pointer_draggable.delete(pointer)
-		st.cursor_ids.delete(pointer)
-		st.control_ids.delete(pointer)
-		st.control_change_ids.delete(pointer)
+		kind := st.node_kinds[key] or { Kind.view }
+		direct := st.node_text_direct[key] or { false }
+		unregister_node(key, native, kind, direct)
+	}
+	for key in stale {
+		native := st.nodes[key] or { continue }
 		if !node_has_ancestor_in_set(key, stale_set) {
 			// Removing a native parent already removes its whole subtree. Avoid
 			// making the same AppKit call again for every stale descendant.
 			native_remove_from_superview(native)
 		}
+	}
+	for key in stale {
 		st.nodes.delete(key)
 		st.node_kinds.delete(key)
+		st.node_text_direct.delete(key)
 		st.node_interactive.delete(key)
+		st.node_secure.delete(key)
+		st.node_declared_text.delete(key)
+		st.node_content_sig.delete(key)
 		st.node_tooltips.delete(key)
 	}
 }
@@ -1082,6 +1423,11 @@ fn remove_stale_nodes(active map[string]bool) {
 fn clear_subtree_registrations(root_key string) {
 	mut st := state()
 	prefix := root_key + '/'
+	for key, native in st.nodes {
+		if key == root_key || key.starts_with(prefix) {
+			unregister_node(key, native, st.node_kinds[key] or { Kind.view }, st.node_text_direct[key] or { false })
+		}
+	}
 	mut ids := []string{}
 	for id, key in st.view_keys {
 		if key == root_key || key.starts_with(prefix) {
@@ -1089,15 +1435,6 @@ fn clear_subtree_registrations(root_key string) {
 		}
 	}
 	for id in ids {
-		native := st.views[id] or { native_nil_view() }
-		if !native_is_nil(native) {
-			pointer := u64(voidptr(native))
-			st.pointer_ids.delete(pointer)
-			st.pointer_draggable.delete(pointer)
-			st.cursor_ids.delete(pointer)
-			st.control_ids.delete(pointer)
-			st.control_change_ids.delete(pointer)
-		}
 		st.views.delete(id)
 		st.view_keys.delete(id)
 		st.view_kinds.delete(id)
@@ -1118,18 +1455,24 @@ fn remove_stale_nodes_below(root_key string, active map[string]bool) {
 	}
 	for key in stale {
 		native := st.nodes[key] or { continue }
-		pointer := u64(voidptr(native))
-		st.pointer_ids.delete(pointer)
-		st.pointer_draggable.delete(pointer)
-		st.cursor_ids.delete(pointer)
-		st.control_ids.delete(pointer)
-		st.control_change_ids.delete(pointer)
+		kind := st.node_kinds[key] or { Kind.view }
+		direct := st.node_text_direct[key] or { false }
+		unregister_node(key, native, kind, direct)
+	}
+	for key in stale {
+		native := st.nodes[key] or { continue }
 		if !node_has_ancestor_in_set(key, stale_set) {
 			native_remove_from_superview(native)
 		}
+	}
+	for key in stale {
 		st.nodes.delete(key)
 		st.node_kinds.delete(key)
+		st.node_text_direct.delete(key)
 		st.node_interactive.delete(key)
+		st.node_secure.delete(key)
+		st.node_declared_text.delete(key)
+		st.node_content_sig.delete(key)
 		st.node_tooltips.delete(key)
 	}
 }
@@ -1163,9 +1506,9 @@ fn assoc_handler_key() voidptr {
 
 fn native_rect(x f64, y f64, width f64, height f64) NativeRect {
 	return NativeRect{
-		x:      x
-		y:      y
-		width:  width
+		x: x
+		y: y
+		width: width
 		height: height
 	}
 }
@@ -1218,19 +1561,19 @@ fn native_install_app_menu(app_name string) {
 	macos.msg_void1(main_menu, 'addItem:', app_menu_item)
 	app_menu := macos.msg_id(macos.alloc('NSMenu'), 'init')
 	macos.msg_void1(app_menu, 'setTitle:', macos.nsstring(app_name))
-	quit_item := macos.msg_id3(macos.alloc('NSMenuItem'), 'initWithTitle:action:keyEquivalent:',
-		macos.nsstring('Quit ${app_name}'), macos.Id(voidptr(macos.sel('terminate:'))),
-		macos.nsstring('q'))
+	quit_item := macos.msg_id3(macos.alloc('NSMenuItem'), 'initWithTitle:action:keyEquivalent:', macos.nsstring('Quit ${app_name}'), macos.Id(voidptr(macos.sel('terminate:'))), macos.nsstring('q'))
 	macos.msg_void1(app_menu, 'addItem:', quit_item)
+	macos.release(quit_item)
 	macos.msg_void1(app_menu_item, 'setSubmenu:', app_menu)
+	macos.release(app_menu)
 	macos.msg_void1(native_current_app(), 'setMainMenu:', main_menu)
+	macos.release(app_menu_item)
+	macos.release(main_menu)
 }
 
 fn native_new_window(frame NativeRect, title string) NativeView {
 	style := ns_window_style_titled | ns_window_style_closable | ns_window_style_miniaturizable | ns_window_style_resizable
-	window := C.macos_objc_msg_id_rect_u64_u64_bool(macos.alloc('UI2Window'),
-		macos.sel('initWithContentRect:styleMask:backing:defer:'), appkit_rect(frame), style,
-		ns_backing_store_buffered, false)
+	window := C.macos_objc_msg_id_rect_u64_u64_bool(macos.alloc('UI2Window'), macos.sel('initWithContentRect:styleMask:backing:defer:'), appkit_rect(frame), style, ns_backing_store_buffered, false)
 	macos.msg_void1(window, 'setTitle:', macos.nsstring(title))
 	macos.msg_void_bool(window, 'setReleasedWhenClosed:', false)
 	return window
@@ -1253,6 +1596,13 @@ fn native_add_subview(parent NativeView, child NativeView) {
 	macos.msg_void1(parent, 'addSubview:', child)
 }
 
+fn native_place_subview(parent NativeView, child NativeView, previous NativeView) {
+	if native_is_nil(parent) || native_is_nil(child) {
+		return
+	}
+	C.ui2_place_subview(voidptr(parent), voidptr(child), voidptr(previous))
+}
+
 fn native_remove_from_superview(view NativeView) {
 	if native_is_nil(view) {
 		return
@@ -1271,14 +1621,6 @@ fn native_new_object(class_name string) NativeView {
 	return macos.msg_id(macos.alloc(class_name), 'init')
 }
 
-fn native_set_tag(view NativeView, tag int) {
-	macos.msg_void_i64(view, 'setTag:', i64(tag))
-}
-
-fn native_tag(view NativeView) int {
-	return int(macos.msg_i64(view, 'tag'))
-}
-
 fn native_set_associated_object(obj NativeView, key voidptr, value NativeView) {
 	macos.set_associated_object(obj, key, value, macos.assoc_retain_nonatomic)
 }
@@ -1293,22 +1635,23 @@ fn native_new_view(frame NativeRect, box BoxStyle, interactive bool) NativeView 
 	class_name := if interactive { 'UI2PointerView' } else { 'UI2FlippedView' }
 	native := macos.msg_id_rect(macos.alloc(class_name), 'initWithFrame:', appkit_rect(frame))
 	native_set_box_background(native, box)
+	native_set_corner_radius(native, box.radius)
 	return native
 }
 
 fn native_new_scroll(frame NativeRect, bg u32, persistent_scrollbars bool) NativeView {
-	scroll_view := macos.msg_id_rect(macos.alloc('NSScrollView'), 'initWithFrame:',
-		appkit_rect(frame))
+	scroll_view := macos.msg_id_rect(macos.alloc('NSScrollView'), 'initWithFrame:', appkit_rect(frame))
 	macos.msg_void_bool(scroll_view, 'setHasVerticalScroller:', true)
-	macos.msg_void_bool(scroll_view, 'setAutohidesScrollers:', true)
-	if persistent_scrollbars {
-		// NSScrollerStyleLegacy (0) keeps the scroller on screen whenever the content
-		// overflows, instead of the overlay scroller that fades away after scrolling.
-		macos.msg_void_i64(scroll_view, 'setScrollerStyle:', 0)
-	}
+	native_set_scrollbar_mode(scroll_view, persistent_scrollbars)
 	macos.msg_void_bool(scroll_view, 'setDrawsBackground:', true)
 	native_set_scroll_background(scroll_view, bg)
 	return scroll_view
+}
+
+fn native_set_scrollbar_mode(scroll NativeView, persistent bool) {
+	// NSScrollerStyleLegacy is 0 and overlay is 1.
+	macos.msg_void_i64(scroll, 'setScrollerStyle:', if persistent { i64(0) } else { i64(1) })
+	macos.msg_void_bool(scroll, 'setAutohidesScrollers:', !persistent)
 }
 
 fn native_set_document_view(scroll NativeView, view NativeView) {
@@ -1321,8 +1664,7 @@ fn native_set_scroll_background(scroll NativeView, bg u32) {
 }
 
 fn native_new_image(frame NativeRect, path string, rotation f64) NativeView {
-	image_view := macos.msg_id_rect(macos.alloc('UI2PointerImageView'), 'initWithFrame:',
-		appkit_rect(frame))
+	image_view := macos.msg_id_rect(macos.alloc('UI2PointerImageView'), 'initWithFrame:', appkit_rect(frame))
 	native_update_image(image_view, frame, path, rotation)
 	return image_view
 }
@@ -1343,13 +1685,14 @@ fn native_update_image(image_view NativeView, frame NativeRect, path string, rot
 	}
 	img := macos.msg_id1(macos.alloc('NSImage'), 'initWithContentsOfFile:', macos.nsstring(path))
 	macos.msg_void1(image_view, 'setImage:', img)
+	if !native_is_nil(img) {
+		macos.release(img)
+	}
 }
 
 fn native_new_label(frame NativeRect, text string, text_hex u32, size f64, bold bool, italic bool, underline bool, align int, lines int) NativeView {
-	label_view := macos.msg_id_rect(macos.alloc('NSTextField'), 'initWithFrame:',
-		appkit_rect(frame))
-	native_update_label(label_view, frame, text, text_hex, size, bold, italic, underline, align,
-		lines)
+	label_view := macos.msg_id_rect(macos.alloc('NSTextField'), 'initWithFrame:', appkit_rect(frame))
+	native_update_label(label_view, frame, text, text_hex, size, bold, italic, underline, align, lines)
 	return label_view
 }
 
@@ -1364,8 +1707,7 @@ fn native_update_label(label_view NativeView, frame NativeRect, text string, tex
 	macos.msg_void1(label_view, 'setTextColor:', native_color(text_hex))
 	macos.msg_void1(label_view, 'setFont:', native_font(size, bold, italic))
 	if italic || underline {
-		C.ui2_control_set_attributed_title(voidptr(label_view), &char(text.str), text_hex, size,
-			bold, italic, underline)
+		C.ui2_control_set_attributed_title(voidptr(label_view), &char(text.str), text_hex, size, bold, italic, underline)
 	}
 	macos.msg_void_i64(label_view, 'setAlignment:', i64(align))
 	cell := macos.msg_id(label_view, 'cell')
@@ -1375,8 +1717,7 @@ fn native_update_label(label_view NativeView, frame NativeRect, text string, tex
 
 fn native_new_button(frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int, image_name string) NativeView {
 	button_view := macos.msg_id_rect(macos.alloc('NSButton'), 'initWithFrame:', appkit_rect(frame))
-	native_update_button(button_view, frame, title, bg_hex, text_hex, size, bold, italic,
-		underline, radius, lines, image_name)
+	native_update_button(button_view, frame, title, bg_hex, text_hex, size, bold, italic, underline, radius, lines, image_name)
 	return button_view
 }
 
@@ -1387,8 +1728,7 @@ fn native_update_button(button_view NativeView, frame NativeRect, title string, 
 	macos.msg_void_u64(button_view, 'setBezelStyle:', 1)
 	macos.msg_void_bool(button_view, 'setBordered:', false)
 	macos.msg_void1(button_view, 'setFont:', native_font(size, bold, italic))
-	C.ui2_control_set_attributed_title(voidptr(button_view), &char(title.str), text_hex, size,
-		bold, italic, underline)
+	C.ui2_control_set_attributed_title(voidptr(button_view), &char(title.str), text_hex, size, bold, italic, underline)
 	native_set_background(button_view, bg_hex)
 	native_set_corner_radius(button_view, radius)
 	cell := macos.msg_id(button_view, 'cell')
@@ -1396,6 +1736,21 @@ fn native_update_button(button_view NativeView, frame NativeRect, title string, 
 	macos.msg_void_bool(cell, 'setUsesSingleLineMode:', lines == 1)
 	native_update_button_image(button_view, frame, image_name)
 	native_clear_control_state(button_view)
+}
+
+fn native_new_checkbox(el Element) NativeView {
+	checkbox_view := macos.msg_id_rect(macos.alloc('NSButton'), 'initWithFrame:', appkit_rect(element_rect(el.frame)))
+	native_update_checkbox(checkbox_view, el)
+	return checkbox_view
+}
+
+fn native_update_checkbox(checkbox_view NativeView, el Element) {
+	native_set_frame(checkbox_view, element_rect(el.frame))
+	macos.msg_void_i64(checkbox_view, 'setButtonType:', ns_button_type_switch)
+	macos.msg_void1(checkbox_view, 'setTitle:', macos.nsstring(el.text))
+	macos.msg_void_i64(checkbox_view, 'setState:', if el.checked { i64(1) } else { i64(0) })
+	macos.msg_void_bool(checkbox_view, 'setAllowsMixedState:', false)
+	macos.msg_void1(checkbox_view, 'setFont:', native_font(el.text_style.size, el.text_style.bold, el.text_style.italic))
 }
 
 fn native_update_button_image(button_view NativeView, frame NativeRect, image_name string) {
@@ -1420,8 +1775,7 @@ fn native_update_button_image(button_view NativeView, frame NativeRect, image_na
 }
 
 fn native_new_dropdown(el Element) NativeView {
-	popup := macos.msg_id_rect(macos.alloc('NSPopUpButton'), 'initWithFrame:',
-		appkit_rect(element_rect(el.frame)))
+	popup := macos.msg_id_rect(macos.alloc('NSPopUpButton'), 'initWithFrame:', appkit_rect(element_rect(el.frame)))
 	native_update_dropdown(popup, el)
 	return popup
 }
@@ -1433,8 +1787,7 @@ fn native_update_dropdown(popup NativeView, el Element) {
 		macos.msg_void1(popup, 'addItemWithTitle:', macos.nsstring(item.title))
 	}
 	native_select_dropdown_item(popup, el.text)
-	macos.msg_void1(popup, 'setFont:', native_font(el.text_style.size, el.text_style.bold,
-		el.text_style.italic))
+	macos.msg_void1(popup, 'setFont:', native_font(el.text_style.size, el.text_style.bold, el.text_style.italic))
 	macos.msg_void_bool(popup, 'setBordered:', true)
 	macos.msg_void_u64(popup, 'setBezelStyle:', 1)
 }
@@ -1443,26 +1796,25 @@ fn native_new_text_field(el Element) NativeView {
 	frame := element_rect(el.frame)
 	cls := if el.secure { 'NSSecureTextField' } else { 'NSTextField' }
 	field := macos.msg_id_rect(macos.alloc(cls), 'initWithFrame:', appkit_rect(frame))
-	native_update_text_field(field, frame, el.placeholder, el.text, el.box.bg, el.text_style.color,
-		el.text_style.size, el.box.radius)
+	native_update_text_field(field, frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, true)
 	return field
 }
 
-fn native_update_text_field(field NativeView, frame NativeRect, placeholder string, text string, bg_hex u32, text_hex u32, size f64, radius f64) {
+fn native_update_text_field(field NativeView, frame NativeRect, placeholder string, text string, bg_hex u32, text_hex u32, size f64, _radius f64, declared_text_changed bool) {
 	native_set_frame(field, frame)
-	// Only replace the value when it actually changed — a rebuild during
-	// editing must not reset the cursor or editing session.
-	cur := macos.utf8_string(macos.msg_id(field, 'stringValue'))
-	if cur != text {
+	// Unrelated refreshes preserve native edits. A changed declaration remains
+	// controlled and is applied explicitly.
+	if declared_text_changed && native_text(field) != text {
 		macos.msg_void1(field, 'setStringValue:', macos.nsstring(text))
 	}
 	macos.msg_void1(field, 'setPlaceholderString:', macos.nsstring(placeholder))
 	macos.msg_void1(field, 'setTextColor:', native_color(text_hex))
 	macos.msg_void1(field, 'setFont:', native_font(size, false, false))
 	macos.msg_void_bool(field, 'setBordered:', true)
+	macos.msg_void_bool(field, 'setBezeled:', true)
+	macos.msg_void_u64(field, 'setBezelStyle:', 1)
 	macos.msg_void_bool(field, 'setDrawsBackground:', true)
 	macos.msg_void1(field, 'setBackgroundColor:', native_color(bg_hex))
-	native_set_corner_radius(field, radius)
 }
 
 // native_new_text_area builds an NSScrollView wrapping an NSTextView —
@@ -1473,20 +1825,19 @@ fn native_new_text_area(el Element) NativeView {
 		tv := native_new_text_view(appkit_rect(frame), el)
 		return tv
 	}
-	scroll_view := macos.msg_id_rect(macos.alloc('NSScrollView'), 'initWithFrame:',
-		appkit_rect(frame))
+	scroll_view := macos.msg_id_rect(macos.alloc('NSScrollView'), 'initWithFrame:', appkit_rect(frame))
 	macos.msg_void_bool(scroll_view, 'setHasVerticalScroller:', true)
 	macos.msg_void_bool(scroll_view, 'setAutohidesScrollers:', true)
 	tv := native_new_text_view(macos.rect(0, 0, frame.width, frame.height), el)
 	macos.msg_void1(scroll_view, 'setDocumentView:', tv)
+	macos.release(tv)
 	native_set_corner_radius(scroll_view, el.box.radius)
 	return scroll_view
 }
 
 fn native_new_text_view(frame macos.Rect, el Element) NativeView {
 	tv := macos.msg_id_rect(macos.alloc('NSTextView'), 'initWithFrame:', frame)
-	macos.msg_void1(tv, 'setFont:', native_font(el.text_style.size, el.text_style.bold,
-		el.text_style.italic))
+	macos.msg_void1(tv, 'setFont:', native_font(el.text_style.size, el.text_style.bold, el.text_style.italic))
 	macos.msg_void_bool(tv, 'setRichText:', el.text_runs.len > 0)
 	macos.msg_void_bool(tv, 'setAllowsUndo:', true)
 	macos.msg_void_bool(tv, 'setVerticallyResizable:', true)
@@ -1497,18 +1848,16 @@ fn native_new_text_view(frame macos.Rect, el Element) NativeView {
 		macos.msg_void1(tv, 'setBackgroundColor:', native_color(el.box.bg))
 	}
 	macos.msg_void1(tv, 'setTextColor:', native_color(el.text_style.color))
-	macos.msg_void_bool(tv, 'setEditable:', !el.readonly)
+	macos.msg_void_bool(tv, 'setEditable:', !el.readonly && el.enabled)
 	macos.msg_void_bool(tv, 'setSelectable:', true)
 	native_set_text_area_content(tv, el)
-	C.ui2_text_view_set_paragraph_style(voidptr(tv), align_value(el.text_style.align),
-		el.text_style.head_indent, el.text_style.first_line_indent,
-		el.text_style.hyphenation_factor)
+	C.ui2_text_view_set_paragraph_style(voidptr(tv), align_value(el.text_style.align), el.text_style.head_indent, el.text_style.first_line_indent, el.text_style.hyphenation_factor)
 	st := state()
 	macos.msg_void1(tv, 'setDelegate:', st.button_handler)
 	return tv
 }
 
-fn native_update_text_area(native NativeView, el Element) {
+fn native_update_text_area(native NativeView, el Element, declared_text_changed bool, content_changed bool) {
 	frame := element_rect(el.frame)
 	native_set_frame(native, frame)
 	if !el.disable_scroll {
@@ -1519,19 +1868,27 @@ fn native_update_text_area(native NativeView, el Element) {
 	if native_is_nil(tv) {
 		return
 	}
-	macos.msg_void_bool(tv, 'setEditable:', !el.readonly)
+	macos.msg_void_bool(tv, 'setEditable:', !el.readonly && el.enabled)
+	macos.msg_void_bool(tv, 'setSelectable:', true)
+	macos.msg_void1(tv, 'setFont:', native_font(el.text_style.size, el.text_style.bold, el.text_style.italic))
+	macos.msg_void1(tv, 'setTextColor:', native_color(el.text_style.color))
 	macos.msg_void_bool(tv, 'setDrawsBackground:', !el.box.transparent)
 	if !el.box.transparent {
 		macos.msg_void1(tv, 'setBackgroundColor:', native_color(el.box.bg))
 	}
-	// Same guard as text fields: don't clobber an active editing session
-	cur := macos.utf8_string(macos.msg_id(tv, 'string'))
-	if cur != el.text {
-		native_set_text_area_content(tv, el)
+	current := macos.utf8_string(macos.msg_id(tv, 'string'))
+	replace_text := declared_text_changed && current != el.text
+	if replace_text || content_changed {
+		was_editing := native_is_first_responder(tv)
+		selection_location := C.ui2_text_view_selected_location(voidptr(tv))
+		selection_length := C.ui2_text_view_selected_length(voidptr(tv))
+		native_set_text_area_content(tv, Element{
+			...el
+			text: if replace_text { el.text } else { current }
+		})
+		C.ui2_text_view_restore_selected_range(voidptr(tv), selection_location, selection_length, was_editing)
 	}
-	C.ui2_text_view_set_paragraph_style(voidptr(tv), align_value(el.text_style.align),
-		el.text_style.head_indent, el.text_style.first_line_indent,
-		el.text_style.hyphenation_factor)
+	C.ui2_text_view_set_paragraph_style(voidptr(tv), align_value(el.text_style.align), el.text_style.head_indent, el.text_style.first_line_indent, el.text_style.hyphenation_factor)
 }
 
 fn native_set_text_area_content(tv NativeView, el Element) {
@@ -1541,25 +1898,17 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 		return
 	}
 	macos.msg_void_bool(tv, 'setRichText:', true)
-	C.ui2_text_view_set_attributed_string(voidptr(tv), &char(el.text.str), el.text_style.color,
-		el.text_style.background_color, el.text_style.size, &char(el.text_style.font_family.str),
-		el.text_style.bold, el.text_style.italic, el.text_style.underline,
-		el.text_style.strikethrough, &char(el.text_style.vertical_align.str))
+	C.ui2_text_view_set_attributed_string(voidptr(tv), &char(el.text.str), el.text_style.color, el.text_style.background_color, el.text_style.size, &char(el.text_style.font_family.str), el.text_style.bold, el.text_style.italic, el.text_style.underline, el.text_style.strikethrough, &char(el.text_style.vertical_align.str))
 	base_length := C.ui2_utf16_length(&char(el.text.str))
 	if base_length > 0 {
-		C.ui2_text_view_add_effect(voidptr(tv), 0, base_length,
-			text_style_effect_value(el.text_style))
+		C.ui2_text_view_add_effect(voidptr(tv), 0, base_length, text_style_effect_value(el.text_style))
 	}
 	mut location := u64(0)
 	for run in el.text_runs {
 		length := C.ui2_utf16_length(&char(run.text.str))
 		if length > 0 {
-			C.ui2_text_view_add_style(voidptr(tv), location, length, run.style.color,
-				run.style.background_color, run.style.size, &char(run.style.font_family.str),
-				run.style.bold, run.style.italic, run.style.underline, run.style.strikethrough,
-				&char(run.style.vertical_align.str))
-			C.ui2_text_view_add_effect(voidptr(tv), location, length,
-				text_style_effect_value(run.style))
+			C.ui2_text_view_add_style(voidptr(tv), location, length, run.style.color, run.style.background_color, run.style.size, &char(run.style.font_family.str), run.style.bold, run.style.italic, run.style.underline, run.style.strikethrough, &char(run.style.vertical_align.str))
+			C.ui2_text_view_add_effect(voidptr(tv), location, length, text_style_effect_value(run.style))
 			if run.style.link.len > 0 {
 				C.ui2_text_view_add_link(voidptr(tv), location, length, &char(run.style.link.str))
 			}
@@ -1590,9 +1939,19 @@ fn native_set_control_target(control NativeView, target NativeView) {
 	macos.msg_void1(control, 'setAction:', macos.sel('handleTap:'))
 }
 
+fn native_clear_control_target(control NativeView) {
+	macos.msg_void1(control, 'setTarget:', native_nil_view())
+	macos.msg_void1(control, 'setAction:', macos.Id(unsafe { nil }))
+}
+
 fn native_clear_control_state(control NativeView) {
-	macos.msg_void_i64(control, 'setState:', 0)
-	macos.msg_void_bool(control, 'highlight:', false)
+	C.ui2_clear_control_state(voidptr(control))
+}
+
+fn native_finish_button_action(control NativeView, persistent_state bool) {
+	if !persistent_state {
+		native_clear_control_state(control)
+	}
 }
 
 fn native_text(view NativeView) string {
@@ -1615,12 +1974,13 @@ fn native_select_dropdown_item(view NativeView, text string) {
 	macos.msg_void1(view, 'selectItemWithTitle:', macos.nsstring(text))
 }
 
-fn native_focus(view NativeView) {
-	macos.msg_bool(view, 'becomeFirstResponder')
+fn native_focus(view NativeView) bool {
+	return C.ui2_focus_view(voidptr(view))
 }
 
 fn native_end_editing(view NativeView) {
-	macos.msg_bool(view, 'resignFirstResponder')
+	window := macos.msg_id(view, 'window')
+	C.ui2_end_window_editing(voidptr(window))
 }
 
 fn native_terminate_app() {
@@ -1680,6 +2040,7 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 	st.root_view = native_new_flipped_view(root_frame, 0xffffff)
 	C.ui2_register_drop_types(voidptr(st.root_view))
 	native_set_content_view(st.window, st.root_view)
+	macos.release(st.root_view)
 	if native_is_nil(st.button_handler) {
 		st.button_handler = native_new_object('UI2ButtonHandler')
 	}
@@ -1770,9 +2131,9 @@ fn ui2_perform_drag_operation(self voidptr, _cmd voidptr, dragging_info voidptr)
 	}
 	st.drop_handler(DropEvent{
 		paths: paths
-		text:  dropped_text
-		x:     C.ui2_dragging_x_in_view(self, dragging_info)
-		y:     C.ui2_dragging_y_in_view(self, dragging_info)
+		text: dropped_text
+		x: C.ui2_dragging_x_in_view(self, dragging_info)
+		y: C.ui2_dragging_y_in_view(self, dragging_info)
 	})
 	return paths.len > 0 || dropped_text.len > 0
 }
@@ -1784,18 +2145,13 @@ fn ui2_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
 		return
 	}
 	native := NativeView(sender)
-	id := st.control_ids[u64(voidptr(native))] or { '' }
+	pointer := u64(voidptr(native))
+	id := st.control_ids[pointer] or { '' }
 	if id.len > 0 {
-		native_clear_control_state(native)
+		native_finish_button_action(native, st.checkbox_controls[pointer] or { false })
 		st.event_handler(id)
-		native_clear_control_state(native)
 		return
 	}
-	tag := native_tag(native)
-	if tag < 0 || tag >= st.button_ids.len {
-		return
-	}
-	st.event_handler(st.button_ids[tag])
 }
 
 @[export: 'ui2_control_text_changed']
@@ -1808,13 +2164,7 @@ fn ui2_control_text_changed(_self voidptr, _cmd voidptr, notification voidptr) {
 	id := st.control_change_ids[u64(voidptr(field))] or { '' }
 	if id.len > 0 {
 		st.event_handler(id)
-		return
 	}
-	tag := int(macos.msg_i64(field, 'tag'))
-	if tag < 0 || tag >= st.button_ids.len {
-		return
-	}
-	st.event_handler(st.button_ids[tag])
 }
 
 @[export: 'ui2_text_view_changed']
@@ -1824,7 +2174,7 @@ fn ui2_text_view_changed(_self voidptr, _cmd voidptr, notification voidptr) {
 		return
 	}
 	tv := macos.msg_id(macos.Id(notification), 'object')
-	id := st.textview_ids[u64(voidptr(tv))] or { return }
+	id := st.textview_action_ids[u64(voidptr(tv))] or { return }
 	st.event_handler(id)
 }
 
@@ -1971,7 +2321,9 @@ fn handle_native_edit_key(key string) bool {
 		'cmd+v' { 3 }
 		'cmd+z' { 4 }
 		'cmd+y', 'cmd+shift+z' { 5 }
-		else { return false }
+		else {
+			return false
+		}
 	}
 
 	return C.ui2_app_send_edit_command(command)

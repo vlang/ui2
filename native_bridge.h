@@ -4,10 +4,13 @@
 #import <AVFoundation/AVFoundation.h>
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
+#include <string.h>
 
 extern void vui_barcode_scanned(char *code);
 extern void vui_barcode_error(char *message);
 extern void vui_barcode_cancelled(void);
+extern void vui_dropdown_selected(void *sender, char *value);
 
 @interface VuiScannerViewController : UIViewController <AVCaptureMetadataOutputObjectsDelegate>
 @property(nonatomic, retain) AVCaptureSession *session;
@@ -193,6 +196,129 @@ static void vui_present_authorized_scanner(UIViewController *root) {
 	VuiScannerViewController *scanner = [[[VuiScannerViewController alloc] init] autorelease];
 	scanner.modalPresentationStyle = UIModalPresentationFullScreen;
 	[top presentViewController:scanner animated:YES completion:nil];
+}
+
+static inline UIAccessibilityTraits vui_accessibility_traits(const char *raw) {
+	if (raw == NULL || raw[0] == '\0') return UIAccessibilityTraitNone;
+	if (strcmp(raw, "button") == 0) return UIAccessibilityTraitButton;
+	if (strcmp(raw, "image") == 0) return UIAccessibilityTraitImage;
+	if (strcmp(raw, "link") == 0) return UIAccessibilityTraitLink;
+	if (strcmp(raw, "header") == 0) return UIAccessibilityTraitHeader;
+	if (strcmp(raw, "adjustable") == 0) return UIAccessibilityTraitAdjustable;
+	return UIAccessibilityTraitNone;
+}
+
+static char vui_original_accessibility_role_key;
+static char vui_original_accessibility_label_key;
+static char vui_original_accessibility_value_key;
+static char vui_original_is_accessibility_element_key;
+
+static inline id vui_saved_accessibility_value(id value) {
+	return value == nil ? [NSNull null] : value;
+}
+
+static inline id vui_restored_accessibility_value(id value) {
+	return value == [NSNull null] ? nil : value;
+}
+
+static inline void vui_apply_common_view_state(void *view_ptr, bool hidden, bool enabled,
+		const char *role_raw, const char *label_raw, const char *value_raw) {
+	UIView *view = (UIView *)view_ptr;
+	if (view == nil) {
+		return;
+	}
+	view.hidden = hidden;
+	BOOL has_role = role_raw != NULL && role_raw[0] != '\0';
+	BOOL has_label = label_raw != NULL && label_raw[0] != '\0';
+	BOOL has_value = value_raw != NULL && value_raw[0] != '\0';
+	id saved_label = objc_getAssociatedObject(view, &vui_original_accessibility_label_key);
+	if (has_label) {
+		if (saved_label == nil) {
+			objc_setAssociatedObject(view, &vui_original_accessibility_label_key,
+				vui_saved_accessibility_value(view.accessibilityLabel), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		}
+		view.accessibilityLabel = [NSString stringWithUTF8String:label_raw];
+	} else if (saved_label != nil) {
+		view.accessibilityLabel = vui_restored_accessibility_value(saved_label);
+		objc_setAssociatedObject(view, &vui_original_accessibility_label_key, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	}
+	id saved_value = objc_getAssociatedObject(view, &vui_original_accessibility_value_key);
+	if (has_value) {
+		if (saved_value == nil) {
+			objc_setAssociatedObject(view, &vui_original_accessibility_value_key,
+				vui_saved_accessibility_value(view.accessibilityValue), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		}
+		view.accessibilityValue = [NSString stringWithUTF8String:value_raw];
+	} else if (saved_value != nil) {
+		view.accessibilityValue = vui_restored_accessibility_value(saved_value);
+		objc_setAssociatedObject(view, &vui_original_accessibility_value_key, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	}
+	UIAccessibilityTraits traits = vui_accessibility_traits(role_raw);
+	id saved_traits = objc_getAssociatedObject(view, &vui_original_accessibility_role_key);
+	if (has_role) {
+		if (saved_traits == nil) {
+			objc_setAssociatedObject(view, &vui_original_accessibility_role_key,
+				@(view.accessibilityTraits), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		}
+		view.accessibilityTraits = traits;
+	} else if (saved_traits != nil) {
+		view.accessibilityTraits = [saved_traits unsignedLongLongValue];
+		objc_setAssociatedObject(view, &vui_original_accessibility_role_key, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	}
+	BOOL has_metadata = has_role || has_label || has_value;
+	id saved_accessible = objc_getAssociatedObject(view, &vui_original_is_accessibility_element_key);
+	if (has_metadata) {
+		if (saved_accessible == nil) {
+			objc_setAssociatedObject(view, &vui_original_is_accessibility_element_key,
+				@(view.isAccessibilityElement), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		}
+		view.isAccessibilityElement = YES;
+	} else if (saved_accessible != nil) {
+		view.isAccessibilityElement = [saved_accessible boolValue];
+		objc_setAssociatedObject(view, &vui_original_is_accessibility_element_key, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	}
+	if ([view isKindOfClass:[UIControl class]]) {
+		[(UIControl *)view setEnabled:enabled];
+	} else {
+		view.userInteractionEnabled = enabled;
+	}
+}
+
+static inline void vui_configure_dropdown(void *button_ptr, const char *encoded_raw) {
+	UIButton *button = (UIButton *)button_ptr;
+	if (button == nil || encoded_raw == NULL) {
+		return;
+	}
+	if (@available(iOS 14.0, *)) {
+		NSString *encoded = [NSString stringWithUTF8String:encoded_raw] ?: @"";
+		NSArray<NSString *> *lines = [encoded componentsSeparatedByString:@"\n"];
+		NSMutableArray<UIMenuElement *> *actions = [NSMutableArray array];
+		__unsafe_unretained UIButton *target = button;
+		for (NSString *line in lines) {
+			if (line.length == 0) {
+				continue;
+			}
+			NSData *data = [[[NSData alloc] initWithBase64EncodedString:line options:0] autorelease];
+			NSString *title = data == nil ? nil : [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+			if (title == nil) {
+				continue;
+			}
+			UIAction *action = [UIAction actionWithTitle:title image:nil identifier:nil handler:^(__kindof UIAction *chosen) {
+				[target setTitle:chosen.title forState:UIControlStateNormal];
+				vui_dropdown_selected(target, (char *)[chosen.title UTF8String]);
+			}];
+			[actions addObject:action];
+		}
+		button.menu = [UIMenu menuWithTitle:@"" children:actions];
+		button.showsMenuAsPrimaryAction = YES;
+	}
+}
+
+static inline void vui_set_view_rotation(void *view_ptr, double degrees) {
+	UIView *view = (UIView *)view_ptr;
+	if (view != nil) {
+		view.transform = CGAffineTransformMakeRotation((CGFloat)(degrees * 0.017453292519943295));
+	}
 }
 
 void vui_present_barcode_scanner(void *root_ptr) {

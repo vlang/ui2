@@ -158,6 +158,33 @@ fn test_parse_hex_color() {
 	assert parse_hex_color('#FFFFFF') == u32(0xFFFFFF)
 	assert parse_hex_color('#05A7FC') == u32(0x05A7FC)
 	assert parse_hex_color('FF0000') == u32(0xFF0000)
+	assert parse_hex_color('#GGGGGG') == u32(0xFFFFFF)
+}
+
+fn test_parse_requires_a_single_complete_root() {
+	if _ := parse_qml('Label {} Button {}') {
+		assert false, 'a second root must be rejected'
+	}
+	if _ := parse_qml('Label {} }') {
+		assert false, 'a trailing brace must be rejected'
+	}
+}
+
+fn test_plain_container_children_use_resolved_local_frame() {
+	node := parse_qml('View { x: 30 y: 40 width: 200 height: 100 Label {} }') or {
+		panic(err)
+	}
+	el := element_from_qnode(node, rect(0, 0, 800, 600)) or { panic(err) }
+	assert el.frame == rect(30, 40, 200, 100)
+	assert el.children[0].frame == rect(0, 0, 200, 100)
+}
+
+fn test_nested_child_coordinates_are_parent_local() {
+	node := parse_qml('View { x: 30 y: 40 width: 200 height: 100 Label { x: 7 y: 9 width: 50 height: 20 } }') or {
+		panic(err)
+	}
+	el := element_from_qnode(node, rect(0, 0, 800, 600)) or { panic(err) }
+	assert el.children[0].frame == rect(7, 9, 50, 20)
 }
 
 fn test_parse_escaped_string() {
@@ -193,6 +220,7 @@ fn test_parse_text_area() {
 	source := 'TextArea {
 		id: body
 		text: "line one\\nline two"
+		on_change: body_changed
 		editable: false
 		background: #FAFAFA
 	}'
@@ -200,6 +228,7 @@ fn test_parse_text_area() {
 	assert node.tag == 'TextArea'
 	el := element_from_qnode(node, rect(0, 0, 400, 300)) or { panic(err) }
 	assert el.id == 'body'
+	assert el.action_id == 'body_changed'
 	assert el.readonly == true
 	assert el.text.contains('line two')
 }
@@ -222,12 +251,27 @@ fn test_parse_menu_items() {
 	node := parse_qml(source) or { panic(err) }
 	el := element_from_qnode(node, rect(0, 0, 100, 30)) or { panic(err) }
 	assert el.key == 'row42'
+	assert el.id == ''
+	assert el.action_id == 'open_row'
 	assert el.menu.len == 2
 	assert el.menu[0].title == 'Reply'
 	assert el.menu[0].id == 'ctx_reply'
 	assert el.menu[1].id == 'ctx_delete'
 	// MenuItem children must not become subviews
 	assert el.children.len == 0
+}
+
+fn test_qml_applies_shared_control_state_properties() {
+	node := parse_qml('TextField { id: email hidden: true enabled: false autocorrect: false pad_left: 20 accessibility_role: text_field accessibility_label: "Email" }') or {
+		panic(err)
+	}
+	el := element_from_qnode(node, rect(0, 0, 200, 40)) or { panic(err) }
+	assert el.hidden
+	assert !el.enabled
+	assert !el.autocorrect
+	assert el.padding_left == 20
+	assert el.accessibility_role == 'text_field'
+	assert el.accessibility_label == 'Email'
 }
 
 fn test_parse_text_field_change_and_submit_events() {
@@ -241,7 +285,8 @@ fn test_parse_text_field_change_and_submit_events() {
 	node := parse_qml(source) or { panic(err) }
 	el := element_from_qnode(node, rect(0, 0, 200, 40)) or { panic(err) }
 	assert el.kind == .text_field
-	assert el.id == 'message_changed'
+	assert el.id == 'message'
+	assert el.action_id == 'message_changed'
 	assert el.submit_id == 'send_message'
 	assert el.emit_change
 	assert el.secure
@@ -257,4 +302,37 @@ fn test_parse_submit_only_text_field() {
 	assert el.id == 'search'
 	assert el.submit_id == 'run_search'
 	assert !el.emit_change
+}
+
+fn test_qml_dropdown_options_persistent_scroll_and_tooltip() {
+	source := 'Scroll {
+		id: users
+		persistent: true
+		Dropdown {
+			id: country
+			text: "Canada"
+			on_change: country_changed
+			tooltip: "Choose a country"
+			Option { text: "United States" }
+			Option { text: "Canada" }
+		}
+	}'
+	el := element_from_qml(source, rect(0, 0, 300, 200)) or { panic(err) }
+	assert el.kind == .scroll
+	assert el.persistent_scrollbars
+	assert el.children.len == 1
+	dropdown_el := el.children[0]
+	assert dropdown_el.kind == .dropdown
+	assert dropdown_el.id == 'country'
+	assert dropdown_el.action_id == 'country_changed'
+	assert dropdown_el.text == 'Canada'
+	assert dropdown_el.tooltip == 'Choose a country'
+	assert dropdown_el.menu.len == 2
+	assert dropdown_el.menu[0].title == 'United States'
+	assert dropdown_el.menu[1].title == 'Canada'
+}
+
+fn test_qml_decimal_keyboard() {
+	el := element_from_qml('TextField { id: age keyboard: decimal }', rect(0, 0, 120, 32)) or { panic(err) }
+	assert el.keyboard == keyboard_decimal
 }

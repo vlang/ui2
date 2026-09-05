@@ -28,10 +28,10 @@ pub mut:
 pub fn text_editor(text string) TextEditor {
 	length := rune_len(text)
 	return TextEditor{
-		text:      text
+		text: text
 		selection: TextSelection{
 			anchor: length
-			caret:  length
+			caret: length
 		}
 	}
 }
@@ -45,7 +45,7 @@ pub fn (mut e TextEditor) set_caret(pos int) {
 	caret := clamp_int(pos, 0, rune_len(e.text))
 	e.selection = TextSelection{
 		anchor: caret
-		caret:  caret
+		caret: caret
 	}
 }
 
@@ -53,14 +53,14 @@ pub fn (mut e TextEditor) set_selection(anchor int, caret int) {
 	length := rune_len(e.text)
 	e.selection = TextSelection{
 		anchor: clamp_int(anchor, 0, length)
-		caret:  clamp_int(caret, 0, length)
+		caret: clamp_int(caret, 0, length)
 	}
 }
 
 pub fn (mut e TextEditor) select_all() {
 	e.selection = TextSelection{
 		anchor: 0
-		caret:  rune_len(e.text)
+		caret: rune_len(e.text)
 	}
 }
 
@@ -73,7 +73,7 @@ pub fn (mut e TextEditor) move_caret(delta int, extend bool) {
 	}
 	e.selection = TextSelection{
 		anchor: next
-		caret:  next
+		caret: next
 	}
 }
 
@@ -82,16 +82,18 @@ pub fn (mut e TextEditor) insert_text(value string) {
 }
 
 pub fn (mut e TextEditor) replace_selection(value string) {
+	e.clamp_selection()
 	start, end := e.selection.ordered()
 	e.text = replace_rune_range(e.text, start, end, value)
 	next := start + rune_len(value)
 	e.selection = TextSelection{
 		anchor: next
-		caret:  next
+		caret: next
 	}
 }
 
 pub fn (mut e TextEditor) backspace() bool {
+	e.clamp_selection()
 	if !e.selection.collapsed() {
 		e.replace_selection('')
 		return true
@@ -106,6 +108,7 @@ pub fn (mut e TextEditor) backspace() bool {
 }
 
 pub fn (mut e TextEditor) delete_forward() bool {
+	e.clamp_selection()
 	if !e.selection.collapsed() {
 		e.replace_selection('')
 		return true

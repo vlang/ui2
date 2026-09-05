@@ -30,12 +30,13 @@ pub enum Align {
 	right
 }
 
-enum Kind {
+pub enum Kind {
 	screen
 	view
 	label
 	image
 	button
+	checkbox
 	dropdown
 	text_field
 	text_area
@@ -113,10 +114,12 @@ pub:
 pub struct Element {
 	kind Kind
 pub:
-	id                    string
+	id                    string // lookup/state identity
+	action_id             string // event identity (falls back to id)
 	submit_id             string // text_field: optional event id emitted when Return submits
 	key                   string // stable identity for reconciliation (falls back to child index)
 	text                  string
+	checked               bool // checkbox: declared on/off state
 	image_path            string
 	tooltip               string
 	placeholder           string
@@ -128,16 +131,91 @@ pub:
 	emit_change           bool
 	long_press            bool
 	swipe_left            bool
-	readonly              bool   // text_area: selectable but not editable
-	disable_scroll        bool   // text_area: hide the internal scroll view scroller
-	persistent_scrollbars bool   // scroll: keep a legacy always-visible scroller instead of the auto-fading overlay one
-	secure                bool   // text_field: password entry (NSSecureTextField)
-	clickable             bool   // view/image: emit pointer down/up events
-	draggable             bool   // view/image: emit pointer drag events
-	rotation              f64    // image: clockwise degrees
+	readonly              bool // text_area: selectable but not editable
+	disable_scroll        bool // text_area: hide the internal scroll view scroller
+	persistent_scrollbars bool // scroll: keep a legacy always-visible scroller instead of the auto-fading overlay one
+	secure                bool // text_field: native password entry
+	clickable             bool // view/image: emit pointer down/up events
+	draggable             bool // view/image: emit pointer drag events
+	rotation              f64 // image: clockwise degrees
 	cursor                string // view/image: hover cursor hint
 	menu                  []MenuEntry
 	children              []Element
+	hidden                bool
+	enabled               bool = true
+	accessibility_role    string
+	accessibility_label   string
+	accessibility_value   string
+	autocorrect           bool = true // native text inputs
+	padding_left          f64 = 12.0 // text input content inset
+}
+
+pub enum BackendSupport {
+	unsupported
+	partial
+	supported
+}
+
+// control_support makes backend differences explicit. Partial means the
+// control works but lacks some native behavior (for example Android rich text).
+pub fn control_support(kind Kind) BackendSupport {
+	$if macos {
+		return .supported
+	} $else $if ios {
+		return match kind {
+			.text_area, .checkbox { .partial }
+			else { .supported }
+		}
+	} $else $if android {
+		return match kind {
+			.text_area, .dropdown { .partial }
+			else { .supported }
+		}
+	} $else $if windows {
+		return match kind {
+			.image, .text_area { .partial }
+			else { .supported }
+		}
+	} $else {
+		return .unsupported
+	}
+}
+
+fn element_action_id(el Element) string {
+	return if el.action_id.len > 0 { el.action_id } else { el.id }
+}
+
+// reconciliation_child_key encodes user keys so separators inside a key
+// cannot alias a nested key path.
+fn reconciliation_child_key(parent string, index int, el Element) string {
+	suffix := if el.key.len > 0 { 'k:' + el.key.bytes().hex() } else { 'i:' + index.str() }
+	return if parent.len == 0 { suffix } else { parent + '/' + suffix }
+}
+
+// validate_element_tree rejects ambiguous declarative identity before a
+// renderer mutates native state.
+pub fn validate_element_tree(root Element) ! {
+	mut ids := map[string]bool{}
+	validate_element_node(root, 'root', mut ids)!
+}
+
+fn validate_element_node(el Element, path string, mut ids map[string]bool) ! {
+	if el.id.len > 0 {
+		if el.id in ids {
+			return error('duplicate element id `${el.id}` at ${path}')
+		}
+		ids[el.id] = true
+	}
+	mut keys := map[string]bool{}
+	for index, child in el.children {
+		if child.key.len > 0 {
+			if child.key in keys {
+				return error('duplicate sibling key `${child.key}` at ${path}')
+			}
+			keys[child.key] = true
+		}
+		validate_element_node(child, '${path}/${index}', mut ids)!
+	}
 }
 
 pub const keyboard_default = 0
@@ -152,17 +230,34 @@ pub const cursor_rotate = 'rotate'
 
 pub fn rect(x f64, y f64, width f64, height f64) Rect {
 	return Rect{
-		x:      x
-		y:      y
-		width:  width
+		x: x
+		y: y
+		width: width
 		height: height
+	}
+}
+
+fn intersect_rect(a Rect, b Rect) Rect {
+	left := if a.x > b.x { a.x } else { b.x }
+	top := if a.y > b.y { a.y } else { b.y }
+	right_a := a.x + a.width
+	right_b := b.x + b.width
+	bottom_a := a.y + a.height
+	bottom_b := b.y + b.height
+	right := if right_a < right_b { right_a } else { right_b }
+	bottom := if bottom_a < bottom_b { bottom_a } else { bottom_b }
+	return Rect{
+		x: left
+		y: top
+		width: if right > left { right - left } else { 0 }
+		height: if bottom > top { bottom - top } else { 0 }
 	}
 }
 
 pub fn screen(bg u32, children []Element) Element {
 	return Element{
-		kind:     .screen
-		box:      BoxStyle{
+		kind: .screen
+		box: BoxStyle{
 			bg: bg
 		}
 		children: children
@@ -171,66 +266,66 @@ pub fn screen(bg u32, children []Element) Element {
 
 pub fn view(id string, frame Rect, box_ BoxStyle, children []Element) Element {
 	return Element{
-		kind:     .view
-		id:       id
-		frame:    frame
-		box:      box_
+		kind: .view
+		id: id
+		frame: frame
+		box: box_
 		children: children
 	}
 }
 
 pub fn draggable_view(id string, frame Rect, box_ BoxStyle, children []Element) Element {
 	return Element{
-		kind:      .view
-		id:        id
-		frame:     frame
-		box:       box_
+		kind: .view
+		id: id
+		frame: frame
+		box: box_
 		draggable: true
-		children:  children
+		children: children
 	}
 }
 
 pub fn draggable_view_with_cursor(id string, frame Rect, box_ BoxStyle, cursor string, children []Element) Element {
 	return Element{
-		kind:      .view
-		id:        id
-		frame:     frame
-		box:       box_
+		kind: .view
+		id: id
+		frame: frame
+		box: box_
 		draggable: true
-		cursor:    cursor
-		children:  children
+		cursor: cursor
+		children: children
 	}
 }
 
 pub fn view_with_long_press(id string, frame Rect, box_ BoxStyle, children []Element) Element {
 	return Element{
-		kind:       .view
-		id:         id
-		frame:      frame
-		box:        box_
+		kind: .view
+		id: id
+		frame: frame
+		box: box_
 		long_press: true
-		children:   children
+		children: children
 	}
 }
 
 pub fn view_with_long_press_and_swipe_left(id string, frame Rect, box_ BoxStyle, children []Element) Element {
 	return Element{
-		kind:       .view
-		id:         id
-		frame:      frame
-		box:        box_
+		kind: .view
+		id: id
+		frame: frame
+		box: box_
 		long_press: true
 		swipe_left: true
-		children:   children
+		children: children
 	}
 }
 
 pub fn scroll(id string, frame Rect, bg u32, children []Element) Element {
 	return Element{
-		kind:     .scroll
-		id:       id
-		frame:    frame
-		box:      BoxStyle{
+		kind: .scroll
+		id: id
+		frame: frame
+		box: BoxStyle{
 			bg: bg
 		}
 		children: children
@@ -243,78 +338,97 @@ pub fn scroll(id string, frame Rect, bg u32, children []Element) Element {
 // draggable scrollbar should stay on screen.
 pub fn scroll_persistent(id string, frame Rect, bg u32, children []Element) Element {
 	return Element{
-		kind:                  .scroll
-		id:                    id
-		frame:                 frame
-		box:                   BoxStyle{
+		kind: .scroll
+		id: id
+		frame: frame
+		box: BoxStyle{
 			bg: bg
 		}
-		children:              children
+		children: children
 		persistent_scrollbars: true
 	}
 }
 
 pub fn label(id string, text string, frame Rect, style TextStyle) Element {
 	return Element{
-		kind:       .label
-		id:         id
-		text:       text
-		frame:      frame
+		kind: .label
+		id: id
+		text: text
+		frame: frame
 		text_style: style
 	}
 }
 
 pub fn image(id string, path string, frame Rect) Element {
 	return Element{
-		kind:       .image
-		id:         id
+		kind: .image
+		id: id
 		image_path: path
-		frame:      frame
+		frame: frame
 	}
 }
 
 pub fn transformed_image(id string, path string, frame Rect, rotation f64, clickable bool) Element {
 	return Element{
-		kind:       .image
-		id:         id
+		kind: .image
+		id: id
 		image_path: path
-		frame:      frame
-		rotation:   rotation
-		clickable:  clickable
+		frame: frame
+		rotation: rotation
+		clickable: clickable
 	}
 }
 
 pub fn transformed_image_with_cursor(id string, path string, frame Rect, rotation f64, clickable bool, cursor string) Element {
 	return Element{
-		kind:       .image
-		id:         id
+		kind: .image
+		id: id
 		image_path: path
-		frame:      frame
-		rotation:   rotation
-		clickable:  clickable
-		cursor:     cursor
+		frame: frame
+		rotation: rotation
+		clickable: clickable
+		cursor: cursor
 	}
 }
 
 pub fn button(id string, title string, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:       .button
-		id:         id
-		text:       title
-		frame:      frame
-		box:        box_
+		kind: .button
+		id: id
+		text: title
+		frame: frame
+		box: box_
 		text_style: style
+	}
+}
+
+// checkbox creates the platform checkbox control. Its id is emitted when the
+// user toggles it; rebuild with the updated checked value to retain that state.
+pub fn checkbox(id string, title string, checked bool, frame Rect, style TextStyle) Element {
+	return Element{
+		kind: .checkbox
+		id: id
+		text: title
+		checked: checked
+		frame: frame
+		box: BoxStyle{
+			transparent: true
+		}
+		text_style: style
+		accessibility_role: 'checkbox'
+		accessibility_label: title
+		accessibility_value: if checked { 'checked' } else { 'unchecked' }
 	}
 }
 
 pub fn button_with_image(id string, title string, image_name string, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:       .button
-		id:         id
-		text:       title
+		kind: .button
+		id: id
+		text: title
 		image_path: image_name
-		frame:      frame
-		box:        box_
+		frame: frame
+		box: box_
 		text_style: style
 	}
 }
@@ -327,13 +441,30 @@ pub fn with_tooltip(el Element, tooltip string) Element {
 	}
 }
 
+// with_action separates an emitted event name from the element's lookup id.
+pub fn with_action(el Element, action_id string) Element {
+	return Element{
+		...el
+		action_id: action_id
+	}
+}
+
+// with_secure_entry makes a text field use the platform's native password
+// control while retaining the field's change and submit bindings.
+pub fn with_secure_entry(el Element) Element {
+	return Element{
+		...el
+		secure: true
+	}
+}
+
 pub fn button_with_long_press(id string, title string, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:       .button
-		id:         id
-		text:       title
-		frame:      frame
-		box:        box_
+		kind: .button
+		id: id
+		text: title
+		frame: frame
+		box: box_
 		text_style: style
 		long_press: true
 	}
@@ -343,31 +474,31 @@ pub fn dropdown(id string, selected string, options []string, frame Rect, box_ B
 	mut entries := []MenuEntry{}
 	for option in options {
 		entries << MenuEntry{
-			id:    option
+			id: option
 			title: option
 		}
 	}
 	return Element{
-		kind:       .dropdown
-		id:         id
-		text:       selected
-		frame:      frame
-		box:        box_
+		kind: .dropdown
+		id: id
+		text: selected
+		frame: frame
+		box: box_
 		text_style: style
-		menu:       entries
+		menu: entries
 	}
 }
 
 pub fn text_field(id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int) Element {
 	return Element{
-		kind:        .text_field
-		id:          id
-		text:        text
+		kind: .text_field
+		id: id
+		text: text
 		placeholder: placeholder
-		frame:       frame
-		box:         box_
-		text_style:  style
-		keyboard:    keyboard
+		frame: frame
+		box: box_
+		text_style: style
+		keyboard: keyboard
 	}
 }
 
@@ -375,84 +506,83 @@ pub fn text_field(id string, placeholder string, text string, frame Rect, box_ B
 // wrapping, scrolling, selection, clipboard and undo.
 pub fn text_area(id string, text string, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:       .text_area
-		id:         id
-		text:       text
-		frame:      frame
-		box:        box_
+		kind: .text_area
+		id: id
+		text: text
+		frame: frame
+		box: box_
 		text_style: style
 	}
 }
 
 pub fn text_area_without_scroll(id string, text string, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:           .text_area
-		id:             id
-		text:           text
-		frame:          frame
-		box:            box_
-		text_style:     style
+		kind: .text_area
+		id: id
+		text: text
+		frame: frame
+		box: box_
+		text_style: style
 		disable_scroll: true
 	}
 }
 
 pub fn rich_text_area(id string, text string, runs []TextRun, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:       .text_area
-		id:         id
-		text:       text
-		frame:      frame
-		box:        box_
+		kind: .text_area
+		id: id
+		text: text
+		frame: frame
+		box: box_
 		text_style: style
-		text_runs:  runs
+		text_runs: runs
 	}
 }
 
 pub fn rich_text_area_without_scroll(id string, text string, runs []TextRun, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:           .text_area
-		id:             id
-		text:           text
-		frame:          frame
-		box:            box_
-		text_style:     style
-		text_runs:      runs
+		kind: .text_area
+		id: id
+		text: text
+		frame: frame
+		box: box_
+		text_style: style
+		text_runs: runs
 		disable_scroll: true
 	}
 }
 
 pub fn text_field_with_change(id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int) Element {
-	return text_field_with_change_and_submit(id, '', placeholder, text, frame, box_, style,
-		keyboard)
+	return text_field_with_change_and_submit(id, '', placeholder, text, frame, box_, style, keyboard)
 }
 
 // text_field_with_submit emits submit_id when Return/Enter is pressed without
 // also emitting a live change event for every edit.
 pub fn text_field_with_submit(id string, submit_id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int) Element {
 	return Element{
-		kind:        .text_field
-		id:          id
-		submit_id:   submit_id
-		text:        text
+		kind: .text_field
+		id: id
+		submit_id: submit_id
+		text: text
 		placeholder: placeholder
-		frame:       frame
-		box:         box_
-		text_style:  style
-		keyboard:    keyboard
+		frame: frame
+		box: box_
+		text_style: style
+		keyboard: keyboard
 	}
 }
 
 pub fn text_field_with_change_and_submit(id string, submit_id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int) Element {
 	return Element{
-		kind:        .text_field
-		id:          id
-		submit_id:   submit_id
-		text:        text
+		kind: .text_field
+		id: id
+		submit_id: submit_id
+		text: text
 		placeholder: placeholder
-		frame:       frame
-		box:         box_
-		text_style:  style
-		keyboard:    keyboard
+		frame: frame
+		box: box_
+		text_style: style
+		keyboard: keyboard
 		emit_change: true
 	}
 }

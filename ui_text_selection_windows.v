@@ -1,10 +1,10 @@
 module ui2
 
 pub fn text_area_set_selection(id string, location int, length int) {
-	record_portable_text_area_selection(id, TextAreaSelectionRange{
-		location: if location < 0 { 0 } else { location }
-		length:   if length < 0 { 0 } else { length }
-	})
+	selection := clamped_text_area_selection(text(id), location, length)
+	record_portable_text_area_selection(id, selection)
+	hwnd := windows_text_area_handle(id) or { return }
+	windows_native_set_selection(hwnd, selection)
 }
 
 pub fn text_area_set_caret(id string, pos int) {
@@ -12,9 +12,15 @@ pub fn text_area_set_caret(id string, pos int) {
 }
 
 pub fn text_area_caret(id string) int {
-	return portable_text_area_selection(id).location
+	hwnd := windows_text_area_handle(id) or { return portable_text_area_selection(id).location }
+	selection := windows_native_get_selection(hwnd)
+	record_portable_text_area_selection(id, selection)
+	return selection.location
 }
 
 pub fn text_area_selection_length(id string) int {
-	return portable_text_area_selection(id).length
+	hwnd := windows_text_area_handle(id) or { return portable_text_area_selection(id).length }
+	selection := windows_native_get_selection(hwnd)
+	record_portable_text_area_selection(id, selection)
+	return selection.length
 }

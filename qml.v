@@ -61,6 +61,8 @@ pub fn parse_hex_color(s string) u32 {
 			val |= u32(c - `a` + 10)
 		} else if c >= `A` && c <= `F` {
 			val |= u32(c - `A` + 10)
+		} else {
+			return 0xFFFFFF
 		}
 	}
 	return val
@@ -275,7 +277,9 @@ pub fn parse_qml(source string) !&QNode {
 	mut p := Parser{
 		tokens: tokens
 	}
-	return p.parse_node()!
+	node := p.parse_node()!
+	p.eat(.eof)!
+	return node
 }
 
 pub fn element_from_qml(source string, frame Rect) !Element {
@@ -288,18 +292,25 @@ pub fn element_from_qnode(node &QNode, frame Rect) !Element {
 }
 
 fn node_to_element(node &QNode, frame Rect) !Element {
-	el := node_to_element_base(node, frame)!
+	resolved := q_frame(node, frame)
+	el := node_to_element_base(node, resolved)!
 	key := node.prop('key')
 	menu := q_menu(node)
 	secure := node.prop_bool('secure')
-	if key == '' && menu.len == 0 && !secure {
-		return el
-	}
 	return Element{
 		...el
-		key:    key
-		menu:   menu
+		action_id: if el.action_id.len > 0 { el.action_id } else { node.prop('on_tap') }
+		key: key
+		menu: if menu.len > 0 { menu } else { el.menu }
 		secure: secure
+		tooltip: node.prop('tooltip')
+		hidden: node.prop_bool('hidden')
+		enabled: node.prop('enabled') != 'false'
+		accessibility_role: node.prop('accessibility_role')
+		accessibility_label: node.prop('accessibility_label')
+		accessibility_value: node.prop('accessibility_value')
+		autocorrect: node.prop('autocorrect') != 'false'
+		padding_left: node.prop_or('pad_left', '12').f64()
 	}
 }
 
@@ -309,7 +320,7 @@ fn q_menu(node &QNode) []MenuEntry {
 	for child in node.children {
 		if child.tag == 'MenuItem' {
 			out << MenuEntry{
-				id:    child.prop_or('on_tap', child.id)
+				id: child.prop_or('on_tap', child.id)
 				title: child.prop('text')
 			}
 		}
@@ -318,9 +329,10 @@ fn q_menu(node &QNode) []MenuEntry {
 }
 
 fn node_to_element_base(node &QNode, frame Rect) !Element {
+	local := rect(0, 0, frame.width, frame.height)
 	match node.tag {
 		'Screen' {
-			return screen(q_color(node, 'background', 0xffffff), q_children(node, frame)!)
+			return screen(q_color(node, 'background', 0xffffff), q_children(node, local)!)
 		}
 		'Column' {
 			return q_column(node, frame)!
@@ -329,51 +341,75 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 			return q_row(node, frame)!
 		}
 		'Scroll' {
-			return scroll(node.id, q_frame(node, frame), q_color(node, 'background', 0xffffff), q_children(node,
-				frame)!)
+			children := q_children(node, local)!
+			if node.prop_bool('persistent') {
+				return scroll_persistent(node.id, frame, q_color(node, 'background', 0xffffff), children)
+			}
+			return scroll(node.id, frame, q_color(node, 'background', 0xffffff), children)
 		}
 		'View', 'Rectangle' {
-			return view(node.id, q_frame(node, frame), q_box(node), q_children(node, frame)!)
+			return view(node.id, frame, q_box(node), q_children(node, local)!)
 		}
 		'Label' {
-			return label(node.id, node.prop('text'), q_frame(node, frame), q_text_style(node))
+			return label(node.id, node.prop('text'), frame, q_text_style(node))
 		}
 		'Image' {
-			return image(node.id, node.prop_or('source', node.prop('path')), q_frame(node, frame))
+			return image(node.id, node.prop_or('source', node.prop('path')), frame)
 		}
 		'Button' {
-			id := node.prop_or('on_tap', node.id)
-			return button(id, node.prop('text'), q_frame(node, frame), q_box(node),
-				q_text_style(node))
+			return Element{
+				...button(node.id, node.prop('text'), frame, q_box(node), q_text_style(node))
+				action_id: node.prop('on_tap')
+			}
+		}
+		'Checkbox' {
+			return Element{
+				...checkbox(node.id, node.prop('text'), node.prop_bool('checked'), frame, q_text_style(node))
+				action_id: node.prop('on_tap')
+			}
+		}
+		'Dropdown' {
+			action_id := if node.prop('on_change').len > 0 {
+				node.prop('on_change')
+			} else {
+				node.prop('on_tap')
+			}
+			return Element{
+				...dropdown(node.id, node.prop('text'), q_options(node), frame, q_box(node), q_text_style(node))
+				action_id: action_id
+			}
 		}
 		'TextArea' {
 			return Element{
-				kind:       .text_area
-				id:         node.id
-				text:       node.prop('text')
-				frame:      q_frame(node, frame)
-				box:        q_box(node)
+				kind: .text_area
+				id: node.id
+				action_id: node.prop('on_change')
+				text: node.prop('text')
+				frame: frame
+				box: q_box(node)
 				text_style: q_text_style(node)
-				readonly:   node.prop('editable') == 'false'
+				readonly: node.prop('editable') == 'false'
+				emit_change: node.prop('on_change').len > 0
 			}
 		}
 		'TextField' {
-			id := node.prop_or('on_change', node.id)
+			id := node.id
+			change_id := node.prop('on_change')
 			submit_id := node.prop('on_submit')
-			frame_ := q_frame(node, frame)
+			keyboard := q_keyboard(node.prop('keyboard'))
 			if node.prop_bool('emit_change') || node.prop('on_change').len > 0 {
-				return text_field_with_change_and_submit(id, submit_id, node.prop('placeholder'),
-					node.prop('text'), frame_, q_box(node), q_text_style(node), keyboard_default)
+				return Element{
+					...text_field_with_change_and_submit(id, submit_id, node.prop('placeholder'), node.prop('text'), frame, q_box(node), q_text_style(node), keyboard)
+					action_id: change_id
+				}
 			}
 			if submit_id.len > 0 {
-				return text_field_with_submit(id, submit_id, node.prop('placeholder'), node.prop('text'),
-					frame_, q_box(node), q_text_style(node), keyboard_default)
+				return text_field_with_submit(id, submit_id, node.prop('placeholder'), node.prop('text'), frame, q_box(node), q_text_style(node), keyboard)
 			}
-			return text_field(id, node.prop('placeholder'), node.prop('text'), frame_, q_box(node),
-				q_text_style(node), keyboard_default)
+			return text_field(id, node.prop('placeholder'), node.prop('text'), frame, q_box(node), q_text_style(node), keyboard)
 		}
 		else {
-			return view(node.id, q_frame(node, frame), q_box(node), q_children(node, frame)!)
+			return view(node.id, frame, q_box(node), q_children(node, local)!)
 		}
 	}
 }
@@ -381,12 +417,29 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 fn q_children(node &QNode, frame Rect) ![]Element {
 	mut out := []Element{}
 	for child in node.children {
-		if child.tag == 'MenuItem' {
+		if child.tag == 'MenuItem' || child.tag == 'Option' {
 			continue // context menu entries, not child views
 		}
-		out << node_to_element(child, q_frame(child, frame))!
+		out << node_to_element(child, frame)!
 	}
 	return out
+}
+
+fn q_options(node &QNode) []string {
+	mut options := []string{}
+	for child in node.children {
+		if child.tag == 'Option' {
+			options << child.prop('text')
+		}
+	}
+	return options
+}
+
+fn q_keyboard(raw string) int {
+	return match raw {
+		'decimal', 'numeric', 'number' { keyboard_decimal }
+		else { keyboard_default }
+	}
 }
 
 fn q_column(node &QNode, frame Rect) !Element {
@@ -396,7 +449,7 @@ fn q_column(node &QNode, frame Rect) !Element {
 	mut y := padding
 	mut children := []Element{}
 	for child in node.children {
-		if child.tag == 'MenuItem' {
+		if child.tag == 'MenuItem' || child.tag == 'Option' {
 			continue
 		}
 		child_h := q_dimension(child, 'height', 32)
@@ -415,7 +468,7 @@ fn q_row(node &QNode, frame Rect) !Element {
 	mut x := padding
 	mut children := []Element{}
 	for child in node.children {
-		if child.tag == 'MenuItem' {
+		if child.tag == 'MenuItem' || child.tag == 'Option' {
 			continue
 		}
 		child_w := q_dimension(child, 'width', 80)
@@ -428,10 +481,7 @@ fn q_row(node &QNode, frame Rect) !Element {
 }
 
 fn q_frame(node &QNode, fallback Rect) Rect {
-	return rect(node.prop_or('x', fallback.x.str()).f64(),
-		node.prop_or('y', fallback.y.str()).f64(),
-		node.prop_or('width', fallback.width.str()).f64(), node.prop_or('height',
-		fallback.height.str()).f64())
+	return rect(node.prop_or('x', fallback.x.str()).f64(), node.prop_or('y', fallback.y.str()).f64(), node.prop_or('width', fallback.width.str()).f64(), node.prop_or('height', fallback.height.str()).f64())
 }
 
 fn q_dimension(node &QNode, key string, fallback f64) f64 {
@@ -444,7 +494,7 @@ fn q_dimension(node &QNode, key string, fallback f64) f64 {
 
 fn q_box(node &QNode) BoxStyle {
 	return BoxStyle{
-		bg:     q_color(node, 'background', 0xffffff)
+		bg: q_color(node, 'background', 0xffffff)
 		radius: node.prop_or('corner_radius', node.prop_or('radius', '0')).f64()
 	}
 }
@@ -452,8 +502,8 @@ fn q_box(node &QNode) BoxStyle {
 fn q_text_style(node &QNode) TextStyle {
 	return TextStyle{
 		color: q_color(node, 'color', 0x111111)
-		size:  node.prop_or('font_size', node.prop_or('size', '15')).f64()
-		bold:  node.prop_bool('bold')
+		size: node.prop_or('font_size', node.prop_or('size', '15')).f64()
+		bold: node.prop_bool('bold')
 		align: q_align(node.prop('align'))
 		lines: node.prop_or('lines', '1').int()
 	}
