@@ -47,4 +47,33 @@ $if !ui2_custom_rendering ? {
 		]
 		assert windows_content_height(children) == 115
 	}
+
+	fn test_windows_native_controls_keep_compact_text_layout() {
+		assert C.ui2_win_register_classes() != 0
+		title := 'layout test'.to_wide()
+		root := C.ui2_win_create_main_window(title, 320, 200)
+		unsafe {
+			free(title)
+		}
+		assert root != unsafe { nil }
+		defer {
+			C.ui2_win_destroy(root)
+		}
+
+		empty := ''.to_wide()
+		field := C.ui2_win_create_widget(windows_widget_kind(.text_field), root, 0, 0, 200, 32, empty, 0, 0, 0, 0)
+		placeholder := 'First name'.to_wide()
+		C.ui2_win_set_edit_options(field, placeholder, 0, 12)
+		assert C.ui2_win_placeholder_matches(field, placeholder) != 0
+
+		label := C.ui2_win_create_widget(windows_widget_kind(.label), root, 0, 40, 200, 32, empty, 0, 0, 0, 0)
+		checkbox := C.ui2_win_create_widget(windows_widget_kind(.checkbox), root, 0, 80, 210, 30, empty, 0, 0, 0, 0)
+		assert C.ui2_win_widget_style(label) & usize(0x0200) != 0
+		assert C.ui2_win_widget_style(checkbox) & usize(0x2000) == 0
+
+		unsafe {
+			free(empty)
+			free(placeholder)
+		}
+	}
 }

@@ -49,6 +49,54 @@ extern int ui2_windows_context_menu(void *hwnd, int screen_x, int screen_y);
 extern int ui2_windows_cursor(void *hwnd);
 extern void ui2_windows_control_pointer(void *hwnd, unsigned int message, int x, int y);
 
+static const wchar_t *ui2_win_placeholder_property(void) {
+	return L"ui2.placeholder";
+}
+
+static inline void ui2_win_store_placeholder(HWND hwnd, const wchar_t *placeholder) {
+	wchar_t *previous = (wchar_t *)GetPropW(hwnd, ui2_win_placeholder_property());
+	const wchar_t *value = placeholder == NULL ? L"" : placeholder;
+	if (previous != NULL && wcscmp(previous, value) == 0) return;
+	if (previous != NULL) {
+		RemovePropW(hwnd, ui2_win_placeholder_property());
+		HeapFree(GetProcessHeap(), 0, previous);
+	}
+	if (value[0] == 0) return;
+	size_t bytes = (wcslen(value) + 1) * sizeof(wchar_t);
+	wchar_t *copy = (wchar_t *)HeapAlloc(GetProcessHeap(), 0, bytes);
+	if (copy == NULL) return;
+	CopyMemory(copy, value, bytes);
+	if (!SetPropW(hwnd, ui2_win_placeholder_property(), (HANDLE)copy)) {
+		HeapFree(GetProcessHeap(), 0, copy);
+	}
+}
+
+static inline void ui2_win_draw_placeholder(HWND hwnd) {
+	const wchar_t *placeholder = (const wchar_t *)GetPropW(
+		hwnd, ui2_win_placeholder_property());
+	if (placeholder == NULL || placeholder[0] == 0 || GetFocus() == hwnd
+		|| GetWindowTextLengthW(hwnd) != 0) return;
+	HDC dc = GetDC(hwnd);
+	if (dc == NULL) return;
+	RECT rect;
+	SendMessageW(hwnd, EM_GETRECT, 0, (LPARAM)&rect);
+	HFONT font = (HFONT)SendMessageW(hwnd, WM_GETFONT, 0, 0);
+	HGDIOBJ previous_font = font == NULL ? NULL : SelectObject(dc, font);
+	int previous_mode = SetBkMode(dc, TRANSPARENT);
+	COLORREF previous_color = SetTextColor(dc, GetSysColor(COLOR_GRAYTEXT));
+	DrawTextW(dc, placeholder, -1, &rect,
+		DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+	SetTextColor(dc, previous_color);
+	SetBkMode(dc, previous_mode);
+	if (previous_font != NULL) SelectObject(dc, previous_font);
+	ReleaseDC(hwnd, dc);
+}
+
+static inline void ui2_win_release_placeholder(HWND hwnd) {
+	wchar_t *placeholder = (wchar_t *)RemovePropW(hwnd, ui2_win_placeholder_property());
+	if (placeholder != NULL) HeapFree(GetProcessHeap(), 0, placeholder);
+}
+
 static inline int ui2_win_apply_cursor(void *hwnd) {
 	int cursor = ui2_windows_cursor(hwnd);
 	LPCWSTR identifier = NULL;
@@ -87,6 +135,16 @@ static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM
 		ui2_windows_control_pointer(hwnd, message, GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
 		if (!IsWindow(hwnd)) return 0;
 	}
+	if (message == WM_PAINT) {
+		LRESULT result = DefSubclassProc(hwnd, message, wparam, lparam);
+		ui2_win_draw_placeholder(hwnd);
+		return result;
+	}
+	if (message == WM_SETFOCUS || message == WM_KILLFOCUS || message == WM_SETTEXT) {
+		LRESULT result = DefSubclassProc(hwnd, message, wparam, lparam);
+		InvalidateRect(hwnd, NULL, TRUE);
+		return result;
+	}
 	if (message == WM_MOUSEWHEEL) {
 		HWND parent = GetParent(hwnd);
 		wchar_t class_name[64];
@@ -102,6 +160,7 @@ static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM
 		}
 	}
 	if (message == WM_NCDESTROY) {
+		ui2_win_release_placeholder(hwnd);
 		RemoveWindowSubclass(hwnd, ui2_win_control_subclass, 1);
 	}
 	return DefSubclassProc(hwnd, message, wparam, lparam);
@@ -179,9 +238,9 @@ static inline void *ui2_win_create_main_window(const wchar_t *title, int width, 
 }
 
 static inline DWORD ui2_win_label_style(int alignment) {
-	if (alignment == 1) return SS_CENTER;
-	if (alignment == 2) return SS_RIGHT;
-	return SS_LEFT;
+	if (alignment == 1) return SS_CENTER | SS_CENTERIMAGE;
+	if (alignment == 2) return SS_RIGHT | SS_CENTERIMAGE;
+	return SS_LEFT | SS_CENTERIMAGE;
 }
 
 static inline DWORD ui2_win_edit_style(int alignment) {
@@ -219,11 +278,11 @@ static inline void *ui2_win_create_widget(int kind, void *parent_ptr, int x, int
 		break;
 	case UI2_WIN_BUTTON:
 		class_name = L"BUTTON";
-		style |= BS_PUSHBUTTON | BS_MULTILINE | BS_CENTER | WS_TABSTOP;
+		style |= BS_PUSHBUTTON | BS_CENTER | BS_VCENTER | WS_TABSTOP;
 		break;
 	case UI2_WIN_CHECKBOX:
 		class_name = L"BUTTON";
-		style |= BS_AUTOCHECKBOX | BS_MULTILINE | BS_LEFT | WS_TABSTOP;
+		style |= BS_AUTOCHECKBOX | BS_LEFT | BS_VCENTER | WS_TABSTOP;
 		break;
 	case UI2_WIN_DROPDOWN:
 		class_name = L"COMBOBOX";
@@ -443,11 +502,26 @@ static inline void ui2_win_set_edit_options(void *hwnd, const wchar_t *placehold
 	if (hwnd == NULL) return;
 	SendMessageW((HWND)hwnd, EM_SETREADONLY, readonly ? TRUE : FALSE, 0);
 #ifdef EM_SETCUEBANNER
-	SendMessageW((HWND)hwnd, EM_SETCUEBANNER, TRUE,
-		(LPARAM)(placeholder == NULL ? L"" : placeholder));
+	// Draw cue text in the control subclass. This remains reliable under Wine,
+	// where EM_SETCUEBANNER may report support without painting anything.
+	SendMessageW((HWND)hwnd, EM_SETCUEBANNER, TRUE, (LPARAM)L"");
 #endif
+	ui2_win_store_placeholder((HWND)hwnd, placeholder);
 	SendMessageW((HWND)hwnd, EM_SETMARGINS, EC_LEFTMARGIN,
 		MAKELPARAM(padding_left < 0 ? 0 : padding_left, 0));
+	InvalidateRect((HWND)hwnd, NULL, TRUE);
+}
+
+static inline int ui2_win_placeholder_matches(void *hwnd, const wchar_t *expected) {
+	if (hwnd == NULL) return 0;
+	const wchar_t *placeholder = (const wchar_t *)GetPropW(
+		(HWND)hwnd, ui2_win_placeholder_property());
+	const wchar_t *value = expected == NULL ? L"" : expected;
+	return placeholder != NULL && wcscmp(placeholder, value) == 0;
+}
+
+static inline uintptr_t ui2_win_widget_style(void *hwnd) {
+	return hwnd == NULL ? 0 : (uintptr_t)GetWindowLongPtrW((HWND)hwnd, GWL_STYLE);
 }
 
 static inline void ui2_win_get_selection(void *hwnd, unsigned int *start, unsigned int *end) {

@@ -37,6 +37,7 @@ Screen {
     }
 
     TextField {
+        id: last_name
         bind.text: app.last_name
         on_change: app.clear_error()
         placeholder: "Last name"
@@ -49,6 +50,7 @@ Screen {
     }
 
     TextField {
+        id: age
         bind.text: app.age
         on_change: app.clear_error()
         placeholder: "Age"
@@ -62,6 +64,7 @@ Screen {
     }
 
     TextField {
+        id: password
         bind.text: app.password
         placeholder: "Password"
         secure: true
@@ -74,23 +77,25 @@ Screen {
     }
 
     Checkbox {
+        id: online_registration
         text: "Online registration"
         bind.checked: app.online_registration
         x: 16
         y: 201
         width: root.form_width
         height: 30
-        font_size: 13
+        font_size: 12
     }
 
     Checkbox {
+        id: subscribe
         text: "Subscribe to the newsletter"
         bind.checked: app.subscribe
         x: 16
         y: 239
         width: root.form_width
         height: 30
-        font_size: 13
+        font_size: 12
     }
 
     Label {
@@ -104,12 +109,14 @@ Screen {
     }
 
     Dropdown {
+        id: country
         bind.text: app.country
         x: 16
         y: 296
         width: root.form_width
         height: 32
         background: #FFFFFF
+        font_size: 12
         corner_radius: 6
 
         Option { text: "United States" }

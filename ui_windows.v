@@ -72,6 +72,10 @@ fn C.ui2_win_set_checked(hwnd voidptr, checked int)
 
 fn C.ui2_win_set_edit_options(hwnd voidptr, placeholder &u16, readonly int, padding_left int)
 
+fn C.ui2_win_placeholder_matches(hwnd voidptr, expected &u16) int
+
+fn C.ui2_win_widget_style(hwnd voidptr) usize
+
 fn C.ui2_win_get_selection(hwnd voidptr, start &u32, end &u32)
 
 fn C.ui2_win_set_selection(hwnd voidptr, start u32, end u32, focus int)
