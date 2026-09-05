@@ -248,6 +248,16 @@ Typed-QML ports from `v-ui` include:
   from a responsive editor.
 - `v run examples/calculate/main.v` — evaluate arithmetic expressions with
   precedence, unary operators, and parentheses.
+- `v run examples/timer/main.v` — run, pause, resume, and restart a timer with
+  a draggable duration control.
+- `v run examples/slider_textbox/main.v` — keep horizontal and vertical slider
+  values synchronized with validated text fields.
+- `v run examples/transitions/main.v` — animate a movable tile between canvas
+  targets with cubic easing.
+- `v run examples/gradient_texture/main.v` — generate an interactive HSV
+  gradient from keyed color tiles.
+- `v run examples/change_title/main.v` — validate a title and update the native
+  desktop window caption.
 
 Run the calculator demo with:
 

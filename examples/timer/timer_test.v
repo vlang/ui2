@@ -1,0 +1,47 @@
+module main
+
+import ui2
+
+fn find_timer_element(element ui2.Element, id string) ?ui2.Element {
+	if element.id == id {
+		return element
+	}
+	for child in element.children {
+		if found := find_timer_element(child, id) {
+			return found
+		}
+	}
+	return none
+}
+
+fn test_timer_tracks_elapsed_pause_resume_and_completion() {
+	mut app := TimerDemo{ duration: 10 }
+	app.start_at(1_000)
+	app.sync_at(3_500)
+	assert app.running
+	assert app.elapsed == 2.5
+	assert app.progress == 0.25
+	app.pause_at(4_000)
+	assert !app.running
+	assert app.elapsed == 3
+	app.resume_at(5_000)
+	app.sync_at(12_000)
+	assert !app.running
+	assert app.elapsed == 10
+	assert app.status == 'Timer complete.'
+}
+
+fn test_timer_duration_mapping_and_qml_controls() {
+	mut app := TimerDemo{}
+	app.set_duration_fraction(0)
+	assert app.duration == 1
+	app.set_duration_fraction(1)
+	assert app.duration == 30
+	assert timer_pointer_x('pointer:drag:duration_track:160.0:200.0') or { 0 } == 160
+	root := ui2.element_from_qml_model(timer_qml_source, app, ui2.rect(0, 0, timer_width, timer_height)) or { panic(err) }
+	ui2.validate_element_tree(root) or { panic(err) }
+	track := find_timer_element(root, 'duration_track') or { panic('missing duration track') }
+	assert track.clickable
+	assert track.draggable
+	assert (find_timer_element(root, 'start') or { panic('missing start') }).native_style
+}
