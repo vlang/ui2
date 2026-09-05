@@ -33,4 +33,10 @@ $if ui2_custom_rendering ? {
 		assert !save_clipboard_image_png('unused.png')
 		quit()
 	}
+
+	fn test_custom_pointer_event_ids_are_normalized() {
+		assert pointer_event_id('down', 'surface', 20, 30) == 'pointer:down:surface:20.0:30.0'
+		assert pointer_event_id('drag', 'surface', 40, 50) == 'pointer:drag:surface:40.0:50.0'
+		assert pointer_event_id('up', 'surface', 40, 50) == 'pointer:up:surface:40.0:50.0'
+	}
 }

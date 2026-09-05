@@ -238,6 +238,16 @@ Typed-QML ports from `v-ui` include:
   events in a live event log.
 - `v run examples/demo_chunkview/main.v` — compose nested styled text chunks
   and toggle their visibility and alignment.
+- `v run examples/cells/main.v` — edit a compact spreadsheet and recalculate
+  dependent `sum` formulas.
+- `v run examples/circle_drawer/main.v` — add and resize circles with
+  selection-aware undo and redo.
+- `v run examples/gg2048/main.v` — play a deterministic, responsive version
+  of the 2048 tile game.
+- `v run examples/editor/main.v` — browse, create, edit, and save text files
+  from a responsive editor.
+- `v run examples/calculate/main.v` — evaluate arithmetic expressions with
+  precedence, unary operators, and parentheses.
 
 Run the calculator demo with:
 

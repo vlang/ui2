@@ -24,6 +24,8 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 		dropdown    bool
 		options     []string
 		emit_change bool
+		clickable   bool
+		draggable   bool
 	}
 
 	struct TouchState {
@@ -365,6 +367,10 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 
 	// ── Touch handling ─────────────────────────────────────────────────
 
+	fn pointer_event_id(phase string, action_id string, x f64, y f64) string {
+		return 'pointer:${phase}:${action_id}:${x}:${y}'
+	}
+
 	fn handle_touch_down(x f64, y f64) {
 		g_touch = TouchState{
 			down: true
@@ -382,6 +388,10 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				g_touch.scroll_start_off_y = g_scroll_offsets[id] or { 0.0 }
 				break
 			}
+		}
+		target := hit_test(x, y)
+		if target.action_id.len > 0 && (target.clickable || target.draggable) {
+			fire_event(pointer_event_id('down', target.action_id, x, y))
 		}
 	}
 
@@ -403,6 +413,10 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 			scroll_area := g_scroll_areas[g_touch.scroll_id] or { Rect{} }
 			max_scroll := content_h - scroll_area.height + 16
 			set_scroll_offset(g_touch.scroll_id, new_offset, max_scroll)
+		}
+		target := hit_test(g_touch.start_x, g_touch.start_y)
+		if target.action_id.len > 0 && target.draggable {
+			fire_event(pointer_event_id('drag', target.action_id, x, y))
 		}
 	}
 
@@ -448,18 +462,22 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 		if g_touch.long_press_fired {
 			return
 		}
+		mut target := hit_test(g_touch.start_x, g_touch.start_y)
 		dx := x - g_touch.start_x
 		if g_touch.moved && dx < -72 {
-			target := hit_test(g_touch.start_x, g_touch.start_y)
 			if target.action_id.len > 0 && target.swipe_left {
 				fire_event('swipe_left:' + target.action_id)
 				return
 			}
 		}
+		if target.action_id.len > 0 && (target.clickable || target.draggable) {
+			fire_event(pointer_event_id('up', target.action_id, x, y))
+			return
+		}
 		if g_touch.moved {
 			return
 		}
-		target := hit_test(x, y)
+		target = hit_test(x, y)
 		if target.id.len == 0 && target.action_id.len == 0 {
 			if g_focused_field.len > 0 {
 				g_focused_field = ''
@@ -780,6 +798,8 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 						h: el.frame.height
 						long_press: el.long_press
 						swipe_left: el.swipe_left
+						clickable: el.clickable
+						draggable: el.draggable
 					}, clip)
 				}
 				for child in el.children {
@@ -847,6 +867,8 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 						y: y
 						w: el.frame.width
 						h: el.frame.height
+						clickable: el.clickable
+						draggable: el.draggable
 					}, clip)
 				}
 			}
