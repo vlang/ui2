@@ -1,10 +1,6 @@
 module ui2
 
-import encoding.base64
 import internal.macos
-import ios
-
-#insert "@DIR/native_bridge.h"
 
 fn C.vui_app_did_finish_launching(self voidptr, cmd voidptr, application voidptr, launch_options voidptr) bool
 
@@ -24,13 +20,9 @@ fn C.vui_swipe_should_begin(self voidptr, cmd voidptr, sender voidptr) bool
 
 fn C.vui_swipe_should_recognize_simultaneously(self voidptr, cmd voidptr, sender voidptr, other voidptr) bool
 
-fn C.vui_present_barcode_scanner(root voidptr)
+fn C.vui_dropdown_selected(self voidptr, cmd voidptr, sender voidptr)
 
-fn C.vui_apply_common_view_state(view voidptr, hidden bool, enabled bool, role &char, label &char, value &char)
-
-fn C.vui_configure_dropdown(button voidptr, encoded &char)
-
-fn C.vui_set_view_rotation(view voidptr, degrees f64)
+fn C.vui_scanner_present(self voidptr, cmd voidptr, root voidptr)
 
 const swipe_delete_threshold = f64(72)
 const swipe_max_translation = f64(140)
@@ -55,6 +47,8 @@ type ObjcPointMsg1 = fn (voidptr, voidptr, voidptr) ObjcPoint
 type ObjcPointMsg0 = fn (voidptr, voidptr) ObjcPoint
 
 type ObjcVoidPointBoolMsg = fn (voidptr, voidptr, ObjcPoint, bool)
+
+type ObjcVoidBoolIdMsg = fn (voidptr, voidptr, bool, voidptr)
 
 __global g_build_screen = BuildFn(unsafe { nil })
 __global g_event_handler = EventFn(unsafe { nil })
@@ -98,7 +92,7 @@ pub fn run(build_screen BuildFn, event_handler EventFn) {
 	defer {
 		macos.release(pool)
 	}
-	code := ios.application_main(g_main_argc, &&char(g_main_argv), 'VuiAppDelegate')
+	code := native_application_main('VuiAppDelegate')
 	if code != 0 {
 		exit(code)
 	}
@@ -167,7 +161,7 @@ pub fn start_barcode_scan() {
 	if g_root_vc == unsafe { nil } {
 		return
 	}
-	C.vui_present_barcode_scanner(g_root_vc)
+	native_present_barcode_scanner(g_root_vc)
 }
 
 // ── Native bridge helpers ──────────────────────────────────────────
@@ -184,7 +178,7 @@ fn font(size f64, bold bool) macos.Id {
 }
 
 fn set_background(view View, hex u32) {
-	macos.msg_void1(view, 'setBackgroundColor:', ios.color(hex))
+	macos.msg_void1(view, 'setBackgroundColor:', native_color(hex))
 }
 
 fn set_corner_radius(view View, radius f64) {
@@ -329,7 +323,7 @@ fn new_label_view(frame Rect, t string, text_hex u32, size f64, bold bool, align
 fn update_label_view(lbl View, frame Rect, t string, text_hex u32, size f64, bold bool, align int, lines int) {
 	macos.msg_void_rect(lbl, 'setFrame:', native_rect(frame))
 	macos.msg_void1(lbl, 'setText:', macos.nsstring(t))
-	macos.msg_void1(lbl, 'setTextColor:', ios.color(text_hex))
+	macos.msg_void1(lbl, 'setTextColor:', native_color(text_hex))
 	macos.msg_void1(lbl, 'setFont:', font(size, bold))
 	macos.msg_void_i64(lbl, 'setTextAlignment:', i64(align))
 	macos.msg_void_i64(lbl, 'setNumberOfLines:', i64(lines))
@@ -343,10 +337,10 @@ fn new_image_view(frame Rect, path string, rotation f64) View {
 }
 
 fn update_image_view(image_view View, frame Rect, path string, rotation f64) {
-	C.vui_set_view_rotation(image_view, 0)
+	native_set_view_rotation(image_view, 0)
 	macos.msg_void_rect(image_view, 'setFrame:', native_rect(frame))
 	macos.msg_void_i64(image_view, 'setContentMode:', 1)
-	C.vui_set_view_rotation(image_view, rotation)
+	native_set_view_rotation(image_view, rotation)
 	image := if path.trim_space().len == 0 {
 		View(unsafe { nil })
 	} else {
@@ -364,7 +358,7 @@ fn new_text_area_view(el Element) View {
 fn update_text_area_view(view View, el Element, declared_text_changed bool) {
 	macos.msg_void_rect(view, 'setFrame:', native_rect(el.frame))
 	set_background(view, el.box.bg)
-	macos.msg_void1(view, 'setTextColor:', ios.color(el.text_style.color))
+	macos.msg_void1(view, 'setTextColor:', native_color(el.text_style.color))
 	macos.msg_void1(view, 'setFont:', font(el.text_style.size, el.text_style.bold))
 	macos.msg_void_bool(view, 'setEditable:', !el.readonly && el.enabled)
 	macos.msg_void_bool(view, 'setSelectable:', true)
@@ -373,14 +367,6 @@ fn update_text_area_view(view View, el Element, declared_text_changed bool) {
 		macos.msg_void1(view, 'setText:', macos.nsstring(el.text))
 	}
 	set_corner_radius(view, el.box.radius)
-}
-
-fn dropdown_options_payload(entries []MenuEntry) string {
-	mut lines := []string{cap: entries.len}
-	for entry in entries {
-		lines << base64.encode_str(entry.title)
-	}
-	return lines.join('\n')
 }
 
 fn new_dropdown_view(el Element) View {
@@ -396,8 +382,7 @@ fn update_dropdown_view(view View, el Element, declared_text_changed bool) {
 	}
 	set_background(view, el.box.bg)
 	set_corner_radius(view, el.box.radius)
-	payload := dropdown_options_payload(el.menu)
-	C.vui_configure_dropdown(view, &char(payload.str))
+	native_configure_dropdown(view, el.menu)
 }
 
 fn new_button_view(frame Rect, title string, bg_hex u32, text_hex u32, size f64, bold bool, radius f64, lines int) View {
@@ -412,7 +397,7 @@ fn new_button_view(frame Rect, title string, bg_hex u32, text_hex u32, size f64,
 fn update_button_view(btn View, frame Rect, title string, bg_hex u32, text_hex u32, size f64, bold bool, radius f64, lines int) {
 	macos.msg_void_rect(btn, 'setFrame:', native_rect(frame))
 	macos.msg_void2(btn, 'setTitle:forState:', macos.nsstring(title), macos.Id(usize(0)))
-	macos.msg_void2(btn, 'setTitleColor:forState:', ios.color(text_hex), macos.Id(usize(0)))
+	macos.msg_void2(btn, 'setTitleColor:forState:', native_color(text_hex), macos.Id(usize(0)))
 	set_background(btn, bg_hex)
 	title_label := macos.msg_id(btn, 'titleLabel')
 	macos.msg_void1(title_label, 'setFont:', font(size, bold))
@@ -448,7 +433,7 @@ fn new_text_field_view(frame Rect, placeholder string, t string, bg_hex u32, tex
 fn update_text_field_view(field View, frame Rect, placeholder string, t string, bg_hex u32, text_hex u32, size f64, radius f64, keyboard int, secure bool, autocorrect bool, declared_text_changed bool, padding_left f64) {
 	macos.msg_void_rect(field, 'setFrame:', native_rect(frame))
 	set_background(field, bg_hex)
-	macos.msg_void1(field, 'setTextColor:', ios.color(text_hex))
+	macos.msg_void1(field, 'setTextColor:', native_color(text_hex))
 	macos.msg_void1(field, 'setFont:', font(size, false))
 	macos.msg_void1(field, 'setPlaceholder:', macos.nsstring(placeholder))
 	if declared_text_changed && macos.utf8_string(macos.msg_id(field, 'text')) != t {
@@ -479,6 +464,9 @@ fn ensure_runtime_classes() {
 		cls := macos.allocate_class_pair(macos.get_class('UIResponder'), 'VuiAppDelegate')
 		macos.add_protocol(cls, macos.get_protocol('UIApplicationDelegate'))
 		macos.add_method(cls, 'application:didFinishLaunchingWithOptions:', voidptr(C.vui_app_did_finish_launching), 'B@:@@')
+		// A dropdown's UICommand sends its selector up the responder chain,
+		// which ends at the application delegate.
+		macos.add_method(cls, 'vuiDropdownSelected:', voidptr(C.vui_dropdown_selected), 'v@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('VuiButtonHandler') == unsafe { nil } {
@@ -487,6 +475,7 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'handleTextChange:', voidptr(C.vui_text_field_changed), 'v@:@')
 		macos.add_method(cls, 'handleTextSubmit:', voidptr(C.vui_text_field_submitted), 'v@:@')
 		macos.add_method(cls, 'textViewDidChange:', voidptr(C.vui_text_view_changed), 'v@:@')
+		macos.add_method(cls, 'vuiPresentScanner:', voidptr(C.vui_scanner_present), 'v@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('VuiLongPressHandler') == unsafe { nil } {
@@ -801,7 +790,7 @@ fn render_element(parent View, el Element, key string, mut active map[string]boo
 	}
 
 	register_native_handlers(native, el)
-	C.vui_apply_common_view_state(native, el.hidden, el.enabled, &char(el.accessibility_role.str), &char(el.accessibility_label.str), &char(el.accessibility_value.str))
+	native_apply_common_view_state(native, el.hidden, el.enabled, el.accessibility_role, el.accessibility_label, el.accessibility_value)
 	if el.id.len > 0 {
 		remember(el.id, native)
 		g_view_kinds[el.id] = el.kind
@@ -910,18 +899,6 @@ fn vui_text_view_changed(_self voidptr, _cmd voidptr, sender voidptr) {
 	g_event_handler(id)
 }
 
-@[export: 'vui_dropdown_selected']
-fn vui_dropdown_selected(sender voidptr, value &char) {
-	if voidptr(g_event_handler) == unsafe { nil } {
-		return
-	}
-	id := g_action_ids[u64(sender)] or { return }
-	selected := cstring_to_v(value)
-	if selected.len > 0 {
-		g_event_handler(id)
-	}
-}
-
 @[export: 'vui_button_long_press']
 fn vui_button_long_press(_self voidptr, _cmd voidptr, sender voidptr) {
 	if voidptr(g_event_handler) == unsafe { nil } {
@@ -990,37 +967,4 @@ fn vui_swipe_should_begin(_self voidptr, _cmd voidptr, sender voidptr) bool {
 @[export: 'vui_swipe_should_recognize_simultaneously']
 fn vui_swipe_should_recognize_simultaneously(_self voidptr, _cmd voidptr, _sender voidptr, _other voidptr) bool {
 	return true
-}
-
-// ── Barcode scanner callbacks ──────────────────────────────────────
-
-fn cstring_to_v(value &char) string {
-	if value == unsafe { nil } {
-		return ''
-	}
-	return unsafe { value.vstring().clone() }
-}
-
-@[export: 'vui_barcode_scanned']
-fn vui_barcode_scanned(code &char) {
-	if voidptr(g_event_handler) == unsafe { nil } {
-		return
-	}
-	g_event_handler('scan_code:' + cstring_to_v(code))
-}
-
-@[export: 'vui_barcode_error']
-fn vui_barcode_error(message &char) {
-	if voidptr(g_event_handler) == unsafe { nil } {
-		return
-	}
-	g_event_handler('scan_error:' + cstring_to_v(message))
-}
-
-@[export: 'vui_barcode_cancelled']
-fn vui_barcode_cancelled() {
-	if voidptr(g_event_handler) == unsafe { nil } {
-		return
-	}
-	g_event_handler('scan_cancelled')
 }
