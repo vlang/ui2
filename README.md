@@ -14,6 +14,19 @@ macOS and Windows use native widgets by default. Pass the compile-time define
 v -d ui2_custom_rendering run examples/users/main.v
 ```
 
+## Requirements
+
+`ui2` needs V 0.5.2 or newer. The module is split across `ui/`, `appkit/`,
+`uikit/`, `windows/`, and `linux/` through the `subdirs` field of `v.mod`, and
+older compilers ignore that field. Run `v up` if `import ui2` fails.
+
+To use `ui2` from a project outside this repository, link the clone into
+`~/.vmodules`:
+
+```sh
+ln -s "$(pwd)" ~/.vmodules/ui2
+```
+
 ## State and identity
 
 - `Element.id` identifies a mounted control for `text`, `set_text`, `focus`, and
