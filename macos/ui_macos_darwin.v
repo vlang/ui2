@@ -6,7 +6,7 @@ module ui2
 $if !ui2_custom_rendering ? {
 
 import encoding.base64
-import macos
+import internal.macos
 import os
 import time
 

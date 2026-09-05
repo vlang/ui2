@@ -12,7 +12,7 @@ $if !ui2_custom_rendering ? {
 
 #flag windows -lshell32
 
-#insert "@DIR/windows/native_helpers_windows.h"
+#insert "@VMODROOT/windows/native_helpers_windows.h"
 
 fn C.ui2_win_register_classes() int
 
