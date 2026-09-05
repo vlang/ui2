@@ -746,6 +746,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 				action_id: node.prop('on_tap')
 			}
 		}
+		'MessageBox' {
+			return q_message_box(node, frame)
+		}
 		'Checkbox' {
 			return Element{
 				...checkbox(node.id, node.prop('text'), node.prop_bool('checked'), frame, q_text_style(node))
@@ -796,6 +799,33 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 			return view(node.id, frame, q_box(node), q_children(node, local)!)
 		}
 	}
+}
+
+// q_message_box maps the declarative dialog onto custom_message_box. Its
+// Button children become the dialog's actions instead of free-standing views,
+// so the card owns their layout.
+fn q_message_box(node &QNode, frame Rect) Element {
+	mut actions := []MessageBoxAction{}
+	for child in node.children {
+		if child.tag != 'Button' {
+			continue
+		}
+		actions << MessageBoxAction{
+			id: child.id
+			action_id: child.prop('on_tap')
+			title: child.prop('text')
+		}
+	}
+	return custom_message_box(
+		id: node.id
+		frame: frame
+		title: node.prop('title')
+		text: node.prop('text')
+		hidden: node.prop_bool('hidden')
+		width: q_dimension(node, 'dialog_width', 300)
+		height: q_dimension(node, 'dialog_height', 150)
+		actions: actions
+	)
 }
 
 fn q_children(node &QNode, frame Rect) ![]Element {

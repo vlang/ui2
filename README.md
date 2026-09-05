@@ -106,6 +106,50 @@ through AppKit/UIKit. Standard Windows controls expose their native name and
 value; explicit Windows accessibility overrides are not yet implemented.
 `autocorrect` and `padding_left` configure applicable mobile text inputs.
 
+## Message boxes
+
+`message_box(...)` shows the operating system's own modal alert and blocks until
+the user answers it:
+
+```v
+choice := ui2.message_box(
+	title:   'Save changes?'
+	text:    'The document has unsaved edits.'
+	style:   .question
+	buttons: .yes_no_cancel
+)
+```
+
+`title` is the short heading and `text` the body. macOS renders them as an
+`NSAlert` message and informative text, Windows as a `MessageBoxW` caption and
+body, and Linux as the desktop's own `zenity` or `kdialog` dialog — `kdialog`
+first under KDE and Plasma. iOS presents a `UIAlertController` and pumps the run
+loop so the call stays synchronous like the desktop backends. `alert(title,
+text)` and `confirm(title, text)` wrap the two common cases.
+
+Android has no alert this layer can drive without a JVM callback, so
+`message_box_supported()` returns `false` there and `message_box` answers as if
+the dialog had been dismissed. Dismissal always reports the non-destructive
+result: `cancel` where the button set has one, otherwise `no`, or `ok` for a
+single-button alert.
+
+`custom_message_box(...)` is the separate, hand-drawn alternative: a dimmed
+overlay with a rounded card that stays inside the window and never blocks. Flip
+its `hidden` field from the button events instead of reading a return value. It
+is also available from QML as `MessageBox`, whose `Button` children become the
+card's actions:
+
+```qml
+MessageBox {
+    id: overlay
+    hidden: !app.visible
+    title: "Hello World"
+    text: "This message came from the ui example."
+
+    Button { id: close_message text: "OK" on_tap: app.close_message() }
+}
+```
+
 ## Layout and text offsets
 
 The QML layer provides fixed frames plus `Row` and `Column` layout. Child frames
@@ -143,8 +187,8 @@ Typed-QML ports from `v-ui` include:
 - `v run examples/grid/main.v` — the original compact three-column data grid.
 - `v run examples/label_justify/main.v` — left, center, and right label
   alignment plus single-line clipping.
-- `v run examples/message/main.v` — the original Hello World message as a
-  portable in-window dialog.
+- `v run examples/message/main.v` — compare the system alert from
+  `message_box` with the hand-drawn in-window dialog.
 - `v run examples/demo_label/main.v` — the original minimal centered-label
   demonstration.
 - `v run examples/group2/main.v` — two responsive groups with text fields,

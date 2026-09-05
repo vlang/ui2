@@ -16,24 +16,30 @@ fn find_message_element(element ui2.Element, id string) ?ui2.Element {
 
 fn test_message_demo_opens_and_closes() {
 	mut app := MessageDemo{}
-	assert app.visible
-	app.close_message()
 	assert !app.visible
 	app.show_message()
 	assert app.visible
+	app.close_message()
+	assert !app.visible
 }
 
-fn test_message_qml_contains_visible_dialog_and_native_actions() {
+fn test_message_qml_offers_native_and_drawn_dialogs() {
 	root := ui2.element_from_qml_model(message_qml_source, MessageDemo{}, ui2.rect(0, 0, message_width, message_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
-	overlay := find_message_element(root, 'overlay') or { panic('missing overlay') }
-	assert !overlay.hidden
+	assert (find_message_element(root, 'show_native_message') or { panic('missing native button') }).native_style
+	assert (find_message_element(root, 'ask_native_question') or { panic('missing question button') }).native_style
 	assert (find_message_element(root, 'show_message') or { panic('missing show button') }).native_style
-	assert (find_message_element(root, 'close_message') or { panic('missing close button') }).native_style
 
-	mut closed := MessageDemo{}
-	closed.close_message()
-	closed_root := ui2.element_from_qml_model(message_qml_source, closed, ui2.rect(0, 0, message_width, message_height)) or { panic(err) }
-	assert (find_message_element(closed_root, 'overlay') or { panic('missing closed overlay') }).hidden
+	overlay := find_message_element(root, 'overlay') or { panic('missing overlay') }
+	assert overlay.hidden
+	assert (find_message_element(root, 'overlay_title') or { panic('missing title') }).text == 'Hello World'
+	close := find_message_element(root, 'close_message') or { panic('missing close button') }
+	assert close.native_style
+	assert close.text == 'OK'
+
+	mut opened := MessageDemo{}
+	opened.show_message()
+	opened_root := ui2.element_from_qml_model(message_qml_source, opened, ui2.rect(0, 0, message_width, message_height)) or { panic(err) }
+	assert !(find_message_element(opened_root, 'overlay') or { panic('missing open overlay') }).hidden
 }

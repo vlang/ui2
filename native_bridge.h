@@ -377,4 +377,47 @@ static inline unsigned long vui_text_view_selected_length(void *view_ptr) {
 	return range.location == NSNotFound ? 0 : range.length;
 }
 
+// vui_message_box presents the system alert and blocks the caller until a
+// button is chosen. UIKit only reports the choice through a handler block, so
+// the main run loop is pumped in place rather than returned to; that keeps
+// ui2's message_box synchronous on iOS like it is on the desktop backends.
+static inline int vui_message_box(void *root_ptr, const char *title_raw,
+		const char *text_raw, const char *buttons_raw, int fallback) {
+	UIViewController *root = (UIViewController *)root_ptr;
+	if (root == nil || buttons_raw == NULL) {
+		return fallback;
+	}
+	NSString *joined = [NSString stringWithUTF8String:buttons_raw] ?: @"";
+	NSArray<NSString *> *titles = [joined componentsSeparatedByString:@"\n"];
+	if (titles.count == 0) {
+		return fallback;
+	}
+	NSString *title = title_raw == NULL ? @"" : ([NSString stringWithUTF8String:title_raw] ?: @"");
+	NSString *text = text_raw == NULL ? @"" : ([NSString stringWithUTF8String:text_raw] ?: @"");
+	__block int chosen = -1;
+	UIAlertController *alert = [UIAlertController
+		alertControllerWithTitle:title.length == 0 ? nil : title
+		message:text.length == 0 ? nil : text
+		preferredStyle:UIAlertControllerStyleAlert];
+	for (NSUInteger index = 0; index < titles.count; index++) {
+		NSString *label = titles[index];
+		NSUInteger position = index;
+		BOOL dismissal = (index + 1 == titles.count) && titles.count > 1;
+		UIAlertAction *action = [UIAlertAction
+			actionWithTitle:label
+			style:dismissal ? UIAlertActionStyleCancel : UIAlertActionStyleDefault
+			handler:^(UIAlertAction *sender) {
+				chosen = (int)position;
+			}];
+		[alert addAction:action];
+	}
+	[root presentViewController:alert animated:YES completion:nil];
+	NSRunLoop *loop = [NSRunLoop currentRunLoop];
+	while (chosen < 0) {
+		[loop runMode:NSDefaultRunLoopMode
+			beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+	}
+	return chosen;
+}
+
 #endif
