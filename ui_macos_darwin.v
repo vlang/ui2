@@ -1426,7 +1426,7 @@ fn native_install_app_menu(app_name string) {
 
 fn native_new_window(frame NativeRect, title string) NativeView {
 	style := ns_window_style_titled | ns_window_style_closable | ns_window_style_miniaturizable | ns_window_style_resizable
-	window := objc_id_rect_u64_u64_bool(macos.alloc('UI2Window'), 'initWithContentRect:styleMask:backing:defer:', appkit_rect(frame), style, ns_backing_store_buffered, false)
+	window := macos.msg_id_rect_u64_u64_bool(macos.alloc('UI2Window'), 'initWithContentRect:styleMask:backing:defer:', appkit_rect(frame), style, ns_backing_store_buffered, false)
 	macos.msg_void1(window, 'setTitle:', macos.nsstring(title))
 	macos.msg_void_bool(window, 'setReleasedWhenClosed:', false)
 	return window

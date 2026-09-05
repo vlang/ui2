@@ -29,7 +29,7 @@ fn native_font_with_format(font macos.Id, format int, enabled bool, fallback_siz
 	}
 	manager := macos.msg_id(macos.get_class('NSFontManager'), 'sharedFontManager')
 	trait := if format == 0 { u64(2) } else { u64(1) }
-	converted := objc_id_id_u64(manager, if enabled { 'convertFont:toHaveTrait:' } else { 'convertFont:toNotHaveTrait:' }, current, trait)
+	converted := macos.msg_id_id_u64(manager, if enabled { 'convertFont:toHaveTrait:' } else { 'convertFont:toNotHaveTrait:' }, current, trait)
 	return if objc_is_nil(converted) { current } else { converted }
 }
 
@@ -42,10 +42,10 @@ fn native_font_with_family(font macos.Id, family_name string, fallback_size f64)
 		return if objc_is_nil(font) { macos.msg_id_f64(macos.get_class('NSFont'), 'systemFontOfSize:', size) } else { font }
 	}
 	family := macos.nsstring(family_name)
-	mut base := objc_id_id_f64(macos.get_class('NSFont'), 'fontWithName:size:', family, size)
+	mut base := macos.msg_id_id_f64(macos.get_class('NSFont'), 'fontWithName:size:', family, size)
 	if objc_is_nil(base) {
 		manager := macos.msg_id(macos.get_class('NSFontManager'), 'sharedFontManager')
-		base = objc_id_id_u64_i64_f64(manager, 'fontWithFamily:traits:weight:size:', family, 0, 5, size)
+		base = macos.msg_id_id_u64_i64_f64(manager, 'fontWithFamily:traits:weight:size:', family, 0, 5, size)
 	}
 	if objc_is_nil(base) {
 		return if objc_is_nil(font) { macos.msg_id_f64(macos.get_class('NSFont'), 'systemFontOfSize:', size) } else { font }
@@ -54,16 +54,16 @@ fn native_font_with_family(font macos.Id, family_name string, fallback_size f64)
 		return base
 	}
 	manager := macos.msg_id(macos.get_class('NSFontManager'), 'sharedFontManager')
-	actual_traits := objc_u64_id(manager, 'traitsOfFont:', font)
+	actual_traits := macos.msg_u64_id(manager, 'traitsOfFont:', font)
 	mut converted := base
 	if actual_traits & 2 != 0 {
-		candidate := objc_id_id_u64(manager, 'convertFont:toHaveTrait:', converted, 2)
+		candidate := macos.msg_id_id_u64(manager, 'convertFont:toHaveTrait:', converted, 2)
 		if !objc_is_nil(candidate) {
 			converted = candidate
 		}
 	}
 	if actual_traits & 1 != 0 {
-		candidate := objc_id_id_u64(manager, 'convertFont:toHaveTrait:', converted, 1)
+		candidate := macos.msg_id_id_u64(manager, 'convertFont:toHaveTrait:', converted, 1)
 		if !objc_is_nil(candidate) {
 			converted = candidate
 		}
@@ -80,7 +80,7 @@ fn native_font_with_size(font macos.Id, requested_size f64) macos.Id {
 		return macos.msg_id_f64(macos.get_class('NSFont'), 'systemFontOfSize:', size)
 	}
 	manager := macos.msg_id(macos.get_class('NSFontManager'), 'sharedFontManager')
-	converted := objc_id_id_f64(manager, 'convertFont:toSize:', font, size)
+	converted := macos.msg_id_id_f64(manager, 'convertFont:toSize:', font, size)
 	return if objc_is_nil(converted) { font } else { converted }
 }
 
@@ -122,7 +122,7 @@ fn native_text_shadow() macos.Id {
 	shadow := objc_autorelease(macos.msg_id(macos.alloc('NSShadow'), 'init'))
 	black := macos.msg_id(macos.get_class('NSColor'), 'blackColor')
 	macos.msg_void1(shadow, 'setShadowColor:', macos.msg_id_f64(black, 'colorWithAlphaComponent:', 0.45))
-	objc_void_point(shadow, 'setShadowOffset:', ObjcPoint{1.25, -1.25})
+	macos.msg_void_point(shadow, 'setShadowOffset:', macos.point(1.25, -1.25))
 	macos.msg_void_f64(shadow, 'setShadowBlurRadius:', 1.0)
 	return shadow
 }
@@ -179,7 +179,7 @@ fn native_text_view_set_paragraph_style(tv macos.Id, alignment int, head_indent 
 	storage := macos.msg_id(tv, 'textStorage')
 	length := if objc_is_nil(storage) { u64(0) } else { macos.msg_u64(storage, 'length') }
 	if length > 0 {
-		objc_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_paragraph_style), style, ObjcRange{0, length})
+		macos.msg_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_paragraph_style), style, macos.range(0, length))
 	}
 	typing := objc_mutable_copy_or_dictionary(macos.msg_id(tv, 'typingAttributes'))
 	objc_dict_set(typing, objc_attr_paragraph_style, style)
@@ -199,7 +199,7 @@ fn native_text_view_add_style(tv macos.Id, location u64, length u64, color u32, 
 	}
 	safe_length := if length < storage_length - location { length } else { storage_length - location }
 	attrs := native_text_attributes(color, background_color, size, family_name, bold, italic, underline, strikethrough, vertical_align)
-	objc_void_id_range(storage, 'addAttributes:range:', attrs, ObjcRange{location, safe_length})
+	macos.msg_void_id_range(storage, 'addAttributes:range:', attrs, macos.range(location, safe_length))
 }
 
 fn native_text_view_add_link(tv macos.Id, location u64, length u64, link string) {
@@ -212,7 +212,7 @@ fn native_text_view_add_link(tv macos.Id, location u64, length u64, link string)
 		return
 	}
 	safe_length := if length < storage_length - location { length } else { storage_length - location }
-	objc_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_link), macos.nsstring(link), ObjcRange{location, safe_length})
+	macos.msg_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_link), macos.nsstring(link), macos.range(location, safe_length))
 	attrs := objc_mutable_dictionary()
 	objc_dict_set(attrs, objc_attr_foreground_color, native_color_from_hex(0x0563c1))
 	objc_dict_set(attrs, objc_attr_underline, objc_number_i64(1))
@@ -226,9 +226,9 @@ fn native_control_set_attributed_title(control macos.Id, text string, color u32,
 	}
 	attrs := native_text_attributes(color, 0, size, '', bold, italic, underline, false, '')
 	attributed := macos.msg_id2(macos.alloc('NSAttributedString'), 'initWithString:attributes:', macos.nsstring(text), attrs)
-	if objc_responds_to(control, 'setAttributedTitle:') {
+	if macos.responds_to(control, 'setAttributedTitle:') {
 		macos.msg_void1(control, 'setAttributedTitle:', attributed)
-	} else if objc_responds_to(control, 'setAttributedStringValue:') {
+	} else if macos.responds_to(control, 'setAttributedStringValue:') {
 		macos.msg_void1(control, 'setAttributedStringValue:', attributed)
 	}
 	macos.release(attributed)
@@ -241,16 +241,16 @@ fn native_text_view_object(tv macos.Id) macos.Id {
 	macos.msg_void_bool(tv, 'setRichText:', true)
 	window := macos.msg_id(tv, 'window')
 	if !objc_is_nil(window) {
-		objc_bool_id(window, 'makeFirstResponder:', tv)
+		macos.msg_bool_id(window, 'makeFirstResponder:', tv)
 	}
 	return tv
 }
 
-fn native_text_view_safe_range(tv macos.Id, location u64, length u64) ObjcRange {
+fn native_text_view_safe_range(tv macos.Id, location u64, length u64) macos.Range {
 	text_length := native_text_view_text_length(tv)
 	safe_location := if location < text_length { location } else { text_length }
 	safe_length := if length < text_length - safe_location { length } else { text_length - safe_location }
-	return ObjcRange{safe_location, safe_length}
+	return macos.range(safe_location, safe_length)
 }
 
 fn native_text_view_set_selected_range(tv macos.Id, location u64, length u64) {
@@ -260,10 +260,10 @@ fn native_text_view_set_selected_range(tv macos.Id, location u64, length u64) {
 	range := native_text_view_safe_range(tv, location, length)
 	window := macos.msg_id(tv, 'window')
 	if !objc_is_nil(window) {
-		objc_bool_id(window, 'makeFirstResponder:', tv)
+		macos.msg_bool_id(window, 'makeFirstResponder:', tv)
 	}
-	objc_void_range(tv, 'setSelectedRange:', range)
-	objc_void_range(tv, 'scrollRangeToVisible:', range)
+	macos.msg_void_range(tv, 'setSelectedRange:', range)
+	macos.msg_void_range(tv, 'scrollRangeToVisible:', range)
 }
 
 fn native_text_view_restore_selected_range(tv macos.Id, location u64, length u64, restore_focus bool) {
@@ -273,17 +273,17 @@ fn native_text_view_restore_selected_range(tv macos.Id, location u64, length u64
 	range := native_text_view_safe_range(tv, location, length)
 	window := macos.msg_id(tv, 'window')
 	if restore_focus && !objc_is_nil(window) {
-		objc_bool_id(window, 'makeFirstResponder:', tv)
+		macos.msg_bool_id(window, 'makeFirstResponder:', tv)
 	}
-	objc_void_range(tv, 'setSelectedRange:', range)
+	macos.msg_void_range(tv, 'setSelectedRange:', range)
 }
 
-fn native_text_view_selected_range(tv macos.Id) ObjcRange {
+fn native_text_view_selected_range(tv macos.Id) macos.Range {
 	if objc_is_nil(tv) {
-		return ObjcRange{}
+		return macos.range(0, 0)
 	}
-	range := objc_range(tv, 'selectedRange')
-	return if range.location == u64(-1) { ObjcRange{} } else { range }
+	range := macos.msg_range(tv, 'selectedRange')
+	return if range.location == u64(-1) { macos.range(0, 0) } else { range }
 }
 
 fn native_text_view_insert_text(tv macos.Id, text string) {
@@ -291,7 +291,7 @@ fn native_text_view_insert_text(tv macos.Id, text string) {
 	if objc_is_nil(text_view) {
 		return
 	}
-	objc_void_id_range(text_view, 'insertText:replacementRange:', macos.nsstring(text), native_text_view_selected_range(text_view))
+	macos.msg_void_id_range(text_view, 'insertText:replacementRange:', macos.nsstring(text), native_text_view_selected_range(text_view))
 }
 
 fn native_text_view_text_length(tv macos.Id) u64 {
@@ -317,7 +317,7 @@ fn native_text_view_current_attributes(tv macos.Id) macos.Id {
 	storage_length := if objc_is_nil(storage) { u64(0) } else { macos.msg_u64(storage, 'length') }
 	if storage_length > 0 {
 		index := if selected.location < storage_length { selected.location } else { storage_length - 1 }
-		return objc_id_u64_range_ptr(storage, 'attributesAtIndex:effectiveRange:', index, unsafe { nil })
+		return macos.msg_id_u64_range_ptr(storage, 'attributesAtIndex:effectiveRange:', index, unsafe { nil })
 	}
 	return macos.msg_id(tv, 'typingAttributes')
 }
@@ -339,7 +339,7 @@ fn native_text_view_format_active(tv macos.Id, format int) bool {
 	if objc_is_nil(font) {
 		return false
 	}
-	traits := objc_u64_id(macos.msg_id(macos.get_class('NSFontManager'), 'sharedFontManager'), 'traitsOfFont:', font)
+	traits := macos.msg_u64_id(macos.msg_id(macos.get_class('NSFontManager'), 'sharedFontManager'), 'traitsOfFont:', font)
 	return if format == 0 { traits & 2 != 0 } else if format == 1 { traits & 1 != 0 } else { false }
 }
 
@@ -430,98 +430,98 @@ fn native_apply_typing_vertical_align(tv macos.Id, align int) {
 	macos.release(attrs)
 }
 
-fn native_safe_storage_range(tv macos.Id, range ObjcRange) ?(macos.Id, ObjcRange) {
+fn native_safe_storage_range(tv macos.Id, range macos.Range) ?(macos.Id, macos.Range) {
 	storage := macos.msg_id(tv, 'textStorage')
 	length := if objc_is_nil(storage) { u64(0) } else { macos.msg_u64(storage, 'length') }
 	if length == 0 || range.length == 0 || range.location >= length {
 		return none
 	}
 	safe_length := if range.length < length - range.location { range.length } else { length - range.location }
-	return storage, ObjcRange{range.location, safe_length}
+	return storage, macos.range(range.location, safe_length)
 }
 
-fn native_apply_range_format(tv macos.Id, requested ObjcRange, format int, enabled bool) {
+fn native_apply_range_format(tv macos.Id, requested macos.Range, format int, enabled bool) {
 	storage, range := native_safe_storage_range(tv, requested) or { return }
 	macos.msg_void(storage, 'beginEditing')
 	if format == 2 || format == 3 {
 		key := if format == 2 { objc_attr_underline } else { objc_attr_strikethrough }
 		if enabled {
-			objc_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(key), objc_number_i64(1), range)
+			macos.msg_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(key), objc_number_i64(1), range)
 		} else {
-			objc_void_id_range(storage, 'removeAttribute:range:', macos.nsstring(key), range)
+			macos.msg_void_id_range(storage, 'removeAttribute:range:', macos.nsstring(key), range)
 		}
 	} else {
 		end := range.location + range.length
 		mut cursor := range.location
 		for cursor < end {
-			mut effective := ObjcRange{cursor, end - cursor}
-			mut font := objc_id_id_u64_range_ptr(storage, 'attribute:atIndex:effectiveRange:', macos.nsstring(objc_attr_font), cursor, &effective)
+			mut effective := macos.range(cursor, end - cursor)
+			mut font := macos.msg_id_id_u64_range_ptr(storage, 'attribute:atIndex:effectiveRange:', macos.nsstring(objc_attr_font), cursor, &effective)
 			if objc_is_nil(font) { font = macos.msg_id(tv, 'font') }
 			apply_length := if effective.length == 0 { u64(1) } else if effective.location + effective.length > end { end - cursor } else { effective.location + effective.length - cursor }
-			apply := ObjcRange{cursor, apply_length}
-			objc_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_font), native_font_with_format(font, format, enabled, native_text_view_font_size(tv)), apply)
+			apply := macos.range(cursor, apply_length)
+			macos.msg_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_font), native_font_with_format(font, format, enabled, native_text_view_font_size(tv)), apply)
 			cursor += apply.length
 		}
 	}
 	macos.msg_void(storage, 'endEditing')
-	objc_void_range(tv, 'setSelectedRange:', range)
+	macos.msg_void_range(tv, 'setSelectedRange:', range)
 }
 
-fn native_apply_range_color(tv macos.Id, requested ObjcRange, color u32, background bool) {
+fn native_apply_range_color(tv macos.Id, requested macos.Range, color u32, background bool) {
 	storage, range := native_safe_storage_range(tv, requested) or { return }
 	key := if background { objc_attr_background_color } else { objc_attr_foreground_color }
 	if background && color == 0 {
-		objc_void_id_range(storage, 'removeAttribute:range:', macos.nsstring(key), range)
+		macos.msg_void_id_range(storage, 'removeAttribute:range:', macos.nsstring(key), range)
 	} else {
-		objc_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(key), native_color_from_hex(color), range)
+		macos.msg_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(key), native_color_from_hex(color), range)
 	}
-	objc_void_range(tv, 'setSelectedRange:', range)
+	macos.msg_void_range(tv, 'setSelectedRange:', range)
 }
 
-fn native_apply_range_effect(tv macos.Id, requested ObjcRange, effect int) {
+fn native_apply_range_effect(tv macos.Id, requested macos.Range, effect int) {
 	storage, range := native_safe_storage_range(tv, requested) or { return }
 	for key in [objc_attr_shadow, objc_attr_stroke_width, objc_attr_stroke_color] {
-		objc_void_id_range(storage, 'removeAttribute:range:', macos.nsstring(key), range)
+		macos.msg_void_id_range(storage, 'removeAttribute:range:', macos.nsstring(key), range)
 	}
 	if effect & 1 != 0 {
-		objc_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_shadow), native_text_shadow(), range)
+		macos.msg_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_shadow), native_text_shadow(), range)
 	}
 	if effect & 2 != 0 {
-		objc_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_stroke_width), objc_number_f64(-2.0), range)
-		objc_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_stroke_color), macos.msg_id(macos.get_class('NSColor'), 'blackColor'), range)
+		macos.msg_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_stroke_width), objc_number_f64(-2.0), range)
+		macos.msg_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_stroke_color), macos.msg_id(macos.get_class('NSColor'), 'blackColor'), range)
 	}
-	objc_void_range(tv, 'setSelectedRange:', range)
+	macos.msg_void_range(tv, 'setSelectedRange:', range)
 }
 
-fn native_apply_range_vertical_align(tv macos.Id, requested ObjcRange, align int) {
+fn native_apply_range_vertical_align(tv macos.Id, requested macos.Range, align int) {
 	storage, range := native_safe_storage_range(tv, requested) or { return }
 	macos.msg_void(storage, 'beginEditing')
 	if align == 0 {
-		objc_void_id_range(storage, 'removeAttribute:range:', macos.nsstring(objc_attr_superscript), range)
+		macos.msg_void_id_range(storage, 'removeAttribute:range:', macos.nsstring(objc_attr_superscript), range)
 	} else {
-		objc_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_superscript), objc_number_i64(i64(align)), range)
+		macos.msg_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_superscript), objc_number_i64(i64(align)), range)
 	}
 	macos.msg_void(storage, 'endEditing')
-	objc_void_range(tv, 'setSelectedRange:', range)
+	macos.msg_void_range(tv, 'setSelectedRange:', range)
 }
 
-fn native_apply_range_font(tv macos.Id, requested ObjcRange, family_name string, size f64, change_family bool) {
+fn native_apply_range_font(tv macos.Id, requested macos.Range, family_name string, size f64, change_family bool) {
 	storage, range := native_safe_storage_range(tv, requested) or { return }
 	macos.msg_void(storage, 'beginEditing')
 	end := range.location + range.length
 	mut cursor := range.location
 	for cursor < end {
-		mut effective := ObjcRange{cursor, end - cursor}
-		mut font := objc_id_id_u64_range_ptr(storage, 'attribute:atIndex:effectiveRange:', macos.nsstring(objc_attr_font), cursor, &effective)
+		mut effective := macos.range(cursor, end - cursor)
+		mut font := macos.msg_id_id_u64_range_ptr(storage, 'attribute:atIndex:effectiveRange:', macos.nsstring(objc_attr_font), cursor, &effective)
 		if objc_is_nil(font) { font = macos.msg_id(tv, 'font') }
 		apply_length := if effective.length == 0 { u64(1) } else if effective.location + effective.length > end { end - cursor } else { effective.location + effective.length - cursor }
-		apply := ObjcRange{cursor, apply_length}
+		apply := macos.range(cursor, apply_length)
 		converted := if change_family { native_font_with_family(font, family_name, native_text_view_font_size(tv)) } else { native_font_with_size(font, size) }
-		objc_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_font), converted, apply)
+		macos.msg_void_id_id_range(storage, 'addAttribute:value:range:', macos.nsstring(objc_attr_font), converted, apply)
 		cursor += apply.length
 	}
 	macos.msg_void(storage, 'endEditing')
-	objc_void_range(tv, 'setSelectedRange:', range)
+	macos.msg_void_range(tv, 'setSelectedRange:', range)
 }
 
 fn native_text_view_toggle_format(tv_ptr macos.Id, format int) {
@@ -561,7 +561,7 @@ fn native_text_view_set_background_color(tv_ptr macos.Id, color u32) {
 }
 
 fn native_text_view_add_effect(tv macos.Id, location u64, length u64, effect int) {
-	if !objc_is_nil(tv) && length > 0 { native_apply_range_effect(tv, ObjcRange{location, length}, effect) }
+	if !objc_is_nil(tv) && length > 0 { native_apply_range_effect(tv, macos.range(location, length), effect) }
 }
 
 fn native_text_view_set_effect(tv_ptr macos.Id, effect int) {
@@ -589,16 +589,16 @@ fn native_text_view_runs(tv macos.Id) []TextRun {
 	mut runs := []TextRun{}
 	mut cursor := u64(0)
 	for cursor < length {
-		mut effective := ObjcRange{cursor, length - cursor}
-		attrs := objc_id_u64_range_ptr(storage, 'attributesAtIndex:effectiveRange:', cursor, &effective)
+		mut effective := macos.range(cursor, length - cursor)
+		attrs := macos.msg_id_u64_range_ptr(storage, 'attributesAtIndex:effectiveRange:', cursor, &effective)
 		mut effective_end := effective.location + effective.length
 		if effective.length == 0 || effective_end <= cursor { effective_end = cursor + 1 }
 		effective.location = cursor
 		effective.length = if effective_end < length { effective_end - cursor } else { length - cursor }
-		run_text := macos.utf8_string(objc_id_range(full, 'substringWithRange:', effective))
+		run_text := macos.utf8_string(macos.msg_id_range(full, 'substringWithRange:', effective))
 		mut font := objc_dict_get(attrs, objc_attr_font)
 		if objc_is_nil(font) { font = macos.msg_id(tv, 'font') }
-		traits := if objc_is_nil(font) { u64(0) } else { objc_u64_id(manager, 'traitsOfFont:', font) }
+		traits := if objc_is_nil(font) { u64(0) } else { macos.msg_u64_id(manager, 'traitsOfFont:', font) }
 		underline := objc_dict_get(attrs, objc_attr_underline)
 		strike := objc_dict_get(attrs, objc_attr_strikethrough)
 		stroke := objc_dict_get(attrs, objc_attr_stroke_width)

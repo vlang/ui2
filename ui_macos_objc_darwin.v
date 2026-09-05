@@ -6,197 +6,7 @@ $if !ui2_custom_rendering ? {
 import macos
 import math
 
-// Cocoa uses two-word ranges and two-double points/sizes on every macOS
-// architecture supported by V.
-struct ObjcRange {
-	mut:
-	location u64
-	length   u64
-}
-
-struct ObjcPoint {
-	x f64
-	y f64
-}
-
-type ObjcMsgIdRectU64U64Bool = fn (macos.Id, macos.Sel, macos.Rect, u64, u64, bool) macos.Id
-type ObjcMsgIdFourF64 = fn (macos.Id, macos.Sel, f64, f64, f64, f64) macos.Id
-type ObjcMsgIdIdF64 = fn (macos.Id, macos.Sel, macos.Id, f64) macos.Id
-type ObjcMsgIdIdU64 = fn (macos.Id, macos.Sel, macos.Id, u64) macos.Id
-type ObjcMsgIdIdU64I64F64 = fn (macos.Id, macos.Sel, macos.Id, u64, i64, f64) macos.Id
-type ObjcMsgIdU64Id = fn (macos.Id, macos.Sel, u64, macos.Id) macos.Id
-type ObjcMsgIdU64Ptr = fn (macos.Id, macos.Sel, u64, &ObjcRange) macos.Id
-type ObjcMsgIdIdU64Ptr = fn (macos.Id, macos.Sel, macos.Id, u64, &ObjcRange) macos.Id
-type ObjcMsgIdRange = fn (macos.Id, macos.Sel, ObjcRange) macos.Id
-type ObjcMsgU64Id = fn (macos.Id, macos.Sel, macos.Id) u64
-type ObjcMsgBoolId = fn (macos.Id, macos.Sel, macos.Id) bool
-type ObjcMsgBoolIdBool = fn (macos.Id, macos.Sel, macos.Id, bool) bool
-type ObjcMsgBoolSel = fn (macos.Id, macos.Sel, macos.Sel) bool
-type ObjcMsgBoolSelIdId = fn (macos.Id, macos.Sel, macos.Sel, macos.Id, macos.Id) bool
-type ObjcMsgRange = fn (macos.Id, macos.Sel) ObjcRange
-type ObjcMsgPoint = fn (macos.Id, macos.Sel) ObjcPoint
-type ObjcMsgPointPointId = fn (macos.Id, macos.Sel, ObjcPoint, macos.Id) ObjcPoint
-type ObjcMsgVoidIdI64Id = fn (macos.Id, macos.Sel, macos.Id, i64, macos.Id)
-type ObjcMsgVoidIdRange = fn (macos.Id, macos.Sel, macos.Id, ObjcRange)
-type ObjcMsgVoidIdIdRange = fn (macos.Id, macos.Sel, macos.Id, macos.Id, ObjcRange)
-type ObjcMsgVoidRange = fn (macos.Id, macos.Sel, ObjcRange)
-type ObjcMsgVoidRectId = fn (macos.Id, macos.Sel, macos.Rect, macos.Id)
-type ObjcMsgVoidPoint = fn (macos.Id, macos.Sel, ObjcPoint)
-type ObjcMsgVoidIdSelIdId = fn (macos.Id, macos.Sel, macos.Id, macos.Sel, macos.Id, macos.Id)
-type ObjcMsgVoidSelIdBool = fn (macos.Id, macos.Sel, macos.Sel, macos.Id, bool)
 type VoidCallback = fn ()
-
-fn C.objc_msgSend(object macos.Id, selector macos.Sel) macos.Id
-
-@[inline]
-fn objc_id_rect_u64_u64_bool(object macos.Id, selector string, rect macos.Rect, a1 u64, a2 u64, a3 bool) macos.Id {
-	call := unsafe { ObjcMsgIdRectU64U64Bool(C.objc_msgSend) }
-	return call(object, macos.sel(selector), rect, a1, a2, a3)
-}
-
-@[inline]
-fn objc_id_four_f64(object macos.Id, selector string, a0 f64, a1 f64, a2 f64, a3 f64) macos.Id {
-	call := unsafe { ObjcMsgIdFourF64(C.objc_msgSend) }
-	return call(object, macos.sel(selector), a0, a1, a2, a3)
-}
-
-@[inline]
-fn objc_id_id_f64(object macos.Id, selector string, a0 macos.Id, a1 f64) macos.Id {
-	call := unsafe { ObjcMsgIdIdF64(C.objc_msgSend) }
-	return call(object, macos.sel(selector), a0, a1)
-}
-
-@[inline]
-fn objc_id_id_u64(object macos.Id, selector string, a0 macos.Id, a1 u64) macos.Id {
-	call := unsafe { ObjcMsgIdIdU64(C.objc_msgSend) }
-	return call(object, macos.sel(selector), a0, a1)
-}
-
-@[inline]
-fn objc_id_id_u64_i64_f64(object macos.Id, selector string, a0 macos.Id, a1 u64, a2 i64, a3 f64) macos.Id {
-	call := unsafe { ObjcMsgIdIdU64I64F64(C.objc_msgSend) }
-	return call(object, macos.sel(selector), a0, a1, a2, a3)
-}
-
-@[inline]
-fn objc_id_u64_id(object macos.Id, selector string, a0 u64, a1 macos.Id) macos.Id {
-	call := unsafe { ObjcMsgIdU64Id(C.objc_msgSend) }
-	return call(object, macos.sel(selector), a0, a1)
-}
-
-@[inline]
-fn objc_id_u64_range_ptr(object macos.Id, selector string, a0 u64, range &ObjcRange) macos.Id {
-	call := unsafe { ObjcMsgIdU64Ptr(C.objc_msgSend) }
-	return call(object, macos.sel(selector), a0, range)
-}
-
-@[inline]
-fn objc_id_id_u64_range_ptr(object macos.Id, selector string, a0 macos.Id, a1 u64, range &ObjcRange) macos.Id {
-	call := unsafe { ObjcMsgIdIdU64Ptr(C.objc_msgSend) }
-	return call(object, macos.sel(selector), a0, a1, range)
-}
-
-@[inline]
-fn objc_id_range(object macos.Id, selector string, range ObjcRange) macos.Id {
-	call := unsafe { ObjcMsgIdRange(C.objc_msgSend) }
-	return call(object, macos.sel(selector), range)
-}
-
-@[inline]
-fn objc_u64_id(object macos.Id, selector string, value macos.Id) u64 {
-	call := unsafe { ObjcMsgU64Id(C.objc_msgSend) }
-	return call(object, macos.sel(selector), value)
-}
-
-@[inline]
-fn objc_bool_id(object macos.Id, selector string, value macos.Id) bool {
-	call := unsafe { ObjcMsgBoolId(C.objc_msgSend) }
-	return call(object, macos.sel(selector), value)
-}
-
-@[inline]
-fn objc_bool_id_bool(object macos.Id, selector string, value macos.Id, flag bool) bool {
-	call := unsafe { ObjcMsgBoolIdBool(C.objc_msgSend) }
-	return call(object, macos.sel(selector), value, flag)
-}
-
-@[inline]
-fn objc_responds_to(object macos.Id, selector string) bool {
-	call := unsafe { ObjcMsgBoolSel(C.objc_msgSend) }
-	return call(object, macos.sel('respondsToSelector:'), macos.sel(selector))
-}
-
-@[inline]
-fn objc_bool_sel_id_id(object macos.Id, selector string, action macos.Sel, target macos.Id, sender macos.Id) bool {
-	call := unsafe { ObjcMsgBoolSelIdId(C.objc_msgSend) }
-	return call(object, macos.sel(selector), action, target, sender)
-}
-
-@[inline]
-fn objc_range(object macos.Id, selector string) ObjcRange {
-	call := unsafe { ObjcMsgRange(C.objc_msgSend) }
-	return call(object, macos.sel(selector))
-}
-
-@[inline]
-fn objc_point(object macos.Id, selector string) ObjcPoint {
-	call := unsafe { ObjcMsgPoint(C.objc_msgSend) }
-	return call(object, macos.sel(selector))
-}
-
-@[inline]
-fn objc_point_point_id(object macos.Id, selector string, point ObjcPoint, view macos.Id) ObjcPoint {
-	call := unsafe { ObjcMsgPointPointId(C.objc_msgSend) }
-	return call(object, macos.sel(selector), point, view)
-}
-
-@[inline]
-fn objc_void_id_i64_id(object macos.Id, selector string, a0 macos.Id, a1 i64, a2 macos.Id) {
-	call := unsafe { ObjcMsgVoidIdI64Id(C.objc_msgSend) }
-	call(object, macos.sel(selector), a0, a1, a2)
-}
-
-@[inline]
-fn objc_void_id_range(object macos.Id, selector string, value macos.Id, range ObjcRange) {
-	call := unsafe { ObjcMsgVoidIdRange(C.objc_msgSend) }
-	call(object, macos.sel(selector), value, range)
-}
-
-@[inline]
-fn objc_void_id_id_range(object macos.Id, selector string, key macos.Id, value macos.Id, range ObjcRange) {
-	call := unsafe { ObjcMsgVoidIdIdRange(C.objc_msgSend) }
-	call(object, macos.sel(selector), key, value, range)
-}
-
-@[inline]
-fn objc_void_range(object macos.Id, selector string, range ObjcRange) {
-	call := unsafe { ObjcMsgVoidRange(C.objc_msgSend) }
-	call(object, macos.sel(selector), range)
-}
-
-@[inline]
-fn objc_void_rect_id(object macos.Id, selector string, rect macos.Rect, value macos.Id) {
-	call := unsafe { ObjcMsgVoidRectId(C.objc_msgSend) }
-	call(object, macos.sel(selector), rect, value)
-}
-
-@[inline]
-fn objc_void_point(object macos.Id, selector string, point ObjcPoint) {
-	call := unsafe { ObjcMsgVoidPoint(C.objc_msgSend) }
-	call(object, macos.sel(selector), point)
-}
-
-@[inline]
-fn objc_void_id_sel_id_id(object macos.Id, selector string, a0 macos.Id, a1 macos.Sel, a2 macos.Id, a3 macos.Id) {
-	call := unsafe { ObjcMsgVoidIdSelIdId(C.objc_msgSend) }
-	call(object, macos.sel(selector), a0, a1, a2, a3)
-}
-
-@[inline]
-fn objc_void_sel_id_bool(object macos.Id, selector string, a0 macos.Sel, a1 macos.Id, a2 bool) {
-	call := unsafe { ObjcMsgVoidSelIdBool(C.objc_msgSend) }
-	call(object, macos.sel(selector), a0, a1, a2)
-}
 
 @[inline]
 fn objc_nil() macos.Id {
@@ -304,7 +114,7 @@ fn native_color_from_hex(hex u32) macos.Id {
 	r := f64((hex >> 16) & 0xff) / 255.0
 	g := f64((hex >> 8) & 0xff) / 255.0
 	b := f64(hex & 0xff) / 255.0
-	color := objc_id_four_f64(macos.get_class('NSColor'), 'colorWithCalibratedRed:green:blue:alpha:', r, g, b, 1.0)
+	color := macos.msg_id_four_f64(macos.get_class('NSColor'), 'colorWithCalibratedRed:green:blue:alpha:', r, g, b, 1.0)
 	if !objc_is_nil(color) {
 		helpers.colors[hex] = macos.retain(color)
 	}
@@ -336,7 +146,7 @@ fn native_font_object(size f64, bold bool, italic bool) macos.Id {
 	mut font := macos.msg_id_f64(font_class, if bold { 'boldSystemFontOfSize:' } else { 'systemFontOfSize:' }, size)
 	if italic && !objc_is_nil(font) {
 		manager := macos.msg_id(macos.get_class('NSFontManager'), 'sharedFontManager')
-		converted := objc_id_id_u64(manager, 'convertFont:toHaveTrait:', font, u64(1))
+		converted := macos.msg_id_id_u64(manager, 'convertFont:toHaveTrait:', font, u64(1))
 		if !objc_is_nil(converted) {
 			font = converted
 		}
@@ -355,7 +165,7 @@ fn native_image_from_name(name string) macos.Id {
 	if name.starts_with('symbol:') {
 		symbol_name := macos.nsstring(name['symbol:'.len..])
 		image_class := macos.get_class('NSImage')
-		if objc_responds_to(image_class, 'imageWithSystemSymbolName:accessibilityDescription:') {
+		if macos.responds_to(image_class, 'imageWithSystemSymbolName:accessibilityDescription:') {
 			symbol_image := macos.msg_id2(image_class, 'imageWithSystemSymbolName:accessibilityDescription:', symbol_name, objc_nil())
 			if !objc_is_nil(symbol_image) {
 				return symbol_image
@@ -375,7 +185,7 @@ fn native_image_from_name_sized(name string, width f64, height f64) macos.Id {
 		return source_image
 	}
 	sized := objc_autorelease(macos.msg_id(source_image, 'copy'))
-	objc_void_point(sized, 'setSize:', ObjcPoint{width, height})
+	macos.msg_void_point(sized, 'setSize:', macos.point(width, height))
 	macos.msg_void_bool(sized, 'setTemplate:', macos.msg_bool(source_image, 'isTemplate'))
 	return sized
 }
@@ -399,7 +209,7 @@ fn native_cursor(name string) macos.Id {
 
 fn native_private_cursor(selector string, fallback macos.Id) macos.Id {
 	cursor_class := macos.get_class('NSCursor')
-	if objc_responds_to(cursor_class, selector) {
+	if macos.responds_to(cursor_class, selector) {
 		cursor := macos.msg_id(cursor_class, selector)
 		if !objc_is_nil(cursor) {
 			return cursor
@@ -412,7 +222,7 @@ fn native_add_cursor_rect(view macos.Id, name string) {
 	if objc_is_nil(view) {
 		return
 	}
-	objc_void_rect_id(view, 'addCursorRect:cursor:', macos.msg_rect(view, 'bounds'), native_cursor(name))
+	macos.msg_void_rect_id(view, 'addCursorRect:cursor:', macos.msg_rect(view, 'bounds'), native_cursor(name))
 }
 
 fn objc_invalidate_cursor_rects(view macos.Id) {
@@ -430,7 +240,7 @@ fn objc_place_subview(parent macos.Id, child macos.Id, previous macos.Id) {
 		return
 	}
 	position := if objc_is_nil(previous) { i64(-1) } else { i64(1) }
-	objc_void_id_i64_id(parent, 'addSubview:positioned:relativeTo:', child, position, previous)
+	macos.msg_void_id_i64_id(parent, 'addSubview:positioned:relativeTo:', child, position, previous)
 }
 
 fn native_accessibility_role(role string) macos.Id {
@@ -473,7 +283,7 @@ fn native_apply_common_view_state(view macos.Id, hidden bool, enabled bool, role
 		return
 	}
 	macos.msg_void_bool(view, 'setHidden:', hidden)
-	if objc_responds_to(view, 'setEnabled:') {
+	if macos.responds_to(view, 'setEnabled:') {
 		macos.msg_void_bool(view, 'setEnabled:', enabled)
 	}
 	mut helpers := native_macos_helpers()
@@ -494,7 +304,7 @@ fn native_apply_common_view_state(view macos.Id, hidden bool, enabled bool, role
 }
 
 fn objc_clear_control_state(control macos.Id) {
-	if objc_is_nil(control) || !objc_bool_id(control, 'isKindOfClass:', macos.get_class('NSButton')) {
+	if objc_is_nil(control) || !macos.msg_bool_id(control, 'isKindOfClass:', macos.get_class('NSButton')) {
 		return
 	}
 	macos.msg_void_i64(control, 'setState:', 0)
@@ -505,12 +315,12 @@ fn native_control_is_editing(control macos.Id) bool {
 	return !objc_is_nil(control) && !objc_is_nil(macos.msg_id(control, 'currentEditor'))
 }
 
-fn native_control_selected_range(control macos.Id) ObjcRange {
+fn native_control_selected_range(control macos.Id) macos.Range {
 	if objc_is_nil(control) {
-		return ObjcRange{}
+		return macos.range(0, 0)
 	}
 	editor := macos.msg_id(control, 'currentEditor')
-	return if objc_is_nil(editor) { ObjcRange{} } else { objc_range(editor, 'selectedRange') }
+	return if objc_is_nil(editor) { macos.range(0, 0) } else { macos.msg_range(editor, 'selectedRange') }
 }
 
 fn native_focus_view(view macos.Id) bool {
@@ -518,7 +328,7 @@ fn native_focus_view(view macos.Id) bool {
 		return false
 	}
 	window := macos.msg_id(view, 'window')
-	return !objc_is_nil(window) && objc_bool_id(window, 'makeFirstResponder:', view)
+	return !objc_is_nil(window) && macos.msg_bool_id(window, 'makeFirstResponder:', view)
 }
 
 fn native_restore_control_selection(control macos.Id, location u64, length u64) {
@@ -528,7 +338,7 @@ fn native_restore_control_selection(control macos.Id, location u64, length u64) 
 	text_length := macos.msg_u64(macos.msg_id(control, 'stringValue'), 'length')
 	safe_location := if location < text_length { location } else { text_length }
 	safe_length := if length < text_length - safe_location { length } else { text_length - safe_location }
-	objc_void_range(macos.msg_id(control, 'currentEditor'), 'setSelectedRange:', ObjcRange{safe_location, safe_length})
+	macos.msg_void_range(macos.msg_id(control, 'currentEditor'), 'setSelectedRange:', macos.range(safe_location, safe_length))
 }
 
 fn native_end_window_editing(window macos.Id) {
@@ -582,18 +392,18 @@ fn native_dragging_text(info macos.Id) string {
 	return macos.utf8_string(macos.msg_id1(pasteboard, 'stringForType:', macos.nsstring('public.utf8-plain-text')))
 }
 
-fn native_dragging_point(view macos.Id, info macos.Id) ObjcPoint {
+fn native_dragging_point(view macos.Id, info macos.Id) macos.Point {
 	if objc_is_nil(view) || objc_is_nil(info) {
-		return ObjcPoint{}
+		return macos.point(0, 0)
 	}
-	return objc_point_point_id(view, 'convertPoint:fromView:', objc_point(info, 'draggingLocation'), objc_nil())
+	return macos.msg_point_point_id(view, 'convertPoint:fromView:', macos.msg_point(info, 'draggingLocation'), objc_nil())
 }
 
-fn native_event_point(view macos.Id, event macos.Id) ObjcPoint {
+fn native_event_point(view macos.Id, event macos.Id) macos.Point {
 	if objc_is_nil(view) || objc_is_nil(event) {
-		return ObjcPoint{}
+		return macos.point(0, 0)
 	}
-	return objc_point_point_id(view, 'convertPoint:fromView:', objc_point(event, 'locationInWindow'), objc_nil())
+	return macos.msg_point_point_id(view, 'convertPoint:fromView:', macos.msg_point(event, 'locationInWindow'), objc_nil())
 }
 
 fn native_current_event_modifier_flags() u64 {
@@ -611,7 +421,7 @@ fn native_app_send_edit_command(command int) bool {
 		5 { 'redo:' }
 		else { return false }
 	}
-	return objc_bool_sel_id_id(native_current_app(), 'sendAction:to:from:', macos.sel(action), objc_nil(), objc_nil())
+	return macos.msg_bool_sel_id_id(native_current_app(), 'sendAction:to:from:', macos.sel(action), objc_nil(), objc_nil())
 }
 
 fn native_pasteboard_image() macos.Id {
@@ -628,11 +438,11 @@ fn native_pasteboard_has_image() bool {
 }
 
 fn native_png_data(bitmap macos.Id) macos.Id {
-	return objc_id_u64_id(bitmap, 'representationUsingType:properties:', 4, objc_empty_dictionary())
+	return macos.msg_id_u64_id(bitmap, 'representationUsingType:properties:', 4, objc_empty_dictionary())
 }
 
 fn native_write_data(data macos.Id, path string) bool {
-	return !objc_is_nil(data) && macos.msg_u64(data, 'length') > 0 && objc_bool_id_bool(data, 'writeToFile:atomically:', macos.nsstring(path), true)
+	return !objc_is_nil(data) && macos.msg_u64(data, 'length') > 0 && macos.msg_bool_id_bool(data, 'writeToFile:atomically:', macos.nsstring(path), true)
 }
 
 fn native_pasteboard_write_image_png(path string) bool {
@@ -665,14 +475,14 @@ fn native_view_save_png(view macos.Id, path string) bool {
 	if objc_is_nil(bitmap) {
 		return false
 	}
-	objc_void_rect_id(view, 'cacheDisplayInRect:toBitmapImageRep:', view_bounds, bitmap)
+	macos.msg_void_rect_id(view, 'cacheDisplayInRect:toBitmapImageRep:', view_bounds, bitmap)
 	return native_write_data(native_png_data(bitmap), path)
 }
 
 fn native_layer_set_frame_geometry(layer macos.Id, frame macos.Rect) {
-	objc_void_point(layer, 'setAnchorPoint:', ObjcPoint{0.5, 0.5})
+	macos.msg_void_point(layer, 'setAnchorPoint:', macos.point(0.5, 0.5))
 	macos.msg_void_rect(layer, 'setBounds:', macos.rect(0, 0, frame.width, frame.height))
-	objc_void_point(layer, 'setPosition:', ObjcPoint{frame.x + frame.width / 2.0, frame.y + frame.height / 2.0})
+	macos.msg_void_point(layer, 'setPosition:', macos.point(frame.x + frame.width / 2.0, frame.y + frame.height / 2.0))
 }
 
 fn native_set_layer_rotation(layer macos.Id, radians f64) {
@@ -745,12 +555,12 @@ fn native_dispatch_main(callback VoidCallback) {
 		helpers.dispatcher = macos.msg_id(macos.alloc('UI2MainDispatcher'), 'init')
 	}
 	boxed_callback := macos.msg_id_u64(macos.get_class('NSNumber'), 'numberWithUnsignedLongLong:', u64(voidptr(callback)))
-	objc_void_sel_id_bool(helpers.dispatcher, 'performSelectorOnMainThread:withObject:waitUntilDone:', macos.sel('runCallback:'), boxed_callback, false)
+	macos.msg_void_sel_id_bool(helpers.dispatcher, 'performSelectorOnMainThread:withObject:waitUntilDone:', macos.sel('runCallback:'), boxed_callback, false)
 }
 
 fn native_observe_bounds(observer macos.Id, view macos.Id) {
 	center := macos.msg_id(macos.get_class('NSNotificationCenter'), 'defaultCenter')
-	objc_void_id_sel_id_id(center, 'addObserver:selector:name:object:', observer, macos.sel('ui2BoundsChanged:'), macos.nsstring('NSViewBoundsDidChangeNotification'), view)
+	macos.msg_void_id_sel_id_id(center, 'addObserver:selector:name:object:', observer, macos.sel('ui2BoundsChanged:'), macos.nsstring('NSViewBoundsDidChangeNotification'), view)
 }
 
 fn native_unobserve_bounds(observer macos.Id, view macos.Id) {
