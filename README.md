@@ -52,6 +52,16 @@ outside the portable editor's current contract.
 
 ## Examples
 
+Run the calculator demo with:
+
+```sh
+v run examples/calculator/main.v
+```
+
+It ports the `v-ui` calculator to `ui2`, including decimal input, sign and
+percentage controls, exponentiation, repeated equals, and division-by-zero
+recovery.
+
 Run the responsive users demo with:
 
 ```sh
