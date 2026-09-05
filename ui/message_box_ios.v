@@ -1,6 +1,6 @@
 module ui2
 
-import internal.macos
+import macos
 
 const ui_alert_controller_style_alert = macos.Id(usize(1))
 const ui_alert_action_style_default = macos.Id(usize(0))

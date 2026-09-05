@@ -3,7 +3,7 @@ module ui2
 
 $if !ui2_custom_rendering ? {
 
-import internal.macos
+import macos
 
 const objc_attr_font = 'NSFont'
 const objc_attr_foreground_color = 'NSColor'

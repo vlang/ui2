@@ -1,9 +1,7 @@
 module ui2
 
 import dl
-import internal.macos
-
-#flag -framework UIKit
+import macos
 
 #flag -framework AVFoundation
 
@@ -131,28 +129,6 @@ fn (mut block GlobalBlock) build(invoke voidptr, signature string) voidptr {
 		descriptor: voidptr(&block.descriptor)
 	}
 	return voidptr(&block.literal)
-}
-
-// ── UIKit entry points ─────────────────────────────────────────────
-
-@[c_extern]
-fn C.UIApplicationMain(argc int, argv &&char, principal voidptr, delegate voidptr) int
-
-// native_application_main starts the UIKit run loop with a delegate class
-// that was registered on the Objective-C runtime by ensure_runtime_classes.
-fn native_application_main(delegate_class string) int {
-	return C.UIApplicationMain(g_main_argc, &&char(g_main_argv), unsafe { nil }, voidptr(macos.nsstring(delegate_class)))
-}
-
-fn native_color(hex u32) macos.Id {
-	return native_color_alpha(hex, 1.0)
-}
-
-fn native_color_alpha(hex u32, alpha f64) macos.Id {
-	red := f64((hex >> 16) & 0xFF) / 255.0
-	green := f64((hex >> 8) & 0xFF) / 255.0
-	blue := f64(hex & 0xFF) / 255.0
-	return macos.msg_id_four_f64(macos.get_class('UIColor'), 'colorWithRed:green:blue:alpha:', red, green, blue, alpha)
 }
 
 // ── Rotation ───────────────────────────────────────────────────────

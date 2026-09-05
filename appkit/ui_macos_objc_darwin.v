@@ -3,7 +3,7 @@ module ui2
 
 $if !ui2_custom_rendering ? {
 
-import internal.macos
+import macos
 import math
 
 type VoidCallback = fn ()

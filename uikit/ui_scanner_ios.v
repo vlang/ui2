@@ -1,6 +1,6 @@
 module ui2
 
-import internal.macos
+import macos
 
 // Barcode scanning is a port of the AVFoundation view controller that used
 // to live in native_bridge.h. The controller class is assembled on the

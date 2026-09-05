@@ -4,7 +4,7 @@
 // custom-rendered macOS windows get the same system alert.
 module ui2
 
-import internal.macos
+import macos
 
 #flag darwin -framework AppKit
 

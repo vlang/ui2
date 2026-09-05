@@ -1,6 +1,7 @@
 module ui2
 
-import internal.macos
+import ios
+import macos
 
 fn C.vui_app_did_finish_launching(self voidptr, cmd voidptr, application voidptr, launch_options voidptr) bool
 
@@ -92,7 +93,7 @@ pub fn run(build_screen BuildFn, event_handler EventFn) {
 	defer {
 		macos.release(pool)
 	}
-	code := native_application_main('VuiAppDelegate')
+	code := ios.application_main(g_main_argc, &&char(g_main_argv), 'VuiAppDelegate')
 	if code != 0 {
 		exit(code)
 	}
@@ -178,7 +179,7 @@ fn font(size f64, bold bool) macos.Id {
 }
 
 fn set_background(view View, hex u32) {
-	macos.msg_void1(view, 'setBackgroundColor:', native_color(hex))
+	macos.msg_void1(view, 'setBackgroundColor:', ios.color(hex))
 }
 
 fn set_corner_radius(view View, radius f64) {
@@ -323,7 +324,7 @@ fn new_label_view(frame Rect, t string, text_hex u32, size f64, bold bool, align
 fn update_label_view(lbl View, frame Rect, t string, text_hex u32, size f64, bold bool, align int, lines int) {
 	macos.msg_void_rect(lbl, 'setFrame:', native_rect(frame))
 	macos.msg_void1(lbl, 'setText:', macos.nsstring(t))
-	macos.msg_void1(lbl, 'setTextColor:', native_color(text_hex))
+	macos.msg_void1(lbl, 'setTextColor:', ios.color(text_hex))
 	macos.msg_void1(lbl, 'setFont:', font(size, bold))
 	macos.msg_void_i64(lbl, 'setTextAlignment:', i64(align))
 	macos.msg_void_i64(lbl, 'setNumberOfLines:', i64(lines))
@@ -358,7 +359,7 @@ fn new_text_area_view(el Element) View {
 fn update_text_area_view(view View, el Element, declared_text_changed bool) {
 	macos.msg_void_rect(view, 'setFrame:', native_rect(el.frame))
 	set_background(view, el.box.bg)
-	macos.msg_void1(view, 'setTextColor:', native_color(el.text_style.color))
+	macos.msg_void1(view, 'setTextColor:', ios.color(el.text_style.color))
 	macos.msg_void1(view, 'setFont:', font(el.text_style.size, el.text_style.bold))
 	macos.msg_void_bool(view, 'setEditable:', !el.readonly && el.enabled)
 	macos.msg_void_bool(view, 'setSelectable:', true)
@@ -397,7 +398,7 @@ fn new_button_view(frame Rect, title string, bg_hex u32, text_hex u32, size f64,
 fn update_button_view(btn View, frame Rect, title string, bg_hex u32, text_hex u32, size f64, bold bool, radius f64, lines int) {
 	macos.msg_void_rect(btn, 'setFrame:', native_rect(frame))
 	macos.msg_void2(btn, 'setTitle:forState:', macos.nsstring(title), macos.Id(usize(0)))
-	macos.msg_void2(btn, 'setTitleColor:forState:', native_color(text_hex), macos.Id(usize(0)))
+	macos.msg_void2(btn, 'setTitleColor:forState:', ios.color(text_hex), macos.Id(usize(0)))
 	set_background(btn, bg_hex)
 	title_label := macos.msg_id(btn, 'titleLabel')
 	macos.msg_void1(title_label, 'setFont:', font(size, bold))
@@ -433,7 +434,7 @@ fn new_text_field_view(frame Rect, placeholder string, t string, bg_hex u32, tex
 fn update_text_field_view(field View, frame Rect, placeholder string, t string, bg_hex u32, text_hex u32, size f64, radius f64, keyboard int, secure bool, autocorrect bool, declared_text_changed bool, padding_left f64) {
 	macos.msg_void_rect(field, 'setFrame:', native_rect(frame))
 	set_background(field, bg_hex)
-	macos.msg_void1(field, 'setTextColor:', native_color(text_hex))
+	macos.msg_void1(field, 'setTextColor:', ios.color(text_hex))
 	macos.msg_void1(field, 'setFont:', font(size, false))
 	macos.msg_void1(field, 'setPlaceholder:', macos.nsstring(placeholder))
 	if declared_text_changed && macos.utf8_string(macos.msg_id(field, 'text')) != t {
