@@ -160,6 +160,50 @@ contains the typed model and business actions. The example includes validated
 text entry, password masking, country selection, toggles, a progress indicator,
 and a keyed, scrollable user table.
 
+### Android
+
+Build Android examples on a Linux, macOS, or Windows development computer with
+[V Android Bootstrapper (`vab`)](https://github.com/vlang/vab). It requires V,
+a Java JDK, the Android SDK, and the Android NDK; Android Studio itself is not
+required. Install `vab` on macOS or Linux with:
+
+```sh
+v install vab
+v ~/.vmodules/vab
+export PATH="$HOME/.vmodules/vab:$PATH"
+vab doctor
+```
+
+See the `vab` installation guide linked above for Windows setup and environment
+variables if the SDK or NDK is not detected. Then, from the `ui2` repository
+root, build an APK for an example:
+
+```sh
+mkdir -p build/android
+vab --name "ui2 counter" --package-id io.vlang.ui2.counter \
+  -o build/android/counter.apk examples/counter
+```
+
+Replace `counter` in the source path, output name, application name, and package
+ID to build another example. Use a different package ID for each example if you
+want several of them installed at the same time. The default build includes all
+supported Android CPU architectures.
+
+Install the resulting APK on a connected device or emulator with:
+
+```sh
+adb install -r build/android/counter.apk
+```
+
+After installation, open **ui2 counter** from the device's app launcher.
+
+Alternatively, let `vab` build, install, and launch the example in one step:
+
+```sh
+vab run --device auto --name "ui2 counter" \
+  --package-id io.vlang.ui2.counter examples/counter
+```
+
 ## Verification
 
 Run `make test` for portable and host-native tests. `make check-macos`,
