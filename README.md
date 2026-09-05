@@ -58,10 +58,15 @@ Button {
 }
 ```
 
+Action arguments are evaluated when the event is dispatched, after any two-way
+binding on that event has written the control value into the model.
+
 Expressions support property paths, arithmetic, comparisons, boolean operators,
 conditionals, parentheses, and string interpolation. They are side-effect-free;
 calls are restricted to event handlers. Unknown model paths, non-writable
 binding targets, and invalid action signatures fail document loading.
+Validation traverses every expression branch and repeater item schema without
+executing expressions against the model's initial values.
 
 Use a keyed `Repeater` for model collections. `item` and `index` are scoped to
 each instance, and the evaluated key becomes `Element.key` for reconciliation:

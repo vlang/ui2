@@ -12,14 +12,20 @@ enum QValueKind {
 }
 
 struct QValue {
-	kind    QValueKind
-	text    string
-	number  f64
-	bool_   bool
-	items   []QValue
-	element &QValue = unsafe { nil }
+	kind   QValueKind
+	text   string
+	number f64
+	bool_  bool
+	items  []QValue
 mut:
 	fields map[string]QValue
+}
+
+struct QSchema {
+	kind    QValueKind
+	element &QSchema = unsafe { nil }
+mut:
+	fields map[string]QSchema
 }
 
 fn q_string(value string) QValue {
@@ -38,8 +44,8 @@ fn q_object(fields map[string]QValue) QValue {
 	return QValue{ kind: .object, fields: fields }
 }
 
-fn q_list(items []QValue, element QValue) QValue {
-	return QValue{ kind: .list, items: items, element: &element }
+fn q_list(items []QValue) QValue {
+	return QValue{ kind: .list, items: items }
 }
 
 fn q_value_from[T](value T) QValue {
@@ -56,8 +62,7 @@ fn q_value_from[T](value T) QValue {
 		for item in value {
 			items << q_value_from(item)
 		}
-		element := q_value_from($zero(T.element_type))
-		return q_list(items, element)
+		return q_list(items)
 	} $else $if T is $struct {
 		mut fields := map[string]QValue{}
 		$for field in T.fields {
@@ -68,6 +73,37 @@ fn q_value_from[T](value T) QValue {
 		return q_object(fields)
 	} $else {
 		return QValue{}
+	}
+}
+
+fn q_array_element_schema[E](_ []E) QSchema {
+	$if E is $struct {
+		return q_schema_from(E{})
+	} $else {
+		return q_schema_from($zero(E))
+	}
+}
+
+fn q_schema_from[T](value T) QSchema {
+	$if T is string {
+		return QSchema{ kind: .string_ }
+	} $else $if T is bool {
+		return QSchema{ kind: .bool_ }
+	} $else $if T is $int || T is $float {
+		return QSchema{ kind: .number }
+	} $else $if T is $array {
+		element := q_array_element_schema(value)
+		return QSchema{ kind: .list, element: &element }
+	} $else $if T is $struct {
+		mut fields := map[string]QSchema{}
+		$for field in T.fields {
+			$if field.is_pub {
+				fields[field.name] = q_schema_from(value.$(field.name))
+			}
+		}
+		return QSchema{ kind: .object, fields: fields }
+	} $else {
+		return QSchema{}
 	}
 }
 
@@ -143,6 +179,131 @@ fn q_lookup(scope map[string]QValue, path string, line int) !QValue {
 		}
 	}
 	return value
+}
+
+fn q_schema_lookup(scope map[string]QSchema, path string, line int) !QSchema {
+	parts := path.split('.')
+	if parts.len == 0 {
+		return error('empty property path at line ${line}')
+	}
+	mut schema := scope[parts[0]] or {
+		// Bare QML enum and color values are string-like literals. Qualified
+		// paths must always resolve against the schema.
+		if parts.len == 1 {
+			return QSchema{ kind: .string_ }
+		}
+		return error('unknown property path `${path}` at line ${line}')
+	}
+	for part in parts[1..] {
+		schema = match schema.kind {
+			.object {
+				schema.fields[part] or {
+					return error('unknown property path `${path}` at line ${line}')
+				}
+			}
+			.list {
+				if part != 'len' {
+					return error('unknown collection property `${part}` in `${path}` at line ${line}')
+				}
+				QSchema{ kind: .number }
+			}
+			.string_ {
+				if part != 'len' {
+					return error('unknown string property `${part}` in `${path}` at line ${line}')
+				}
+				QSchema{ kind: .number }
+			}
+			else {
+				return error('cannot read `${part}` from `${path}` at line ${line}')
+			}
+		}
+	}
+	return schema
+}
+
+fn q_require_schema(schema QSchema, expected QValueKind, line int) ! {
+	if schema.kind != expected {
+		return error('expected ${expected} expression at line ${line}')
+	}
+}
+
+fn q_schema_expression(expr &QExpression, scope map[string]QSchema) !QSchema {
+	return match expr.kind {
+		.literal {
+			if expr.quoted {
+				QSchema{ kind: .string_ }
+			} else if expr.value in ['true', 'false'] {
+				QSchema{ kind: .bool_ }
+			} else {
+				QSchema{ kind: .number }
+			}
+		}
+		.path { q_schema_lookup(scope, expr.value, expr.line)! }
+		.call {
+			return error('calls are only allowed in event handlers at line ${expr.line}')
+		}
+		.unary {
+			value := q_schema_expression(expr.left, scope)!
+			match expr.value {
+				'!' { QSchema{ kind: .bool_ } }
+				'-' {
+					q_require_schema(value, .number, expr.line)!
+					QSchema{ kind: .number }
+				}
+				else {
+					return error('unknown unary operator `${expr.value}` at line ${expr.line}')
+				}
+			}
+		}
+		.binary { q_schema_binary(expr, scope)! }
+		.conditional {
+			q_schema_expression(expr.left, scope)!
+			when_true := q_schema_expression(expr.right, scope)!
+			when_false := q_schema_expression(expr.third, scope)!
+			if when_true.kind != when_false.kind {
+				return error('conditional branches have different types at line ${expr.line}')
+			}
+			when_true
+		}
+		.interpolation {
+			for part in expr.parts {
+				if !isnil(part.expr) {
+					q_schema_expression(part.expr, scope)!
+				}
+			}
+			QSchema{ kind: .string_ }
+		}
+	}
+}
+
+fn q_schema_binary(expr &QExpression, scope map[string]QSchema) !QSchema {
+	left := q_schema_expression(expr.left, scope)!
+	right := q_schema_expression(expr.right, scope)!
+	return match expr.value {
+		'+' {
+			if left.kind == .string_ || right.kind == .string_ {
+				QSchema{ kind: .string_ }
+			} else {
+				q_require_schema(left, .number, expr.line)!
+				q_require_schema(right, .number, expr.line)!
+				QSchema{ kind: .number }
+			}
+		}
+		'-', '*', '/', '%' {
+			q_require_schema(left, .number, expr.line)!
+			q_require_schema(right, .number, expr.line)!
+			QSchema{ kind: .number }
+		}
+		'<', '<=', '>', '>=' {
+			q_require_schema(left, .number, expr.line)!
+			q_require_schema(right, .number, expr.line)!
+			QSchema{ kind: .bool_ }
+		}
+		'==', '!=', '&&', '||' { QSchema{ kind: .bool_ } }
+		else {
+			return error('unknown operator `${expr.value}` at line ${expr.line}')
+		}
+	}
 }
 
 fn q_values_equal(left QValue, right QValue) bool {
@@ -278,9 +439,10 @@ fn q_eval_binary(expr &QExpression, scope map[string]QValue) !QValue {
 }
 
 struct QmlInvocation {
-	name string
-	args []QValue
-	line int
+	name  string
+	args  []&QExpression
+	scope map[string]QValue
+	line  int
 }
 
 struct QmlBinding {
@@ -307,11 +469,14 @@ fn q_action(expr &QExpression, scope map[string]QValue) !QmlInvocation {
 	if name.len == 0 || name.contains('.') {
 		return error('invalid app action `${expr.value}` at line ${expr.line}')
 	}
-	mut args := []QValue{cap: expr.args.len}
-	for arg in expr.args {
-		args << q_eval(arg, scope)!
+	mut action_scope := scope.clone()
+	action_scope.delete('app')
+	return QmlInvocation{
+		name: name
+		args: expr.args.clone()
+		scope: action_scope
+		line: expr.line
 	}
-	return QmlInvocation{ name: name, args: args, line: expr.line }
 }
 
 fn q_event_id(node &QNode, scope map[string]QValue, property string) string {
@@ -322,6 +487,71 @@ fn q_event_id(node &QNode, scope map[string]QValue, property string) string {
 fn q_control_id(node &QNode, scope map[string]QValue) string {
 	repeated := (scope['__repeat_key'] or { q_string('') }).string_value()
 	return '__qml_control_${node.path.replace('.', '_')}_${repeated.bytes().hex()}'
+}
+
+fn q_repeat_identity(parent string, key string) string {
+	// Encode each key independently. Encoding only the final joined path makes
+	// (`a/b`, `c`) indistinguishable from (`a`, `b/c`).
+	segment := key.bytes().hex()
+	return if parent.len > 0 { '${parent}/${segment}' } else { segment }
+}
+
+enum QChildLayoutKind {
+	overlay
+	column
+	row
+}
+
+struct QChildLayout {
+	kind    QChildLayoutKind
+	frame   Rect
+	padding f64
+	spacing f64
+mut:
+	cursor f64
+}
+
+fn q_child_layout(node &QNode, actual Rect) QChildLayout {
+	kind := match node.tag {
+		'Column' { QChildLayoutKind.column }
+		'Row' { QChildLayoutKind.row }
+		else { QChildLayoutKind.overlay }
+	}
+	padding := node.prop_or('padding', '0').f64()
+	return QChildLayout{
+		kind: kind
+		frame: rect(0, 0, actual.width, actual.height)
+		padding: padding
+		spacing: node.prop_or('spacing', '0').f64()
+		cursor: padding
+	}
+}
+
+fn (layout &QChildLayout) fallback() Rect {
+	return match layout.kind {
+		.overlay { layout.frame }
+		.column {
+			rect(layout.padding, layout.cursor, layout.frame.width - layout.padding * 2, 32)
+		}
+		.row {
+			rect(layout.cursor, layout.padding, 80, layout.frame.height - layout.padding * 2)
+		}
+	}
+}
+
+fn (mut layout QChildLayout) advance(child &QNode) {
+	if child.tag in ['MenuItem', 'Option'] {
+		return
+	}
+	match layout.kind {
+		.column {
+			layout.cursor += q_dimension(child, 'height', 32) + layout.spacing
+		}
+		.row {
+			layout.cursor += q_dimension(child, 'width', 80) + layout.spacing
+		}
+		.overlay {}
+	}
 }
 
 fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut evaluation QmlEvaluation) !&QNode {
@@ -384,6 +614,18 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		binding = QmlBinding{ property: property, target: expr.value, control: resolved.id }
 	}
 
+	actual := q_frame(resolved, frame)
+	if node.id.len > 0 {
+		mut object := scope[node.id] or {
+			return error('internal QML scope error for `${node.id}` at line ${node.line}')
+		}
+		object.fields['x'] = q_number(actual.x, actual.x.str())
+		object.fields['y'] = q_number(actual.y, actual.y.str())
+		object.fields['width'] = q_number(actual.width, actual.width.str())
+		object.fields['height'] = q_number(actual.height, actual.height.str())
+		scope[node.id] = object
+	}
+
 	mut binding_event_property := ''
 	if b := binding {
 		binding_event_property = match b.property {
@@ -415,17 +657,20 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		}
 	}
 
+	mut layout := q_child_layout(resolved, actual)
 	for child in node.children {
 		if child.tag == 'Repeater' {
-			q_expand_repeater(child, scope, frame, mut resolved.children, mut evaluation)!
+			q_expand_repeater(child, scope, mut resolved.children, mut evaluation, mut layout)!
 		} else {
-			resolved.children << q_eval_node(child, scope, frame, mut evaluation)!
+			resolved_child := q_eval_node(child, scope, layout.fallback(), mut evaluation)!
+			resolved.children << resolved_child
+			layout.advance(resolved_child)
 		}
 	}
 	return resolved
 }
 
-fn q_expand_repeater(node &QNode, scope map[string]QValue, frame Rect, mut output []&QNode, mut evaluation QmlEvaluation) ! {
+fn q_expand_repeater(node &QNode, scope map[string]QValue, mut output []&QNode, mut evaluation QmlEvaluation, mut layout QChildLayout) ! {
 	model_expr := node.expressions['model'] or {
 		return error('Repeater requires `model` at line ${node.line}')
 	}
@@ -435,18 +680,6 @@ fn q_expand_repeater(node &QNode, scope map[string]QValue, frame Rect, mut outpu
 	items := q_eval(model_expr, scope)!
 	if items.kind != .list {
 		return error('Repeater model must be a collection at line ${model_expr.line}')
-	}
-	if items.items.len == 0 && !isnil(items.element) {
-		// Evaluate an element schema without producing UI so paths and action
-		// signatures inside an initially-empty repeater still fail at load time.
-		mut schema_scope := scope.clone()
-		schema_scope['item'] = *items.element
-		schema_scope['index'] = q_number(0, '0')
-		schema_scope['__repeat_key'] = q_string('__schema__')
-		q_eval(key_expr, schema_scope)!
-		for child in node.children {
-			q_eval_node(child, schema_scope, frame, mut evaluation)!
-		}
 	}
 	mut keys := map[string]bool{}
 	for index, item in items.items {
@@ -462,13 +695,9 @@ fn q_expand_repeater(node &QNode, scope map[string]QValue, frame Rect, mut outpu
 		}
 		keys[key] = true
 		parent_key := (scope['__repeat_key'] or { q_string('') }).string_value()
-		item_scope['__repeat_key'] = q_string(if parent_key.len > 0 {
-			'${parent_key}/${key}'
-		} else {
-			key
-		})
+		item_scope['__repeat_key'] = q_string(q_repeat_identity(parent_key, key))
 		for child_index, child in node.children {
-			mut repeated := q_eval_node(child, item_scope, frame, mut evaluation)!
+			mut repeated := q_eval_node(child, item_scope, layout.fallback(), mut evaluation)!
 			if repeated.props['key'].len == 0 {
 				repeated.props['key'] = if node.children.len == 1 {
 					key
@@ -477,8 +706,134 @@ fn q_expand_repeater(node &QNode, scope map[string]QValue, frame Rect, mut outpu
 				}
 			}
 			output << repeated
+			layout.advance(repeated)
 		}
 	}
+}
+
+fn q_validate_declared_schema(name string, type_name string, schema QSchema, line int) ! {
+	expected := match type_name {
+		'bool' { QValueKind.bool_ }
+		'string' { QValueKind.string_ }
+		'int', 'f32', 'f64' { QValueKind.number }
+		else {
+			return error('unsupported property type `${type_name}` at line ${line}')
+		}
+	}
+	if schema.kind != expected {
+		return error('property `${name}` expects `${type_name}` at line ${line}')
+	}
+}
+
+fn q_validate_action[T](expr &QExpression, scope map[string]QSchema) ! {
+	if expr.kind != .call || !expr.value.starts_with('app.') {
+		return error('event handlers must call an app action at line ${expr.line}')
+	}
+	name := expr.value.all_after('app.')
+	if name.len == 0 || name.contains('.') {
+		return error('invalid app action `${expr.value}` at line ${expr.line}')
+	}
+	mut args := []QSchema{cap: expr.args.len}
+	for arg in expr.args {
+		args << q_schema_expression(arg, scope)!
+	}
+	type_check_action[T](name, args, expr.line)!
+}
+
+fn q_validate_repeater_schema[T](node &QNode, scope map[string]QSchema) ! {
+	model_expr := node.expressions['model'] or {
+		return error('Repeater requires `model` at line ${node.line}')
+	}
+	key_expr := node.expressions['key'] or {
+		return error('Repeater requires a stable `key` at line ${node.line}')
+	}
+	items := q_schema_expression(model_expr, scope)!
+	if items.kind != .list || isnil(items.element) {
+		return error('Repeater model must be a collection at line ${model_expr.line}')
+	}
+	mut item_scope := scope.clone()
+	item_scope['item'] = *items.element
+	item_scope['index'] = QSchema{ kind: .number }
+	key := q_schema_expression(key_expr, item_scope)!
+	if key.kind in [.invalid, .object, .list] {
+		return error('Repeater key must be a scalar value at line ${key_expr.line}')
+	}
+	for child in node.children {
+		q_validate_node_schema[T](child, item_scope)!
+	}
+}
+
+fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
+	mut scope := incoming_scope.clone()
+	if node.id.len > 0 {
+		scope[node.id] = QSchema{
+			kind: .object
+			fields: {
+				'x':      QSchema{ kind: .number }
+				'y':      QSchema{ kind: .number }
+				'width':  QSchema{ kind: .number }
+				'height': QSchema{ kind: .number }
+			}
+		}
+	}
+	for name in node.property_order {
+		expr := node.expressions[name] or { continue }
+		schema := q_schema_expression(expr, scope)!
+		q_validate_declared_schema(name, node.property_types[name], schema, expr.line)!
+		if node.id.len > 0 {
+			mut object := scope[node.id] or {
+				return error('internal QML schema error for `${node.id}` at line ${node.line}')
+			}
+			object.fields[name] = schema
+			scope[node.id] = object
+		}
+	}
+	for key, expr in node.expressions {
+		if key == 'id' || key in node.property_types || key.starts_with('bind.')
+			|| key in ['on_tap', 'on_change', 'on_submit'] {
+			continue
+		}
+		q_schema_expression(expr, scope)!
+	}
+	for key, expr in node.expressions {
+		if !key.starts_with('bind.') {
+			continue
+		}
+		property := key.all_after('bind.')
+		if property !in ['text', 'checked'] {
+			return error('two-way binding is not supported for `${property}` at line ${node.line}')
+		}
+		if expr.kind != .path || !expr.value.starts_with('app.') || expr.value.count('.') != 1 {
+			return error('`${key}` must target a mutable top-level app field at line ${expr.line}')
+		}
+		q_schema_expression(expr, scope)!
+		target := expr.value.all_after('app.')
+		type_name := qml_writable_field_type[T](target)!
+		if property == 'checked' && type_name != 'bool' {
+			return error('bind.checked requires a bool field, got `${target}` (${type_name})')
+		}
+	}
+	for property in ['on_tap', 'on_change', 'on_submit'] {
+		expr := node.expressions[property] or { continue }
+		if expr.kind == .call {
+			q_validate_action[T](expr, scope)!
+		} else {
+			q_schema_expression(expr, scope)!
+		}
+	}
+	for child in node.children {
+		if child.tag == 'Repeater' {
+			q_validate_repeater_schema[T](child, scope)!
+		} else {
+			q_validate_node_schema[T](child, scope)!
+		}
+	}
+}
+
+fn q_validate_template[T](root &QNode, model T) ! {
+	q_validate_node_schema[T](root, {
+		'app': q_schema_from(model)
+	})!
 }
 
 fn q_evaluate_template[T](root &QNode, model T, frame Rect) !(&QNode, map[string]QmlEvent) {
@@ -495,26 +850,11 @@ fn q_evaluate_template[T](root &QNode, model T, frame Rect) !(&QNode, map[string
 // and additionally wires two-way bindings and actions to the live model.
 pub fn element_from_qml_model[T](source string, model T, frame Rect) !Element {
 	template := parse_qml(source)!
-	resolved, events := q_evaluate_template(template, model, frame)!
-	qml_validate_events[T](events)!
+	q_validate_template[T](template, model)!
+	resolved, _ := q_evaluate_template(template, model, frame)!
 	element := element_from_qnode(resolved, frame)!
 	validate_element_tree(element)!
 	return element
-}
-
-fn qml_validate_events[T](events map[string]QmlEvent) ! {
-	for _, event in events {
-		if binding := event.binding {
-			target := binding.target.all_after('app.')
-			type_name := qml_writable_field_type[T](target)!
-			if binding.property == 'checked' && type_name != 'bool' {
-				return error('bind.checked requires a bool field, got `${target}` (${type_name})')
-			}
-		}
-		if invocation := event.invocation {
-			type_check_invocation[T](invocation)!
-		}
-	}
 }
 
 fn qml_writable_field_type[T](name string) !string {
@@ -532,32 +872,32 @@ fn qml_writable_field_type[T](name string) !string {
 	return error('unknown app field `${name}`')
 }
 
-fn type_check_invocation[T](invocation QmlInvocation) ! {
+fn type_check_action[T](name string, args []QSchema, line int) ! {
 	$for method in T.methods {
-		if method.name == invocation.name {
+		if method.name == name {
 			$if !method.is_pub {
-				return error('app action `${invocation.name}` is not public')
+				return error('app action `${name}` is not public')
 			} $else $if method.typ is fn ( ) {
-				if invocation.args.len != 0 {
-					return error('app action `${invocation.name}` expects no arguments at line ${invocation.line}')
+				if args.len != 0 {
+					return error('app action `${name}` expects no arguments at line ${line}')
 				}
 				return
 			} $else $if method.typ is fn ( int ) {
-				if invocation.args.len != 1 || invocation.args[0].kind != .number {
-					return error('app action `${invocation.name}` expects one int argument at line ${invocation.line}')
+				if args.len != 1 || args[0].kind != .number {
+					return error('app action `${name}` expects one int argument at line ${line}')
 				}
 				return
 			} $else $if method.typ is fn ( string ) {
-				if invocation.args.len != 1 {
-					return error('app action `${invocation.name}` expects one string argument at line ${invocation.line}')
+				if args.len != 1 || args[0].kind != .string_ {
+					return error('app action `${name}` expects one string argument at line ${line}')
 				}
 				return
 			} $else {
-				return error('app action `${invocation.name}` has an unsupported signature at line ${invocation.line}')
+				return error('app action `${name}` has an unsupported signature at line ${line}')
 			}
 		}
 	}
-	return error('unknown app action `${invocation.name}` at line ${invocation.line}')
+	return error('unknown app action `${name}` at line ${line}')
 }
 
 fn qml_set_field[T](mut model T, name string, value QValue) ! {
@@ -591,16 +931,24 @@ fn qml_set_field[T](mut model T, name string, value QValue) ! {
 }
 
 fn qml_dispatch[T](mut model T, invocation QmlInvocation) ! {
+	mut scope := invocation.scope.clone()
+	// The app object is intentionally refreshed here. Repeater-local values stay
+	// attached to the stable event identity from the rendered instance.
+	scope['app'] = q_value_from(model)
+	mut args := []QValue{cap: invocation.args.len}
+	for expr in invocation.args {
+		args << q_eval(expr, scope)!
+	}
 	$for method in T.methods {
 		if method.name == invocation.name {
 			$if method.is_pub && method.typ is fn ( ) {
 				model.$method()
 				return
 			} $else $if method.is_pub && method.typ is fn ( int ) {
-				model.$method(int(invocation.args[0].numeric(0)!))
+				model.$method(int(args[0].numeric(invocation.line)!))
 				return
 			} $else $if method.is_pub && method.typ is fn ( string ) {
-				model.$method(invocation.args[0].string_value())
+				model.$method(args[0].string_value())
 				return
 			}
 		}
@@ -695,9 +1043,9 @@ fn (mut controller QmlController[T]) handle(event_id string) {
 // reconciles the cached document after each binding write or app action.
 pub fn run_qml[T](config QmlRunConfig[T]) ! {
 	template := parse_qml(config.source)!
+	q_validate_template[T](template, config.model)!
 	initial_frame := rect(0, 0, f64(config.width), f64(config.height))
 	resolved, events := q_evaluate_template(template, config.model, initial_frame)!
-	qml_validate_events[T](events)!
 	validate_element_tree(element_from_qnode(resolved, initial_frame)!)!
 	mut controller := &QmlController[T]{
 		template: template

@@ -2,8 +2,20 @@ module ui2
 
 pub struct QmlTestUser {
 pub:
-	id   int
-	name string
+	id     int
+	name   string
+	weight f64
+}
+
+pub struct QmlTestNestedItem {
+pub:
+	id string
+}
+
+pub struct QmlTestGroup {
+pub:
+	id    string
+	items []QmlTestNestedItem
 }
 
 pub struct QmlTestApp {
@@ -13,7 +25,9 @@ pub mut:
 	name    string
 	enabled bool
 	users   []QmlTestUser
+	groups  []QmlTestGroup
 	removed int
+	saved   string
 }
 
 pub fn (mut app QmlTestApp) clear() {
@@ -22,6 +36,10 @@ pub fn (mut app QmlTestApp) clear() {
 
 pub fn (mut app QmlTestApp) remove_user(id int) {
 	app.removed = id
+}
+
+pub fn (mut app QmlTestApp) save_name(name string) {
+	app.saved = name
 }
 
 fn qml_test_find(element Element, text string) ?Element {
@@ -120,15 +138,104 @@ fn test_qml_model_validates_an_initially_empty_repeater() {
 	}
 }
 
+fn test_qml_model_does_not_evaluate_an_empty_repeater_schema() {
+	source := 'Screen { Repeater { model: app.users key: item.id Label { width: 100 / item.weight } } }'
+	root := element_from_qml_model(source, QmlTestApp{}, rect(0, 0, 100, 30)) or {
+		panic(err)
+	}
+	assert root.children.len == 0
+}
+
+fn test_qml_model_validates_inactive_expression_branches() {
+	source := 'Label { text: app.enabled ? app.typo : "OK" }'
+	if _ := element_from_qml_model(source, QmlTestApp{ enabled: false }, rect(0, 0, 100, 30)) {
+		assert false, 'inactive branches must still be validated'
+	} else {
+		assert err.msg().contains('app.typo')
+	}
+}
+
+fn test_qml_model_resolves_named_node_geometry_before_children() {
+	source := 'Screen { Rectangle { id: panel width: 200 Label { text: "Hello" width: panel.width } } }'
+	root := element_from_qml_model(source, QmlTestApp{}, rect(0, 0, 780, 300)) or {
+		panic(err)
+	}
+	text_label := qml_test_find(root, 'Hello') or { panic('missing label') }
+	assert text_label.frame.width == 200
+}
+
+fn test_qml_model_evaluates_action_arguments_after_binding_writes() {
+	source := 'TextField { bind.text: app.name on_change: app.save_name(app.name) }'
+	template := parse_qml(source) or { panic(err) }
+	mut app := QmlTestApp{ name: 'Ada' }
+	q_validate_template[QmlTestApp](template, app) or { panic(err) }
+	resolved, events := q_evaluate_template(template, app, rect(0, 0, 200, 30)) or {
+		panic(err)
+	}
+	field := element_from_qnode(resolved, rect(0, 0, 200, 30)) or { panic(err) }
+	event := events[field.action_id] or { panic('missing field event') }
+	invocation := event.invocation or { panic('missing field action') }
+
+	// This is the order used by QmlController.handle(): binding first, action second.
+	qml_set_field[QmlTestApp](mut app, 'name', q_string('Adam')) or { panic(err) }
+	qml_dispatch[QmlTestApp](mut app, invocation) or { panic(err) }
+	assert app.name == 'Adam'
+	assert app.saved == 'Adam'
+}
+
+fn test_qml_model_nested_repeater_event_identities_do_not_collide() {
+	source := 'Screen {
+		Repeater {
+			model: app.groups
+			key: item.id
+			Rectangle {
+				Repeater {
+					model: item.items
+					key: item.id
+					Button { text: item.id on_tap: app.save_name(item.id) }
+				}
+			}
+		}
+	}'
+	mut app := QmlTestApp{
+		groups: [
+			QmlTestGroup{ id: 'a/b', items: [QmlTestNestedItem{ id: 'c' }] },
+			QmlTestGroup{ id: 'a', items: [QmlTestNestedItem{ id: 'b/c' }] },
+		]
+	}
+	template := parse_qml(source) or { panic(err) }
+	q_validate_template[QmlTestApp](template, app) or { panic(err) }
+	resolved, events := q_evaluate_template(template, app, rect(0, 0, 200, 100)) or {
+		panic(err)
+	}
+	root := element_from_qnode(resolved, rect(0, 0, 200, 100)) or { panic(err) }
+	first := qml_test_find(root, 'c') or { panic('missing first nested item') }
+	second := qml_test_find(root, 'b/c') or { panic('missing second nested item') }
+	assert first.action_id != second.action_id
+	assert events.len == 2
+
+	first_invocation := (events[first.action_id] or { panic('missing first event') }).invocation or {
+		panic('missing first invocation')
+	}
+	second_invocation := (events[second.action_id] or { panic('missing second event') }).invocation or {
+		panic('missing second invocation')
+	}
+	qml_dispatch[QmlTestApp](mut app, first_invocation) or { panic(err) }
+	assert app.saved == 'c'
+	qml_dispatch[QmlTestApp](mut app, second_invocation) or { panic(err) }
+	assert app.saved == 'b/c'
+}
+
 fn test_qml_model_adapter_writes_fields_and_dispatches_typed_actions() {
 	mut app := QmlTestApp{ name: 'before' }
 	qml_set_field[QmlTestApp](mut app, 'name', q_string('after')) or { panic(err) }
 	assert app.name == 'after'
 	qml_dispatch[QmlTestApp](mut app, QmlInvocation{ name: 'clear' }) or { panic(err) }
 	assert app.name == ''
+	argument := &QExpression{ kind: .literal, value: '42', line: 1 }
 	qml_dispatch[QmlTestApp](mut app, QmlInvocation{
 		name: 'remove_user'
-		args: [q_number(42, '42')]
+		args: [argument]
 	}) or { panic(err) }
 	assert app.removed == 42
 }
