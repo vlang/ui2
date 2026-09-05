@@ -136,6 +136,15 @@ Typed-QML ports from `v-ui` include:
 - `v run examples/rectangles/main.v` — the original four-color rectangle row.
 - `v run examples/textbox/main.v` — editable and read-only multiline text
   areas with live character counts.
+- `v run examples/box_layout/main.v` — fixed, relative, nested, and
+  window-anchored rectangles.
+- `v run examples/dynamic_layout/main.v` — add, remove, reorder, hide, and
+  rename controls through a keyed repeater.
+- `v run examples/grid/main.v` — the original compact three-column data grid.
+- `v run examples/label_justify/main.v` — left, center, and right label
+  alignment plus single-line clipping.
+- `v run examples/message/main.v` — the original Hello World message as a
+  portable in-window dialog.
 
 Run the calculator demo with:
 
