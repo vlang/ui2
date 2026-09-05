@@ -154,6 +154,16 @@ Typed-QML ports from `v-ui` include:
   scrollable multiline text areas.
 - `v run examples/scrollview/main.v` — two independently scrollable read-only
   text panes with generated content.
+- `v run examples/box_layout_with_textbox/main.v` — fixed and proportional box
+  layout with an editable multiline text area.
+- `v run examples/files_dropped/main.v` — collect dropped files and plain text
+  in a keyed, scrollable list.
+- `v run examples/nested_scrollview_box_layout/main.v` — a scrollable 5×5 box
+  layout of independently editable multiline areas.
+- `v run examples/demo_radio/main.v` — exclusive country choices that switch
+  between compact horizontal and vertical layouts.
+- `v run examples/demo_style_4colors/main.v` — select four-color palettes and
+  preview them across portable and native controls.
 
 Run the calculator demo with:
 
