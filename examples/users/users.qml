@@ -283,26 +283,14 @@ Screen {
         }
     }
 
-    Rectangle {
+    Image {
+        id: v_logo
         hidden: root.compact
-        x: root.table_left + root.table_width - 92
-        y: 304
-        width: 92
-        height: 84
-        background: #536B99
-        corner_radius: 12
-
-        Label {
-            text: "V"
-            x: 0
-            y: 4
-            width: 92
-            height: 70
-            color: #FFFFFF
-            font_size: 52
-            bold: true
-            align: center
-        }
+        source: app.logo_path
+        x: root.table_left + root.table_width - 50
+        y: root.height - 66
+        width: 50
+        height: 50
     }
 
     Label {

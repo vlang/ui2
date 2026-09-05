@@ -1,5 +1,6 @@
 module main
 
+import os
 import ui2
 
 fn test_numeric_age_discards_non_digits_and_limits_length() {
@@ -50,6 +51,10 @@ fn test_users_screen_is_evaluated_from_model_qml() {
 	assert table.persistent_scrollbars
 	assert find_element_by_text(table, 'Sam') != none
 	assert find_element_by_text(table, 'Kate') != none
+	logo := find_element_by_id(root, 'v_logo') or { panic('missing V logo') }
+	assert logo.image_path == initial_app().logo_path
+	assert os.exists(logo.image_path)
+	assert logo.frame == ui2.rect(window_width - 66, window_height - 66, 50, 50)
 	country := find_element_by_text(root, 'United States') or { panic('missing country dropdown') }
 	assert country.menu.len == 4
 	assert country.menu[1].title == 'Canada'

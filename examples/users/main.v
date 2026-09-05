@@ -1,5 +1,6 @@
 module main
 
+import os
 import ui2
 
 const window_width = 780
@@ -19,6 +20,7 @@ pub:
 pub struct App {
 pub:
 	max_users int = maximum_users
+	logo_path string
 pub mut:
 	first_name          string
 	last_name           string
@@ -35,6 +37,7 @@ pub mut:
 
 fn initial_app() App {
 	return App{
+		logo_path: users_logo_path()
 		users: [
 			User{
 				id: 1
@@ -51,6 +54,14 @@ fn initial_app() App {
 				country: 'Canada'
 			},
 		]
+	}
+}
+
+fn users_logo_path() string {
+	$if windows {
+		return os.real_path(os.join_path(os.dir(@FILE), 'logo.bmp'))
+	} $else {
+		return os.real_path(os.join_path(os.dir(@FILE), 'logo.png'))
 	}
 }
 
