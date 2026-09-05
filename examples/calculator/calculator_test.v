@@ -66,8 +66,10 @@ fn test_calculator_screen_contains_display_and_every_key() {
 	assert clear_key.text == 'C'
 	assert clear_key.box.bg == 0xef4444
 	assert clear_key.action_id.len > 0
+	assert clear_key.native_style
 	equals_key := panel.children.last()
 	assert equals_key.key == '='
 	assert equals_key.box.bg == 0x3478d4
 	assert equals_key.text_style.bold
+	assert equals_key.native_style
 }

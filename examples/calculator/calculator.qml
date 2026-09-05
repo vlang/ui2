@@ -51,6 +51,7 @@ Screen {
             Button {
                 text: item.text
                 on_tap: app.press(item.text)
+                native: true
                 x: root.padding + item.column * (root.button_width + root.spacing)
                 y: 76 + item.row * (root.button_height + root.spacing)
                 width: root.button_width

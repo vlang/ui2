@@ -686,6 +686,7 @@ fn node_to_element(node &QNode, frame Rect) !Element {
 		accessibility_role: node.prop('accessibility_role')
 		accessibility_label: node.prop('accessibility_label')
 		accessibility_value: node.prop('accessibility_value')
+		native_style: node.prop_bool('native')
 		autocorrect: node.prop('autocorrect') != 'false'
 		padding_left: node.prop_or('pad_left', '12').f64()
 	}

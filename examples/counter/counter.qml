@@ -40,6 +40,7 @@ Screen {
             id: increment
             text: "Count"
             on_tap: app.increment()
+            native: true
             x: card.width - 108
             y: 12
             width: 96

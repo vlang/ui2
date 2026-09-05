@@ -119,9 +119,11 @@ Screen {
     }
 
     Button {
+        id: add-user
         text: "Add user"
         enabled: app.users.len < app.max_users
         on_tap: app.add_user()
+        native: true
         x: 16
         y: 337
         width: 140
@@ -134,8 +136,10 @@ Screen {
     }
 
     Button {
+        id: help
         text: "?"
         on_tap: app.open_help()
+        native: true
         tooltip: "About this example"
         x: 178
         y: 337
@@ -333,8 +337,10 @@ Screen {
             align: center
         }
         Button {
+            id: close-help
             text: "Close"
             on_tap: app.close_help()
+            native: true
             x: 100
             y: 94
             width: 120

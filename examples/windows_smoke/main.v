@@ -25,7 +25,7 @@ fn build_smoke_screen() ui2.Element {
 		ui2.view('panel', ui2.rect(16, 50, 360, 260), ui2.BoxStyle{
 			bg: 0xffffff
 		}, [
-			ui2.button('button', 'Native button', ui2.rect(12, 12, 150, 34), ui2.BoxStyle{}, ui2.TextStyle{}),
+			ui2.with_native_style(ui2.button('button', 'Native button', ui2.rect(12, 12, 150, 34), ui2.BoxStyle{}, ui2.TextStyle{})),
 			ui2.dropdown('dropdown', 'Two', ['One', 'Two', 'Three'], ui2.rect(178, 12, 160, 34), ui2.BoxStyle{}, ui2.TextStyle{}),
 			ui2.text_field_with_change_and_submit('field', 'submit', 'Native text field', 'hello', ui2.rect(12, 60, 326, 32), ui2.BoxStyle{}, ui2.TextStyle{}, ui2.keyboard_default),
 			ui2.text_area('area', 'Native multiline EDIT control', ui2.rect(12, 106, 326, 72), ui2.BoxStyle{}, ui2.TextStyle{}),

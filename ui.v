@@ -126,6 +126,7 @@ pub:
 	frame                 Rect
 	box                   BoxStyle
 	text_style            TextStyle
+	native_style          bool // button: let the platform own bezel and interaction styling
 	text_runs             []TextRun // text_area: optional rich text style runs
 	keyboard              int
 	emit_change           bool
@@ -404,6 +405,15 @@ pub fn button(id string, title string, frame Rect, box_ BoxStyle, style TextStyl
 		frame: frame
 		box: box_
 		text_style: style
+	}
+}
+
+// with_native_style lets the platform render a button's standard bezel and
+// interaction states. Declared styles remain available to custom renderers.
+pub fn with_native_style(el Element) Element {
+	return Element{
+		...el
+		native_style: true
 	}
 }
 

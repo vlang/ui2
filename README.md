@@ -58,6 +58,10 @@ Button {
 }
 ```
 
+On macOS, set `native: true` on a `Button` (or wrap a V-built button with
+`with_native_style`) to let AppKit own its bezel, font, hover, and pressed
+appearance. Its declared colors remain the fallback for the custom renderer.
+
 Action arguments are evaluated when the event is dispatched, after any two-way
 binding on that event has written the control value into the model.
 

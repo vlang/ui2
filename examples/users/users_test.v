@@ -45,7 +45,11 @@ fn test_users_screen_is_evaluated_from_model_qml() {
 	root := ui2.element_from_qml_model(users_qml_source, initial_app(), bounds) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
-	assert (find_element_by_text(root, 'Add user') or { panic('missing Add user label') }).text == 'Add user'
+	add_user := find_element_by_id(root, 'add-user') or { panic('missing Add user button') }
+	assert add_user.text == 'Add user'
+	assert add_user.native_style
+	assert (find_element_by_id(root, 'help') or { panic('missing help button') }).native_style
+	assert (find_element_by_id(root, 'close-help') or { panic('missing Close button') }).native_style
 	assert (find_element_by_text(root, '2/10') or { panic('missing progress label') }).text == '2/10'
 	table := find_element_by_id(root, 'users_table') or { panic('missing users table') }
 	assert table.persistent_scrollbars

@@ -30,4 +30,5 @@ fn test_counter_qml_builds_valid_ui() {
 	button := find_counter_element(root, 'increment') or { panic('missing Count button') }
 	assert button.text == 'Count'
 	assert button.action_id.len > 0
+	assert button.native_style
 }

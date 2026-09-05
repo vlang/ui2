@@ -94,6 +94,7 @@ Screen {
             id: book
             text: "Book"
             on_tap: app.book()
+            native: true
             enabled: root.can_book
             x: 16
             y: 258

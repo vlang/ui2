@@ -20,6 +20,7 @@ const ns_window_style_miniaturizable = u64(4)
 const ns_window_style_resizable = u64(8)
 const ns_backing_store_buffered = u64(2)
 const ns_button_type_momentary_change = i64(5)
+const ns_button_type_momentary_push_in = i64(7)
 const ns_button_type_switch = i64(3)
 
 type NativeView = voidptr
@@ -1013,7 +1014,7 @@ fn native_create_element(el Element) NativeView {
 			native_new_image(element_rect(el.frame), el.image_path, el.rotation)
 		}
 		.button {
-			native_new_button(element_rect(el.frame), el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.box.radius, el.text_style.lines, el.image_path)
+			native_new_button(element_rect(el.frame), el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.box.radius, el.text_style.lines, el.image_path, el.native_style)
 		}
 		.checkbox {
 			native_new_checkbox(el)
@@ -1050,7 +1051,7 @@ fn native_update_element(native NativeView, el Element, declared_text_changed bo
 			native_update_image(native, element_rect(el.frame), el.image_path, el.rotation)
 		}
 		.button {
-			native_update_button(native, element_rect(el.frame), el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.box.radius, el.text_style.lines, el.image_path)
+			native_update_button(native, element_rect(el.frame), el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.box.radius, el.text_style.lines, el.image_path, el.native_style)
 		}
 		.checkbox {
 			native_update_checkbox(native, el)
@@ -1568,22 +1569,28 @@ fn native_update_label(label_view NativeView, frame NativeRect, text string, tex
 	macos.msg_void_bool(cell, 'setUsesSingleLineMode:', lines == 1)
 }
 
-fn native_new_button(frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int, image_name string) NativeView {
+fn native_new_button(frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int, image_name string, native_style bool) NativeView {
 	button_view := macos.msg_id_rect(macos.alloc('NSButton'), 'initWithFrame:', appkit_rect(frame))
-	native_update_button(button_view, frame, title, bg_hex, text_hex, size, bold, italic, underline, radius, lines, image_name)
+	native_update_button(button_view, frame, title, bg_hex, text_hex, size, bold, italic, underline, radius, lines, image_name, native_style)
 	return button_view
 }
 
-fn native_update_button(button_view NativeView, frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int, image_name string) {
+fn native_update_button(button_view NativeView, frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int, image_name string, native_style bool) {
 	native_set_frame(button_view, frame)
-	macos.msg_void_i64(button_view, 'setButtonType:', ns_button_type_momentary_change)
 	macos.msg_void1(button_view, 'setTitle:', macos.nsstring(title))
 	macos.msg_void_u64(button_view, 'setBezelStyle:', 1)
-	macos.msg_void_bool(button_view, 'setBordered:', false)
-	macos.msg_void1(button_view, 'setFont:', native_font(size, bold, italic))
-	native_control_set_attributed_title(button_view, title, text_hex, size, bold, italic, underline)
-	native_set_background(button_view, bg_hex)
-	native_set_corner_radius(button_view, radius)
+	if native_style {
+		macos.msg_void_i64(button_view, 'setButtonType:', ns_button_type_momentary_push_in)
+		macos.msg_void_bool(button_view, 'setBordered:', true)
+		macos.msg_void_bool(button_view, 'setWantsLayer:', false)
+	} else {
+		macos.msg_void_i64(button_view, 'setButtonType:', ns_button_type_momentary_change)
+		macos.msg_void_bool(button_view, 'setBordered:', false)
+		macos.msg_void1(button_view, 'setFont:', native_font(size, bold, italic))
+		native_control_set_attributed_title(button_view, title, text_hex, size, bold, italic, underline)
+		native_set_background(button_view, bg_hex)
+		native_set_corner_radius(button_view, radius)
+	}
 	cell := macos.msg_id(button_view, 'cell')
 	macos.msg_void_i64(cell, 'setLineBreakMode:', 4)
 	macos.msg_void_bool(cell, 'setUsesSingleLineMode:', lines == 1)

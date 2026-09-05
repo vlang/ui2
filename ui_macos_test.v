@@ -21,6 +21,22 @@ fn test_macos_checkbox_uses_native_switch_and_retains_state() {
 	assert macos.msg_i64(checkbox_view, 'state') == 1
 }
 
+fn test_macos_native_style_button_keeps_appkit_bezel_and_press_state() {
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	button_view := native_new_button(native_rect(0, 0, 96, 40), 'Count', 0x3478d4,
+		0xffffff, 15, true, false, false, 7, 1, '', true)
+	defer {
+		macos.release(button_view)
+	}
+
+	assert macos.msg_bool(button_view, 'isBordered')
+	assert macos.msg_u64(macos.msg_id(button_view, 'cell'), 'highlightsBy') & u64(2) != 0
+	assert !macos.msg_bool(button_view, 'wantsLayer')
+}
+
 fn test_macos_text_field_uses_native_bezel_without_layer_mask() {
 	pool := macos.autorelease_pool_new()
 	defer {
