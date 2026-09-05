@@ -145,6 +145,15 @@ Typed-QML ports from `v-ui` include:
   alignment plus single-line clipping.
 - `v run examples/message/main.v` — the original Hello World message as a
   portable in-window dialog.
+- `v run examples/demo_label/main.v` — the original minimal centered-label
+  demonstration.
+- `v run examples/group2/main.v` — two responsive groups with text fields,
+  a checkbox, native buttons, and validation feedback.
+- `v run examples/logview/main.v` — append scan batches to a read-only log.
+- `v run examples/nested_scrollview/main.v` — scroll a list of independently
+  scrollable multiline text areas.
+- `v run examples/scrollview/main.v` — two independently scrollable read-only
+  text panes with generated content.
 
 Run the calculator demo with:
 
