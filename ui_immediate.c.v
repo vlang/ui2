@@ -103,6 +103,7 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 			bg_color: hex_color(0xf4f6f8)
 			width: width
 			height: height
+			sample_count: 4
 			create_window: true
 			window_title: title
 			user_data: unsafe { voidptr(g_gg_app) }
@@ -823,6 +824,8 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				if el.id.len > 0 {
 					g_scroll_content_h[el.id] = content_h
 				}
+				draw_scrollbar(ctx, x, y, el.frame.width, el.frame.height, content_h, scroll_y,
+					el.persistent_scrollbars)
 				apply_clip(ctx, clip)
 			}
 			.label {
@@ -867,17 +870,24 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 			.checkbox {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
-				box_size := if el.frame.height < 20 { el.frame.height } else { 20.0 }
+				box_size := if el.frame.height < 18 { el.frame.height } else { 18.0 }
 				box_y := y + (el.frame.height - box_size) / 2
-				draw_rect(ctx, x, box_y, box_size, box_size, 0x59636e, 4)
-				draw_rect(ctx, x + 2, box_y + 2, box_size - 4, box_size - 4, 0xffffff, 2)
+				fill := if el.checked {
+					if el.enabled { u32(0x3478d4) } else { u32(0x94a3b8) }
+				} else {
+					u32(0xffffff)
+				}
+				border := if el.checked {
+					if el.enabled { u32(0x2f6fc4) } else { u32(0x94a3b8) }
+				} else if el.enabled {
+					u32(0x64748b)
+				} else {
+					u32(0xcbd5e1)
+				}
+				draw_rect(ctx, x, box_y, box_size, box_size, fill, 4)
+				draw_outline(ctx, x, box_y, box_size, box_size, border, 4)
 				if el.checked {
-					draw_text_centered(ctx, '✓', x, box_y - 1, box_size, box_size, TextStyle{
-						color: 0x1769aa
-						size: 16
-						bold: true
-						align: .center
-					})
+					draw_check_mark(ctx, x, box_y, box_size, if el.enabled { u32(0xffffff) } else { u32(0xf8fafc) })
 				}
 				draw_text(ctx, el.text, x + box_size + 8, y, el.frame.width - box_size - 8, el.frame.height, el.text_style)
 				if el.enabled {
@@ -903,8 +913,13 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				g_text_kinds[el.id] = el.kind
 				g_active_fields[el.id] = true
 				selected := g_text_values[el.id] or { el.text }
-				draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
-				draw_text_centered(ctx, selected, x, y, el.frame.width, el.frame.height, el.text_style)
+				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box.bg,
+					el.box.radius, false, el.enabled)
+				padding := if el.padding_left > 0 { el.padding_left } else { 12.0 }
+				text_width := if el.frame.width > padding + 32 { el.frame.width - padding - 32 } else { 0.0 }
+				draw_text(ctx, selected, x + padding, y, text_width, el.frame.height, el.text_style)
+				draw_chevron_down(ctx, x + el.frame.width - 17, y + el.frame.height / 2,
+					if el.enabled { u32(0x475569) } else { u32(0x94a3b8) })
 				if el.enabled {
 					mut options := []string{cap: el.menu.len}
 					for entry in el.menu {
@@ -931,7 +946,6 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				} else {
 					f64(0)
 				}
-				draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
 				previous_prop := g_text_props[el.id] or { el.text }
 				kind_changed := el.id in g_text_kinds && (g_text_kinds[el.id] or { el.kind }) != el.kind
 				if kind_changed || el.id !in g_text_values || (el.text != previous_prop && (g_text_values[el.id] or { '' }) != el.text) {
@@ -949,6 +963,8 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				}
 				display_text := text_field_display_text(current_text, el.secure)
 				is_focused := g_focused_field == el.id
+				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box.bg,
+					el.box.radius, is_focused, el.enabled)
 				if current_text.len > 0 {
 					draw_text(ctx, display_text, x + padding_left, y, content_width, el.frame.height, el.text_style)
 				} else if el.placeholder.len > 0 {
@@ -984,7 +1000,6 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 			.text_area {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
-				draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
 				previous_prop := g_text_props[el.id] or { el.text }
 				kind_changed := el.id in g_text_kinds && (g_text_kinds[el.id] or { el.kind }) != el.kind
 				if kind_changed || el.id !in g_text_values || (el.text != previous_prop && (g_text_values[el.id] or { '' }) != el.text) {
@@ -995,6 +1010,8 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				g_text_kinds[el.id] = el.kind
 				g_active_fields[el.id] = true
 				current_text := g_text_values[el.id] or { el.text }
+				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box.bg,
+					el.box.radius, g_focused_field == el.id, el.enabled)
 				draw_text(ctx, current_text, x + el.padding_left, y, el.frame.width - el.padding_left - 8, el.frame.height, TextStyle{
 					...el.text_style
 					lines: if el.text_style.lines > 1 { el.text_style.lines } else { 1000 }
@@ -1085,6 +1102,87 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 		} else {
 			ctx.draw_rect_filled(f32(x), f32(y), f32(w), f32(h), c)
 		}
+	}
+
+	fn draw_outline(ctx &gg.Context, x f64, y f64, w f64, h f64, color_hex u32, radius f64) {
+		if w <= 0 || h <= 0 {
+			return
+		}
+		c := hex_color(color_hex)
+		if radius > 0 {
+			ctx.draw_rounded_rect_empty(f32(x), f32(y), f32(w), f32(h), f32(radius), c)
+		} else {
+			ctx.draw_rect_empty(f32(x), f32(y), f32(w), f32(h), c)
+		}
+	}
+
+	fn draw_control_surface(ctx &gg.Context, x f64, y f64, w f64, h f64, background u32, radius f64, focused bool, enabled bool) {
+		draw_rect(ctx, x, y, w, h, background, radius)
+		border := if focused {
+			u32(0x3478d4)
+		} else if enabled {
+			u32(0xd7dee8)
+		} else {
+			u32(0xe2e8f0)
+		}
+		draw_outline(ctx, x, y, w, h, border, radius)
+		if focused && w > 2 && h > 2 {
+			inner_radius := if radius > 1 { radius - 1 } else { 0.0 }
+			draw_outline(ctx, x + 1, y + 1, w - 2, h - 2, border, inner_radius)
+		}
+	}
+
+	fn draw_check_mark(ctx &gg.Context, x f64, y f64, size f64, color_hex u32) {
+		pen := gg.PenConfig{
+			color: hex_color(color_hex)
+			thickness: 2
+		}
+		ctx.draw_line_with_config(f32(x + size * 0.22), f32(y + size * 0.50),
+			f32(x + size * 0.42), f32(y + size * 0.70), pen)
+		ctx.draw_line_with_config(f32(x + size * 0.40), f32(y + size * 0.69),
+			f32(x + size * 0.79), f32(y + size * 0.29), pen)
+	}
+
+	fn draw_chevron_down(ctx &gg.Context, center_x f64, center_y f64, color_hex u32) {
+		pen := gg.PenConfig{
+			color: hex_color(color_hex)
+			thickness: 1.5
+		}
+		ctx.draw_line_with_config(f32(center_x - 4), f32(center_y - 2), f32(center_x),
+			f32(center_y + 2), pen)
+		ctx.draw_line_with_config(f32(center_x), f32(center_y + 2), f32(center_x + 4),
+			f32(center_y - 2), pen)
+	}
+
+	fn draw_scrollbar(ctx &gg.Context, x f64, y f64, width f64, height f64, content_height f64, offset f64, persistent bool) {
+		if width < 12 || height < 16 {
+			return
+		}
+		max_offset := if content_height > height { content_height - height } else { 0.0 }
+		if !persistent && max_offset <= 0 {
+			return
+		}
+		track_x := x + width - 9
+		track_y := y + 4
+		track_width := 5.0
+		track_height := height - 8
+		draw_rect(ctx, track_x, track_y, track_width, track_height, 0xf1f5f9, 2.5)
+		content_for_ratio := if content_height > height { content_height } else { height }
+		mut thumb_height := track_height * height / content_for_ratio
+		if thumb_height < 28 {
+			thumb_height = 28
+		}
+		if thumb_height > track_height {
+			thumb_height = track_height
+		}
+		progress := if max_offset > 0 {
+			clamped_offset := if offset < 0 { 0.0 } else if offset > max_offset { max_offset } else { offset }
+			clamped_offset / max_offset
+		} else {
+			0.0
+		}
+		thumb_y := track_y + (track_height - thumb_height) * progress
+		draw_rect(ctx, track_x, thumb_y, track_width, thumb_height, 0xcbd5e1, 2.5)
 	}
 
 	fn text_align(a Align) gg.HorizontalAlign {
