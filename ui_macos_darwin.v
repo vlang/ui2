@@ -14,164 +14,6 @@ import time
 
 #flag darwin -framework QuartzCore
 
-#insert "@DIR/macos/native_helpers.h"
-
-fn C.macos_objc_msg_id_rect_u64_u64_bool(obj macos.Id, selector macos.Sel, rect macos.Rect, a1 u64, a2 u64, a3 bool) macos.Id
-
-fn C.ui2_image_from_name(raw &char) macos.Id
-
-fn C.ui2_image_from_name_sized(raw &char, width f64, height f64) macos.Id
-
-fn C.ui2_nscolor_rgb(hex u32) macos.Id
-
-fn C.ui2_font(size f64, bold bool, italic bool) macos.Id
-
-fn C.ui2_app_did_finish_launching(self voidptr, cmd voidptr, notification voidptr)
-
-fn C.ui2_app_should_terminate_after_last_window_closed(self voidptr, cmd voidptr, sender voidptr) bool
-
-fn C.ui2_button_tap(self voidptr, cmd voidptr, sender voidptr)
-
-fn C.ui2_view_is_flipped(self voidptr, cmd voidptr) bool
-
-fn C.ui2_window_key_down(self voidptr, cmd voidptr, event voidptr)
-
-fn C.ui2_window_perform_key_equiv(self voidptr, cmd voidptr, event voidptr) bool
-
-fn C.ui2_window_did_resize(self voidptr, cmd voidptr, notification voidptr)
-
-fn C.ui2_control_text_changed(self voidptr, cmd voidptr, notification voidptr)
-
-fn C.ui2_text_view_changed(self voidptr, cmd voidptr, notification voidptr)
-
-fn C.ui2_text_view_do_command(self voidptr, cmd voidptr, text_view voidptr, command voidptr) bool
-
-fn C.ui2_text_view_clicked_on_link(self voidptr, cmd voidptr, text_view voidptr, link voidptr, char_index u64) bool
-
-fn C.ui2_bounds_changed(self voidptr, cmd voidptr, notification voidptr)
-
-fn C.ui2_dispatch_main(cb voidptr)
-
-fn C.ui2_observe_bounds(observer voidptr, view voidptr)
-
-fn C.ui2_unobserve_bounds(observer voidptr, view voidptr)
-
-fn C.ui2_place_subview(parent voidptr, child voidptr, previous voidptr)
-
-fn C.ui2_apply_common_view_state(view voidptr, hidden bool, enabled bool, role &char, label &char, value &char)
-
-fn C.ui2_clear_control_state(control voidptr)
-
-fn C.ui2_control_is_editing(control voidptr) bool
-
-fn C.ui2_control_selected_location(control voidptr) u64
-
-fn C.ui2_control_selected_length(control voidptr) u64
-
-fn C.ui2_focus_view(view voidptr) bool
-
-fn C.ui2_restore_control_selection(control voidptr, location u64, length u64)
-
-fn C.ui2_end_window_editing(window voidptr)
-
-fn C.ui2_text_view_set_attributed_string(tv voidptr, utf8 &char, color u32, background_color u32, size f64, family &char, bold bool, italic bool, underline bool, strikethrough bool, vertical_align &char)
-
-fn C.ui2_text_view_set_paragraph_style(tv voidptr, alignment int, head_indent f64, first_line_indent f64, hyphenation_factor f64)
-
-fn C.ui2_text_view_add_style(tv voidptr, location u64, length u64, color u32, background_color u32, size f64, family &char, bold bool, italic bool, underline bool, strikethrough bool, vertical_align &char)
-
-fn C.ui2_text_view_add_link(tv voidptr, location u64, length u64, link &char)
-
-fn C.ui2_text_view_runs(tv voidptr) macos.Id
-
-fn C.ui2_control_set_attributed_title(control voidptr, utf8 &char, color u32, size f64, bold bool, italic bool, underline bool)
-
-fn C.ui2_text_view_toggle_format(tv voidptr, format int)
-
-fn C.ui2_text_view_set_font_family(tv voidptr, family &char)
-
-fn C.ui2_text_view_set_font_size(tv voidptr, size f64)
-
-fn C.ui2_text_view_set_color(tv voidptr, color u32)
-
-fn C.ui2_text_view_set_background_color(tv voidptr, color u32)
-
-fn C.ui2_text_view_add_effect(tv voidptr, location u64, length u64, effect int)
-
-fn C.ui2_text_view_set_effect(tv voidptr, effect int)
-
-fn C.ui2_text_view_effect_active(tv voidptr) int
-
-fn C.ui2_text_view_format_active(tv voidptr, format int) bool
-
-fn C.ui2_text_view_toggle_vertical_align(tv voidptr, align int)
-
-fn C.ui2_text_view_vertical_align_active(tv voidptr) int
-
-fn C.ui2_text_view_set_selected_range(tv voidptr, location u64, length u64)
-
-fn C.ui2_text_view_restore_selected_range(tv voidptr, location u64, length u64, restore_focus bool)
-
-fn C.ui2_text_view_selected_location(tv voidptr) u64
-
-fn C.ui2_text_view_selected_length(tv voidptr) u64
-
-fn C.ui2_text_view_insert_text(tv voidptr, utf8 &char)
-
-fn C.ui2_text_view_text_length(tv voidptr) u64
-
-fn C.ui2_selector_name(selector voidptr) macos.Id
-
-fn C.ui2_view_save_png(view voidptr, path &char) bool
-
-fn C.ui2_pasteboard_has_image() bool
-
-fn C.ui2_pasteboard_write_image_png(path &char) bool
-
-fn C.ui2_app_send_edit_command(command int) bool
-
-fn C.ui2_current_event_modifier_flags() u64
-
-fn C.ui2_utf16_length(utf8 &char) u64
-
-fn C.ui2_event_x_in_view(view voidptr, event voidptr) f64
-
-fn C.ui2_event_y_in_view(view voidptr, event voidptr) f64
-
-fn C.ui2_view_clear_rotation(view voidptr)
-
-fn C.ui2_view_reset_transform(view voidptr)
-
-fn C.ui2_view_set_rotation(view voidptr, degrees f64)
-
-fn C.ui2_pointer_mouse_down(self voidptr, cmd voidptr, event voidptr)
-
-fn C.ui2_pointer_mouse_dragged(self voidptr, cmd voidptr, event voidptr)
-
-fn C.ui2_pointer_mouse_up(self voidptr, cmd voidptr, event voidptr)
-
-fn C.ui2_pointer_reset_cursor_rects(self voidptr, cmd voidptr)
-
-fn C.ui2_dragging_entered(self voidptr, cmd voidptr, dragging_info voidptr) u64
-
-fn C.ui2_perform_drag_operation(self voidptr, cmd voidptr, dragging_info voidptr) bool
-
-fn C.ui2_add_cursor_rect(view voidptr, cursor &char)
-
-fn C.ui2_invalidate_cursor_rects(view voidptr)
-
-fn C.ui2_register_drop_types(view voidptr)
-
-fn C.ui2_dragging_file_count(dragging_info voidptr) u64
-
-fn C.ui2_dragging_file_path(dragging_info voidptr, index u64) &char
-
-fn C.ui2_dragging_text(dragging_info voidptr) &char
-
-fn C.ui2_dragging_x_in_view(view voidptr, dragging_info voidptr) f64
-
-fn C.ui2_dragging_y_in_view(view voidptr, dragging_info voidptr) f64
-
 const ns_window_style_titled = u64(1)
 const ns_window_style_closable = u64(2)
 const ns_window_style_miniaturizable = u64(4)
@@ -423,7 +265,7 @@ fn refresh_on_main() {
 // background threads (sync loops, network fetches).
 pub fn request_refresh() {
 	cb := refresh_on_main
-	C.ui2_dispatch_main(voidptr(cb))
+	native_dispatch_main(cb)
 }
 
 // scroll_offset returns the current vertical scroll position of a Scroll element.
@@ -513,7 +355,7 @@ pub fn text_area_set_selection(id string, location int, length int) {
 	tv := text_area_document_view(id) or { return }
 	start := if location < 0 { u64(0) } else { u64(location) }
 	selection_length := if length < 0 { u64(0) } else { u64(length) }
-	C.ui2_text_view_set_selected_range(voidptr(tv), start, selection_length)
+	native_text_view_set_selected_range(tv, start, selection_length)
 }
 
 // text_area_set_caret positions and collapses the selection at a UTF-16 offset.
@@ -523,17 +365,17 @@ pub fn text_area_set_caret(id string, pos int) {
 
 pub fn text_area_caret(id string) int {
 	tv := text_area_document_view(id) or { return 0 }
-	return int(C.ui2_text_view_selected_location(voidptr(tv)))
+	return int(native_text_view_selected_range(tv).location)
 }
 
 pub fn text_area_selection_length(id string) int {
 	tv := text_area_document_view(id) or { return 0 }
-	return int(C.ui2_text_view_selected_length(voidptr(tv)))
+	return int(native_text_view_selected_range(tv).length)
 }
 
 pub fn insert_text_area_text(id string, text string) {
 	tv := text_area_document_view(id) or { return }
-	C.ui2_text_view_insert_text(voidptr(tv), &char(text.str))
+	native_text_view_insert_text(tv, text)
 }
 
 // consume_text_key tells the current text-view key delegate call that the app
@@ -551,11 +393,11 @@ pub fn consume_key() {
 }
 
 pub fn clipboard_has_image() bool {
-	return C.ui2_pasteboard_has_image()
+	return native_pasteboard_has_image()
 }
 
 pub fn save_clipboard_image_png(path string) bool {
-	return C.ui2_pasteboard_write_image_png(&char(path.str))
+	return native_pasteboard_write_image_png(path)
 }
 
 pub fn dismiss_keyboard() {
@@ -601,7 +443,7 @@ fn schedule_screenshot_capture() {
 	}
 	st.screenshot_pending = true
 	cb := capture_screenshot_on_main
-	C.ui2_dispatch_main(voidptr(cb))
+	native_dispatch_main(cb)
 }
 
 fn capture_screenshot_on_main() {
@@ -614,7 +456,7 @@ fn capture_screenshot_on_main() {
 	if path == '' {
 		return
 	}
-	if !C.ui2_view_save_png(voidptr(st.root_view), &char(path.str)) {
+	if !native_view_save_png(st.root_view, path) {
 		eprintln('ui2 screenshot failed: ${path}')
 		return
 	}
@@ -626,37 +468,37 @@ fn capture_screenshot_on_main() {
 
 pub fn toggle_text_area_format(id string, format TextFormat) TextFormatState {
 	tv := text_area_document_view(id) or { return TextFormatState{} }
-	C.ui2_text_view_toggle_format(voidptr(tv), int(format))
+	native_text_view_toggle_format(tv, int(format))
 	return text_area_format_state(id)
 }
 
 pub fn set_text_area_font_family(id string, family string) TextFormatState {
 	tv := text_area_document_view(id) or { return TextFormatState{} }
-	C.ui2_text_view_set_font_family(voidptr(tv), &char(family.str))
+	native_text_view_set_font_family(tv, family)
 	return text_area_format_state(id)
 }
 
 pub fn set_text_area_font_size(id string, size f64) TextFormatState {
 	tv := text_area_document_view(id) or { return TextFormatState{} }
-	C.ui2_text_view_set_font_size(voidptr(tv), size)
+	native_text_view_set_font_size(tv, size)
 	return text_area_format_state(id)
 }
 
 pub fn set_text_area_color(id string, color u32) TextFormatState {
 	tv := text_area_document_view(id) or { return TextFormatState{} }
-	C.ui2_text_view_set_color(voidptr(tv), color)
+	native_text_view_set_color(tv, color)
 	return text_area_format_state(id)
 }
 
 pub fn set_text_area_background_color(id string, color u32) TextFormatState {
 	tv := text_area_document_view(id) or { return TextFormatState{} }
-	C.ui2_text_view_set_background_color(voidptr(tv), color)
+	native_text_view_set_background_color(tv, color)
 	return text_area_format_state(id)
 }
 
 pub fn set_text_area_effect(id string, effect string) TextFormatState {
 	tv := text_area_document_view(id) or { return TextFormatState{} }
-	C.ui2_text_view_set_effect(voidptr(tv), text_effect_value(effect))
+	native_text_view_set_effect(tv, text_effect_value(effect))
 	return text_area_format_state(id)
 }
 
@@ -678,7 +520,7 @@ pub fn toggle_text_area_subscript(id string) TextFormatState {
 
 pub fn toggle_text_area_vertical_align(id string, align string) TextFormatState {
 	tv := text_area_document_view(id) or { return TextFormatState{} }
-	C.ui2_text_view_toggle_vertical_align(voidptr(tv), vertical_align_value(align))
+	native_text_view_toggle_vertical_align(tv, vertical_align_value(align))
 	return text_area_format_state(id)
 }
 
@@ -692,8 +534,7 @@ fn vertical_align_value(align string) int {
 
 pub fn text_area_runs(id string) []TextRun {
 	tv := text_area_document_view(id) or { return []TextRun{} }
-	raw := macos.utf8_string(C.ui2_text_view_runs(voidptr(tv)))
-	return parse_text_area_runs(raw)
+	return native_text_view_runs(tv)
 }
 
 fn parse_text_area_runs(raw string) []TextRun {
@@ -740,13 +581,13 @@ fn text_run_vertical_align(value string) string {
 
 pub fn text_area_format_state(id string) TextFormatState {
 	tv := text_area_document_view(id) or { return TextFormatState{} }
-	vertical := C.ui2_text_view_vertical_align_active(voidptr(tv))
-	effect := C.ui2_text_view_effect_active(voidptr(tv))
+	vertical := native_text_view_vertical_align_active(tv)
+	effect := native_text_view_effect_active(tv)
 	return TextFormatState{
-		bold: C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.bold))
-		italic: C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.italic))
-		underline: C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.underline))
-		strikethrough: C.ui2_text_view_format_active(voidptr(tv), int(TextFormat.strikethrough))
+		bold: native_text_view_format_active(tv, int(TextFormat.bold))
+		italic: native_text_view_format_active(tv, int(TextFormat.italic))
+		underline: native_text_view_format_active(tv, int(TextFormat.underline))
+		strikethrough: native_text_view_format_active(tv, int(TextFormat.strikethrough))
 		shadow: (effect & 1) != 0
 		outline: (effect & 2) != 0
 		subscript: vertical < 0
@@ -777,49 +618,54 @@ fn text_area_text_view(native NativeView, direct bool) NativeView {
 fn ensure_runtime_classes() {
 	if macos.get_class('UI2FlippedView') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSView'), 'UI2FlippedView')
-		macos.add_method(cls, 'isFlipped', voidptr(C.ui2_view_is_flipped), 'B@:')
-		macos.add_method(cls, 'draggingEntered:', voidptr(C.ui2_dragging_entered), 'Q@:@')
-		macos.add_method(cls, 'performDragOperation:', voidptr(C.ui2_perform_drag_operation), 'B@:@')
+		macos.add_method(cls, 'isFlipped', voidptr(ui2_view_is_flipped), 'B@:')
+		macos.add_method(cls, 'draggingEntered:', voidptr(ui2_dragging_entered), 'Q@:@')
+		macos.add_method(cls, 'performDragOperation:', voidptr(ui2_perform_drag_operation), 'B@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2PointerView') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSView'), 'UI2PointerView')
-		macos.add_method(cls, 'isFlipped', voidptr(C.ui2_view_is_flipped), 'B@:')
-		macos.add_method(cls, 'mouseDown:', voidptr(C.ui2_pointer_mouse_down), 'v@:@')
-		macos.add_method(cls, 'mouseDragged:', voidptr(C.ui2_pointer_mouse_dragged), 'v@:@')
-		macos.add_method(cls, 'mouseUp:', voidptr(C.ui2_pointer_mouse_up), 'v@:@')
-		macos.add_method(cls, 'resetCursorRects', voidptr(C.ui2_pointer_reset_cursor_rects), 'v@:')
+		macos.add_method(cls, 'isFlipped', voidptr(ui2_view_is_flipped), 'B@:')
+		macos.add_method(cls, 'mouseDown:', voidptr(ui2_pointer_mouse_down), 'v@:@')
+		macos.add_method(cls, 'mouseDragged:', voidptr(ui2_pointer_mouse_dragged), 'v@:@')
+		macos.add_method(cls, 'mouseUp:', voidptr(ui2_pointer_mouse_up), 'v@:@')
+		macos.add_method(cls, 'resetCursorRects', voidptr(ui2_pointer_reset_cursor_rects), 'v@:')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2PointerImageView') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSImageView'), 'UI2PointerImageView')
-		macos.add_method(cls, 'mouseDown:', voidptr(C.ui2_pointer_mouse_down), 'v@:@')
-		macos.add_method(cls, 'mouseDragged:', voidptr(C.ui2_pointer_mouse_dragged), 'v@:@')
-		macos.add_method(cls, 'mouseUp:', voidptr(C.ui2_pointer_mouse_up), 'v@:@')
-		macos.add_method(cls, 'resetCursorRects', voidptr(C.ui2_pointer_reset_cursor_rects), 'v@:')
+		macos.add_method(cls, 'mouseDown:', voidptr(ui2_pointer_mouse_down), 'v@:@')
+		macos.add_method(cls, 'mouseDragged:', voidptr(ui2_pointer_mouse_dragged), 'v@:@')
+		macos.add_method(cls, 'mouseUp:', voidptr(ui2_pointer_mouse_up), 'v@:@')
+		macos.add_method(cls, 'resetCursorRects', voidptr(ui2_pointer_reset_cursor_rects), 'v@:')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2AppDelegate') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSObject'), 'UI2AppDelegate')
-		macos.add_method(cls, 'applicationDidFinishLaunching:', voidptr(C.ui2_app_did_finish_launching), 'v@:@')
-		macos.add_method(cls, 'applicationShouldTerminateAfterLastWindowClosed:', voidptr(C.ui2_app_should_terminate_after_last_window_closed), 'B@:@')
-		macos.add_method(cls, 'windowDidResize:', voidptr(C.ui2_window_did_resize), 'v@:@')
+		macos.add_method(cls, 'applicationDidFinishLaunching:', voidptr(ui2_app_did_finish_launching), 'v@:@')
+		macos.add_method(cls, 'applicationShouldTerminateAfterLastWindowClosed:', voidptr(ui2_app_should_terminate_after_last_window_closed), 'B@:@')
+		macos.add_method(cls, 'windowDidResize:', voidptr(ui2_window_did_resize), 'v@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2ButtonHandler') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSObject'), 'UI2ButtonHandler')
-		macos.add_method(cls, 'handleTap:', voidptr(C.ui2_button_tap), 'v@:@')
-		macos.add_method(cls, 'controlTextDidChange:', voidptr(C.ui2_control_text_changed), 'v@:@')
-		macos.add_method(cls, 'textDidChange:', voidptr(C.ui2_text_view_changed), 'v@:@')
-		macos.add_method(cls, 'textView:doCommandBySelector:', voidptr(C.ui2_text_view_do_command), 'B@:@:')
-		macos.add_method(cls, 'textView:clickedOnLink:atIndex:', voidptr(C.ui2_text_view_clicked_on_link), 'B@:@@Q')
-		macos.add_method(cls, 'ui2BoundsChanged:', voidptr(C.ui2_bounds_changed), 'v@:@')
+		macos.add_method(cls, 'handleTap:', voidptr(ui2_button_tap), 'v@:@')
+		macos.add_method(cls, 'controlTextDidChange:', voidptr(ui2_control_text_changed), 'v@:@')
+		macos.add_method(cls, 'textDidChange:', voidptr(ui2_text_view_changed), 'v@:@')
+		macos.add_method(cls, 'textView:doCommandBySelector:', voidptr(ui2_text_view_do_command), 'B@:@:')
+		macos.add_method(cls, 'textView:clickedOnLink:atIndex:', voidptr(ui2_text_view_clicked_on_link), 'B@:@@Q')
+		macos.add_method(cls, 'ui2BoundsChanged:', voidptr(ui2_bounds_changed), 'v@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2Window') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSWindow'), 'UI2Window')
-		macos.add_method(cls, 'keyDown:', voidptr(C.ui2_window_key_down), 'v@:@')
-		macos.add_method(cls, 'performKeyEquivalent:', voidptr(C.ui2_window_perform_key_equiv), 'B@:@')
+		macos.add_method(cls, 'keyDown:', voidptr(ui2_window_key_down), 'v@:@')
+		macos.add_method(cls, 'performKeyEquivalent:', voidptr(ui2_window_perform_key_equiv), 'B@:@')
+		macos.register_class_pair(cls)
+	}
+	if macos.get_class('UI2MainDispatcher') == unsafe { nil } {
+		cls := macos.allocate_class_pair(macos.get_class('NSObject'), 'UI2MainDispatcher')
+		macos.add_method(cls, 'runCallback:', voidptr(ui2_dispatch_callback), 'v@:@')
 		macos.register_class_pair(cls)
 	}
 }
@@ -910,9 +756,10 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 					text: current
 				}
 			}
-			restore_editing = C.ui2_control_is_editing(voidptr(old_native))
-			restore_location = C.ui2_control_selected_location(voidptr(old_native))
-			restore_length = C.ui2_control_selected_length(voidptr(old_native))
+			restore_editing = native_control_is_editing(old_native)
+			selected := native_control_selected_range(old_native)
+			restore_location = selected.location
+			restore_length = selected.length
 		} else if !native_is_nil(old_native) && existing_kind == .text_area
 			&& el.kind == .text_area {
 			old_tv := text_area_text_view(old_native, existing_direct)
@@ -923,8 +770,9 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 				}
 			}
 			restore_editing = native_is_first_responder(old_tv)
-			restore_location = C.ui2_text_view_selected_location(voidptr(old_tv))
-			restore_length = C.ui2_text_view_selected_length(voidptr(old_tv))
+			selected := native_text_view_selected_range(old_tv)
+			restore_location = selected.location
+			restore_length = selected.length
 		}
 		if !native_is_nil(old_native) {
 			unregister_node(key, old_native, existing_kind, existing_direct)
@@ -960,11 +808,11 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		}
 		if restore_editing {
 			if el.kind == .text_field {
-				C.ui2_restore_control_selection(voidptr(native), restore_location, restore_length)
+				native_restore_control_selection(native, restore_location, restore_length)
 			} else if el.kind == .text_area {
 				tv := text_area_text_view(native, el.disable_scroll)
 				if native_focus(tv) {
-					C.ui2_text_view_set_selected_range(voidptr(tv), restore_location, restore_length)
+					native_text_view_set_selected_range(tv, restore_location, restore_length)
 				}
 			}
 		}
@@ -1007,7 +855,7 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			if u64(voidptr(clip)) !in st.observed {
 				st.observed[u64(voidptr(clip))] = true
 				macos.msg_void_bool(clip, 'setPostsBoundsChangedNotifications:', true)
-				C.ui2_observe_bounds(voidptr(st.button_handler), voidptr(clip))
+				native_observe_bounds(st.button_handler, clip)
 			}
 			doc_key := key + '/document'
 			active[doc_key] = true
@@ -1323,7 +1171,7 @@ fn unregister_node(key string, native NativeView, kind Kind, text_direct bool) {
 		clip_pointer := u64(voidptr(clip))
 		st.scroll_ids.delete(clip_pointer)
 		if clip_pointer in st.observed {
-			C.ui2_unobserve_bounds(voidptr(st.button_handler), voidptr(clip))
+			native_unobserve_bounds(st.button_handler, clip)
 			st.observed.delete(clip_pointer)
 		}
 	}
@@ -1386,7 +1234,7 @@ fn apply_common_native_state(native NativeView, el Element) {
 	if native_is_nil(native) || el.kind == .screen {
 		return
 	}
-	C.ui2_apply_common_view_state(voidptr(native), el.hidden, el.enabled, &char(el.accessibility_role.str), &char(el.accessibility_label.str), &char(el.accessibility_value.str))
+	native_apply_common_view_state(native, el.hidden, el.enabled, el.accessibility_role, el.accessibility_label, el.accessibility_value)
 }
 
 fn remove_stale_nodes(active map[string]bool) {
@@ -1531,7 +1379,7 @@ fn native_is_nil(v NativeView) bool {
 }
 
 fn native_color(hex u32) macos.Id {
-	return C.ui2_nscolor_rgb(hex)
+	return native_color_from_hex(hex)
 }
 
 fn native_run_app() {
@@ -1578,7 +1426,7 @@ fn native_install_app_menu(app_name string) {
 
 fn native_new_window(frame NativeRect, title string) NativeView {
 	style := ns_window_style_titled | ns_window_style_closable | ns_window_style_miniaturizable | ns_window_style_resizable
-	window := C.macos_objc_msg_id_rect_u64_u64_bool(macos.alloc('UI2Window'), macos.sel('initWithContentRect:styleMask:backing:defer:'), appkit_rect(frame), style, ns_backing_store_buffered, false)
+	window := objc_id_rect_u64_u64_bool(macos.alloc('UI2Window'), 'initWithContentRect:styleMask:backing:defer:', appkit_rect(frame), style, ns_backing_store_buffered, false)
 	macos.msg_void1(window, 'setTitle:', macos.nsstring(title))
 	macos.msg_void_bool(window, 'setReleasedWhenClosed:', false)
 	return window
@@ -1605,7 +1453,7 @@ fn native_place_subview(parent NativeView, child NativeView, previous NativeView
 	if native_is_nil(parent) || native_is_nil(child) {
 		return
 	}
-	C.ui2_place_subview(voidptr(parent), voidptr(child), voidptr(previous))
+	objc_place_subview(parent, child, previous)
 }
 
 fn native_remove_from_superview(view NativeView) {
@@ -1619,7 +1467,7 @@ fn native_invalidate_cursor_rects(view NativeView) {
 	if native_is_nil(view) {
 		return
 	}
-	C.ui2_invalidate_cursor_rects(voidptr(view))
+	objc_invalidate_cursor_rects(view)
 }
 
 fn native_new_object(class_name string) NativeView {
@@ -1676,13 +1524,13 @@ fn native_new_image(frame NativeRect, path string, rotation f64) NativeView {
 
 fn native_update_image(image_view NativeView, frame NativeRect, path string, rotation f64) {
 	rotated := rotation < -0.001 || rotation > 0.001
-	C.ui2_view_reset_transform(voidptr(image_view))
+	native_view_reset_transform(image_view)
 	native_set_frame(image_view, frame)
 	macos.msg_void_i64(image_view, 'setImageScaling:', 3)
 	if rotated {
-		C.ui2_view_set_rotation(voidptr(image_view), rotation)
+		native_view_set_rotation(image_view, rotation)
 	} else {
-		C.ui2_view_clear_rotation(voidptr(image_view))
+		native_view_clear_rotation(image_view)
 	}
 	if path.trim_space() == '' {
 		macos.msg_void1(image_view, 'setImage:', macos.Id(unsafe { nil }))
@@ -1712,7 +1560,7 @@ fn native_update_label(label_view NativeView, frame NativeRect, text string, tex
 	macos.msg_void1(label_view, 'setTextColor:', native_color(text_hex))
 	macos.msg_void1(label_view, 'setFont:', native_font(size, bold, italic))
 	if italic || underline {
-		C.ui2_control_set_attributed_title(voidptr(label_view), &char(text.str), text_hex, size, bold, italic, underline)
+		native_control_set_attributed_title(label_view, text, text_hex, size, bold, italic, underline)
 	}
 	macos.msg_void_i64(label_view, 'setAlignment:', i64(align))
 	cell := macos.msg_id(label_view, 'cell')
@@ -1733,7 +1581,7 @@ fn native_update_button(button_view NativeView, frame NativeRect, title string, 
 	macos.msg_void_u64(button_view, 'setBezelStyle:', 1)
 	macos.msg_void_bool(button_view, 'setBordered:', false)
 	macos.msg_void1(button_view, 'setFont:', native_font(size, bold, italic))
-	C.ui2_control_set_attributed_title(voidptr(button_view), &char(title.str), text_hex, size, bold, italic, underline)
+	native_control_set_attributed_title(button_view, title, text_hex, size, bold, italic, underline)
 	native_set_background(button_view, bg_hex)
 	native_set_corner_radius(button_view, radius)
 	cell := macos.msg_id(button_view, 'cell')
@@ -1769,7 +1617,7 @@ fn native_update_button_image(button_view NativeView, frame NativeRect, image_na
 	} else {
 		13.0
 	}
-	icon_image := C.ui2_image_from_name_sized(&char(image_name.str), icon_size, icon_size)
+	icon_image := native_image_from_name_sized(image_name, icon_size, icon_size)
 	macos.msg_void1(button_view, 'setImage:', icon_image)
 	macos.msg_void_i64(button_view, 'setImagePosition:', if frame.height >= 42 {
 		i64(5)
@@ -1856,7 +1704,7 @@ fn native_new_text_view(frame macos.Rect, el Element) NativeView {
 	macos.msg_void_bool(tv, 'setEditable:', !el.readonly && el.enabled)
 	macos.msg_void_bool(tv, 'setSelectable:', true)
 	native_set_text_area_content(tv, el)
-	C.ui2_text_view_set_paragraph_style(voidptr(tv), align_value(el.text_style.align), el.text_style.head_indent, el.text_style.first_line_indent, el.text_style.hyphenation_factor)
+	native_text_view_set_paragraph_style(tv, align_value(el.text_style.align), el.text_style.head_indent, el.text_style.first_line_indent, el.text_style.hyphenation_factor)
 	st := state()
 	macos.msg_void1(tv, 'setDelegate:', st.button_handler)
 	return tv
@@ -1885,15 +1733,14 @@ fn native_update_text_area(native NativeView, el Element, declared_text_changed 
 	replace_text := declared_text_changed && current != el.text
 	if replace_text || content_changed {
 		was_editing := native_is_first_responder(tv)
-		selection_location := C.ui2_text_view_selected_location(voidptr(tv))
-		selection_length := C.ui2_text_view_selected_length(voidptr(tv))
+		selection := native_text_view_selected_range(tv)
 		native_set_text_area_content(tv, Element{
 			...el
 			text: if replace_text { el.text } else { current }
 		})
-		C.ui2_text_view_restore_selected_range(voidptr(tv), selection_location, selection_length, was_editing)
+		native_text_view_restore_selected_range(tv, selection.location, selection.length, was_editing)
 	}
-	C.ui2_text_view_set_paragraph_style(voidptr(tv), align_value(el.text_style.align), el.text_style.head_indent, el.text_style.first_line_indent, el.text_style.hyphenation_factor)
+	native_text_view_set_paragraph_style(tv, align_value(el.text_style.align), el.text_style.head_indent, el.text_style.first_line_indent, el.text_style.hyphenation_factor)
 }
 
 fn native_set_text_area_content(tv NativeView, el Element) {
@@ -1903,19 +1750,19 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 		return
 	}
 	macos.msg_void_bool(tv, 'setRichText:', true)
-	C.ui2_text_view_set_attributed_string(voidptr(tv), &char(el.text.str), el.text_style.color, el.text_style.background_color, el.text_style.size, &char(el.text_style.font_family.str), el.text_style.bold, el.text_style.italic, el.text_style.underline, el.text_style.strikethrough, &char(el.text_style.vertical_align.str))
-	base_length := C.ui2_utf16_length(&char(el.text.str))
+	native_text_view_set_attributed_string(tv, el.text, el.text_style.color, el.text_style.background_color, el.text_style.size, el.text_style.font_family, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.text_style.strikethrough, el.text_style.vertical_align)
+	base_length := native_utf16_length(el.text)
 	if base_length > 0 {
-		C.ui2_text_view_add_effect(voidptr(tv), 0, base_length, text_style_effect_value(el.text_style))
+		native_text_view_add_effect(tv, 0, base_length, text_style_effect_value(el.text_style))
 	}
 	mut location := u64(0)
 	for run in el.text_runs {
-		length := C.ui2_utf16_length(&char(run.text.str))
+		length := native_utf16_length(run.text)
 		if length > 0 {
-			C.ui2_text_view_add_style(voidptr(tv), location, length, run.style.color, run.style.background_color, run.style.size, &char(run.style.font_family.str), run.style.bold, run.style.italic, run.style.underline, run.style.strikethrough, &char(run.style.vertical_align.str))
-			C.ui2_text_view_add_effect(voidptr(tv), location, length, text_style_effect_value(run.style))
+			native_text_view_add_style(tv, location, length, run.style.color, run.style.background_color, run.style.size, run.style.font_family, run.style.bold, run.style.italic, run.style.underline, run.style.strikethrough, run.style.vertical_align)
+			native_text_view_add_effect(tv, location, length, text_style_effect_value(run.style))
 			if run.style.link.len > 0 {
-				C.ui2_text_view_add_link(voidptr(tv), location, length, &char(run.style.link.str))
+				native_text_view_add_link(tv, location, length, run.style.link)
 			}
 		}
 		location += length
@@ -1950,7 +1797,7 @@ fn native_clear_control_target(control NativeView) {
 }
 
 fn native_clear_control_state(control NativeView) {
-	C.ui2_clear_control_state(voidptr(control))
+	objc_clear_control_state(control)
 }
 
 fn native_finish_button_action(control NativeView, persistent_state bool) {
@@ -1980,12 +1827,12 @@ fn native_select_dropdown_item(view NativeView, text string) {
 }
 
 fn native_focus(view NativeView) bool {
-	return C.ui2_focus_view(voidptr(view))
+	return native_focus_view(view)
 }
 
 fn native_end_editing(view NativeView) {
 	window := macos.msg_id(view, 'window')
-	C.ui2_end_window_editing(voidptr(window))
+	native_end_window_editing(window)
 }
 
 fn native_terminate_app() {
@@ -2020,7 +1867,7 @@ fn native_set_corner_radius(view NativeView, radius f64) {
 }
 
 fn native_font(size f64, bold bool, italic bool) NativeView {
-	return NativeView(C.ui2_font(size, bold, italic))
+	return NativeView(native_font_object(size, bold, italic))
 }
 
 @[export: 'ui2_view_is_flipped']
@@ -2043,7 +1890,7 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 	macos.msg_void1(st.window, 'setDelegate:', st.app_delegate)
 	root_frame := native_rect(0, 0, f64(st.run_config.width), f64(st.run_config.height))
 	st.root_view = native_new_flipped_view(root_frame, 0xffffff)
-	C.ui2_register_drop_types(voidptr(st.root_view))
+	native_register_drop_types(st.root_view)
 	native_set_content_view(st.window, st.root_view)
 	macos.release(st.root_view)
 	if native_is_nil(st.button_handler) {
@@ -2074,9 +1921,8 @@ fn fire_pointer_event(native NativeView, phase string, event voidptr) {
 	if voidptr(st.event_handler) == unsafe { nil } {
 		return
 	}
-	x := C.ui2_event_x_in_view(voidptr(st.root_view), event)
-	y := C.ui2_event_y_in_view(voidptr(st.root_view), event)
-	st.event_handler('pointer:${phase}:${id}:${x}:${y}')
+	point := native_event_point(st.root_view, event)
+	st.event_handler('pointer:${phase}:${id}:${point.x}:${point.y}')
 }
 
 @[export: 'ui2_pointer_mouse_down']
@@ -2101,7 +1947,7 @@ fn ui2_pointer_reset_cursor_rects(self voidptr, _cmd voidptr) {
 	if cursor.len == 0 {
 		return
 	}
-	C.ui2_add_cursor_rect(self, &char(cursor.str))
+	native_add_cursor_rect(self, cursor)
 }
 
 @[export: 'ui2_dragging_entered']
@@ -2116,29 +1962,14 @@ fn ui2_perform_drag_operation(self voidptr, _cmd voidptr, dragging_info voidptr)
 	if voidptr(st.drop_handler) == unsafe { nil } {
 		return false
 	}
-	raw_count := int(C.ui2_dragging_file_count(dragging_info))
-	count := if raw_count > 256 { 256 } else { raw_count }
-	mut paths := []string{cap: count}
-	for index in 0 .. count {
-		value := C.ui2_dragging_file_path(dragging_info, u64(index))
-		if value != unsafe { nil } {
-			path := unsafe { value.vstring().clone() }
-			if path.len > 0 {
-				paths << path
-			}
-		}
-	}
-	text_value := C.ui2_dragging_text(dragging_info)
-	dropped_text := if text_value != unsafe { nil } {
-		unsafe { text_value.vstring().clone() }
-	} else {
-		''
-	}
+	paths := native_dragging_file_paths(dragging_info, 256)
+	dropped_text := native_dragging_text(dragging_info)
+	point := native_dragging_point(self, dragging_info)
 	st.drop_handler(DropEvent{
 		paths: paths
 		text: dropped_text
-		x: C.ui2_dragging_x_in_view(self, dragging_info)
-		y: C.ui2_dragging_y_in_view(self, dragging_info)
+		x: point.x
+		y: point.y
 	})
 	return paths.len > 0 || dropped_text.len > 0
 }
@@ -2189,7 +2020,7 @@ fn ui2_text_view_do_command(_self voidptr, _cmd voidptr, text_view voidptr, comm
 	if voidptr(st.key_handler) == unsafe { nil } {
 		return false
 	}
-	key := text_command_key(command, C.ui2_current_event_modifier_flags()) or { return false }
+	key := text_command_key(command, native_current_event_modifier_flags()) or { return false }
 	id := st.textview_ids[u64(text_view)] or { return false }
 	boundary_noop := text_command_boundary_noop(text_view, key)
 	st.text_key_consumed = false
@@ -2215,41 +2046,32 @@ fn ui2_text_view_clicked_on_link(_self voidptr, _cmd voidptr, text_view voidptr,
 }
 
 fn text_command_key(command voidptr, modifiers u64) ?string {
-	name := macos.utf8_string(C.ui2_selector_name(command))
+	selector := macos.Sel(command)
 	shift := modifiers & 0x20000 != 0
-	return match name {
-		'deleteBackward:' {
-			'backspace'
-		}
-		'deleteForward:' {
-			'forward_delete'
-		}
-		'insertLineBreak:' {
-			'line_break'
-		}
-		'insertNewline:', 'insertParagraphSeparator:' {
-			if shift {
-				'line_break'
-			} else {
-				'enter'
-			}
-		}
-		else {
-			none
-		}
+	if selector == macos.sel('deleteBackward:') {
+		return 'backspace'
 	}
+	if selector == macos.sel('deleteForward:') {
+		return 'forward_delete'
+	}
+	if selector == macos.sel('insertLineBreak:') {
+		return 'line_break'
+	}
+	if selector == macos.sel('insertNewline:') || selector == macos.sel('insertParagraphSeparator:') {
+		return if shift { 'line_break' } else { 'enter' }
+	}
+	return none
 }
 
 fn text_command_boundary_noop(text_view voidptr, key string) bool {
-	selected_length := C.ui2_text_view_selected_length(text_view)
-	if selected_length > 0 {
+	selected := native_text_view_selected_range(text_view)
+	if selected.length > 0 {
 		return false
 	}
-	location := C.ui2_text_view_selected_location(text_view)
-	text_length := C.ui2_text_view_text_length(text_view)
+	text_length := native_text_view_text_length(text_view)
 	return match key {
-		'backspace' { location == 0 }
-		'forward_delete' { location >= text_length }
+		'backspace' { selected.location == 0 }
+		'forward_delete' { selected.location >= text_length }
 		else { false }
 	}
 }
@@ -2282,7 +2104,7 @@ fn ui2_window_key_down(_self voidptr, _cmd voidptr, event voidptr) {
 @[export: 'ui2_window_perform_key_equiv']
 fn ui2_window_perform_key_equiv(_self voidptr, _cmd voidptr, event voidptr) bool {
 	s := key_event_string(macos.Id(event))
-	if s == 'cmd+v' && C.ui2_pasteboard_has_image() {
+	if s == 'cmd+v' && native_pasteboard_has_image() {
 		st := state()
 		if voidptr(st.key_handler) != unsafe { nil } {
 			st.key_handler(s)
@@ -2331,7 +2153,7 @@ fn handle_native_edit_key(key string) bool {
 		}
 	}
 
-	return C.ui2_app_send_edit_command(command)
+	return native_app_send_edit_command(command)
 }
 
 // key_event_string normalizes an NSEvent into 'cmd+shift+r' style strings.
