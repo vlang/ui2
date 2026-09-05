@@ -33,6 +33,6 @@ fn test_dropdown_qml_contains_all_options() {
 	message := find_dropdown_element(root, 'selection-message') or {
 		panic('missing selection message')
 	}
-	assert message.frame.y == 13
-	assert message.frame.height == 30
+	assert message.frame.y == 19
+	assert message.frame.height == 18
 }
