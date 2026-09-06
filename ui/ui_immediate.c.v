@@ -1202,7 +1202,12 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 			.button {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
-				draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
+				if el.native_style && el.box.bg == unstyled_box_bg {
+					draw_button_bezel(ctx, x, y, el.frame.width, el.frame.height, el.box.radius,
+						el.enabled)
+				} else {
+					draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
+				}
 				draw_text_centered(ctx, el.text, x, y, el.frame.width, el.frame.height, el.text_style)
 				if el.enabled {
 					add_hit_target(HitTarget{
@@ -1491,6 +1496,47 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 			inner_radius := if radius > 1 { radius - 1 } else { 0.0 }
 			draw_outline(ctx, x + 1, y + 1, w - 2, h - 2, border, inner_radius)
 		}
+	}
+
+	// unstyled_box_bg is BoxStyle's default background: the button was left
+	// the colour it was given rather than painted by the application.
+	const unstyled_box_bg = u32(0xffffff)
+	const button_bezel_radius = f64(6)
+
+	// A button that asked for the platform's styling gets its bezel from
+	// AppKit or Win32 on the native backends. The immediate renderer is the
+	// platform in its own window, so it draws one itself; without it a
+	// `native` button that was never painted is a bare caption, invisible on a
+	// white card. A button the application did colour keeps that colour, since
+	// the styling it asked the platform for stops where its own begins.
+	fn draw_button_bezel(ctx &gg.Context, x f64, y f64, w f64, h f64, radius f64, enabled bool) {
+		mut fill := u32(0xeef2f7)
+		mut border := u32(0xb4bfcd)
+		if !enabled {
+			fill = 0xf6f8fa
+			border = 0xdde4ec
+		} else if touch_is_held_inside(x, y, w, h) {
+			fill = 0xdbe3ec
+			border = 0x94a3b8
+		}
+		bezel_radius := if radius > 0 { radius } else { button_bezel_radius }
+		draw_rect(ctx, x, y, w, h, fill, bezel_radius)
+		draw_outline(ctx, x, y, w, h, border, bezel_radius)
+	}
+
+	// touch_is_held_inside reports the pointer being down on this box, which
+	// is what a pressed button looks like. The press has to have started there
+	// too, so dragging across the window does not light up everything it
+	// passes over.
+	fn touch_is_held_inside(x f64, y f64, w f64, h f64) bool {
+		if !g_touch.down {
+			return false
+		}
+		inside_start := g_touch.start_x >= x && g_touch.start_x <= x + w && g_touch.start_y >= y
+			&& g_touch.start_y <= y + h
+		inside_now := g_touch.current_x >= x && g_touch.current_x <= x + w
+			&& g_touch.current_y >= y && g_touch.current_y <= y + h
+		return inside_start && inside_now
 	}
 
 	fn draw_check_mark(ctx &gg.Context, x f64, y f64, size f64, color_hex u32) {

@@ -110,6 +110,13 @@ dropdowns and text areas are `partial` because the dropdown list is drawn by
 the renderer instead of a native menu and rich text-area runs are rendered as
 plain text.
 
+A button marked `native` asks the platform for the standard bezel and hands it
+the interaction styling. AppKit and Win32 supply theirs; the custom renderer
+draws one, including a pressed shade while the pointer is held on it, so the
+button does not come out as a bare caption. A button the application gave its
+own background keeps it, since the platform styling stops where the
+application's own begins.
+
 Images load from `image_path` on every backend. The custom renderer caches
 decoded images. Scroll viewports clip both drawing and hit testing.
 

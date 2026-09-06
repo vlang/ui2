@@ -223,6 +223,32 @@ $if ui2_custom_rendering ? {
 		assert text('menu-escape') == ''
 	}
 
+	fn test_custom_button_press_state_follows_the_pointer() {
+		g_touch = TouchState{}
+		assert !touch_is_held_inside(10, 10, 100, 30)
+		g_touch = TouchState{
+			down: true
+			start_x: 20
+			start_y: 20
+			current_x: 20
+			current_y: 20
+		}
+		assert touch_is_held_inside(10, 10, 100, 30)
+		// Held down, but dragged off the button.
+		g_touch.current_x = 300
+		assert !touch_is_held_inside(10, 10, 100, 30)
+		// A press that began elsewhere does not light up what it passes over.
+		g_touch = TouchState{
+			down: true
+			start_x: 300
+			start_y: 20
+			current_x: 20
+			current_y: 20
+		}
+		assert !touch_is_held_inside(10, 10, 100, 30)
+		g_touch = TouchState{}
+	}
+
 	// Ten pixels a character, ellipsis included, so a width is a character
 	// count and the expected truncation can be read off the assertion.
 	fn custom_test_text_width(line string) f64 {
