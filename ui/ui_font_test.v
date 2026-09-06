@@ -238,3 +238,24 @@ fn test_font_metrics_read_an_installed_font() {
 		return
 	}
 }
+
+// The font ui2 ships is the one the custom renderer draws with on every
+// platform, so it has to be present, readable by the same parser the renderer
+// uses, and reachable without anything installed on the machine.
+fn test_the_bundled_roboto_is_what_the_renderer_picks() {
+	regular, bold := font_pick(font_bundle_dirs())
+	assert os.file_name(regular) == 'Roboto-Regular.ttf'
+	assert os.file_name(bold) == 'Roboto-Bold.ttf'
+
+	metrics := font_file_metrics(regular)!
+	assert metrics.units_per_em == 2048
+	assert metrics.ascender == 1900
+	assert metrics.descender == -500
+
+	// gg derives the italic face from the regular one by name.
+	dir := os.dir(regular)
+	for face in ['Roboto-Italic.ttf', 'Roboto-BoldItalic.ttf'] {
+		font_file_metrics(os.join_path(dir, face))!
+	}
+	assert os.is_file(os.join_path(dir, 'OFL.txt'))
+}
