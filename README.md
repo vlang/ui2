@@ -189,11 +189,11 @@ ascender-to-descender height rather than by the em square. `ui2` reads
 declared size means the same thing no matter which face is loaded.
 
 The renderer picks the font itself instead of taking the first face `fc-match`
-reports, which varies by distribution. `ui2` ships Roboto in `assets/fonts/`, so
-every custom-rendered window draws the same face on every platform. Nothing has
-to be installed for that to work while the module is on the build machine; to
-ship a binary elsewhere, copy `assets/fonts/` next to it or put the files in a
-`fonts/` directory beside it.
+reports, which varies by distribution. `ui2` ships Roboto and Roboto Mono in
+`assets/fonts/`, so every custom-rendered window draws the same faces on every
+platform. Nothing has to be installed for that to work while the module is on
+the build machine; to ship a binary elsewhere, copy `assets/fonts/` next to it
+or put the files in a `fonts/` directory beside it.
 
 Failing all of those, the renderer looks for Inter, Roboto, Noto Sans, Open
 Sans, DejaVu Sans, Liberation Sans, Ubuntu, Cantarell, FreeSans, and Arial among
@@ -215,6 +215,13 @@ when choosing a default for that reason.
 `TextStyle.font_family` names a family. The native backends hand the name to the
 platform's font manager; the custom renderer resolves it against the same font
 directories and ignores it when the machine has no such face.
+
+A family that names a fixed-pitch face is the exception: dropping to the
+proportional default would lose the column alignment it was asked for. So
+`monospace`, `Consolas`, `Courier New`, `Menlo`, and anything ending in `Mono`
+fall back through Roboto Mono, JetBrains Mono, DejaVu Sans Mono, Liberation
+Mono, Noto Sans Mono, Ubuntu Mono, Cascadia Mono, Consolas, Menlo, and Courier
+New. The bundled Roboto Mono means that list always resolves.
 
 ## Examples
 

@@ -1575,6 +1575,11 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				// better in its regular weight than in the default font.
 				path = font_lookup(g_font_files, family, false, false)
 			}
+			if path.len == 0 && font_is_mono_family(family) {
+				// Falling back to the proportional default would break the
+				// column alignment the element asked for in the first place.
+				path = font_mono_path(g_font_files, family, bold, italic)
+			}
 		}
 		g_font_family_files[key] = path
 		return path

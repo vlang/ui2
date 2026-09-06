@@ -249,6 +249,38 @@ fn font_preferences() []string {
 	}
 }
 
+// font_mono_preferences ranks the monospace faces to fall back to when an
+// element asks for one the machine does not have. `ui2` ships Roboto Mono, so
+// the first entry is always there unless the application replaced the bundle.
+fn font_mono_preferences() []string {
+	return ['Roboto Mono', 'JetBrains Mono', 'DejaVu Sans Mono', 'Liberation Mono', 'Noto Sans Mono',
+		'Ubuntu Mono', 'Cascadia Mono', 'Consolas', 'Menlo', 'Courier New']
+}
+
+// font_is_mono_family reports whether a declared family asks for a fixed-pitch
+// face, so an unavailable one falls back to another monospace rather than to
+// the proportional default. It covers the CSS generic names and the faces a
+// cross-platform application usually names.
+fn font_is_mono_family(family string) bool {
+	key := font_key(family)
+	if key.ends_with('mono') || key.contains('monospace') {
+		return true
+	}
+	return key in ['courier', 'couriernew', 'consolas', 'menlo', 'monaco', 'terminal']
+}
+
+// font_first_available returns the file for the first of `families` that this
+// machine has, in the requested weight and slant.
+fn font_first_available(index map[string]string, families []string, bold bool, italic bool) string {
+	for family in families {
+		path := font_lookup(index, family, bold, italic)
+		if path != '' {
+			return path
+		}
+	}
+	return ''
+}
+
 // font_fallback settles for whatever upright sans face is installed once none
 // of the preferred families turned up, so the size math still has real metrics
 // to work from.
@@ -283,6 +315,22 @@ fn font_pick(dirs []string) (string, string) {
 		}
 	}
 	return font_fallback(index), ''
+}
+
+// font_mono_path returns the monospace file to draw `family` with, falling back
+// through the preferred mono faces when the machine has no such family. gg
+// keeps a mono slot of its own, but sizes it two pixels smaller than it is
+// asked for, so the renderer resolves a path here instead of using it.
+fn font_mono_path(index map[string]string, family string, bold bool, italic bool) string {
+	mut families := [family]
+	families << font_mono_preferences()
+	path := font_first_available(index, families, bold, italic)
+	if path != '' {
+		return path
+	}
+	// Roboto Mono ships no italic here, and neither do most of the system
+	// faces, so an upright mono still reads better than a proportional italic.
+	return font_first_available(index, families, bold, false)
 }
 
 // font_paths reports the regular and bold files the custom renderer draws with.

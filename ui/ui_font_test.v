@@ -257,5 +257,71 @@ fn test_the_bundled_roboto_is_what_the_renderer_picks() {
 	for face in ['Roboto-Italic.ttf', 'Roboto-BoldItalic.ttf'] {
 		font_file_metrics(os.join_path(dir, face))!
 	}
-	assert os.is_file(os.join_path(dir, 'OFL.txt'))
+	assert os.is_file(os.join_path(dir, 'Roboto-OFL.txt'))
+}
+
+// gg fills its own mono slot by rewriting `-Regular` to `Mono-Regular` in the
+// path it was given, so the two files have to keep those names and sit in the
+// same directory.
+fn test_the_bundled_roboto_mono_sits_where_gg_looks_for_it() {
+	regular, _ := font_pick(font_bundle_dirs())
+	mono := regular.replace('-Regular.ttf', 'Mono-Regular.ttf')
+	assert os.file_name(mono) == 'RobotoMono-Regular.ttf'
+
+	metrics := font_file_metrics(mono)!
+	assert metrics.units_per_em == 2048
+	assert metrics.ascender == 2146
+	assert metrics.descender == -555
+
+	dir := os.dir(regular)
+	font_file_metrics(os.join_path(dir, 'RobotoMono-Bold.ttf'))!
+	assert os.is_file(os.join_path(dir, 'RobotoMono-OFL.txt'))
+}
+
+// Roboto Mono is a third taller than Roboto between ascender and descender, so
+// without the per-font conversion a mono label would draw noticeably smaller
+// than the sans one beside it at the same declared size.
+fn test_mono_and_sans_draw_the_same_em_square() {
+	regular, _ := font_pick(font_bundle_dirs())
+	sans := font_file_metrics(regular)!
+	mono := font_file_metrics(regular.replace('-Regular.ttf', 'Mono-Regular.ttf'))!
+	assert font_render_size(15, sans) == font_em_pixels(15) * 2400.0 / 2048.0
+	assert font_render_size(15, mono) == font_em_pixels(15) * 2701.0 / 2048.0
+	assert font_render_size(15, mono) > font_render_size(15, sans) * 1.1
+}
+
+fn test_mono_families_are_recognized_by_name() {
+	for family in ['monospace', 'Mono', 'Roboto Mono', 'DejaVu Sans Mono', 'Courier New', 'Consolas',
+		'Menlo', 'Monaco'] {
+		assert font_is_mono_family(family), '${family} should read as monospace'
+	}
+	for family in ['Inter', 'Roboto', 'Helvetica', 'Mona Sans', 'Times New Roman'] {
+		assert !font_is_mono_family(family), '${family} should not read as monospace'
+	}
+}
+
+fn test_an_unavailable_mono_family_falls_back_to_another_mono() {
+	dir := font_test_dir('mono', ['Roboto-Regular.ttf', 'RobotoMono-Regular.ttf',
+		'RobotoMono-Bold.ttf'])
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	index := font_index([dir])
+	// Nothing here is called Consolas, but the request is still for a
+	// fixed-pitch face.
+	assert font_mono_path(index, 'Consolas', false, false) == os.join_path(dir, 'RobotoMono-Regular.ttf')
+	assert font_mono_path(index, 'monospace', true, false) == os.join_path(dir, 'RobotoMono-Bold.ttf')
+	// No italic mono is installed, so the upright one is used rather than the
+	// proportional default.
+	assert font_mono_path(index, 'Courier New', false, true) == os.join_path(dir, 'RobotoMono-Regular.ttf')
+	// A family that is present wins over the fallback list.
+	assert font_mono_path(index, 'Roboto Mono', false, false) == os.join_path(dir, 'RobotoMono-Regular.ttf')
+}
+
+fn test_mono_fallback_reports_nothing_when_no_mono_face_exists() {
+	dir := font_test_dir('nomono', ['Roboto-Regular.ttf', 'Roboto-Bold.ttf'])
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	assert font_mono_path(font_index([dir]), 'Consolas', false, false) == ''
 }
