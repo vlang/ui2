@@ -3,9 +3,11 @@
 Roboto 3.016, the `web/static` build from
 [googlefonts/roboto-classic](https://github.com/googlefonts/roboto-classic/releases/tag/v3.016),
 covering Latin, Greek, Cyrillic, and Vietnamese, Roboto Mono 3.001 from
-[googlefonts/RobotoMono](https://github.com/googlefonts/RobotoMono), and Noto
-Sans Symbols 2 v2.008, the `unhinted` build from
-[notofonts/symbols](https://github.com/notofonts/symbols/releases/tag/NotoSansSymbols2-v2.008).
+[googlefonts/RobotoMono](https://github.com/googlefonts/RobotoMono), Noto Sans
+Symbols 2 v2.008, the `unhinted` build from
+[notofonts/symbols](https://github.com/notofonts/symbols/releases/tag/NotoSansSymbols2-v2.008),
+and Noto Emoji 3.002 from
+[google/fonts](https://github.com/google/fonts/tree/main/ofl/notoemoji).
 
 The custom renderer draws with these files unless the application overrides them
 (see "Fonts and text sizes" in the top-level README), so a `gg` window looks the
@@ -22,8 +24,26 @@ covers 927 of them, which is every letter an interface is written in and almost
 none of the marks it labels rows with, so a ▸ or a ✓ would otherwise come
 out as the empty box. Noto Sans Symbols 2 carries the geometric shapes, dingbats,
 box elements and braille, and the renderer adds one symbol face off the machine
-behind it for the blocks it leaves out, arrows among them. Nothing here covers
-emoji: those need a color font, and `stb_truetype` rasterizes outlines only.
+behind it for the blocks it leaves out, arrows among them.
+
+`NotoEmoji-Regular.ttf` sits behind it in that same chain and is what draws an
+emoji. It is the monochrome Noto Emoji, not the color one: `stb_truetype` reads
+neither the bitmaps of `NotoColorEmoji.ttf` nor the layers of a COLR font, and
+the outline such a face leaves at the base glyph is empty, so it would trade the
+empty box for an empty space. Monochrome emoji are outlines like any other
+glyph, and they take the color the label was given. The file also carries U+FE0F
+and U+200D, the variation selector and the joiner that emoji are written with,
+which would otherwise draw a box of their own — the renderer does no shaping, so
+it draws every code point it is handed.
+
+Upstream ships the monochrome family as the variable `NotoEmoji[wght].ttf`
+only, which is the one thing this directory cannot use, so the file here is its
+regular instance:
+
+```sh
+fonttools varLib.instancer -q 'NotoEmoji[wght].ttf' wght=400 \
+	--update-name-table -o NotoEmoji-Regular.ttf
+```
 
 These are the static instances on purpose. `stb_truetype`, the rasterizer
 fontstash builds with, ignores the `fvar` and `gvar` tables, so the variable
@@ -35,6 +55,6 @@ instructions, so the `hinted` build would only add bytes. For the same reason
 Noto Sans Symbols 2 is the `unhinted` build rather than the `googlefonts` one,
 which is the same outlines and twice the file.
 
-All three families are licensed under the SIL Open Font License 1.1. They carry
+All four families are licensed under the SIL Open Font License 1.1. They carry
 different copyright notices, so each keeps its own copy: `Roboto-OFL.txt`,
-`RobotoMono-OFL.txt` and `NotoSansSymbols2-OFL.txt`.
+`RobotoMono-OFL.txt`, `NotoSansSymbols2-OFL.txt` and `NotoEmoji-OFL.txt`.

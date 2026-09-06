@@ -328,16 +328,34 @@ fn test_mono_fallback_reports_nothing_when_no_mono_face_exists() {
 
 // ── Symbols ────────────────────────────────────────────────────────
 
-// The symbol face ui2 ships is what keeps a triangle, an arrow or a check mark
-// from coming out as an empty box on a machine with nothing installed, so it
-// has to be present, readable by the same parser the renderer uses, and the
-// first place a glyph the text font lacks is looked for.
-fn test_the_bundled_symbol_face_leads_the_fallback_chain() {
+// The faces ui2 ships are what keep a triangle, an arrow, a check mark or an
+// emoji from coming out as an empty box on a machine with nothing installed, so
+// they have to be present, readable by the same parser the renderer uses, and
+// searched before anything else. Symbols come before emoji: the two overlap
+// around the dingbats, and the text-weight glyph is the one to draw.
+fn test_the_bundled_faces_lead_the_fallback_chain() {
 	paths := font_symbol_paths()
-	assert paths.len > 0
+	assert paths.len >= 2
 	assert os.file_name(paths[0]) == 'NotoSansSymbols2-Regular.ttf'
-	font_file_metrics(paths[0])!
-	assert os.is_file(os.join_path(os.dir(paths[0]), 'NotoSansSymbols2-OFL.txt'))
+	assert os.file_name(paths[1]) == 'NotoEmoji-Regular.ttf'
+	for path in paths[..2] {
+		font_file_metrics(path)!
+	}
+	dir := os.dir(paths[0])
+	assert os.is_file(os.join_path(dir, 'NotoSansSymbols2-OFL.txt'))
+	assert os.is_file(os.join_path(dir, 'NotoEmoji-OFL.txt'))
+}
+
+// Noto Emoji is drawn at the size Roboto is, and the renderer resolves a point
+// size against the metrics of the text font alone, so an emoji only sits right
+// on the line while the two agree about the em square.
+fn test_the_bundled_emoji_face_shares_robotos_metrics() {
+	regular, _ := font_pick(font_bundle_dirs())
+	text := font_file_metrics(regular)!
+	emoji := font_file_metrics(os.join_path(os.dir(regular), 'NotoEmoji-Regular.ttf'))!
+	assert emoji.units_per_em == text.units_per_em
+	assert emoji.ascender == text.ascender
+	assert emoji.descender == text.descender
 }
 
 // Every face in the chain is read into memory and kept there for as long as the
@@ -371,18 +389,22 @@ fn test_ui2_font_symbols_is_searched_before_the_bundled_face() {
 	assert os.file_name(font_symbol_paths()[0]) == 'NotoSansSymbols2-Regular.ttf'
 }
 
-// A face made of symbols has no letters in it, so a window that settled on one
-// for its text would draw every word as a row of empty boxes.
+// A face made of symbols or emoji has no letters in it, so a window that settled
+// on one for its text would draw every word as a row of empty boxes. The color
+// emoji faces are named for that reason alone: they are never searched for a
+// missing glyph, since stb_truetype cannot read a bitmap or a layered one.
 fn test_a_symbol_face_is_never_settled_on_for_text() {
 	for family in ['Noto Sans Symbols 2', 'NotoSansSymbols2-Regular', 'Noto Sans Symbols',
-		'Segoe UI Symbol', 'Apple Symbols', 'Symbola'] {
+		'Segoe UI Symbol', 'Apple Symbols', 'Symbola', 'Noto Emoji', 'NotoEmoji-Regular',
+		'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji'] {
 		assert font_is_symbol_family(family), '${family} should read as a symbol face'
 	}
 	for family in ['Roboto', 'Noto Sans', 'DejaVu Sans', 'Inter', 'Arial', ''] {
 		assert !font_is_symbol_family(family), '${family} should read as a text face'
 	}
 
-	dir := font_test_dir('symbols', ['NotoSansSymbols2-Regular.ttf', 'Roboto-Regular.ttf'])
+	dir := font_test_dir('symbols', ['NotoSansSymbols2-Regular.ttf', 'NotoEmoji-Regular.ttf',
+		'Roboto-Regular.ttf'])
 	defer {
 		os.rmdir_all(dir) or {}
 	}
@@ -390,7 +412,8 @@ fn test_a_symbol_face_is_never_settled_on_for_text() {
 	// check keeps the search from settling on it.
 	assert font_fallback(font_index([dir])) == os.join_path(dir, 'Roboto-Regular.ttf')
 
-	only_symbols := font_test_dir('symbols_only', ['NotoSansSymbols2-Regular.ttf'])
+	only_symbols := font_test_dir('symbols_only', ['NotoSansSymbols2-Regular.ttf',
+		'NotoEmoji-Regular.ttf'])
 	defer {
 		os.rmdir_all(only_symbols) or {}
 	}

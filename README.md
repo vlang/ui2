@@ -246,21 +246,25 @@ Roboto has 927 code points, so the triangles, arrows and check marks an
 interface labels its rows with are not in it, and fontstash draws a code point
 it cannot find as glyph 0 — the empty box, or tofu.
 
-`ui2` therefore ships Noto Sans Symbols 2 in `assets/fonts/` as well, and hands
-it to fontstash as a fallback for every face it loads. Fontstash searches the
-chain whenever a glyph lookup lands on that empty box, so a label mixing letters
-and symbols is still drawn in one pass and measured exactly the way it is drawn;
-`TextStyle.font_family` faces get the same chain.
+`ui2` therefore ships Noto Sans Symbols 2 and Noto Emoji in `assets/fonts/` as
+well, and hands them to fontstash as fallbacks for every face it loads.
+Fontstash searches the chain whenever a glyph lookup lands on that empty box, so
+a label mixing letters and symbols is still drawn in one pass and measured
+exactly the way it is drawn; `TextStyle.font_family` faces get the same chain.
 
-Noto Sans Symbols 2 covers the geometric shapes, dingbats, box elements and
-braille. Behind it the renderer adds one symbol face off the machine — Noto Sans
-Symbols, Segoe UI Symbol, Apple Symbols, Symbola, or the widest text face it
-finds — which is what covers the blocks Noto Sans Symbols 2 leaves out, the
-arrows at U+2190 and the box drawing at U+2500 among them. Only one is loaded,
-since every face in the chain stays in memory for as long as the window does.
+Noto Sans Symbols 2 comes first and covers the geometric shapes, dingbats, box
+elements and braille. Then one symbol face off the machine — Noto Sans Symbols,
+Segoe UI Symbol, Apple Symbols, Symbola, or the widest text face it finds —
+which is what covers the blocks Noto Sans Symbols 2 leaves out, the arrows at
+U+2190 and the box drawing at U+2500 among them. Only one is taken, since every
+face in the chain stays in memory for as long as the window does.
 
-Emoji are not covered. They need a color font, and `stb_truetype` rasterizes
-outlines only.
+Emoji are drawn from Noto Emoji, the monochrome family: they come out as
+outlines in the color the label was given, not as the color artwork a desktop
+draws. `stb_truetype` reads neither the bitmaps nor the layers a color emoji
+font keeps its artwork in, so an installed `NotoColorEmoji.ttf` or Segoe UI
+Emoji is never searched — it would draw an empty space rather than an empty box,
+which is no better.
 
 `UI2_FONT_SYMBOLS` takes a file path and is searched ahead of the bundled face:
 

@@ -263,12 +263,24 @@ fn font_mono_preferences() []string {
 // letters a paragraph is set in. A text face only draws the scripts it was cut
 // for: the bundled Roboto stops at 927 code points, so the triangles, arrows
 // and check marks an interface labels its rows with land on glyph 0, the empty
-// box. `ui2` ships Noto Sans Symbols 2 first in this list so those boxes are
-// gone with nothing installed on the machine; the rest are the symbol faces the
-// three desktops come with.
+// box. `ui2` ships Noto Sans Symbols 2 and Noto Emoji for that reason, so those
+// boxes are gone with nothing installed on the machine; the rest are the symbol
+// faces the three desktops come with. Symbols are looked for before emoji: the
+// two overlap around the dingbats, and a ✔ beside a line of text should be the
+// text-weight one rather than the emoji.
 fn font_symbol_families() []string {
 	return ['Noto Sans Symbols 2', 'Noto Sans Symbols', 'Segoe UI Symbol', 'Apple Symbols',
-		'Symbola']
+		'Symbola', 'Noto Emoji']
+}
+
+// font_color_emoji_families lists the faces that keep their emoji as bitmaps or
+// as stacks of colored layers. `stb_truetype`, the rasterizer fontstash builds
+// with, reads neither, and the outline such a face leaves at the base glyph is
+// empty, so searching one would trade the empty box for an empty space. They
+// are named only so the renderer does not settle on one for its text.
+fn font_color_emoji_families() []string {
+	return ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Twemoji Mozilla',
+		'JoyPixels']
 }
 
 // font_symbol_fallback_families ranks every face worth looking in for a glyph
@@ -287,15 +299,17 @@ fn font_symbol_fallback_families() []string {
 	return families
 }
 
-// font_is_symbol_family reports whether a face is one of those symbol-only
-// ones, so the renderer never settles on it for its text font: a window drawn
-// in Noto Sans Symbols 2 would be nothing but empty boxes.
+// font_is_symbol_family reports whether a face holds symbols or emoji instead
+// of letters, so the renderer never settles on it for its text font: a window
+// drawn in Noto Sans Symbols 2 would be nothing but empty boxes.
 fn font_is_symbol_family(family string) bool {
 	key := font_key(family)
 	if key.len == 0 {
 		return false
 	}
-	for candidate in font_symbol_families() {
+	mut candidates := font_symbol_families()
+	candidates << font_color_emoji_families()
+	for candidate in candidates {
 		if key.starts_with(font_key(candidate)) {
 			return true
 		}
