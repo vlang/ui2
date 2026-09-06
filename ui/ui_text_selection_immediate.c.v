@@ -1,6 +1,6 @@
 module ui2
 
-$if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
+$if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
 	pub fn text_area_set_selection(id string, location int, length int) {
 		if id !in g_active_fields || (g_text_kinds[id] or { Kind.screen }) != .text_area {
 			return

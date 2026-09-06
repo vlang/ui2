@@ -112,8 +112,10 @@ pub:
 }
 
 pub struct Element {
-	kind Kind
 pub:
+	// kind is readable from outside the module so a renderer can live in
+	// another package: dispatching on it is the first thing any backend does.
+	kind                  Kind
 	id                    string // lookup/state identity
 	action_id             string // event identity (falls back to id)
 	submit_id             string // text_field: optional event id emitted when Return submits
@@ -276,6 +278,20 @@ pub fn view(id string, frame Rect, box_ BoxStyle, children []Element) Element {
 		id: id
 		frame: frame
 		box: box_
+		children: children
+	}
+}
+
+// clickable_view is a container that reports pointer down and up on itself,
+// for a surface that is not a control but still has to answer a click — the
+// body of a window that should come to the front when it is touched, say.
+pub fn clickable_view(id string, frame Rect, box_ BoxStyle, children []Element) Element {
+	return Element{
+		kind: .view
+		id: id
+		frame: frame
+		box: box_
+		clickable: true
 		children: children
 	}
 }

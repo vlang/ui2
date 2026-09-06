@@ -5,7 +5,7 @@
 module ui2
 
 fn native_menu_bar_supported() bool {
-	$if android || linux {
+	$if (android || linux) && !ui2_headless ? {
 		return true
 	} $else {
 		return false
@@ -17,7 +17,7 @@ fn native_tray_supported() bool {
 }
 
 fn native_set_menu_bar(_menus []Menu) {
-	$if android || linux {
+	$if (android || linux) && !ui2_headless ? {
 		// The bar is redrawn from the declaration every frame; all that has to
 		// happen here is that a menu left open by the previous declaration
 		// cannot outlive it.
