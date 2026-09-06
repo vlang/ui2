@@ -5,6 +5,7 @@
 module ui2
 
 $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
+	import fontstash
 	import gg
 	import os
 	import sokol.sapp
@@ -102,6 +103,9 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 	__global g_font_indexed = false
 	__global g_font_family_files = map[string]string{}
 	__global g_font_family_metrics = map[string]FontMetrics{}
+	__global g_font_symbol_ids = []int{}
+	__global g_font_symbol_bases = map[int]bool{}
+	__global g_font_symbol_fons = voidptr(unsafe { nil })
 	__global g_active_images = map[string]bool{}
 	__global g_open_dropdown = ''
 	__global g_dropdown_popup = DropdownPopup{}
@@ -345,6 +349,10 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 			return
 		}
 		ctx := app.ctx
+		// gg builds its fonts in the sokol init callback, after the window has
+		// been created, so the fallback chain is attached on the way into the
+		// first frame rather than in run_window.
+		ensure_symbol_fallbacks(ctx)
 		ctx.begin()
 		if voidptr(g_build_screen) != unsafe { nil } {
 			g_hit_targets = []HitTarget{}
@@ -1631,6 +1639,77 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 		return path
 	}
 
+	// ensure_symbol_fallbacks hands fontstash the faces to look in when the font
+	// a string is drawn in has no outline for one of its code points. fontstash
+	// walks a font's fallback list whenever a glyph lookup lands on index 0 —
+	// the empty box, or tofu — and rasterizes the first face that does have the
+	// code point, so a label mixing letters and symbols is still drawn in one
+	// pass and measured exactly the way it is drawn.
+	//
+	// The ids belong to the fontstash context gg loaded its fonts into. Sokol
+	// builds a new one whenever the window is recreated, on an Android resume
+	// among others, so the loaded faces are tracked against the context they
+	// came from rather than behind a flag that a new context would not clear.
+	fn ensure_symbol_fallbacks(ctx &gg.Context) {
+		if !ctx.font_inited || ctx.ft == unsafe { nil } || ctx.ft.fons == unsafe { nil } {
+			return
+		}
+		fons := ctx.ft.fons
+		if g_font_symbol_fons != voidptr(fons) {
+			g_font_symbol_fons = voidptr(fons)
+			g_font_symbol_ids = []int{}
+			g_font_symbol_bases = map[int]bool{}
+			for path in font_symbol_paths() {
+				bytes := os.read_bytes(path) or { continue }
+				id := fons.add_font_mem(path, bytes, true)
+				if id != fontstash.invalid {
+					g_font_symbol_ids << id
+				}
+			}
+		}
+		for base in [ctx.ft.font_normal, ctx.ft.font_bold, ctx.ft.font_mono, ctx.ft.font_italic] {
+			add_symbol_fallbacks(fons, base)
+		}
+	}
+
+	// add_symbol_fallbacks attaches the chain to one font, once. fontstash gives
+	// a font a fixed number of fallback slots and appends to them blindly, so
+	// registering the same face twice would spend them for nothing.
+	fn add_symbol_fallbacks(fons &fontstash.Context, base int) {
+		if base == fontstash.invalid || g_font_symbol_ids.len == 0 || base in g_font_symbol_bases {
+			return
+		}
+		g_font_symbol_bases[base] = true
+		for id in g_font_symbol_ids {
+			if id != base {
+				fons.add_fallback_font(base, id)
+			}
+		}
+	}
+
+	// ensure_family_fallbacks gives a face named by TextStyle.font_family the
+	// same chain. gg loads such a file itself, on the first draw that asks for
+	// it, and keeps the id in a map of its own; loading it here first puts the
+	// id in that map before any glyph is rasterized from it, which is the only
+	// moment the fallbacks can still be attached.
+	fn ensure_family_fallbacks(ctx &gg.Context, path string) {
+		if path.len == 0 || g_font_symbol_ids.len == 0 || !ctx.font_inited {
+			return
+		}
+		mut id := ctx.ft.fonts_map[path]
+		if id == 0 {
+			bytes := os.read_bytes(path) or { return }
+			id = ctx.ft.fons.add_font_mem(path, bytes, true)
+			if id == fontstash.invalid {
+				return
+			}
+			unsafe {
+				ctx.ft.fonts_map[path] = id
+			}
+		}
+		add_symbol_fallbacks(ctx.ft.fons, id)
+	}
+
 	// text_font_metrics reports the metrics to size a string with: the chosen
 	// family's own, or the window font's when the element declared none.
 	fn text_font_metrics(path string) FontMetrics {
@@ -1720,6 +1799,7 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 
 		text_y := int(y + h / 2)
 		family := text_font_file(style.font_family, style.bold, style.italic)
+		ensure_family_fallbacks(ctx, family)
 		cfg := gg.TextCfg{
 			color: hex_color(style.color)
 			size: int(font_render_size(style.size, text_font_metrics(family)) + 0.5)

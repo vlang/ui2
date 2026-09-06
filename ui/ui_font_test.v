@@ -325,3 +325,77 @@ fn test_mono_fallback_reports_nothing_when_no_mono_face_exists() {
 	}
 	assert font_mono_path(font_index([dir]), 'Consolas', false, false) == ''
 }
+
+// ── Symbols ────────────────────────────────────────────────────────
+
+// The symbol face ui2 ships is what keeps a triangle, an arrow or a check mark
+// from coming out as an empty box on a machine with nothing installed, so it
+// has to be present, readable by the same parser the renderer uses, and the
+// first place a glyph the text font lacks is looked for.
+fn test_the_bundled_symbol_face_leads_the_fallback_chain() {
+	paths := font_symbol_paths()
+	assert paths.len > 0
+	assert os.file_name(paths[0]) == 'NotoSansSymbols2-Regular.ttf'
+	font_file_metrics(paths[0])!
+	assert os.is_file(os.join_path(os.dir(paths[0]), 'NotoSansSymbols2-OFL.txt'))
+}
+
+// Every face in the chain is read into memory and kept there for as long as the
+// window lives, so the machine contributes one at most. The point of the tail
+// is to cover the blocks Noto Sans Symbols 2 leaves out, not to load every
+// symbol font that happens to be installed.
+fn test_the_symbol_chain_takes_at_most_one_installed_face() {
+	bundled := font_index(font_bundle_dirs())
+	mut shipped := 0
+	for family in font_symbol_fallback_families() {
+		if font_lookup(bundled, family, false, false) != '' {
+			shipped++
+		}
+	}
+	assert shipped > 0
+	assert font_symbol_paths().len <= shipped + 1
+}
+
+fn test_ui2_font_symbols_is_searched_before_the_bundled_face() {
+	regular, _ := font_pick(font_bundle_dirs())
+	os.setenv('UI2_FONT_SYMBOLS', regular, true)
+	defer {
+		os.unsetenv('UI2_FONT_SYMBOLS')
+	}
+	paths := font_symbol_paths()
+	assert paths[0] == regular
+	assert os.file_name(paths[1]) == 'NotoSansSymbols2-Regular.ttf'
+
+	// A path that names no file is ignored rather than searched.
+	os.setenv('UI2_FONT_SYMBOLS', os.join_path(os.temp_dir(), 'ui2_no_such_font.ttf'), true)
+	assert os.file_name(font_symbol_paths()[0]) == 'NotoSansSymbols2-Regular.ttf'
+}
+
+// A face made of symbols has no letters in it, so a window that settled on one
+// for its text would draw every word as a row of empty boxes.
+fn test_a_symbol_face_is_never_settled_on_for_text() {
+	for family in ['Noto Sans Symbols 2', 'NotoSansSymbols2-Regular', 'Noto Sans Symbols',
+		'Segoe UI Symbol', 'Apple Symbols', 'Symbola'] {
+		assert font_is_symbol_family(family), '${family} should read as a symbol face'
+	}
+	for family in ['Roboto', 'Noto Sans', 'DejaVu Sans', 'Inter', 'Arial', ''] {
+		assert !font_is_symbol_family(family), '${family} should read as a text face'
+	}
+
+	dir := font_test_dir('symbols', ['NotoSansSymbols2-Regular.ttf', 'Roboto-Regular.ttf'])
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	// The symbol file sorts first and its name says "sans", so nothing but that
+	// check keeps the search from settling on it.
+	assert font_fallback(font_index([dir])) == os.join_path(dir, 'Roboto-Regular.ttf')
+
+	only_symbols := font_test_dir('symbols_only', ['NotoSansSymbols2-Regular.ttf'])
+	defer {
+		os.rmdir_all(only_symbols) or {}
+	}
+	assert font_fallback(font_index([only_symbols])) == ''
+	regular, bold := font_pick([only_symbols])
+	assert regular == ''
+	assert bold == ''
+}

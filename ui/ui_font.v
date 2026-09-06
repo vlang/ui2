@@ -257,6 +257,79 @@ fn font_mono_preferences() []string {
 		'Ubuntu Mono', 'Cascadia Mono', 'Consolas', 'Menlo', 'Courier New']
 }
 
+// ── Symbols ────────────────────────────────────────────────────────
+
+// font_symbol_families ranks the faces that carry symbols rather than the
+// letters a paragraph is set in. A text face only draws the scripts it was cut
+// for: the bundled Roboto stops at 927 code points, so the triangles, arrows
+// and check marks an interface labels its rows with land on glyph 0, the empty
+// box. `ui2` ships Noto Sans Symbols 2 first in this list so those boxes are
+// gone with nothing installed on the machine; the rest are the symbol faces the
+// three desktops come with.
+fn font_symbol_families() []string {
+	return ['Noto Sans Symbols 2', 'Noto Sans Symbols', 'Segoe UI Symbol', 'Apple Symbols',
+		'Symbola']
+}
+
+// font_symbol_fallback_families ranks every face worth looking in for a glyph
+// the text font does not have. The symbol faces come first, then the text faces
+// with a wide enough repertoire to cover what Noto Sans Symbols 2 leaves out —
+// the arrows at U+2190 and the box drawing at U+2500, most visibly.
+fn font_symbol_fallback_families() []string {
+	mut families := font_symbol_families()
+	$if windows {
+		families << ['Arial Unicode MS', 'Lucida Sans Unicode']
+	} $else $if macos {
+		families << ['Arial Unicode MS']
+	} $else {
+		families << ['DejaVu Sans', 'FreeSerif', 'Noto Sans']
+	}
+	return families
+}
+
+// font_is_symbol_family reports whether a face is one of those symbol-only
+// ones, so the renderer never settles on it for its text font: a window drawn
+// in Noto Sans Symbols 2 would be nothing but empty boxes.
+fn font_is_symbol_family(family string) bool {
+	key := font_key(family)
+	if key.len == 0 {
+		return false
+	}
+	for candidate in font_symbol_families() {
+		if key.starts_with(font_key(candidate)) {
+			return true
+		}
+	}
+	return false
+}
+
+// font_symbol_paths lists the files to search for a glyph the text font has no
+// outline for, in the order they are searched. Everything the application ships
+// comes first, and then at most one face off the machine, so an installed
+// symbol font can cover what the bundle does not without the window holding
+// another few megabytes of glyphs it will never draw. `UI2_FONT_SYMBOLS` names
+// a file to put ahead of both.
+fn font_symbol_paths() []string {
+	families := font_symbol_fallback_families()
+	mut paths := []string{}
+	env_symbols := os.getenv('UI2_FONT_SYMBOLS')
+	if env_symbols.len > 0 && os.is_file(env_symbols) {
+		paths << env_symbols
+	}
+	bundled := font_index(font_bundle_dirs())
+	for family in families {
+		path := font_lookup(bundled, family, false, false)
+		if path != '' && path !in paths {
+			paths << path
+		}
+	}
+	installed := font_first_available(font_index(font_system_dirs()), families, false, false)
+	if installed != '' && installed !in paths {
+		paths << installed
+	}
+	return paths
+}
+
 // font_is_mono_family reports whether a declared family asks for a fixed-pitch
 // face, so an unavailable one falls back to another monospace rather than to
 // the proportional default. It covers the CSS generic names and the faces a
@@ -290,6 +363,9 @@ fn font_fallback(index map[string]string) string {
 	for pass in 0 .. 2 {
 		for key in keys {
 			if key.contains('bold') || key.contains('italic') || key.contains('oblique') {
+				continue
+			}
+			if font_is_symbol_family(key) {
 				continue
 			}
 			if pass == 0 && (!key.contains('sans') || key.contains('mono')) {
