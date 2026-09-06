@@ -222,4 +222,29 @@ $if ui2_custom_rendering ? {
 		assert g_open_dropdown == ''
 		assert text('menu-escape') == ''
 	}
+
+	// Ten pixels a character, ellipsis included, so a width is a character
+	// count and the expected truncation can be read off the assertion.
+	fn custom_test_text_width(line string) f64 {
+		return f64(line.runes().len) * 10
+	}
+
+	fn test_custom_text_that_fits_is_drawn_whole() {
+		assert fit_text_to_width('abcde', 50, custom_test_text_width) == 'abcde'
+		assert fit_text_to_width('abcde', 500, custom_test_text_width) == 'abcde'
+		assert fit_text_to_width('', 0, custom_test_text_width) == ''
+	}
+
+	fn test_custom_text_wider_than_its_box_ends_in_an_ellipsis() {
+		// Four characters of room: three of the word plus the ellipsis.
+		assert fit_text_to_width('abcde', 40, custom_test_text_width) == 'abc\u2026'
+		// Room for the ellipsis alone, and for less than that.
+		assert fit_text_to_width('abcde', 10, custom_test_text_width) == '\u2026'
+		assert fit_text_to_width('abcde', 5, custom_test_text_width) == '\u2026'
+	}
+
+	fn test_custom_text_is_shortened_by_whole_runes() {
+		// A multi-byte rune has to be dropped as one character, not as bytes.
+		assert fit_text_to_width('\u00e9\u00e9\u00e9\u00e9', 30, custom_test_text_width) == '\u00e9\u00e9\u2026'
+	}
 }

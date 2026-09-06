@@ -174,6 +174,12 @@ are parent-local. It does not implement intrinsic sizing, flex/grid, wrapping,
 or min/max constraints; applications can compute frames before constructing an
 element tree.
 
+A label, button, checkbox, or dropdown whose text is wider than its frame ends
+in an ellipsis rather than running over whatever is beside it: the native
+backends hand their cells `NSLineBreakByTruncatingTail`, and the custom
+renderer shortens the line itself. Text fields and text areas are the
+exception, since they place the caret by measuring the whole string.
+
 `TextEditor` positions are Unicode rune offsets. Native text-area selection APIs
 use UTF-16 code-unit offsets. This is intentional; grapheme-cluster editing is
 outside the portable editor's current contract.
@@ -323,6 +329,16 @@ Typed-QML ports from `v-ui` include:
   gradient from keyed color tiles.
 - `v run examples/change_title/main.v` — validate a title and update the native
   desktop window caption.
+- `v run examples/nested_clipping/main.v` — toggle a scroll viewport per box, or
+  per quadrant, and watch the unclipped bars spill over their neighbours.
+- `v run examples/canvas_layout/main.v` — drag a themed tile across a sheet that
+  is taller than its viewport, and read live canvas coordinates.
+- `v run examples/grid2/main.v` — sort a scrollable data grid of text, factor,
+  and boolean columns, then edit the selected record.
+- `v run examples/colorbox/main.v` — pick a color from a hue strip and an HSV
+  square, store it in a slot, and drive a rectangle's text with it.
+- `v run examples/child_window/main.v` — open a movable child panel with its own
+  field, checkbox, and native greeting dialog.
 
 Run the calculator demo with:
 

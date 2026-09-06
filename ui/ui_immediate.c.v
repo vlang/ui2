@@ -1327,13 +1327,13 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box.bg,
 					el.box.radius, is_focused, el.enabled)
 				if current_text.len > 0 {
-					draw_text(ctx, display_text, x + padding_left, y, content_width, el.frame.height, el.text_style)
+					draw_editable_text(ctx, display_text, x + padding_left, y, content_width, el.frame.height, el.text_style)
 				} else if el.placeholder.len > 0 {
 					placeholder_style := TextStyle{
 						...el.text_style
 						color: 0x999999
 					}
-					draw_text(ctx, el.placeholder, x + padding_left, y, content_width, el.frame.height, placeholder_style)
+					draw_editable_text(ctx, el.placeholder, x + padding_left, y, content_width, el.frame.height, placeholder_style)
 				}
 				if is_focused {
 					before := editor.text.runes()[..editor.selection.caret].string()
@@ -1373,7 +1373,7 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				current_text := g_text_values[el.id] or { el.text }
 				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box.bg,
 					el.box.radius, g_focused_field == el.id, el.enabled)
-				draw_text(ctx, current_text, x + el.padding_left, y, el.frame.width - el.padding_left - 8, el.frame.height, TextStyle{
+				draw_editable_text(ctx, current_text, x + el.padding_left, y, el.frame.width - el.padding_left - 8, el.frame.height, TextStyle{
 					...el.text_style
 					lines: if el.text_style.lines > 1 { el.text_style.lines } else { 1000 }
 				})
@@ -1607,7 +1607,62 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 		}
 	}
 
+	// text_ellipsis marks a line the renderer had to shorten. AppKit's cells
+	// truncate with this glyph too, and the bundled Roboto always has it.
+	const text_ellipsis = '\u2026'
+
+	// fit_text shortens a line that is wider than the box it was given. Both
+	// native backends hand their labels NSLineBreakByTruncatingTail, so a long
+	// string ends in an ellipsis there; the immediate renderer draws straight
+	// into the window and would otherwise run the tail over its neighbours and
+	// off the window edge.
+	fn fit_text(ctx &gg.Context, t string, w f64, cfg gg.TextCfg) string {
+		if w <= 0 {
+			return t
+		}
+		ctx.set_text_cfg(cfg)
+		return fit_text_to_width(t, w, fn [ctx] (line string) f64 {
+			return f64(ctx.text_width_f(line))
+		})
+	}
+
+	// fit_text_to_width is the search fit_text runs. It takes the measurement
+	// as an argument so it can be tested without a window to measure in.
+	fn fit_text_to_width(t string, w f64, text_width fn (string) f64) string {
+		if text_width(t) <= w {
+			return t
+		}
+		runes := t.runes()
+		// The longest head that still fits, found by halving rather than by
+		// dropping one rune at a time, so a long line costs a handful of
+		// measurements instead of one per character.
+		mut kept := 0
+		mut high := runes.len
+		for kept < high {
+			mid := (kept + high + 1) / 2
+			if text_width(runes[..mid].string() + text_ellipsis) <= w {
+				kept = mid
+			} else {
+				high = mid - 1
+			}
+		}
+		return runes[..kept].string() + text_ellipsis
+	}
+
+	// draw_text draws text that belongs to a box, shortening it when it does
+	// not fit.
 	fn draw_text(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle) {
+		draw_text_in_box(ctx, t, x, y, w, h, style, true)
+	}
+
+	// draw_editable_text draws the text of a field the caller can type in.
+	// Those controls place the caret by measuring the whole string, so a
+	// shortened line would leave the caret sitting past the end of it.
+	fn draw_editable_text(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle) {
+		draw_text_in_box(ctx, t, x, y, w, h, style, false)
+	}
+
+	fn draw_text_in_box(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle, fit bool) {
 		if t.len == 0 {
 			return
 		}
@@ -1637,10 +1692,12 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				if i >= style.lines {
 					break
 				}
-				ctx.draw_text(int(text_x), int(start_y + f64(i) * line_h), part, cfg)
+				line := if fit { fit_text(ctx, part, w, cfg) } else { part }
+				ctx.draw_text(int(text_x), int(start_y + f64(i) * line_h), line, cfg)
 			}
 		} else {
-			ctx.draw_text(text_x, text_y, t, cfg)
+			ctx.draw_text(text_x, text_y, if fit { fit_text(ctx, t, w, cfg) } else { t },
+				cfg)
 		}
 	}
 
