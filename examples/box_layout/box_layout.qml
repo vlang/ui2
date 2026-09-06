@@ -55,7 +55,10 @@ Screen {
             background: #BFDBFE
             corner_radius: 10
 
-            Label { text: "50% anchored" x: 12 y: blue.height - 32 width: blue.width - 24 height: 20 align: right color: #1E3A8A font_size: 12 }
+            // The corner anchor block below overlaps this rectangle's last 56
+            // pixels, so the right-aligned label stops short of it instead of
+            // being painted over.
+            Label { id: blue_caption text: "50% anchored" x: 12 y: blue.height - 32 width: blue.width - 80 height: 20 align: right color: #1E3A8A font_size: 12 }
         }
 
         Rectangle {
