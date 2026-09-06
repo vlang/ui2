@@ -10,7 +10,9 @@ permissions:
 jobs:
   verify-and-publish:
     runs-on: ubuntu-latest
-    container: thevlang/vlang:latest
+    container:
+      image: thevlang/vlang:ubuntu
+      options: --user 0
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +23,7 @@ jobs:
       - name: Install Linux dependencies
         run: |
           apt-get update -qq
-          apt-get install -y --no-install-recommends \
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             git python3 make gcc pkg-config \
             libx11-dev libxcursor-dev libxi-dev libxrandr-dev libxinerama-dev \
             libxfixes-dev libgl1-mesa-dev libegl-dev libasound2-dev
