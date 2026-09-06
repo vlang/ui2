@@ -1,21 +1,81 @@
 name: QML implementation verification
+
 on:
   push:
     branches: [work/qml-menus-icons-preview]
+
 permissions:
-  contents: read
+  contents: write
+
 jobs:
-  headers:
+  verify-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 45
     steps:
-      - name: Package Linux UI development headers
+      - name: Setup V
+        uses: vlang/setup-v@v1.3
+        env:
+          VFLAGS: -gc boehm
+        with:
+          check-latest: true
+
+      - uses: actions/checkout@v4
+        with:
+          path: ui2
+          fetch-depth: 0
+
+      - name: Install Linux dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends libx11-dev libxcursor-dev libxi-dev libxrandr-dev libxinerama-dev libxfixes-dev libgl1-mesa-dev libegl-dev libasound2-dev
-          tar -czf qml-headers.tar.gz -C /usr/include GL EGL KHR X11 alsa
-      - uses: actions/upload-artifact@v4
-        with:
-          name: qml-headers
-          path: qml-headers.tar.gz
-          retention-days: 1
+          sudo apt-get install -y --no-install-recommends \
+            libx11-dev libxcursor-dev libxi-dev libxrandr-dev libxinerama-dev \
+            libxfixes-dev libgl1-mesa-dev libegl-dev libasound2-dev
+
+      - name: Apply feature changes
+        run: python3 ui2/.github/apply_qml_feature.py
+
+      - name: Format changed V sources
+        run: |
+          v fmt -w ui2/ui/ui.v
+          v fmt -w ui2/ui/menu.v
+          v fmt -w ui2/ui/qml.v
+          v fmt -w ui2/ui/qml_model.v
+          v fmt -w ui2/ui/qml_menu.v
+          v fmt -w ui2/ui/qml_menu_test.v
+          v fmt -w ui2/examples/menubar/main.v
+          v fmt -w ui2/examples/menubar/menubar_test.v
+          v fmt -w ui2/cmd/ui2-qml/main.v
+          git -C ui2 diff --check
+
+      - name: Test QML parser and model
+        run: |
+          v test ui2/ui/qml_test.v
+          v test ui2/ui/qml_model_test.v
+          v test ui2/ui/qml_menu_test.v
+
+      - name: Test declarative menu example
+        run: v test ui2/examples/menubar
+
+      - name: Build QML previewer
+        run: v -o /tmp/ui2-qml ui2/cmd/ui2-qml
+
+      - name: Build all Linux examples
+        run: v run ui2/examples/build_examples.vsh
+
+      - name: Publish verified feature to master
+        shell: bash
+        run: |
+          cd ui2
+          git add README.md ui examples/menubar cmd/ui2-qml
+          git diff --cached -- . ':!.github' > /tmp/qml-feature.patch
+          test -s /tmp/qml-feature.patch
+          git reset --hard origin/master
+          git clean -fd
+          git apply --check /tmp/qml-feature.patch
+          git apply /tmp/qml-feature.patch
+          git diff --check
+          git config user.name "OpenAI"
+          git config user.email "noreply@openai.com"
+          git add README.md ui examples/menubar cmd/ui2-qml
+          git commit -m "Declare application menus and icons in QML"
+          git push origin HEAD:master
