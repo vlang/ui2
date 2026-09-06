@@ -29,6 +29,10 @@ jobs:
     steps:
       - name: Setup V
         uses: vlang/setup-v@v1.3
+        env:
+          # The compiler bootstrap otherwise uses -gc none and can exhaust
+          # the hosted runner before the UI tests are reached.
+          VFLAGS: -gc boehm
         with:
           check-latest: true
 
