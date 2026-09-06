@@ -46,6 +46,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		scroll_id          string
 		scroll_start_off_y f64
 		long_press_fired   bool
+		scrollbar_drag     bool
+		scrollbar_grab_y   f64
 	}
 
 	struct GgApp {
@@ -280,7 +282,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	pub fn scroll_to_rect(id string, _x f64, y f64, _width f64, height f64) {
-		area := g_scroll_areas[id] or { return }
+		area := g_scroll_viewports[id] or { return }
 		current := scroll_offset(id)
 		mut next := current
 		if y < current {
@@ -288,8 +290,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		} else if y + height > current + area.height {
 			next = y + height - area.height
 		}
-		content_h := g_scroll_content_h[id] or { 0.0 }
-		set_scroll_offset(id, next, content_h - area.height + 16)
+		set_scroll_offset(id, next, scroll_maximum(id))
 	}
 
 	pub fn clipboard_has_image() bool {
@@ -359,7 +360,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		ctx.begin()
 		if voidptr(g_build_screen) != unsafe { nil } {
 			g_hit_targets = []HitTarget{}
-			g_scroll_areas = map[string]Rect{}
+			reset_scroll_frame()
 			g_active_fields = map[string]bool{}
 			g_active_scrolls = map[string]bool{}
 			g_active_images = map[string]bool{}
@@ -479,12 +480,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			update_dropdown_hover(x, y)
 			return
 		}
-		for id, area in g_scroll_areas {
-			if x >= area.x && x <= area.x + area.width && y >= area.y && y <= area.y + area.height {
-				g_touch.scroll_id = id
-				g_touch.scroll_start_off_y = g_scroll_offsets[id] or { 0.0 }
-				break
-			}
+		g_touch.scroll_id = scroll_hit_test(x, y)
+		g_touch.scroll_start_off_y = scroll_offset(g_touch.scroll_id)
+		if begin_scrollbar_drag(x, y) {
+			return
 		}
 		target := hit_test(x, y)
 		if target.action_id.len > 0 && (target.clickable || target.draggable) {
@@ -503,13 +502,14 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		g_touch.current_x = x
 		g_touch.current_y = y
+		if g_touch.scrollbar_drag {
+			drag_scrollbar(y)
+			return
+		}
 		if g_touch.scroll_id.len > 0 {
 			delta := g_touch.start_y - y
 			new_offset := g_touch.scroll_start_off_y + delta
-			content_h := g_scroll_content_h[g_touch.scroll_id] or { 0.0 }
-			scroll_area := g_scroll_areas[g_touch.scroll_id] or { Rect{} }
-			max_scroll := content_h - scroll_area.height + 16
-			set_scroll_offset(g_touch.scroll_id, new_offset, max_scroll)
+			set_scroll_offset(g_touch.scroll_id, new_offset, scroll_maximum(g_touch.scroll_id))
 		}
 		target := hit_test(g_touch.start_x, g_touch.start_y)
 		if target.action_id.len > 0 && target.draggable {
@@ -523,21 +523,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			update_dropdown_hover(x, y)
 			return
 		}
-		for id, area in g_scroll_areas {
-			if x < area.x || x > area.x + area.width || y < area.y || y > area.y + area.height {
-				continue
-			}
-			content_h := g_scroll_content_h[id] or { 0.0 }
-			max_scroll := content_h - area.height + 16
-			if max_scroll <= 0 {
-				set_scroll_offset(id, 0, 0)
-				return
-			}
-			current_offset := g_scroll_offsets[id] or { 0.0 }
-			new_offset := current_offset - delta_y * 48
-			set_scroll_offset(id, new_offset, max_scroll)
+		id := scroll_hit_test(x, y)
+		if id.len == 0 {
 			return
 		}
+		set_scroll_offset(id, scroll_offset(id) - delta_y * 48, scroll_maximum(id))
 	}
 
 	fn set_scroll_offset(id string, requested f64, maximum f64) {
@@ -561,7 +551,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		g_touch.down = false
-		if g_touch.long_press_fired {
+		if g_touch.long_press_fired || g_touch.scrollbar_drag {
 			return
 		}
 		if g_open_dropdown.len > 0 {
@@ -612,7 +602,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn check_long_press() {
-		if !g_touch.down || g_touch.moved || g_touch.long_press_fired {
+		if !g_touch.down || g_touch.moved || g_touch.long_press_fired || g_touch.scrollbar_drag {
 			return
 		}
 		elapsed := time.ticks() - g_touch.start_time
@@ -1105,6 +1095,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			g_scroll_offsets.delete(id)
 			g_scroll_content_h.delete(id)
 		}
+		for id in g_text_area_layouts.keys() {
+			if id !in g_active_fields || (g_text_kinds[id] or { Kind.screen }) != .text_area {
+				g_text_area_layouts.delete(id)
+			}
+		}
 		mut stale_images := []string{}
 		for path, _ in g_image_ids {
 			if path !in g_active_images {
@@ -1165,43 +1160,33 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.scroll {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
+				frame := rect(x, y, el.frame.width, el.frame.height)
 				draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, 0)
-				scroll_y := g_scroll_offsets[el.id] or { 0.0 }
-				if el.id.len > 0 {
-					area := intersect_rect(Rect{
-						x: x
-						y: y
-						width: el.frame.width
-						height: el.frame.height
-					}, clip)
-					if area.width > 0 && area.height > 0 {
-						g_scroll_areas[el.id] = area
-						g_active_scrolls[el.id] = true
+				mut content_h := 0.0
+				for child in el.children {
+					if !child.hidden && child.frame.y + child.frame.height > content_h {
+						content_h = child.frame.y + child.frame.height
 					}
 				}
-				child_clip := intersect_rect(Rect{
-					x: x
-					y: y
-					width: el.frame.width
-					height: el.frame.height
-				}, clip)
-				mut content_h := f64(0)
+				// Include the bottom inset in both the scroll range and thumb geometry.
+				if content_h > 0 {
+					content_h += 16
+				}
+				scroll_y := register_scroll_view(el.id, frame, clip, content_h, el.enabled,
+					true, el.persistent_scrollbars)
+				child_clip := intersect_rect(frame, clip)
 				for child in el.children {
 					child_screen_y := child.frame.y - scroll_y
-					bottom := child.frame.y + child.frame.height
-					if bottom > content_h {
-						content_h = bottom
-					}
 					if child_screen_y + child.frame.height < 0 || child_screen_y > el.frame.height {
 						continue
 					}
 					render_element(ctx, child, x, y - scroll_y, child_clip)
 				}
-				if el.id.len > 0 {
-					g_scroll_content_h[el.id] = content_h
+				if child_clip.width > 0 && child_clip.height > 0 {
+					apply_clip(ctx, child_clip)
+					draw_scrollbar(ctx, x, y, el.frame.width, el.frame.height, content_h, scroll_y,
+						el.persistent_scrollbars)
 				}
-				draw_scrollbar(ctx, x, y, el.frame.width, el.frame.height, content_h, scroll_y,
-					el.persistent_scrollbars)
 				apply_clip(ctx, clip)
 			}
 			.label {
@@ -1407,10 +1392,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				current_text := g_text_values[el.id] or { el.text }
 				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box.bg,
 					el.box.radius, g_focused_field == el.id, el.enabled)
-				draw_editable_text(ctx, current_text, x + el.padding_left, y, el.frame.width - el.padding_left - 8, el.frame.height, TextStyle{
-					...el.text_style
-					lines: if el.text_style.lines > 1 { el.text_style.lines } else { 1000 }
-				})
+				draw_text_area_content(ctx, el, current_text, x, y, clip)
 				if el.enabled && !el.readonly {
 					add_hit_target(HitTarget{
 						id: el.id
@@ -1591,34 +1573,12 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn draw_scrollbar(ctx &gg.Context, x f64, y f64, width f64, height f64, content_height f64, offset f64, persistent bool) {
-		if width < 12 || height < 16 {
+		bar := scrollbar_geometry(rect(x, y, width, height), content_height, offset, persistent)
+		if bar.track.width <= 0 || bar.track.height <= 0 {
 			return
 		}
-		max_offset := if content_height > height { content_height - height } else { 0.0 }
-		if !persistent && max_offset <= 0 {
-			return
-		}
-		track_x := x + width - 9
-		track_y := y + 4
-		track_width := 5.0
-		track_height := height - 8
-		draw_rect(ctx, track_x, track_y, track_width, track_height, 0xf1f5f9, 2.5)
-		content_for_ratio := if content_height > height { content_height } else { height }
-		mut thumb_height := track_height * height / content_for_ratio
-		if thumb_height < 28 {
-			thumb_height = 28
-		}
-		if thumb_height > track_height {
-			thumb_height = track_height
-		}
-		progress := if max_offset > 0 {
-			clamped_offset := if offset < 0 { 0.0 } else if offset > max_offset { max_offset } else { offset }
-			clamped_offset / max_offset
-		} else {
-			0.0
-		}
-		thumb_y := track_y + (track_height - thumb_height) * progress
-		draw_rect(ctx, track_x, thumb_y, track_width, thumb_height, 0xcbd5e1, 2.5)
+		draw_rect(ctx, bar.track.x, bar.track.y, bar.track.width, bar.track.height, 0xf1f5f9, 2.5)
+		draw_rect(ctx, bar.thumb.x, bar.thumb.y, bar.thumb.width, bar.thumb.height, 0xcbd5e1, 2.5)
 	}
 
 	// text_font_file resolves a declared family to the file fontstash has to
@@ -1678,6 +1638,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		fons := ctx.ft.fons
 		if g_font_symbol_fons != voidptr(fons) {
 			g_font_symbol_fons = voidptr(fons)
+			g_text_area_layouts = map[string]TextAreaLayout{}
 			g_font_symbol_ids = []int{}
 			g_font_symbol_bases = map[int]bool{}
 			for path in font_symbol_paths() {
