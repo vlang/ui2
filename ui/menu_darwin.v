@@ -202,9 +202,11 @@ fn macos_status_image(icon string) macos.Id {
 	}
 	sized := macos.msg_id(macos.msg_id(source, 'copy'), 'autorelease')
 	macos.msg_void_point(sized, 'setSize:', macos.point(macos_status_image_size, macos_status_image_size))
-	// A template image is recolored by the system, which is what keeps a
-	// status icon legible in both the light and the dark menu bar.
-	macos.msg_void_bool(sized, 'setTemplate:', true)
+	// Carry the source's own template flag rather than forcing one: a template
+	// image is recolored by the system, which is what keeps an SF Symbol
+	// legible in both the light and the dark menu bar, while an icon the app
+	// drew in color stays the color it drew.
+	macos.msg_void_bool(sized, 'setTemplate:', macos.msg_bool(source, 'isTemplate'))
 	return sized
 }
 

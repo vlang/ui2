@@ -1232,7 +1232,9 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 			return 0
 		}
 		win_wm_tray {
-			windows_handle_tray_message(u32(lparam))
+			// The low word is the mouse message; the high word is the icon id
+			// once the notification area is asked for version 4 behavior.
+			windows_handle_tray_message(u32(lparam) & 0xffff)
 			return 0
 		}
 		win_wm_close {

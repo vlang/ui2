@@ -52,7 +52,9 @@ pub:
 	// the item visible, so an icon-less tray is still usable.
 	title string
 	// icon is an image path, or 'symbol:<name>' for an SF Symbol on macOS.
-	// Status area icons are small: 16x16 up to 22x22.
+	// Status area icons are small: 16x16 up to 22x22. An SF Symbol, or any
+	// image marked as a template, is recolored to suit a light or dark menu
+	// bar; any other image is drawn as it is.
 	icon    string
 	tooltip string
 	menu    []MenuItem
