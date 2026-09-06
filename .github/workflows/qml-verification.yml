@@ -16,20 +16,25 @@ jobs:
         with:
           path: ui2
           persist-credentials: false
-      - uses: vlang/setup-v@v1.3
-        with:
-          check-latest: true
+      - name: Build a garbage-collected verification compiler
+        shell: bash
+        run: |
+          git clone --depth=1 https://github.com/vlang/v v
+          git clone --depth=1 https://github.com/vlang/vc v/vc
+          git clone --depth=1 --branch thirdparty-linux-amd64 https://github.com/vlang/tccbin v/thirdparty/tcc
+          cd v
+          cc -std=c99 -w -o v1 vc/v.c -lm -lpthread
+          ./v1 -no-parallel -gc boehm -o v cmd/v
+          ./v -version
+          git rev-parse HEAD
       - name: Package development sources and compiler
         shell: bash
         run: |
           mkdir -p bundle
           cp -a ui2 bundle/ui2
-          rm -rf bundle/ui2/.git
-          find bundle/ui2 -type f -name '*.ttf' -delete
-          vroot="$(dirname "$(readlink -f "$(command -v v)")")"
-          cp -a "$vroot" bundle/v
-          find bundle/v -type d -name .git -prune -exec rm -rf '{}' +
-          find bundle/v -type f -name '*.ttf' -delete
+          cp -a v bundle/v
+          find bundle -type d -name .git -prune -exec rm -rf '{}' +
+          find bundle -type f -name '*.ttf' -delete
           tar -czf qml-development.tar.gz -C bundle ui2 v
       - uses: actions/upload-artifact@v4
         with:
