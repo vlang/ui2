@@ -1,134 +1,59 @@
-name: Validate Scrollview correction
+name: CI
 
 on:
   push:
-    branches: [fix/scrollview-global-scope-20260906]
-    paths: [.github/workflows/ci.yml]
+  pull_request:
+  schedule:
+    - cron: '31 1,12 * * *'
 
-permissions:
-  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  linux-test-inputs:
-    runs-on: windows-latest
-    timeout-minutes: 10
+  build-examples:
+    name: Build examples (${{ matrix.os }}${{ matrix.custom && ', custom renderer' || '' }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: macos-latest
+          - os: windows-latest
+          - os: macos-latest
+            custom: true
+          - os: windows-latest
+            custom: true
     steps:
-      - name: Fetch public sources and the published Linux compiler for local verification
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path inputs | Out-Null
-          Invoke-WebRequest https://github.com/vlang/v/releases/download/0.5.2/v_linux.zip -OutFile inputs/v_linux.zip
-          $hash = (Get-FileHash inputs/v_linux.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($hash -ne '86caf9e70c3342d48ef19eb4f6c47b709f18c90ae86255520d5c29df6b482e23') { throw 'Compiler checksum mismatch' }
-          Invoke-WebRequest https://github.com/vlang/ui2/archive/ca99243bb2b255b3b35e59c93cd36e24942939b4.zip -OutFile inputs/ui2.zip
-          Invoke-WebRequest https://github.com/vlang/v/archive/80f1886ea8f72a05e3dfc2bbc82129d9987934c8.zip -OutFile inputs/v-source.zip
-      - uses: actions/upload-artifact@v4
+      - name: Setup V
+        uses: vlang/setup-v@v1.3
+        env:
+          # The compiler bootstrap otherwise uses -gc none and can exhaust
+          # the hosted runner before the UI tests are reached.
+          VFLAGS: -gc boehm
         with:
-          name: linux-verification-inputs
-          path: inputs/*.zip
-          retention-days: 1
+          check-latest: true
 
-  verify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    steps:
+      # `import ui2` resolves through the checkout directory name, so the
+      # repository has to land in a directory called `ui2`.
       - uses: actions/checkout@v4
         with:
           path: ui2
-          ref: fix/scrollview-global-scope-20260906
 
-      - name: Install build and display dependencies
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends libx11-dev libxcursor-dev libxi-dev libgl1-mesa-dev libasound2-dev xvfb xauth
+          sudo apt-get update
+          sudo apt-get install --quiet -y --no-install-recommends \
+            libx11-dev libxcursor-dev libxi-dev libgl1-mesa-dev libasound2-dev
 
-      - name: Use the published V compiler independently of the failing rolling bootstrap
+      - name: Test immediate scrolling
+        if: runner.os == 'Linux' || matrix.custom
         run: |
-          curl --fail --location --retry 3 https://github.com/vlang/v/releases/download/0.5.2/v_linux.zip -o "$RUNNER_TEMP/v_linux.zip"
-          echo "86caf9e70c3342d48ef19eb4f6c47b709f18c90ae86255520d5c29df6b482e23  $RUNNER_TEMP/v_linux.zip" | sha256sum --check
-          unzip -q "$RUNNER_TEMP/v_linux.zip" -d "$RUNNER_TEMP/v-release"
-          chmod +x "$RUNNER_TEMP/v-release/v/v"
-          echo "$RUNNER_TEMP/v-release/v" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/v-release/v/v" version
+          v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/ui_scroll_immediate_test.v
+          v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/examples/scrollview
 
-      - name: Reproduce the reported failure before applying the correction
-        working-directory: ui2
-        run: |
-          if v -d ui2_custom_rendering -o "$RUNNER_TEMP/scrollview-before" examples/scrollview > "$RUNNER_TEMP/before.log" 2>&1; then
-            cat "$RUNNER_TEMP/before.log"
-            echo 'Expected the reported baseline compilation failure.'
-            exit 1
-          fi
-          cat "$RUNNER_TEMP/before.log"
-          grep -F 'undefined ident: `g_scroll_viewports`' "$RUNNER_TEMP/before.log"
-          grep -F 'undefined ident: `g_text_area_layouts`' "$RUNNER_TEMP/before.log"
-
-      - name: Place shared scroll state before its consumers
-        working-directory: ui2
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          main = Path('ui/ui_immediate.c.v')
-          scroll = Path('ui/ui_scroll_immediate.c.v')
-          declarations = (
-              '\t// Viewports are full layout boxes; areas are their visible, hittable parts.\n'
-              '\t// Using the clipped height for the range makes nested panes overscroll.\n'
-              '\t__global g_scroll_viewports = map[string]Rect{}\n'
-              '\t__global g_scroll_order = []string{}\n'
-              '\t__global g_scrollbar_geometries = map[string]ScrollbarGeometry{}\n'
-              '\t__global g_text_area_layouts = map[string]TextAreaLayout{}\n'
-          )
-          anchor = '\t__global g_scroll_areas = map[string]Rect{}\n'
-          source = main.read_text()
-          helper = scroll.read_text()
-          assert source.count(anchor) == 1
-          assert helper.count(declarations + '\n') == 1
-          note = (
-              '\t// Keep shared globals in this block before their first use. Globals\n'
-              '\t// inside a later file\'s $if are not visible to earlier consumers.\n'
-          )
-          main.write_text(source.replace(anchor, anchor + note + declarations))
-          scroll.write_text(helper.replace(declarations + '\n', ''))
-          PY
-          git diff --check
-          git diff -- ui/ui_immediate.c.v ui/ui_scroll_immediate.c.v
-
-      - name: Build Scrollview with the reported flags and with the default Linux backend
-        working-directory: ui2
-        run: |
-          v -d ui2_custom_rendering -o "$RUNNER_TEMP/scrollview-custom" examples/scrollview
-          v -o "$RUNNER_TEMP/scrollview-default" examples/scrollview
-
-      - name: Run scrolling regression tests and the example tests
-        working-directory: ui2
-        run: |
-          v test ui/ui_scroll_immediate_test.v
-          v -d ui2_custom_rendering test ui/ui_scroll_immediate_test.v
-          v -d ui2_custom_rendering test ui/ui_custom_test.v
-          v test examples/scrollview
-          v -d ui2_custom_rendering test examples/scrollview
-
-      - name: Launch the exact reported run command under a virtual Linux display
-        working-directory: ui2
-        run: |
-          set +e
-          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a timeout 8s v -d ui2_custom_rendering run examples/scrollview > "$RUNNER_TEMP/launch.log" 2>&1
-          status=$?
-          set -e
-          cat "$RUNNER_TEMP/launch.log"
-          test "$status" -eq 124
-          ! grep -E 'error:|panic:|Segmentation fault|Aborted' "$RUNNER_TEMP/launch.log"
-
-      - name: Preserve only the verified source correction on the validation branch
-        working-directory: ui2
-        run: |
-          git diff --check
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add ui/ui_immediate.c.v ui/ui_scroll_immediate.c.v
-          git commit -m 'Fix shared Scrollview globals being used before their conditional declarations' -m 'Verified the reported failure before the change, both Linux Scrollview builds, scrolling and custom-renderer regression tests, and a virtual-display launch with V 0.5.2.'
-          git push origin HEAD:refs/heads/fix/scrollview-global-scope-20260906
-          git rev-parse HEAD
-          git ls-tree HEAD ui/ui_immediate.c.v ui/ui_scroll_immediate.c.v
+      - name: Build all examples
+        run: v run ui2/examples/build_examples.vsh ${{ matrix.custom && '-d ui2_custom_rendering' || '' }}
