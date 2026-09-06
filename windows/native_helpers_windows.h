@@ -326,6 +326,10 @@ static inline void *ui2_win_create_main_window(const wchar_t *title, int width, 
 	return hwnd;
 }
 
+static inline void ui2_win_set_window_title(void *hwnd, const wchar_t *title) {
+	if (hwnd != NULL) SetWindowTextW((HWND)hwnd, title == NULL ? L"" : title);
+}
+
 static inline DWORD ui2_win_label_style(int alignment) {
 	if (alignment == 1) return SS_CENTER | SS_CENTERIMAGE;
 	if (alignment == 2) return SS_RIGHT | SS_CENTERIMAGE;

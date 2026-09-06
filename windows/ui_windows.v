@@ -20,6 +20,8 @@ fn C.ui2_win_visual_styles_enabled() int
 
 fn C.ui2_win_create_main_window(title &u16, width int, height int) voidptr
 
+fn C.ui2_win_set_window_title(hwnd voidptr, title &u16)
+
 fn C.ui2_win_create_widget(kind int, parent voidptr, x int, y int, width int, height int, text &u16, alignment int, secure int, readonly int, disable_scroll int) voidptr
 
 fn C.ui2_win_show_main_window(hwnd voidptr)
@@ -414,6 +416,16 @@ pub fn on_scroll(handler ScrollFn) {
 pub fn on_drop(handler DropFn) {
 	mut st := windows_state()
 	st.drop_handler = handler
+}
+
+// set_window_title updates the current Win32 window title.
+pub fn set_window_title(title string) {
+	st := windows_state()
+	if st.root != unsafe { nil } {
+		wide_title := title.to_wide()
+		C.ui2_win_set_window_title(st.root, wide_title)
+		unsafe { free(wide_title) }
+	}
 }
 
 pub fn text(id string) string {

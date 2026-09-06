@@ -258,6 +258,14 @@ pub fn on_drop(handler DropFn) {
 	st.drop_handler = handler
 }
 
+// set_window_title updates the current AppKit window title.
+pub fn set_window_title(title string) {
+	st := state()
+	if !native_is_nil(st.window) {
+		macos.msg_void1(st.window, 'setTitle:', macos.nsstring(title))
+	}
+}
+
 fn refresh_on_main() {
 	refresh()
 }
