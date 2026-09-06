@@ -1,0 +1,36 @@
+name: QML implementation verification
+
+on:
+  push:
+    branches: [work/qml-menus-icons-preview]
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ui2
+      - uses: vlang/setup-v@v1.3
+        with:
+          check-latest: true
+      - name: Package development sources and compiler
+        shell: bash
+        run: |
+          mkdir -p bundle
+          cp -a ui2 bundle/ui2
+          rm -rf bundle/ui2/.git
+          find bundle/ui2 -type f -name '*.ttf' -delete
+          vroot="$(dirname "$(readlink -f "$(command -v v)")")"
+          cp -a "$vroot" bundle/v
+          rm -rf bundle/v/.git bundle/v/vc/.git bundle/v/thirdparty/tcc/.git
+          tar -czf qml-development.tar.gz -C bundle ui2 v
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qml-development
+          path: qml-development.tar.gz
+          retention-days: 1
