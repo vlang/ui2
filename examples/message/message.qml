@@ -11,7 +11,9 @@ Screen {
         corner_radius: 10
 
         Label { text: "Message" x: 16 y: 14 width: root.width - 64 height: 28 color: #111827 font_size: 18 bold: true }
-        Label { text: "Native alerts belong to the system; the drawn one stays in the window." x: 16 y: 50 width: root.width - 64 height: 22 color: #64748B font_size: 13 }
+        // Text is a third wider on the 96 dpi desktops than it is on macOS, so
+        // this line has to fit the window there too, not just here.
+        Label { text: "Native alerts block; the drawn one does not." x: 16 y: 50 width: root.width - 64 height: 22 color: #64748B font_size: 13 }
 
         Button {
             id: show_native_message
@@ -54,6 +56,9 @@ Screen {
         hidden: !app.visible
         title: "Hello World"
         text: "This message came from the ui example."
+        // The default 300 leaves the body line hanging over the card edge once
+        // the text is rendered at 96 dpi.
+        dialog_width: 360
 
         Button {
             id: close_message
