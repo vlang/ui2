@@ -10,15 +10,9 @@ permissions:
 jobs:
   verify-and-publish:
     runs-on: ubuntu-latest
+    container: thevlang/vlang:latest
     timeout-minutes: 45
     steps:
-      - name: Setup V
-        uses: vlang/setup-v@v1.3
-        env:
-          VFLAGS: -gc boehm
-        with:
-          check-latest: true
-
       - uses: actions/checkout@v4
         with:
           path: ui2
@@ -26,8 +20,9 @@ jobs:
 
       - name: Install Linux dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
+          apt-get update -qq
+          apt-get install -y --no-install-recommends \
+            git python3 make gcc pkg-config \
             libx11-dev libxcursor-dev libxi-dev libxrandr-dev libxinerama-dev \
             libxfixes-dev libgl1-mesa-dev libegl-dev libasound2-dev
 
