@@ -1,43 +1,21 @@
 name: QML implementation verification
-
 on:
   push:
     branches: [work/qml-menus-icons-preview]
-
 permissions:
   contents: read
-
 jobs:
-  bootstrap:
+  headers:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-        with:
-          path: ui2
-          persist-credentials: false
-      - name: Build a garbage-collected verification compiler
-        shell: bash
+      - name: Package Linux UI development headers
         run: |
-          git clone --depth=1 https://github.com/vlang/v v
-          git clone --depth=1 https://github.com/vlang/vc v/vc
-          git clone --depth=1 --branch thirdparty-linux-amd64 https://github.com/vlang/tccbin v/thirdparty/tcc
-          cd v
-          cc -std=c99 -w -o v1 vc/v.c -lm -lpthread
-          ./v1 -no-parallel -gc boehm -o v cmd/v
-          ./v -version
-          git rev-parse HEAD
-      - name: Package development sources and compiler
-        shell: bash
-        run: |
-          mkdir -p bundle
-          cp -a ui2 bundle/ui2
-          cp -a v bundle/v
-          find bundle -type d -name .git -prune -exec rm -rf '{}' +
-          find bundle -type f -name '*.ttf' -delete
-          tar -czf qml-development.tar.gz -C bundle ui2 v
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libx11-dev libxcursor-dev libxi-dev libgl1-mesa-dev libasound2-dev
+          tar -czf qml-headers.tar.gz -C /usr/include GL KHR X11 alsa
       - uses: actions/upload-artifact@v4
         with:
-          name: qml-development
-          path: qml-development.tar.gz
+          name: qml-headers
+          path: qml-headers.tar.gz
           retention-days: 1
