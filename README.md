@@ -404,6 +404,21 @@ GitHub Actions runs `make examples` on Linux, macOS, and Windows, plus
 normal platform SDK/toolchain. `make check-custom` additionally type-checks the
 opt-in custom macOS and Windows builds.
 
+`make screenshot EXAMPLE=<name>` renders one example and writes a single frame
+to a PNG, so a layout can be checked without a person watching the window:
+
+```sh
+make screenshot EXAMPLE=message
+v run examples/screenshot_example.vsh message --frame 30 --out shots
+```
+
+It drives gg's own recorder rather than a desktop screenshot utility, so it
+needs no screen recording permission and captures the window alone. The
+recorder reads the presented framebuffer back, which only the GL backend
+implements, so the script builds macOS examples against GL instead of Metal.
+Text is a third wider at 96 dpi than it is on macOS, so a layout that only just
+fits in a macOS screenshot still has to be checked on Linux or Windows.
+
 The Windows backend also has an executable Wine smoke test. It creates every
 native widget kind, reads text back from the Win32 controls, verifies text-area
 selection, and closes itself with a non-zero exit status on failure:
