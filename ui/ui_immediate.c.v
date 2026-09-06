@@ -6,6 +6,7 @@ module ui2
 
 $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 	import gg
+	import os
 	import sokol.sapp
 	import time
 
@@ -96,6 +97,11 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 	__global g_active_fields = map[string]bool{}
 	__global g_active_scrolls = map[string]bool{}
 	__global g_image_ids = map[string]int{}
+	__global g_font_metrics = FontMetrics{}
+	__global g_font_files = map[string]string{}
+	__global g_font_indexed = false
+	__global g_font_family_files = map[string]string{}
+	__global g_font_family_metrics = map[string]FontMetrics{}
 	__global g_active_images = map[string]bool{}
 	__global g_open_dropdown = ''
 	__global g_dropdown_popup = DropdownPopup{}
@@ -134,8 +140,17 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 	pub fn run_window(title string, width int, height int, build_fn BuildFn, event_fn EventFn) {
 		g_build_screen = build_fn
 		g_event_handler = event_fn
+		// Choosing the font here rather than letting gg ask `fc-match` for one
+		// keeps the window legible and identical across distributions, and
+		// gives draw_text the metrics it needs to size text in points.
+		font_regular, font_bold := font_paths()
+		if font_regular.len > 0 {
+			g_font_metrics = font_file_metrics(font_regular) or { FontMetrics{} }
+		}
 		g_gg_app.ctx = gg.new_context(
 			bg_color: hex_color(0xf4f6f8)
+			font_path: font_regular
+			custom_bold_font_path: font_bold
 			width: width
 			height: height
 			sample_count: 4
@@ -1531,6 +1546,54 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 		draw_rect(ctx, track_x, thumb_y, track_width, thumb_height, 0xcbd5e1, 2.5)
 	}
 
+	// text_font_file resolves a declared family to the file fontstash has to
+	// load. gg reads TextCfg.family as a path and, when it cannot read one,
+	// returns without touching the font state at all, leaving the string drawn
+	// in whatever the previous element used. An unknown family therefore has to
+	// come back empty so the default font is used instead.
+	fn text_font_file(family string, bold bool, italic bool) string {
+		if family.len == 0 {
+			return ''
+		}
+		key := '${family}:${bold}:${italic}'
+		if path := g_font_family_files[key] {
+			return path
+		}
+		mut path := ''
+		if os.is_file(family) {
+			path = family
+		} else {
+			if !g_font_indexed {
+				mut dirs := font_bundle_dirs()
+				dirs << font_system_dirs()
+				g_font_files = font_index(dirs)
+				g_font_indexed = true
+			}
+			path = font_lookup(g_font_files, family, bold, italic)
+			if path.len == 0 && (bold || italic) {
+				// A family with no bold or italic file of its own still reads
+				// better in its regular weight than in the default font.
+				path = font_lookup(g_font_files, family, false, false)
+			}
+		}
+		g_font_family_files[key] = path
+		return path
+	}
+
+	// text_font_metrics reports the metrics to size a string with: the chosen
+	// family's own, or the window font's when the element declared none.
+	fn text_font_metrics(path string) FontMetrics {
+		if path.len == 0 {
+			return g_font_metrics
+		}
+		if metrics := g_font_family_metrics[path] {
+			return metrics
+		}
+		metrics := font_file_metrics(path) or { g_font_metrics }
+		g_font_family_metrics[path] = metrics
+		return metrics
+	}
+
 	fn text_align(a Align) gg.HorizontalAlign {
 		return match a {
 			.left { .left }
@@ -1550,16 +1613,19 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 		}
 
 		text_y := int(y + h / 2)
+		family := text_font_file(style.font_family, style.bold, style.italic)
 		cfg := gg.TextCfg{
 			color: hex_color(style.color)
-			size: int(style.size)
+			size: int(font_render_size(style.size, text_font_metrics(family)) + 0.5)
 			bold: style.bold
+			italic: style.italic
+			family: family
 			align: text_align(style.align)
 			vertical_align: .middle
 		}
 		if style.lines > 1 && t.contains('\n') {
 			parts := t.split('\n')
-			line_h := style.size + 4
+			line_h := font_line_height(style.size)
 			total_h := f64(parts.len) * line_h
 			start_y := y + (h - total_h) / 2 + line_h / 2
 			for i, part in parts {

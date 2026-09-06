@@ -175,6 +175,43 @@ element tree.
 use UTF-16 code-unit offsets. This is intentional; grapheme-cluster editing is
 outside the portable editor's current contract.
 
+## Fonts and text sizes
+
+`TextStyle.size` is in points. Win32 and the Linux desktops resolve a point at
+96 dpi, AppKit and UIKit at 72, so the custom renderer follows whichever
+platform it draws on and a declared size matches the native controls beside it.
+The default size of 15 is therefore a 20 px em square on Linux and Windows, and
+15 px on macOS and iOS.
+
+The custom renderer draws through fontstash, which sizes a glyph by its
+ascender-to-descender height rather than by the em square. `ui2` reads
+`unitsPerEm` and the `hhea` metrics out of the font file and converts, so the
+declared size means the same thing no matter which face is loaded.
+
+On Linux the renderer picks the font itself instead of taking the first face
+`fc-match` reports, which varies by distribution. It looks for Inter, Roboto,
+Noto Sans, Open Sans, DejaVu Sans, Liberation Sans, Ubuntu, Cantarell, FreeSans,
+and Arial, in that order, and falls back to any upright sans face installed.
+
+To ship a font with an application, put its files in `fonts/` or `assets/fonts/`
+next to the binary; those are searched before the system font directories.
+`UI2_FONT` and `UI2_FONT_BOLD` override everything and take file paths, which is
+the quickest way to compare faces:
+
+```sh
+UI2_FONT=/usr/share/fonts/truetype/roboto/Roboto-Regular.ttf ./users
+```
+
+Use static font files, not variable ones. `stb_truetype`, the rasterizer
+fontstash builds with, ignores the `fvar` and `gvar` tables, so a variable font
+draws every weight at its default instance and bold text stops being bold. The
+renderer skips variable files (`Roboto[wdth,wght].ttf`, `*-VariableFont*.ttf`)
+when choosing a default for that reason.
+
+`TextStyle.font_family` names a family. The native backends hand the name to the
+platform's font manager; the custom renderer resolves it against the same font
+directories and ignores it when the machine has no such face.
+
 ## Examples
 
 Typed-QML ports from `v-ui` include:
