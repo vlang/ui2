@@ -346,6 +346,16 @@ Typed-QML ports from `v-ui` include:
   square, store it in a slot, and drive a rectangle's text with it.
 - `v run examples/child_window/main.v` — open a movable child panel with its own
   field, checkbox, and native greeting dialog.
+- `v run examples/accent_color/main.v` — drag three channels into an accent and
+  derive a shade, a tint, and a readable font color from it.
+- `v run examples/text_style/main.v` — apply a family found in this machine's
+  font trees, at a chosen size and emphasis, to an editable sample.
+- `v run examples/canvas_layout_inside_row/main.v` — drag a rotatable logo
+  across two panes and read its position in each pane's own coordinates.
+- `v run examples/calculator_resizable/main.v` — a calculator whose keys, type,
+  and spacing are all fractions of the window.
+- `v run examples/users_box_layout/main.v` — a fixed registration column, with a
+  progress bar and country choices, beside a table pane anchored to the window.
 
 Run the calculator demo with:
 
