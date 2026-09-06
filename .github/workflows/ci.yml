@@ -9,6 +9,25 @@ permissions:
   contents: read
 
 jobs:
+  linux-test-inputs:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch public sources and the published Linux compiler for local verification
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path inputs | Out-Null
+          Invoke-WebRequest https://github.com/vlang/v/releases/download/0.5.2/v_linux.zip -OutFile inputs/v_linux.zip
+          $hash = (Get-FileHash inputs/v_linux.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '86caf9e70c3342d48ef19eb4f6c47b709f18c90ae86255520d5c29df6b482e23') { throw 'Compiler checksum mismatch' }
+          Invoke-WebRequest https://github.com/vlang/ui2/archive/ca99243bb2b255b3b35e59c93cd36e24942939b4.zip -OutFile inputs/ui2.zip
+          Invoke-WebRequest https://github.com/vlang/v/archive/80f1886ea8f72a05e3dfc2bbc82129d9987934c8.zip -OutFile inputs/v-source.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-verification-inputs
+          path: inputs/*.zip
+          retention-days: 1
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
