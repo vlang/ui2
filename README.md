@@ -174,6 +174,58 @@ MessageBox {
 }
 ```
 
+## Menus and the tray
+
+`set_menu_bar(...)` installs the application's top level menu bar and
+`set_tray(...)` docks an icon in the status area. Both are plain declarations,
+and both emit through the event handler `run_window` was given — the same
+channel a button tap arrives on, so a menu row and a control can share an
+action id and run the same code:
+
+```v
+ui2.set_menu_bar([
+	ui2.Menu{
+		title: 'File'
+		items: [
+			ui2.menu_item_with_shortcut('file_new', 'New Note', 'cmd+n'),
+			ui2.menu_separator(),
+			ui2.disabled(ui2.menu_item('file_revert', 'Revert')),
+			ui2.submenu('Export', [
+				ui2.menu_item('export_pdf', 'PDF'),
+			]),
+		]
+	},
+])
+
+ui2.set_tray(
+	title:   'ui2'
+	icon:    'symbol:cup.and.saucer.fill'
+	tooltip: 'ui2 tray demo'
+	menu:    [ui2.menu_item('tray_quit', 'Quit')]
+)
+```
+
+A shortcut names the platform's primary modifier as `cmd`: Command on macOS,
+Control on Windows and Linux. A row's `checked` state is declared rather than
+remembered — after handling the event, install the menu again with the new
+value. Either call may come before `run_window`; what was declared is installed
+as soon as there is a window to attach it to. `remove_tray()` undocks the icon.
+
+macOS builds an `NSMenu` main menu, keeping its own application menu with
+"Quit <app>" first, and an `NSStatusItem` for the tray, whose `icon` may name an
+SF Symbol as `symbol:<name>`. Windows builds an `HMENU` menu bar with an
+accelerator table, and a `Shell_NotifyIcon` notification area icon that opens
+its menu on either mouse button. The custom renderer has no platform menu bar,
+so it draws one across the top of the window — `bounds()` reserves that strip,
+so a screen laid out at y 0 starts below it — and it owns nothing outside its
+window, so `tray_supported()` is `false` there. iOS and Android have neither, so
+both calls are accepted and ignored; check `menu_bar_supported()` and
+`tray_supported()` before offering them in a shared UI.
+
+`validate_menus(...)` rejects an untitled menu, a row that emits nothing, a
+duplicated id, a submenu that also emits, and a decorated separator, so a
+declaration can be checked in a test without a window.
+
 ## Layout and text offsets
 
 The QML layer provides fixed frames plus `Row` and `Column` layout. Child frames
@@ -389,6 +441,10 @@ Typed-QML ports from `v-ui` include:
   and spacing are all fractions of the window.
 - `v run examples/users_box_layout/main.v` — a fixed registration column, with a
   progress bar and country choices, beside a table pane anchored to the window.
+- `v run examples/menubar/main.v` — a top level menu bar with shortcuts,
+  separators, disabled and checked rows, and nested submenus.
+- `v run examples/tray_icon/main.v` — a status area icon whose menu sets a
+  status, toggles a setting, and docks or hides the icon again.
 
 Run the calculator demo with:
 

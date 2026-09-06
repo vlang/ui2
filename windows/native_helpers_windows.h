@@ -28,6 +28,7 @@
 #include <wchar.h>
 
 #define UI2_WM_REFRESH (WM_APP + 77)
+#define UI2_WM_TRAY (WM_APP + 78)
 
 enum {
 	UI2_WIN_VIEW = 1,
@@ -422,9 +423,20 @@ static inline void ui2_win_set_checked(void *hwnd_ptr, int checked) {
 	}
 }
 
+#define UI2_WIN_MAX_ACCELERATORS 128
+
+static ACCEL ui2_win_accel_entries[UI2_WIN_MAX_ACCELERATORS];
+static int ui2_win_accel_count = 0;
+static HACCEL ui2_win_accel_table = NULL;
+static HWND ui2_win_accel_window = NULL;
+
 static inline int ui2_win_message_loop(void) {
 	MSG message;
 	while (GetMessageW(&message, NULL, 0, 0) > 0) {
+		if (ui2_win_accel_table != NULL && ui2_win_accel_window != NULL
+			&& TranslateAcceleratorW(ui2_win_accel_window, ui2_win_accel_table, &message)) {
+			continue;
+		}
 		TranslateMessage(&message);
 		DispatchMessageW(&message);
 	}
@@ -1071,6 +1083,128 @@ static inline unsigned int ui2_win_menu_track(void *menu, void *hwnd, int x, int
 
 static inline void ui2_win_menu_destroy(void *menu) {
 	if (menu != NULL) DestroyMenu((HMENU)menu);
+}
+
+static inline void *ui2_win_menubar_create(void) {
+	return CreateMenu();
+}
+
+static inline void ui2_win_menu_add_item(void *menu, unsigned int command,
+		const wchar_t *title, int enabled, int checked) {
+	if (menu == NULL) return;
+	AppendMenuW((HMENU)menu, MF_STRING | (enabled ? MF_ENABLED : MF_GRAYED)
+		| (checked ? MF_CHECKED : MF_UNCHECKED), command, title == NULL ? L"" : title);
+}
+
+static inline void ui2_win_menu_add_separator(void *menu) {
+	if (menu != NULL) AppendMenuW((HMENU)menu, MF_SEPARATOR, 0, NULL);
+}
+
+// The parent menu takes ownership of the submenu, so only the outermost menu
+// is ever destroyed by hand.
+static inline void ui2_win_menu_add_submenu(void *menu, void *submenu,
+		const wchar_t *title) {
+	if (menu == NULL || submenu == NULL) return;
+	AppendMenuW((HMENU)menu, MF_POPUP | MF_ENABLED, (UINT_PTR)(HMENU)submenu,
+		title == NULL ? L"" : title);
+}
+
+static inline void ui2_win_set_menubar(void *hwnd, void *menu) {
+	if (hwnd == NULL) return;
+	HMENU previous = GetMenu((HWND)hwnd);
+	SetMenu((HWND)hwnd, (HMENU)menu);
+	if (previous != NULL) DestroyMenu(previous);
+	DrawMenuBar((HWND)hwnd);
+}
+
+static inline void ui2_win_accel_reset(void) {
+	ui2_win_accel_count = 0;
+}
+
+static inline void ui2_win_accel_add(int virtual_key, int control, int alt, int shift,
+		unsigned int command) {
+	if (virtual_key == 0 || ui2_win_accel_count >= UI2_WIN_MAX_ACCELERATORS) return;
+	ACCEL *entry = &ui2_win_accel_entries[ui2_win_accel_count++];
+	entry->fVirt = (BYTE)(FVIRTKEY | (control ? FCONTROL : 0) | (alt ? FALT : 0)
+		| (shift ? FSHIFT : 0));
+	entry->key = (WORD)virtual_key;
+	entry->cmd = (WORD)command;
+}
+
+static inline void ui2_win_accel_install(void *hwnd) {
+	if (ui2_win_accel_table != NULL) {
+		DestroyAcceleratorTable(ui2_win_accel_table);
+		ui2_win_accel_table = NULL;
+	}
+	ui2_win_accel_window = (HWND)hwnd;
+	if (ui2_win_accel_count > 0) {
+		ui2_win_accel_table = CreateAcceleratorTableW(ui2_win_accel_entries,
+			ui2_win_accel_count);
+	}
+}
+
+static NOTIFYICONDATAW ui2_win_tray_data;
+static int ui2_win_tray_added = 0;
+// Only an icon this layer loaded from a file is its to destroy; the stock
+// application icon is shared.
+static HICON ui2_win_tray_loaded_icon = NULL;
+
+static inline unsigned int ui2_win_tray_message(void) {
+	return UI2_WM_TRAY;
+}
+
+static inline void ui2_win_tray_set(void *hwnd, const wchar_t *tooltip,
+		const wchar_t *icon_path) {
+	if (hwnd == NULL) return;
+	HICON icon = NULL;
+	if (icon_path != NULL && icon_path[0] != L'\0') {
+		icon = (HICON)LoadImageW(NULL, icon_path, IMAGE_ICON,
+			GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_LOADFROMFILE);
+	}
+	HICON previous = ui2_win_tray_loaded_icon;
+	ui2_win_tray_loaded_icon = icon;
+	if (icon == NULL) icon = LoadIconW(NULL, IDI_APPLICATION);
+
+	ZeroMemory(&ui2_win_tray_data, sizeof(ui2_win_tray_data));
+	ui2_win_tray_data.cbSize = sizeof(ui2_win_tray_data);
+	ui2_win_tray_data.hWnd = (HWND)hwnd;
+	ui2_win_tray_data.uID = 1;
+	ui2_win_tray_data.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+	ui2_win_tray_data.uCallbackMessage = UI2_WM_TRAY;
+	ui2_win_tray_data.hIcon = icon;
+	if (tooltip != NULL) {
+		size_t capacity = sizeof(ui2_win_tray_data.szTip) / sizeof(wchar_t);
+		wcsncpy(ui2_win_tray_data.szTip, tooltip, capacity - 1);
+		ui2_win_tray_data.szTip[capacity - 1] = L'\0';
+	}
+	Shell_NotifyIconW(ui2_win_tray_added ? NIM_MODIFY : NIM_ADD, &ui2_win_tray_data);
+	ui2_win_tray_added = 1;
+	if (previous != NULL) DestroyIcon(previous);
+}
+
+static inline void ui2_win_tray_remove(void) {
+	if (!ui2_win_tray_added) return;
+	Shell_NotifyIconW(NIM_DELETE, &ui2_win_tray_data);
+	ui2_win_tray_added = 0;
+	if (ui2_win_tray_loaded_icon != NULL) {
+		DestroyIcon(ui2_win_tray_loaded_icon);
+		ui2_win_tray_loaded_icon = NULL;
+	}
+}
+
+// A notification area menu only dismisses when its owner is foreground, and
+// the trailing WM_NULL is the documented workaround for the first click after
+// it closes being swallowed.
+static inline unsigned int ui2_win_tray_popup(void *hwnd, void *menu) {
+	if (hwnd == NULL || menu == NULL) return 0;
+	POINT point;
+	GetCursorPos(&point);
+	SetForegroundWindow((HWND)hwnd);
+	unsigned int command = (unsigned int)TrackPopupMenu((HMENU)menu,
+		TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY, point.x, point.y, 0, (HWND)hwnd,
+		NULL);
+	PostMessageW((HWND)hwnd, WM_NULL, 0, 0);
+	return command;
 }
 
 static inline unsigned int ui2_win_drop_count(void *drop) {

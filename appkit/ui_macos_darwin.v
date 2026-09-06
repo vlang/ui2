@@ -157,6 +157,7 @@ pub fn run_window(title string, width int, height int, build_fn BuildFn, event_f
 		width: width
 		height: height
 	}
+	publish_menu_context(event_fn, title, unsafe { nil })
 	ensure_runtime_classes()
 	native_set_activation_policy_regular()
 	delegate := native_new_object('UI2AppDelegate')
@@ -1411,28 +1412,6 @@ fn native_set_delegate(delegate NativeView) {
 	macos.msg_void1(native_current_app(), 'setDelegate:', delegate)
 }
 
-// native_install_app_menu gives the application a minimal menu bar with an
-// application menu containing a "Quit <app>" item bound to Cmd+Q. Without a
-// main menu, AppKit has nothing to handle the Cmd+Q key equivalent, so
-// ui2-hosted apps could not be quit from the keyboard. The Quit item has no
-// explicit target, so its terminate: action travels the responder chain to
-// NSApp (honoring any applicationShouldTerminate: the app's delegate installs).
-fn native_install_app_menu(app_name string) {
-	main_menu := macos.msg_id(macos.alloc('NSMenu'), 'init')
-	app_menu_item := macos.msg_id(macos.alloc('NSMenuItem'), 'init')
-	macos.msg_void1(main_menu, 'addItem:', app_menu_item)
-	app_menu := macos.msg_id(macos.alloc('NSMenu'), 'init')
-	macos.msg_void1(app_menu, 'setTitle:', macos.nsstring(app_name))
-	quit_item := macos.msg_id3(macos.alloc('NSMenuItem'), 'initWithTitle:action:keyEquivalent:', macos.nsstring('Quit ${app_name}'), macos.Id(voidptr(macos.sel('terminate:'))), macos.nsstring('q'))
-	macos.msg_void1(app_menu, 'addItem:', quit_item)
-	macos.release(quit_item)
-	macos.msg_void1(app_menu_item, 'setSubmenu:', app_menu)
-	macos.release(app_menu)
-	macos.msg_void1(native_current_app(), 'setMainMenu:', main_menu)
-	macos.release(app_menu_item)
-	macos.release(main_menu)
-}
-
 fn native_new_window(frame NativeRect, title string) NativeView {
 	style := ns_window_style_titled | ns_window_style_closable | ns_window_style_miniaturizable | ns_window_style_resizable
 	window := macos.msg_id_rect_u64_u64_bool(macos.alloc('UI2Window'), 'initWithContentRect:styleMask:backing:defer:', appkit_rect(frame), style, ns_backing_store_buffered, false)
@@ -1898,7 +1877,10 @@ fn ui2_app_should_terminate_after_last_window_closed(_self voidptr, _cmd voidptr
 @[export: 'ui2_app_did_finish_launching']
 fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidptr) {
 	mut st := state()
-	native_install_app_menu(st.run_config.title)
+	// The menu bar and the tray can be declared before the app is up; install
+	// whatever was declared now that AppKit can accept it. The menu bar goes in
+	// either way, since macOS needs its application menu to handle Cmd+Q.
+	install_declared_menus()
 	frame := native_rect(120, 120, f64(st.run_config.width), f64(st.run_config.height))
 	st.window = native_new_window(frame, st.run_config.title)
 	// The app delegate doubles as window delegate for windowDidResize:

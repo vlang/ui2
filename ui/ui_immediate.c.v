@@ -127,9 +127,11 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				height: 800
 			}
 		}
+		// The drawn menu bar owns the top strip of the window, so the screen
+		// an app lays out is the rest of it.
 		return Rect{
 			width: f64(g_gg_app.ctx.width)
-			height: f64(g_gg_app.ctx.height)
+			height: f64(g_gg_app.ctx.height) - menu_bar_height()
 		}
 	}
 
@@ -144,6 +146,7 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 	pub fn run_window(title string, width int, height int, build_fn BuildFn, event_fn EventFn) {
 		g_build_screen = build_fn
 		g_event_handler = event_fn
+		publish_menu_context(event_fn, title, unsafe { nil })
 		// Choosing the font here rather than letting gg ask `fc-match` for one
 		// keeps the window legible and identical across distributions, and
 		// gives draw_text the metrics it needs to size text in points.
@@ -367,7 +370,8 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				return
 			}
 			g_dropdown_popup.mounted = false
-			render_element(ctx, root, 0, 0, rect(0, 0, f64(ctx.width), f64(ctx.height)))
+			top := menu_bar_height()
+			render_element(ctx, root, 0, top, rect(0, top, f64(ctx.width), f64(ctx.height) - top))
 			if g_open_dropdown.len > 0 {
 				if g_dropdown_popup.mounted {
 					draw_dropdown_popup(ctx)
@@ -375,6 +379,8 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 					close_dropdown()
 				}
 			}
+			// The bar and its panels float above every control in the window.
+			draw_menu_bar(ctx)
 			prune_unmounted_state()
 		}
 		check_long_press()
@@ -384,9 +390,15 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 	fn on_event(e &gg.Event, _ &GgApp) {
 		match e.typ {
 			.mouse_down {
+				if menu_bar_handle_down(f64(e.mouse_x), f64(e.mouse_y)) {
+					return
+				}
 				handle_touch_down(f64(e.mouse_x), f64(e.mouse_y))
 			}
 			.mouse_move {
+				if menu_bar_handle_move(f64(e.mouse_x), f64(e.mouse_y)) {
+					return
+				}
 				if g_open_dropdown.len > 0 {
 					update_dropdown_hover(f64(e.mouse_x), f64(e.mouse_y))
 				}
@@ -395,9 +407,15 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				}
 			}
 			.mouse_scroll {
+				if menu_bar_open() {
+					return
+				}
 				handle_mouse_scroll(f64(e.mouse_x), f64(e.mouse_y), f64(e.scroll_y))
 			}
 			.mouse_up {
+				if menu_bar_handle_up(f64(e.mouse_x), f64(e.mouse_y)) {
+					return
+				}
 				handle_touch_up(f64(e.mouse_x), f64(e.mouse_y))
 			}
 			.touches_began {
@@ -421,6 +439,9 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				handle_char_input(e.char_code)
 			}
 			.key_down {
+				if menu_bar_handle_key(e) {
+					return
+				}
 				if g_open_dropdown.len > 0 {
 					if handle_dropdown_key(e.key_code) {
 						return
@@ -1110,10 +1131,10 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				w := f64(ctx.width)
 				h := f64(ctx.height)
 				if !el.box.transparent {
-					draw_rect(ctx, 0, 0, w, h, el.box.bg, 0)
+					draw_rect(ctx, off_x, off_y, w - off_x, h - off_y, el.box.bg, 0)
 				}
 				for child in el.children {
-					render_element(ctx, child, 0, 0, clip)
+					render_element(ctx, child, off_x, off_y, clip)
 				}
 			}
 			.view {

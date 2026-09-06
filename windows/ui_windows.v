@@ -355,9 +355,14 @@ pub fn run_window(title string, width int, height int, build_fn BuildFn, event_f
 		return
 	}
 	st.root = root
+	// The menu bar and the tray can be declared before the window exists;
+	// attach whatever was declared now that there is a window to attach to.
+	publish_menu_context(event_fn, title, root)
+	install_declared_menus()
 	refresh()
 	C.ui2_win_show_main_window(root)
 	C.ui2_win_message_loop()
+	native_remove_tray()
 	windows_dispose_all()
 }
 
@@ -1133,6 +1138,9 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 		win_wm_command {
 			child := voidptr(usize(lparam))
 			if child == unsafe { nil } {
+				// A menu bar row and an accelerator both arrive without a
+				// control handle; the command id names the row.
+				windows_handle_menu_command(u32(wparam & 0xffff))
 				return 0
 			}
 			handle := windows_handle_id(child)
@@ -1221,6 +1229,10 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 		}
 		win_wm_refresh {
 			refresh()
+			return 0
+		}
+		win_wm_tray {
+			windows_handle_tray_message(u32(lparam))
 			return 0
 		}
 		win_wm_close {
