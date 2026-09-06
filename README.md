@@ -1,5 +1,8 @@
 # ui2
 
+<img height="280" alt="image" src="https://github.com/user-attachments/assets/0fb17bf1-ba64-4d70-bba9-76e08069e009" />
+
+
 `ui2` is a compact declarative UI module for V. It uses retained native controls
 on macOS, iOS, and Windows and a custom immediate-mode `gg` renderer on Linux
 and Android.
