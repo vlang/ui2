@@ -12,7 +12,7 @@ jobs:
       - name: Package Linux UI development headers
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends libx11-dev libxcursor-dev libxi-dev libgl1-mesa-dev libegl-dev libasound2-dev
+          sudo apt-get install -y --no-install-recommends libx11-dev libxcursor-dev libxi-dev libxrandr-dev libxinerama-dev libxfixes-dev libgl1-mesa-dev libegl-dev libasound2-dev
           tar -czf qml-headers.tar.gz -C /usr/include GL EGL KHR X11 alsa
       - uses: actions/upload-artifact@v4
         with:
