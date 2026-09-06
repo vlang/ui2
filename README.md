@@ -103,8 +103,9 @@ Call `control_support(kind)` to query support. macOS implements every shared
 control kind. iOS implements every kind, with text areas reported as `partial`
 because rich runs are currently rendered as plain text. Linux, Android, and
 opt-in custom desktop builds implement every kind through custom rendering;
-dropdowns and text areas are `partial` because dropdown presentation is a
-compact cycling control and rich text-area runs are rendered as plain text.
+dropdowns and text areas are `partial` because the dropdown list is drawn by
+the renderer instead of a native menu and rich text-area runs are rendered as
+plain text.
 
 Images load from `image_path` on every backend. The custom renderer caches
 decoded images. Scroll viewports clip both drawing and hit testing.

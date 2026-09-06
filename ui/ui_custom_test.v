@@ -39,4 +39,187 @@ $if ui2_custom_rendering ? {
 		assert pointer_event_id('drag', 'surface', 40, 50) == 'pointer:drag:surface:40.0:50.0'
 		assert pointer_event_id('up', 'surface', 40, 50) == 'pointer:up:surface:40.0:50.0'
 	}
+
+	fn test_custom_dropdown_popup_opens_below_its_control() {
+		row_height := dropdown_row_height(TextStyle{})
+		assert row_height == 28
+		frame := dropdown_popup_frame(rect(16, 40, 200, 42), 3, row_height, rect(0, 0, 320, 400))
+		assert frame.x == 16
+		assert frame.y == 86
+		assert frame.width == 200
+		assert frame.height == 3 * row_height + 8
+	}
+
+	fn test_custom_dropdown_popup_flips_above_when_more_rows_fit() {
+		frame := dropdown_popup_frame(rect(16, 150, 200, 30), 4, 28, rect(0, 0, 320, 220))
+		assert frame.height == 4 * 28 + 8
+		assert frame.y == 26
+	}
+
+	fn test_custom_dropdown_popup_shows_whole_rows_inside_the_window() {
+		frame := dropdown_popup_frame(rect(150, 60, 120, 30), 6, 28, rect(0, 0, 200, 160))
+		assert frame.height == 28 + 8
+		assert frame.y == 94
+		assert frame.x == 76
+	}
+
+	fn test_custom_dropdown_scroll_reveals_the_selected_row() {
+		g_dropdown_popup = DropdownPopup{
+			id: 'menu'
+			options: ['a', 'b', 'c', 'd', 'e', 'f']
+			row_height: 28
+			height: 2 * 28 + 8
+			max_scroll: 4 * 28
+			selected: 5
+		}
+		g_dropdown_scroll = 0
+		reveal_dropdown_row(5)
+		assert g_dropdown_scroll == 4 * 28
+		reveal_dropdown_row(0)
+		assert g_dropdown_scroll == 0
+		assert clamped_dropdown_scroll(1000) == 4 * 28
+		assert clamped_dropdown_scroll(-10) == 0
+		close_dropdown()
+		assert g_dropdown_scroll == 0
+		assert g_dropdown_popup.options.len == 0
+	}
+
+	fn test_custom_dropdown_click_opens_a_list_instead_of_cycling() {
+		close_dropdown()
+		target := HitTarget{
+			id: 'menu-click'
+			action_id: 'menu-change'
+			dropdown: true
+			options: ['One', 'Two', 'Three']
+		}
+		open_dropdown(target)
+		assert g_open_dropdown == 'menu-click'
+		assert text('menu-click') == ''
+		select_dropdown_option(HitTarget{
+			...target
+			dropdown_option: true
+			option_index: 2
+		})
+		assert g_open_dropdown == ''
+		assert text('menu-click') == 'Three'
+	}
+
+	fn test_custom_dropdown_without_an_id_only_reports_the_tap() {
+		close_dropdown()
+		open_dropdown(HitTarget{
+			action_id: 'menu-change'
+			dropdown: true
+			options: ['One']
+		})
+		assert g_open_dropdown == ''
+	}
+
+	fn test_custom_dropdown_keys_move_the_highlight_and_commit() {
+		close_dropdown()
+		g_open_dropdown = 'menu-keys'
+		g_dropdown_popup = DropdownPopup{
+			id: 'menu-keys'
+			action_id: 'menu-change'
+			options: ['One', 'Two', 'Three']
+			row_height: 28
+			height: 3 * 28 + 8
+			mounted: true
+		}
+		assert handle_dropdown_key(.down)
+		assert g_dropdown_hover == 0
+		assert handle_dropdown_key(.up)
+		assert g_dropdown_hover == 2
+		assert handle_dropdown_key(.tab) == false
+		assert handle_dropdown_key(.enter)
+		assert g_open_dropdown == ''
+		assert text('menu-keys') == 'Three'
+	}
+
+	// The control sits at 32,70 296x42 and the list rows the popup registers on
+	// the next frame start at y 120, matching the dropdown example's layout.
+	fn custom_test_dropdown_targets(id string) []HitTarget {
+		options := ['One', 'Two', 'Three']
+		mut targets := [
+			HitTarget{
+				id: id
+				action_id: 'menu-change'
+				x: 32
+				y: 70
+				w: 296
+				h: 42
+				dropdown: true
+				options: options
+			},
+		]
+		for index in 0 .. options.len {
+			targets << HitTarget{
+				id: id
+				action_id: 'menu-change'
+				x: 32
+				y: 120 + f64(index) * 28
+				w: 296
+				h: 28
+				dropdown_option: true
+				option_index: index
+				options: options
+			}
+		}
+		return targets
+	}
+
+	fn test_custom_dropdown_pointer_flow_picks_a_row_from_the_list() {
+		close_dropdown()
+		targets := custom_test_dropdown_targets('menu-pick')
+		g_hit_targets = [targets[0]]
+		handle_touch_down(100, 90)
+		handle_touch_up(100, 90)
+		assert g_open_dropdown == 'menu-pick'
+		assert text('menu-pick') == ''
+		g_hit_targets = targets.clone()
+		handle_touch_down(100, 160)
+		assert g_dropdown_hover == 1
+		handle_touch_up(100, 160)
+		assert g_open_dropdown == ''
+		assert text('menu-pick') == 'Two'
+		g_hit_targets = []HitTarget{}
+	}
+
+	fn test_custom_dropdown_pointer_flow_dismisses_on_an_outside_click() {
+		close_dropdown()
+		targets := custom_test_dropdown_targets('menu-dismiss')
+		g_hit_targets = [targets[0]]
+		handle_touch_down(100, 90)
+		handle_touch_up(100, 90)
+		assert g_open_dropdown == 'menu-dismiss'
+		g_hit_targets = targets.clone()
+		handle_touch_down(100, 300)
+		assert g_dropdown_hover == -1
+		handle_touch_up(100, 300)
+		assert g_open_dropdown == ''
+		assert text('menu-dismiss') == ''
+		g_hit_targets = [targets[0]]
+		handle_touch_down(100, 90)
+		handle_touch_up(100, 90)
+		assert g_open_dropdown == 'menu-dismiss'
+		handle_touch_down(100, 90)
+		handle_touch_up(100, 90)
+		assert g_open_dropdown == ''
+		assert text('menu-dismiss') == ''
+		g_hit_targets = []HitTarget{}
+	}
+
+	fn test_custom_dropdown_escape_closes_the_list() {
+		close_dropdown()
+		g_open_dropdown = 'menu-escape'
+		g_dropdown_popup = DropdownPopup{
+			id: 'menu-escape'
+			options: ['One', 'Two']
+			row_height: 28
+			height: 2 * 28 + 8
+			mounted: true
+		}
+		assert handle_dropdown_key(.escape)
+		assert g_open_dropdown == ''
+		assert text('menu-escape') == ''
+	}
 }

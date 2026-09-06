@@ -23,6 +23,10 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 		text_area   bool
 		dropdown    bool
 		options     []string
+		// dropdown_option marks one row of the open dropdown list; id names the
+		// owning dropdown and option_index the value the row selects.
+		dropdown_option bool
+		option_index    int
 		emit_change bool
 		clickable   bool
 		draggable   bool
@@ -47,6 +51,31 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 		ctx &gg.Context = unsafe { nil }
 	}
 
+	// DropdownPopup caches the geometry of the open dropdown list. The list is
+	// drawn after the element tree so it floats above every other control, and
+	// it is recomputed each frame to stay anchored to a moving control.
+	struct DropdownPopup {
+	mut:
+		id         string
+		action_id  string
+		x          f64
+		y          f64
+		width      f64
+		height     f64
+		row_height f64
+		options    []string
+		selected   int = -1
+		text_style TextStyle
+		radius     f64
+		max_scroll f64
+		mounted    bool
+	}
+
+	const dropdown_popup_padding = 4.0
+	const dropdown_popup_gap = 4.0
+	const dropdown_popup_margin = 4.0
+	const dropdown_popup_min_row_height = 24.0
+
 	__global g_build_screen = BuildFn(unsafe { nil })
 	__global g_event_handler = EventFn(unsafe { nil })
 	__global g_key_handler = KeyFn(unsafe { nil })
@@ -68,6 +97,10 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 	__global g_active_scrolls = map[string]bool{}
 	__global g_image_ids = map[string]int{}
 	__global g_active_images = map[string]bool{}
+	__global g_open_dropdown = ''
+	__global g_dropdown_popup = DropdownPopup{}
+	__global g_dropdown_hover = -1
+	__global g_dropdown_scroll = 0.0
 
 	// ── Public API ─────────────────────────────────────────────────────
 
@@ -310,7 +343,15 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				ctx.end()
 				return
 			}
+			g_dropdown_popup.mounted = false
 			render_element(ctx, root, 0, 0, rect(0, 0, f64(ctx.width), f64(ctx.height)))
+			if g_open_dropdown.len > 0 {
+				if g_dropdown_popup.mounted {
+					draw_dropdown_popup(ctx)
+				} else {
+					close_dropdown()
+				}
+			}
 			prune_unmounted_state()
 		}
 		check_long_press()
@@ -323,6 +364,9 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				handle_touch_down(f64(e.mouse_x), f64(e.mouse_y))
 			}
 			.mouse_move {
+				if g_open_dropdown.len > 0 {
+					update_dropdown_hover(f64(e.mouse_x), f64(e.mouse_y))
+				}
 				if g_touch.down {
 					handle_touch_move(f64(e.mouse_x), f64(e.mouse_y))
 				}
@@ -354,6 +398,11 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				handle_char_input(e.char_code)
 			}
 			.key_down {
+				if g_open_dropdown.len > 0 {
+					if handle_dropdown_key(e.key_code) {
+						return
+					}
+				}
 				if !dispatch_key_event(e) {
 					handle_key_down(e.key_code)
 				}
@@ -381,6 +430,10 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 			start_time: time.ticks()
 			moved: false
 			long_press_fired: false
+		}
+		if g_open_dropdown.len > 0 {
+			update_dropdown_hover(x, y)
+			return
 		}
 		for id, area in g_scroll_areas {
 			if x >= area.x && x <= area.x + area.width && y >= area.y && y <= area.y + area.height {
@@ -421,6 +474,11 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 	}
 
 	fn handle_mouse_scroll(x f64, y f64, delta_y f64) {
+		if g_open_dropdown.len > 0 {
+			g_dropdown_scroll = clamped_dropdown_scroll(g_dropdown_scroll - delta_y * 24)
+			update_dropdown_hover(x, y)
+			return
+		}
 		for id, area in g_scroll_areas {
 			if x < area.x || x > area.x + area.width || y < area.y || y > area.y + area.height {
 				continue
@@ -462,6 +520,10 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 		if g_touch.long_press_fired {
 			return
 		}
+		if g_open_dropdown.len > 0 {
+			handle_dropdown_release(x, y)
+			return
+		}
 		mut target := hit_test(g_touch.start_x, g_touch.start_y)
 		dx := x - g_touch.start_x
 		if g_touch.moved && dx < -72 {
@@ -499,7 +561,7 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 			return
 		}
 		if target.dropdown {
-			cycle_dropdown(target)
+			open_dropdown(target)
 			return
 		}
 		fire_event(target.action_id)
@@ -705,21 +767,271 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 		}
 	}
 
-	fn cycle_dropdown(target HitTarget) {
-		if target.options.len == 0 {
+	// ── Dropdown popup ─────────────────────────────────────────────────
+
+	// A dropdown click opens a floating list of its options. Without an id there
+	// is nowhere to keep the selection, so such a control only reports the tap.
+	fn open_dropdown(target HitTarget) {
+		if target.id.len == 0 || target.options.len == 0 {
 			fire_event(target.action_id)
 			return
 		}
-		current := g_text_values[target.id] or { '' }
-		mut next := 0
-		for index, option in target.options {
-			if option == current {
-				next = (index + 1) % target.options.len
+		close_dropdown()
+		g_open_dropdown = target.id
+		g_focused_field = ''
+	}
+
+	fn close_dropdown() {
+		g_open_dropdown = ''
+		g_dropdown_hover = -1
+		g_dropdown_scroll = 0.0
+		g_dropdown_popup = DropdownPopup{}
+	}
+
+	// While the list is open it owns every release: pick the row under the
+	// pointer, or dismiss on any release outside it (including the control).
+	fn handle_dropdown_release(x f64, y f64) {
+		release := hit_test(x, y)
+		if release.dropdown_option && release.id == g_open_dropdown {
+			select_dropdown_option(release)
+			return
+		}
+		close_dropdown()
+	}
+
+	fn select_dropdown_option(target HitTarget) {
+		if target.option_index < 0 || target.option_index >= target.options.len {
+			close_dropdown()
+			return
+		}
+		commit_dropdown(target.id, target.action_id, target.options[target.option_index])
+	}
+
+	fn commit_dropdown(id string, action_id string, value string) {
+		close_dropdown()
+		g_text_values[id] = value
+		fire_event(action_id)
+	}
+
+	fn handle_dropdown_key(key gg.KeyCode) bool {
+		popup := g_dropdown_popup
+		if popup.options.len == 0 {
+			return false
+		}
+		highlighted := if g_dropdown_hover >= 0 { g_dropdown_hover } else { popup.selected }
+		match key {
+			.escape {
+				close_dropdown()
+				return true
+			}
+			.up, .down {
+				step := if key == .down { 1 } else { -1 }
+				mut next := highlighted + step
+				if next < 0 {
+					next = popup.options.len - 1
+				} else if next >= popup.options.len {
+					next = 0
+				}
+				g_dropdown_hover = next
+				reveal_dropdown_row(next)
+				return true
+			}
+			.enter, .kp_enter {
+				if highlighted < 0 || highlighted >= popup.options.len {
+					close_dropdown()
+					return true
+				}
+				commit_dropdown(popup.id, popup.action_id, popup.options[highlighted])
+				return true
+			}
+			else {
+				return false
+			}
+		}
+	}
+
+	fn update_dropdown_hover(x f64, y f64) {
+		mut hover := -1
+		for target in g_hit_targets {
+			if !target.dropdown_option || target.id != g_open_dropdown {
+				continue
+			}
+			if x >= target.x && x <= target.x + target.w && y >= target.y && y <= target.y + target.h {
+				hover = target.option_index
+			}
+		}
+		g_dropdown_hover = hover
+	}
+
+	fn clamped_dropdown_scroll(offset f64) f64 {
+		if offset < 0 {
+			return 0.0
+		}
+		max_scroll := g_dropdown_popup.max_scroll
+		return if offset > max_scroll { max_scroll } else { offset }
+	}
+
+	fn reveal_dropdown_row(index int) {
+		popup := g_dropdown_popup
+		if index < 0 || popup.max_scroll <= 0 {
+			g_dropdown_scroll = clamped_dropdown_scroll(g_dropdown_scroll)
+			return
+		}
+		view_height := popup.height - dropdown_popup_padding * 2
+		row_top := f64(index) * popup.row_height
+		row_bottom := row_top + popup.row_height
+		mut offset := g_dropdown_scroll
+		if row_top < offset {
+			offset = row_top
+		} else if row_bottom > offset + view_height {
+			offset = row_bottom - view_height
+		}
+		g_dropdown_scroll = clamped_dropdown_scroll(offset)
+	}
+
+	fn dropdown_row_height(style TextStyle) f64 {
+		row_height := style.size + 13
+		return if row_height < dropdown_popup_min_row_height {
+			dropdown_popup_min_row_height
+		} else {
+			row_height
+		}
+	}
+
+	// dropdown_popup_frame drops the list below its control, flips it above when
+	// more rows fit there, and keeps whole rows inside the window so a clipped
+	// half row never looks selectable.
+	fn dropdown_popup_frame(anchor Rect, options int, row_height f64, window Rect) Rect {
+		chrome := dropdown_popup_padding * 2
+		below := window.height - (anchor.y + anchor.height) - dropdown_popup_gap - dropdown_popup_margin
+		above := anchor.y - dropdown_popup_gap - dropdown_popup_margin
+		rows_below := int((below - chrome) / row_height)
+		rows_above := int((above - chrome) / row_height)
+		flip := rows_above > rows_below
+		mut rows := if flip { rows_above } else { rows_below }
+		if rows > options {
+			rows = options
+		}
+		if rows < 1 {
+			rows = 1
+		}
+		height := f64(rows) * row_height + chrome
+		mut x := anchor.x
+		if x + anchor.width > window.width - dropdown_popup_margin {
+			x = window.width - dropdown_popup_margin - anchor.width
+		}
+		if x < dropdown_popup_margin {
+			x = dropdown_popup_margin
+		}
+		mut y := if flip {
+			anchor.y - dropdown_popup_gap - height
+		} else {
+			anchor.y + anchor.height + dropdown_popup_gap
+		}
+		if y + height > window.height - dropdown_popup_margin {
+			y = window.height - dropdown_popup_margin - height
+		}
+		if y < dropdown_popup_margin {
+			y = dropdown_popup_margin
+		}
+		return rect(x, y, anchor.width, height)
+	}
+
+	fn track_dropdown_popup(el Element, x f64, y f64, options []string, selected string) {
+		ctx := g_gg_app.ctx
+		if ctx == unsafe { nil } {
+			return
+		}
+		mut selected_index := -1
+		for index, option in options {
+			if option == selected {
+				selected_index = index
 				break
 			}
 		}
-		g_text_values[target.id] = target.options[next]
-		fire_event(target.action_id)
+		row_height := dropdown_row_height(el.text_style)
+		anchor := rect(x, y, el.frame.width, el.frame.height)
+		window := rect(0, 0, f64(ctx.width), f64(ctx.height))
+		frame := dropdown_popup_frame(anchor, options.len, row_height, window)
+		content_height := f64(options.len) * row_height
+		view_height := frame.height - dropdown_popup_padding * 2
+		opening := g_dropdown_popup.id != el.id
+		g_dropdown_popup = DropdownPopup{
+			id: el.id
+			action_id: element_action_id(el)
+			x: frame.x
+			y: frame.y
+			width: frame.width
+			height: frame.height
+			row_height: row_height
+			options: options
+			selected: selected_index
+			text_style: el.text_style
+			radius: el.box.radius
+			max_scroll: if content_height > view_height { content_height - view_height } else { 0.0 }
+			mounted: true
+		}
+		if opening {
+			g_dropdown_scroll = 0.0
+			g_dropdown_hover = -1
+			reveal_dropdown_row(selected_index)
+		} else {
+			g_dropdown_scroll = clamped_dropdown_scroll(g_dropdown_scroll)
+		}
+	}
+
+	fn draw_dropdown_popup(ctx &gg.Context) {
+		popup := g_dropdown_popup
+		if popup.options.len == 0 || popup.width <= 0 || popup.height <= 0 {
+			return
+		}
+		window := rect(0, 0, f64(ctx.width), f64(ctx.height))
+		apply_clip(ctx, window)
+		draw_rect(ctx, popup.x + 1, popup.y + 2, popup.width, popup.height, 0xdbe2ea, popup.radius)
+		draw_rect(ctx, popup.x, popup.y, popup.width, popup.height, 0xffffff, popup.radius)
+		draw_outline(ctx, popup.x, popup.y, popup.width, popup.height, 0xb8c2cf, popup.radius)
+		list := intersect_rect(rect(popup.x + 1, popup.y + dropdown_popup_padding, popup.width - 2,
+			popup.height - dropdown_popup_padding * 2), window)
+		if list.width <= 0 || list.height <= 0 {
+			return
+		}
+		apply_clip(ctx, list)
+		row_style := TextStyle{
+			...popup.text_style
+			align: .left
+		}
+		for index, option in popup.options {
+			row_y := popup.y + dropdown_popup_padding + f64(index) * popup.row_height - g_dropdown_scroll
+			if row_y + popup.row_height <= list.y || row_y >= list.y + list.height {
+				continue
+			}
+			if index == g_dropdown_hover {
+				draw_rect(ctx, popup.x + 2, row_y, popup.width - 4, popup.row_height, 0xdbeafe, 4)
+			} else if index == popup.selected {
+				draw_rect(ctx, popup.x + 2, row_y, popup.width - 4, popup.row_height, 0xf1f5f9, 4)
+			}
+			if index == popup.selected {
+				mark := if popup.row_height < 13 { popup.row_height } else { 13.0 }
+				draw_check_mark(ctx, popup.x + 7, row_y + (popup.row_height - mark) / 2, mark,
+					row_style.color)
+			}
+			draw_text(ctx, option, popup.x + 26, row_y, popup.width - 34, popup.row_height,
+				row_style)
+			add_hit_target(HitTarget{
+				id: popup.id
+				action_id: popup.action_id
+				x: popup.x
+				y: row_y
+				w: popup.width
+				h: popup.row_height
+				dropdown_option: true
+				option_index: index
+				options: popup.options
+			}, list)
+		}
+		draw_scrollbar(ctx, popup.x, popup.y, popup.width, popup.height, f64(popup.options.len) * popup.row_height +
+			dropdown_popup_padding * 2, g_dropdown_scroll, false)
+		apply_clip(ctx, window)
 	}
 
 	fn prune_unmounted_state() {
@@ -935,8 +1247,9 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 				g_text_kinds[el.id] = el.kind
 				g_active_fields[el.id] = true
 				selected := g_text_values[el.id] or { el.text }
+				list_open := el.enabled && el.id.len > 0 && g_open_dropdown == el.id
 				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box.bg,
-					el.box.radius, false, el.enabled)
+					el.box.radius, list_open, el.enabled)
 				padding := if el.padding_left > 0 { el.padding_left } else { 12.0 }
 				text_width := if el.frame.width > padding + 32 { el.frame.width - padding - 32 } else { 0.0 }
 				draw_text(ctx, selected, x + padding, y, text_width, el.frame.height, el.text_style)
@@ -957,6 +1270,17 @@ $if android || linux || ((macos || windows) && ui2_custom_rendering ?) {
 						dropdown: true
 						options: options
 					}, clip)
+					if list_open {
+						visible := intersect_rect(rect(x, y, el.frame.width, el.frame.height),
+							clip)
+						if options.len > 0 && visible.width > 0 && visible.height > 0 {
+							track_dropdown_popup(el, x, y, options, selected)
+						} else {
+							close_dropdown()
+						}
+					}
+				} else if el.id.len > 0 && g_open_dropdown == el.id {
+					close_dropdown()
 				}
 			}
 			.text_field {
