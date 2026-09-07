@@ -83,5 +83,32 @@ fn test_grid2_qml_scrolls_the_body_and_repeats_sortable_headers() {
 	assert body.children[1].frame.y == 32
 	// The rows are taller than the viewport, which is what makes the body scroll.
 	assert f64(grid2_row_count) * 32 > body.frame.height
-	assert (find_grid2_element(root, 'edit_worker') or { panic('missing checkbox') }).checked
+	csp := find_grid2_element(root, 'edit_csp') or { panic('missing csp dropdown') }
+	worker := find_grid2_element(root, 'edit_worker') or { panic('missing checkbox') }
+	editor := find_grid2_element(root, 'editor') or { panic('missing editor') }
+	assert worker.checked
+	assert worker.frame.x >= csp.frame.x + csp.frame.width
+	assert worker.frame.x + worker.frame.width <= editor.frame.width
+}
+
+fn test_grid2_qml_compact_editor_keeps_fields_and_worker_checkbox_separate() {
+	app := grid2_demo()
+	root := ui2.element_from_qml_model(grid2_qml_source, app, ui2.rect(0, 0, 524, grid2_height)) or {
+		panic(err)
+	}
+	ui2.validate_element_tree(root) or { panic(err) }
+	v1 := find_grid2_element(root, 'edit_v1') or { panic('missing first editor field') }
+	v2 := find_grid2_element(root, 'edit_v2') or { panic('missing second editor field') }
+	sex := find_grid2_element(root, 'edit_sex') or { panic('missing sex dropdown') }
+	csp := find_grid2_element(root, 'edit_csp') or { panic('missing csp dropdown') }
+	worker := find_grid2_element(root, 'edit_worker') or { panic('missing worker checkbox') }
+	editor := find_grid2_element(root, 'editor') or { panic('missing editor') }
+
+	assert v1.frame.y == v2.frame.y
+	assert sex.frame.y == csp.frame.y
+	assert v1.frame.y < sex.frame.y
+	assert v2.frame.x >= v1.frame.x + v1.frame.width
+	assert csp.frame.x >= sex.frame.x + sex.frame.width
+	assert worker.frame.x >= csp.frame.x + csp.frame.width
+	assert worker.frame.x + worker.frame.width <= editor.frame.width
 }
