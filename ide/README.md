@@ -1,5 +1,8 @@
 # UI2 Studio
 
+<img width="400" alt="image" src="https://github.com/user-attachments/assets/db98f044-b0a3-4f93-8ba8-d9ae39cb1ee4" />
+
+
 `ide/` is a Delphi/Lazarus-style visual form designer implemented entirely in
 V and UI2. It edits the fixed-coordinate `Screen` documents that UI2 renders on
 macOS, Windows, Linux, iOS, and Android.
