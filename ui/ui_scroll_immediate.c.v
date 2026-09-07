@@ -8,6 +8,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	import math
 
 	const text_area_vertical_padding = 8.0
+	const anonymous_text_area_scroll_prefix = '@text-area-key:'
 
 	fn reset_scroll_frame() {
 		g_scroll_areas = map[string]Rect{}
@@ -125,6 +126,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			math.max(0.0, frame.height - text_area_vertical_padding * 2))
 	}
 
+	fn text_area_scroll_id(el Element) string {
+		if el.id.len > 0 {
+			return el.id
+		}
+		// Keyed repeater children do not need public ids for reconciliation, but
+		// the immediate backend still needs stable private state to scroll them.
+		// Prefix the key so it cannot alias a normal QML id in the scroll maps.
+		if el.key.len > 0 {
+			return anonymous_text_area_scroll_prefix + el.key
+		}
+		return ''
+	}
+
 	// Wrap using the same font measurement as drawing. Explicit blank lines
 	// survive, and an unbroken word is split only at UTF-8 rune boundaries.
 	fn wrap_text_area_lines(value string, width f64, measure fn (string) f64) []string {
@@ -233,7 +247,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		content_height := f64(lines.len) * line_height + text_area_vertical_padding * 2
 		// Read-only means not editable, not unscrollable. disable_scroll only
 		// hides the scroller, matching Element's documented/native behavior.
-		offset := register_scroll_view(el.id, frame, clip, content_height, el.enabled,
+		scroll_id := text_area_scroll_id(el)
+		offset := register_scroll_view(scroll_id, frame, clip, content_height, el.enabled,
 			!el.disable_scroll, el.persistent_scrollbars)
 		text_clip := intersect_rect(content, clip)
 		if text_clip.width > 0 && text_clip.height > 0 {
