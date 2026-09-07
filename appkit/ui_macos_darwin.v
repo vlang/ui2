@@ -1684,7 +1684,7 @@ fn native_new_text_area(el Element) NativeView {
 
 fn native_new_text_view(frame macos.Rect, el Element) NativeView {
 	tv := macos.msg_id_rect(macos.alloc('NSTextView'), 'initWithFrame:', frame)
-	macos.msg_void1(tv, 'setFont:', native_font(el.text_style.size, el.text_style.bold, el.text_style.italic))
+	macos.msg_void1(tv, 'setFont:', native_text_style_font(el.text_style))
 	macos.msg_void_bool(tv, 'setRichText:', el.text_runs.len > 0)
 	macos.msg_void_bool(tv, 'setAllowsUndo:', true)
 	macos.msg_void_bool(tv, 'setVerticallyResizable:', true)
@@ -1717,7 +1717,7 @@ fn native_update_text_area(native NativeView, el Element, declared_text_changed 
 	}
 	macos.msg_void_bool(tv, 'setEditable:', !el.readonly && el.enabled)
 	macos.msg_void_bool(tv, 'setSelectable:', true)
-	macos.msg_void1(tv, 'setFont:', native_font(el.text_style.size, el.text_style.bold, el.text_style.italic))
+	macos.msg_void1(tv, 'setFont:', native_text_style_font(el.text_style))
 	macos.msg_void1(tv, 'setTextColor:', native_color(el.text_style.color))
 	macos.msg_void_bool(tv, 'setDrawsBackground:', !el.box.transparent)
 	if !el.box.transparent {
@@ -1862,6 +1862,14 @@ fn native_set_corner_radius(view NativeView, radius f64) {
 
 fn native_font(size f64, bold bool, italic bool) NativeView {
 	return NativeView(native_font_object(size, bold, italic))
+}
+
+// Native text areas used to ignore TextStyle.font_family and always install
+// the system face. Keep the same weight/italic base, then resolve the declared
+// family through the text formatting helper used by rich text operations.
+fn native_text_style_font(style TextStyle) NativeView {
+	base := macos.Id(native_font(style.size, style.bold, style.italic))
+	return NativeView(native_font_with_family(base, style.font_family, style.size))
 }
 
 @[export: 'ui2_view_is_flipped']

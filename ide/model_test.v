@@ -3,6 +3,18 @@ module main
 import os
 import ui2
 
+fn find_ide_element(element ui2.Element, id string) ?ui2.Element {
+	if element.id == id {
+		return element
+	}
+	for child in element.children {
+		if found := find_ide_element(child, id) {
+			return found
+		}
+	}
+	return none
+}
+
 fn test_designer_adds_snaps_duplicates_and_undoes_components() {
 	mut app := new_ide_app('.')
 	id := app.add_component('button', 13, 19)
@@ -113,6 +125,28 @@ fn test_ide_builds_a_valid_element_tree_in_each_document_mode() {
 		ui2.validate_element_tree(root) or { panic('${tab}: ${err}') }
 	}
 	ui2.validate_menus(app.menus()) or { panic(err) }
+}
+
+fn test_source_mode_uses_monospace_and_toolbar_uses_icons() {
+	mut app := new_ide_app('.')
+	app.active_tab = 'source'
+	root := build_ide(ui2.rect(0, 0, ide_width, ide_height), app)
+	source := find_ide_element(root, 'source_editor') or { panic('missing source editor') }
+	assert source.text_style.font_family == source_code_font_family()
+	icons := {
+		'new_form':  '＋'
+		'open_path': '📂'
+		'save_form': '💾'
+		'undo':      '↶'
+		'redo':      '↷'
+		'preview':   '▶'
+	}
+	for id, icon in icons {
+		button := find_ide_element(root, id) or { panic('missing toolbar button `${id}`') }
+		assert button.text == icon
+		assert button.tooltip.len > 0
+		assert button.accessibility_label == button.tooltip
+	}
 }
 
 fn test_saved_form_and_generated_main_compile_together() {

@@ -101,6 +101,27 @@ fn ide_button(id string, title string, frame ui2.Rect, active bool) ui2.Element 
 	}, text_style(11, if active { u32(0xffffff) } else { color_text }, active)), title)
 }
 
+fn toolbar_icon_button(id string, icon string, tooltip string, frame ui2.Rect, active bool) ui2.Element {
+	return ui2.Element{
+		...ui2.with_tooltip(ui2.button(id, icon, frame, ui2.BoxStyle{
+			bg: if active { color_primary } else { 0xffffff }
+			radius: 5
+		}, text_style(17, if active { u32(0xffffff) } else { color_text }, false)), tooltip)
+		accessibility_role: 'button'
+		accessibility_label: tooltip
+	}
+}
+
+fn source_code_font_family() string {
+	$if macos {
+		return 'Menlo'
+	} $else $if windows {
+		return 'Consolas'
+	} $else {
+		return 'Roboto Mono'
+	}
+}
+
 fn tiny_button(id string, title string, frame ui2.Rect, enabled bool) ui2.Element {
 	return ui2.Element{
 		...ui2.button(id, title, frame, ui2.BoxStyle{
@@ -114,13 +135,17 @@ fn tiny_button(id string, title string, frame ui2.Rect, enabled bool) ui2.Elemen
 fn build_toolbar(layout IdeLayout, app &IdeApp) ui2.Element {
 	mut children := []ui2.Element{}
 	children << ui2.label('', 'UI2 Studio', ui2.rect(14, 11, 108, 24), text_style(17, 0xffffff, true))
-	children << ide_button('new_form', 'New', ui2.rect(132, 8, 58, 30), false)
-	children << ide_button('open_path', 'Open', ui2.rect(196, 8, 62, 30), false)
-	children << ide_button('save_form', 'Save', ui2.rect(264, 8, 58, 30), false)
-	children << ide_button('undo', 'Undo', ui2.rect(334, 8, 58, 30), false)
-	children << ide_button('redo', 'Redo', ui2.rect(398, 8, 58, 30), false)
-	children << ide_button('preview', if app.active_tab == 'preview' { 'Design' } else { 'Run' }, ui2.rect(468, 8, 64, 30), app.active_tab == 'preview')
-	path_x := 548.0
+	children << toolbar_icon_button('new_form', '＋', 'New Form', ui2.rect(132, 8, 40, 30), false)
+	children << toolbar_icon_button('open_path', '📂', 'Open Form', ui2.rect(178, 8, 40, 30), false)
+	children << toolbar_icon_button('save_form', '💾', 'Save Form', ui2.rect(224, 8, 40, 30), false)
+	children << toolbar_icon_button('undo', '↶', 'Undo', ui2.rect(276, 8, 40, 30), false)
+	children << toolbar_icon_button('redo', '↷', 'Redo', ui2.rect(322, 8, 40, 30), false)
+	children << toolbar_icon_button('preview', if app.active_tab == 'preview' {
+		'■'
+	} else {
+		'▶'
+	}, if app.active_tab == 'preview' { 'Return to Design' } else { 'Run Preview' }, ui2.rect(374, 8, 44, 30), app.active_tab == 'preview')
+	path_x := 434.0
 	path_width := if layout.frame.width - path_x - 124 > 180 {
 		layout.frame.width - path_x - 124
 	} else {
@@ -497,7 +522,7 @@ fn build_source_editor(layout IdeLayout, app &IdeApp) []ui2.Element {
 	}, ui2.TextStyle{
 		color: 0xe2e8f0
 		size: 12
-		font_family: 'Roboto Mono'
+		font_family: source_code_font_family()
 	})
 	editor = ui2.Element{
 		...editor
