@@ -127,6 +127,33 @@ fn test_ide_builds_a_valid_element_tree_in_each_document_mode() {
 	ui2.validate_menus(app.menus()) or { panic(err) }
 }
 
+fn test_ide_docks_tree_above_inspector_and_keeps_workspace_to_the_right() {
+	mut app := new_ide_app('.')
+	frame := ui2.rect(0, 0, ide_width, ide_height)
+	layout := ide_layout(frame, app)
+	assert layout.navigator.x == 0
+	assert layout.inspector.x == 0
+	assert layout.navigator.y + layout.navigator.height < layout.inspector.y + 0.1
+	assert layout.inspector.y + layout.inspector.height == layout.status.y
+	assert layout.center.x == layout.left.width
+	assert layout.center.width == frame.width - layout.left.width
+	assert layout.stage.y == layout.center.y
+	assert layout.tabs.y == layout.stage.y + layout.stage.height
+
+	root := build_ide(frame, app)
+	tree := find_ide_element(root, 'object_tree_panel') or { panic('missing object tree') }
+	inspector := find_ide_element(root, 'object_inspector_panel') or {
+		panic('missing object inspector')
+	}
+	stage := find_ide_element(root, 'designer_stage') or { panic('missing designer stage') }
+	assert tree.frame.x == inspector.frame.x
+	assert tree.frame.y < inspector.frame.y
+	assert stage.frame.x >= tree.frame.x + tree.frame.width
+	if _ := find_ide_element(root, 'right_panel') {
+		assert false, 'the single-window layout must not have a right inspector dock'
+	}
+}
+
 fn test_source_mode_uses_monospace_and_toolbar_uses_icons() {
 	mut app := new_ide_app('.')
 	app.active_tab = 'source'

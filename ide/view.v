@@ -17,18 +17,19 @@ const color_primary = u32(0x2563eb)
 const color_stage = u32(0x334155)
 
 struct IdeLayout {
-	frame   ui2.Rect
-	toolbar ui2.Rect
-	palette ui2.Rect
-	left    ui2.Rect
-	center  ui2.Rect
-	right   ui2.Rect
-	tabs    ui2.Rect
-	stage   ui2.Rect
-	output  ui2.Rect
-	status  ui2.Rect
-	form    ui2.Rect
-	scale   f64
+	frame     ui2.Rect
+	toolbar   ui2.Rect
+	palette   ui2.Rect
+	left      ui2.Rect
+	navigator ui2.Rect
+	inspector ui2.Rect
+	center    ui2.Rect
+	tabs      ui2.Rect
+	stage     ui2.Rect
+	output    ui2.Rect
+	status    ui2.Rect
+	form      ui2.Rect
+	scale     f64
 }
 
 fn minimum(value f64, other f64) f64 {
@@ -36,23 +37,29 @@ fn minimum(value f64, other f64) f64 {
 }
 
 fn ide_layout(frame ui2.Rect, app &IdeApp) IdeLayout {
-	left_width := if frame.width >= 1120 { 218.0 } else { 178.0 }
-	right_width := if frame.width >= 1120 { 286.0 } else { 234.0 }
+	left_width := if frame.width >= 1120 { 286.0 } else { 244.0 }
 	body_y := ide_toolbar_height + ide_palette_height
 	status_y := frame.height - ide_status_height
 	body_height := status_y - body_y
 	center_x := left_width
-	center_width := if frame.width - left_width - right_width > 320 {
-		frame.width - left_width - right_width
+	center_width := if frame.width - left_width > 320 {
+		frame.width - left_width
 	} else {
 		320.0
+	}
+	mut navigator_height := body_height * 0.38
+	if navigator_height < 210 {
+		navigator_height = body_height / 2
+	}
+	if navigator_height > 310 {
+		navigator_height = 310
 	}
 	output_height := if app.output_open && body_height > 420 {
 		126.0
 	} else if app.output_open { 86.0 } else { 0.0 }
-	tabs := ui2.rect(center_x, body_y, center_width, ide_tab_height)
-	stage := ui2.rect(center_x, body_y + ide_tab_height, center_width, body_height - ide_tab_height - output_height)
-	output := ui2.rect(center_x, stage.y + stage.height, center_width, output_height)
+	stage := ui2.rect(center_x, body_y, center_width, body_height - ide_tab_height - output_height)
+	tabs := ui2.rect(center_x, stage.y + stage.height, center_width, ide_tab_height)
+	output := ui2.rect(center_x, tabs.y + tabs.height, center_width, output_height)
 	available_width := stage.width - 54
 	available_height := stage.height - 54
 	mut scale := minimum(available_width / app.form_width, available_height / app.form_height)
@@ -69,8 +76,9 @@ fn ide_layout(frame ui2.Rect, app &IdeApp) IdeLayout {
 		toolbar: ui2.rect(0, 0, frame.width, ide_toolbar_height)
 		palette: ui2.rect(0, ide_toolbar_height, frame.width, ide_palette_height)
 		left: ui2.rect(0, body_y, left_width, body_height)
+		navigator: ui2.rect(0, body_y, left_width, navigator_height)
+		inspector: ui2.rect(0, body_y + navigator_height + 1, left_width, body_height - navigator_height - 1)
 		center: ui2.rect(center_x, body_y, center_width, body_height)
-		right: ui2.rect(center_x + center_width, body_y, right_width, body_height)
 		tabs: tabs
 		stage: stage
 		output: output
@@ -198,16 +206,16 @@ fn build_palette(layout IdeLayout, app &IdeApp) ui2.Element {
 	return panel('palette', layout.palette, color_panel_alt, children)
 }
 
-fn build_left_panel(layout IdeLayout, app &IdeApp) ui2.Element {
-	width := layout.left.width
+fn build_object_tree(layout IdeLayout, app &IdeApp) ui2.Element {
+	width := layout.navigator.width
+	height := layout.navigator.height
 	mut children := []ui2.Element{}
-	children << ui2.label('', 'PROJECT INSPECTOR', ui2.rect(12, 10, width - 24, 18), text_style(10, color_muted, true))
-	children << ui2.label('', 'v  ${os_name(app.project_root)}', ui2.rect(12, 34, width - 24, 20), text_style(11, color_text, true))
-	children << tiny_button('project_form', '  ${if app.dirty { '*' } else { '' }}${display_file_name(app)}', ui2.rect(18, 58, width - 30, 27), true)
-	children << tiny_button('generate_main', '  main.v  (generate)', ui2.rect(18, 89, width - 30, 27), true)
-	divider_y := 126.0
-	children << panel('', ui2.rect(0, divider_y, width, 1), color_border, [])
-	children << ui2.label('', 'OBJECT TREE', ui2.rect(12, divider_y + 10, width - 24, 18), text_style(10, color_muted, true))
+	children << ui2.label('', 'OBJECT TREE', ui2.rect(12, 9, 96, 18), text_style(10, color_muted, true))
+	children << ui2.label('', os_name(app.project_root), ui2.rect(112, 9, width - 124, 18), ui2.TextStyle{
+		size: 9
+		color: color_muted
+		align: .right
+	})
 	mut rows := []ui2.Element{}
 	rows << tiny_button('select_form', '${if app.selected_id == 0 { '> ' } else { '' }}${app.form_name}: Screen', ui2.rect(5, 2, width - 20, 28), true)
 	for index, component in app.components {
@@ -217,13 +225,16 @@ fn build_left_panel(layout IdeLayout, app &IdeApp) ui2.Element {
 			'  '
 		}}${component.name}: ${component_tag(component.kind)}', ui2.rect(12, 34 + index * 31, width - 27, 27), true)
 	}
-	tree_y := divider_y + 32
-	tree_height := layout.left.height - tree_y - 42
+	tree_y := 34.0
+	tree_height := height - tree_y - 72
 	children << ui2.scroll('object_tree', ui2.rect(6, tree_y, width - 12, tree_height), color_panel, rows)
-	children << tiny_button('delete_component', 'Delete', ui2.rect(10, layout.left.height - 34, 58, 25), app.selected_id > 0)
-	children << tiny_button('duplicate_component', 'Duplicate', ui2.rect(74, layout.left.height - 34, 72, 25), app.selected_id > 0)
-	children << tiny_button('bring_front', 'Front', ui2.rect(152, layout.left.height - 34, width - 162, 25), app.selected_id > 0)
-	return panel('left_panel', layout.left, color_panel, children)
+	children << panel('', ui2.rect(0, height - 70, width, 1), color_border, [])
+	children << tiny_button('project_form', '${if app.dirty { '*' } else { '' }}${display_file_name(app)}', ui2.rect(8, height - 64, (width - 22) * 0.58, 26), true)
+	children << tiny_button('generate_main', 'main.v +', ui2.rect(14 + (width - 22) * 0.58, height - 64, (width - 22) * 0.42, 26), true)
+	children << tiny_button('delete_component', 'Delete', ui2.rect(8, height - 32, 58, 25), app.selected_id > 0)
+	children << tiny_button('duplicate_component', 'Duplicate', ui2.rect(72, height - 32, 72, 25), app.selected_id > 0)
+	children << tiny_button('bring_front', 'Front', ui2.rect(150, height - 32, width - 158, 25), app.selected_id > 0)
+	return panel('object_tree_panel', layout.navigator, color_panel, children)
 }
 
 fn os_name(path string) string {
@@ -311,8 +322,8 @@ fn build_events_inspector(width f64, app &IdeApp) []ui2.Element {
 	return children
 }
 
-fn build_right_panel(layout IdeLayout, app &IdeApp) ui2.Element {
-	width := layout.right.width
+fn build_object_inspector(layout IdeLayout, app &IdeApp) ui2.Element {
+	width := layout.inspector.width
 	mut children := []ui2.Element{}
 	children << ui2.label('', 'OBJECT INSPECTOR', ui2.rect(12, 10, width - 24, 18), text_style(10, color_muted, true))
 	selection_title := if component := app.selected_component() {
@@ -330,8 +341,8 @@ fn build_right_panel(layout IdeLayout, app &IdeApp) ui2.Element {
 	} else {
 		build_form_inspector(width - 12, app)
 	}
-	children << ui2.scroll('property_grid', ui2.rect(6, 98, width - 12, layout.right.height - 104), color_panel, property_children)
-	return panel('right_panel', layout.right, color_panel, children)
+	children << ui2.scroll('property_grid', ui2.rect(6, 98, width - 12, layout.inspector.height - 104), color_panel, property_children)
+	return panel('object_inspector_panel', layout.inspector, color_panel, children)
 }
 
 fn build_tabs(layout IdeLayout, app &IdeApp) ui2.Element {
@@ -339,7 +350,11 @@ fn build_tabs(layout IdeLayout, app &IdeApp) ui2.Element {
 	children << ide_button('tab_designer', 'Design', ui2.rect(10, 4, 78, 28), app.active_tab == 'designer')
 	children << ide_button('tab_source', 'Source', ui2.rect(94, 4, 78, 28), app.active_tab == 'source')
 	children << ide_button('tab_preview', 'Preview', ui2.rect(178, 4, 78, 28), app.active_tab == 'preview')
-	children << ui2.label('', '${app.form_name}  ${int(app.form_width)} x ${int(app.form_height)}  ${int(layout.scale * 100)}%', ui2.rect(270, 9, layout.tabs.width - 282, 18), text_style(10, color_muted, false))
+	info_width := if app.output_open { layout.tabs.width - 282 } else { layout.tabs.width - 366 }
+	children << ui2.label('', '${app.form_name}  ${int(app.form_width)} x ${int(app.form_height)}  ${int(layout.scale * 100)}%', ui2.rect(270, 9, info_width, 18), text_style(10, color_muted, false))
+	if !app.output_open {
+		children << tiny_button('toggle_output', 'Messages', ui2.rect(layout.tabs.width - 80, 6, 72, 24), true)
+	}
 	return panel('document_tabs', layout.tabs, color_panel_alt, children)
 }
 
@@ -582,19 +597,16 @@ fn build_ide(frame ui2.Rect, app &IdeApp) ui2.Element {
 	mut children := []ui2.Element{}
 	children << build_toolbar(layout, app)
 	children << build_palette(layout, app)
-	children << build_left_panel(layout, app)
-	children << build_right_panel(layout, app)
-	children << build_tabs(layout, app)
+	children << build_object_tree(layout, app)
+	children << build_object_inspector(layout, app)
 	children << panel('designer_stage', layout.stage, color_stage, [])
 	match app.active_tab {
 		'source' { children << build_source_editor(layout, app) }
 		'preview' { children << build_preview_form(layout, app) }
 		else { children << build_designer_form(layout, app) }
 	}
+	children << build_tabs(layout, app)
 	children << build_output(layout, app)
-	if !app.output_open {
-		children << tiny_button('toggle_output', 'Messages', ui2.rect(layout.center.x + layout.center.width - 72, layout.center.y + layout.center.height - 23, 68, 20), true)
-	}
 	children << build_status(layout, app)
 	return ui2.screen(color_window, children)
 }

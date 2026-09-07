@@ -22,6 +22,9 @@ v run ide ide/sample.qml
 
 The designer provides:
 
+- a single-window Delphi-style workspace with the component palette across the
+  top, the object tree above the inspector on the left, and document tabs below
+  the central design/code surface;
 - a component palette for labels, buttons, fields, text areas, checkboxes,
   dropdowns, rectangles, and images;
 - a scaled WYSIWYG form with selection, drag, resize, arrow-key movement,
