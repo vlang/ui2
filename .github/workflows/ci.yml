@@ -34,7 +34,10 @@ jobs:
           # the hosted runner before the UI tests are reached.
           VFLAGS: -gc boehm
         with:
-          check-latest: true
+          # ui2's documented minimum is V 0.5.2. Pin CI to that released
+          # toolchain instead of V master, whose V3 bootstrap currently rejects
+          # the boehm flag and is also broken under the hosted Windows toolchain.
+          version: '0.5.2'
 
       # `import ui2` resolves through the checkout directory name, so the
       # repository has to land in a directory called `ui2`.
