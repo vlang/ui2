@@ -171,6 +171,32 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		assert scroll_offset('inner') == 48
 	}
 
+	fn test_keyed_anonymous_text_areas_get_independent_nested_scroll_state() {
+		reset_scroll_test_state()
+		first := Element{kind: .text_area, key: '0'}
+		second := Element{kind: .text_area, key: '1'}
+		first_id := text_area_scroll_id(first)
+		second_id := text_area_scroll_id(second)
+		assert first_id == anonymous_text_area_scroll_prefix + '0'
+		assert second_id == anonymous_text_area_scroll_prefix + '1'
+		assert first_id != second_id
+		assert text_area_scroll_id(Element{kind: .text_area, id: 'notes', key: '0'}) == 'notes'
+		assert text_area_scroll_id(Element{kind: .text_area}) == ''
+
+		clip := rect(0, 0, 300, 200)
+		register_scroll_view('outer', clip, clip, 1000, true, true, false)
+		register_scroll_view(first_id, rect(20, 20, 100, 100), clip, 600, true, true, false)
+		register_scroll_view(second_id, rect(140, 20, 100, 100), clip, 600, true, true, false)
+		handle_mouse_scroll(50, 50, -1)
+		assert scroll_offset(first_id) == 48
+		assert scroll_offset(second_id) == 0
+		assert scroll_offset('outer') == 0
+		handle_mouse_scroll(170, 50, -2)
+		assert scroll_offset(first_id) == 48
+		assert scroll_offset(second_id) == 96
+		assert scroll_offset('outer') == 0
+	}
+
 	fn test_short_disabled_and_hidden_scrollbar_panes() {
 		reset_scroll_test_state()
 		frame := rect(0, 0, 100, 100)
