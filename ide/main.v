@@ -89,9 +89,69 @@ fn event_numeric_suffix(event string, prefix string) ?int {
 	return raw.int()
 }
 
+fn point_inside(rect ui2.Rect, x f64, y f64) bool {
+	return x >= rect.x && x <= rect.x + rect.width && y >= rect.y
+		&& y <= rect.y + rect.height
+}
+
+fn (mut app IdeApp) handle_palette_pointer(phase string, kind string, x f64, y f64, layout IdeLayout) {
+	match phase {
+		'down' {
+			app.armed_kind = ''
+			app.palette_drag_kind = kind
+			app.palette_drag_x = x
+			app.palette_drag_y = y
+			app.palette_drag_moved = false
+			app.status = 'Drag ${component_title(kind)} onto the form.'
+		}
+		'drag' {
+			if app.palette_drag_kind != kind {
+				return
+			}
+			app.palette_drag_x = x
+			app.palette_drag_y = y
+			app.palette_drag_moved = true
+			app.status = if app.active_tab == 'designer' && point_inside(layout.form, x, y) {
+				'Release to place ${component_title(kind)}.'
+			} else {
+				'Drag ${component_title(kind)} onto the form.'
+			}
+		}
+		'up' {
+			if app.palette_drag_kind != kind {
+				return
+			}
+			moved := app.palette_drag_moved
+			app.palette_drag_kind = ''
+			app.palette_drag_moved = false
+			if !moved {
+				app.armed_kind = kind
+				app.status = '${component_title(kind)} tool selected. Click the form to place it.'
+				return
+			}
+			if app.active_tab != 'designer' || !point_inside(layout.form, x, y) {
+				app.status = '${component_title(kind)} drop canceled.'
+				return
+			}
+			component_width, component_height := component_default_size(kind)
+			local_x := (x - layout.form.x) / layout.scale - component_width / 2
+			local_y := (y - layout.form.y) / layout.scale - component_height / 2
+			app.add_component(kind, local_x, local_y)
+		}
+		else {}
+	}
+}
+
 fn (mut app IdeApp) handle_pointer(event string, frame ui2.Rect) bool {
 	phase, id, x, y := pointer_event(event) or { return false }
 	layout := ide_layout(frame, app)
+	if id.starts_with('palette_') {
+		kind := id.all_after('palette_')
+		if kind != 'pointer' && component_tag(kind).len > 0 {
+			app.handle_palette_pointer(phase, kind, x, y, layout)
+			return true
+		}
+	}
 	local_x := (x - layout.form.x) / layout.scale
 	local_y := (y - layout.form.y) / layout.scale
 	if id == 'form_surface' {
@@ -341,6 +401,11 @@ fn handle_ide_event(event string) {
 
 fn handle_ide_key(key string) {
 	mut state := unsafe { ide_state }
+	focused := ui2.focused_id()
+	if focused.len > 0 && key in ['forward_delete', 'backspace', 'left', 'right', 'up', 'down',
+		'shift+left', 'shift+right', 'shift+up', 'shift+down', 'cmd+z', 'cmd+shift+z'] {
+		return
+	}
 	mut handled := true
 	match key {
 		'forward_delete', 'backspace' { state.delete_selected() }
@@ -356,6 +421,15 @@ fn handle_ide_key(key string) {
 		'cmd+shift+z' { state.redo() }
 		'cmd+d' { state.duplicate_selected() }
 		'f9' { state.toggle_preview() }
+		'tab', 'shift+tab' {
+			next := state.adjacent_inspector_property_id(focused, key == 'shift+tab') or {
+				handled = false
+				''
+			}
+			if handled {
+				ui2.focus(next)
+			}
+		}
 		'escape' {
 			state.armed_kind = ''
 			state.active_tab = 'designer'

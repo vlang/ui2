@@ -230,6 +230,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		g_text_editors[id] = editor
 	}
 
+	pub fn focused_id() string {
+		return g_focused_field
+	}
+
 	pub fn focused_text_area_id() string {
 		for target in g_hit_targets {
 			if target.id == g_focused_field && target.text_area {

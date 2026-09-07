@@ -460,6 +460,16 @@ pub fn focus(id string) {
 	C.ui2_win_focus(hwnd)
 }
 
+pub fn focused_id() string {
+	st := windows_state()
+	focused := C.ui2_win_focus_handle()
+	if focused == unsafe { nil } {
+		return ''
+	}
+	key := st.handle_keys[windows_handle_id(focused)] or { return '' }
+	return st.node_ids[key] or { '' }
+}
+
 pub fn focused_text_area_id() string {
 	st := windows_state()
 	focused := C.ui2_win_focus_handle()

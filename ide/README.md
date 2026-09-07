@@ -26,10 +26,12 @@ The designer provides:
   top, the object tree above the inspector on the left, and document tabs below
   the central design/code surface;
 - a component palette for labels, buttons, fields, text areas, checkboxes,
-  dropdowns, rectangles, and images;
+  dropdowns, rectangles, and images, with click-to-place and drag-to-form
+  placement;
 - a scaled WYSIWYG form with selection, drag, resize, arrow-key movement,
   grid display, and grid snapping;
-- project and object trees plus a live property/event inspector;
+- project and object trees plus a live property/event inspector whose editable
+  rows support Tab and Shift+Tab traversal;
 - undo/redo, duplicate, delete, and z-order commands;
 - generated QML source with a source-to-designer apply workflow;
 - an interactive preview and a messages/build pane;

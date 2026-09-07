@@ -135,6 +135,15 @@ pub fn focus(id string) {
 	macos.msg_bool(view, 'becomeFirstResponder')
 }
 
+pub fn focused_id() string {
+	for id, native in g_views {
+		if macos.msg_bool(native, 'isFirstResponder') {
+			return id
+		}
+	}
+	return ''
+}
+
 pub fn focused_text_area_id() string {
 	for id, native in g_views {
 		if (g_view_kinds[id] or { Kind.view }) == .text_area && macos.msg_bool(native, 'isFirstResponder') {

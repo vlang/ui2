@@ -170,6 +170,55 @@ fn test_object_inspector_uses_compact_property_rows() {
 	assert font_size.frame.y - name.frame.y == ide_inspector_row_height * 8
 }
 
+fn test_tab_order_cycles_through_visible_inspector_properties() {
+	mut app := new_ide_app('.')
+	assert app.adjacent_inspector_property_id('form_property_name', false)? == 'form_property_width'
+	assert app.adjacent_inspector_property_id('form_property_background', false)? == 'form_property_name'
+	assert app.adjacent_inspector_property_id('form_property_name', true)? == 'form_property_background'
+
+	app.add_component('button', 32, 40)
+	assert app.adjacent_inspector_property_id('property_name', false)? == 'property_text'
+	assert app.adjacent_inspector_property_id('property_font_size', false)? == 'property_name'
+	assert app.adjacent_inspector_property_id('project_path', false) == none
+
+	app.inspector_tab = 'events'
+	assert app.adjacent_inspector_property_id('property_event', false)? == 'property_event'
+}
+
+fn test_palette_controls_can_be_clicked_or_dragged_onto_the_form() {
+	mut app := new_ide_app('.')
+	frame := ui2.rect(0, 0, ide_width, ide_height)
+	layout := ide_layout(frame, app)
+
+	root := build_ide(frame, app)
+	palette_button := find_ide_element(root, 'palette_button') or {
+		panic('missing button palette control')
+	}
+	assert palette_button.kind == .view
+	assert palette_button.draggable
+
+	assert app.handle_pointer('pointer:down:palette_button:260:80', frame)
+	assert app.handle_pointer('pointer:up:palette_button:260:80', frame)
+	assert app.armed_kind == 'button'
+	assert app.components.len == 0
+
+	drop_x := layout.form.x + 200 * layout.scale
+	drop_y := layout.form.y + 160 * layout.scale
+	assert app.handle_pointer('pointer:down:palette_button:260:80', frame)
+	assert app.handle_pointer('pointer:drag:palette_button:${drop_x}:${drop_y}', frame)
+	assert app.palette_drag_moved
+	drag_root := build_ide(frame, app)
+	_ := find_ide_element(drag_root, 'palette_drag_preview') or {
+		panic('missing palette drag preview')
+	}
+	assert app.handle_pointer('pointer:up:palette_button:${drop_x}:${drop_y}', frame)
+	assert app.palette_drag_kind == ''
+	assert app.components.len == 1
+	assert app.components[0].kind == 'button'
+	assert app.components[0].x == 144
+	assert app.components[0].y == 144
+}
+
 fn test_source_mode_uses_monospace_and_toolbar_uses_icons() {
 	mut app := new_ide_app('.')
 	app.active_tab = 'source'

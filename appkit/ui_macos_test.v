@@ -53,4 +53,10 @@ fn test_macos_text_field_uses_native_bezel_without_layer_mask() {
 	// the clipped corner gaps in the rendered field.
 	assert !macos.msg_bool(field, 'wantsLayer')
 }
+
+fn test_macos_text_commands_report_forward_and_reverse_tab() {
+	assert text_command_key(voidptr(macos.sel('insertTab:')), 0)? == 'tab'
+	assert text_command_key(voidptr(macos.sel('insertTab:')), 0x20000)? == 'shift+tab'
+	assert text_command_key(voidptr(macos.sel('insertBacktab:')), 0)? == 'shift+tab'
+}
 }

@@ -238,8 +238,8 @@ fn debug_milliseconds(nanoseconds u64) f64 {
 	return f64(nanoseconds) / 1_000_000.0
 }
 
-// on_key registers a handler for key events that reach the window
-// (i.e. not consumed by a focused text field). Keys arrive normalized:
+// on_key registers a handler for key events that reach the window, plus
+// intercepted editing commands such as Tab. Keys arrive normalized:
 // 'up', 'forward_delete', 'escape', 'cmd+shift+r', 'f5', ...
 pub fn on_key(handler KeyFn) {
 	mut st := state()
@@ -340,6 +340,33 @@ pub fn focus(id string) {
 	if !native_focus(native) {
 		return
 	}
+}
+
+// focused_id returns the declarative id of the control that currently owns
+// keyboard focus. NSTextField edits through a shared field editor, so compare
+// that responder with each field's currentEditor as well as direct responders.
+pub fn focused_id() string {
+	st := state()
+	if native_is_nil(st.window) {
+		return ''
+	}
+	responder := macos.msg_id(st.window, 'firstResponder')
+	if native_is_nil(NativeView(responder)) {
+		return ''
+	}
+	if id := st.textview_ids[u64(voidptr(responder))] {
+		return id
+	}
+	for id, native in st.views {
+		if native == NativeView(responder) {
+			return id
+		}
+		if (st.view_kinds[id] or { Kind.view }) == .text_field
+			&& macos.msg_id(native, 'currentEditor') == responder {
+			return id
+		}
+	}
+	return ''
 }
 
 // focused_text_area_id returns the id of the text area that currently holds
@@ -661,6 +688,7 @@ fn ensure_runtime_classes() {
 		cls := macos.allocate_class_pair(macos.get_class('NSObject'), 'UI2ButtonHandler')
 		macos.add_method(cls, 'handleTap:', voidptr(ui2_button_tap), 'v@:@')
 		macos.add_method(cls, 'controlTextDidChange:', voidptr(ui2_control_text_changed), 'v@:@')
+		macos.add_method(cls, 'control:textView:doCommandBySelector:', voidptr(ui2_control_do_command), 'B@:@@:')
 		macos.add_method(cls, 'textDidChange:', voidptr(ui2_text_view_changed), 'v@:@')
 		macos.add_method(cls, 'textView:doCommandBySelector:', voidptr(ui2_text_view_do_command), 'B@:@:')
 		macos.add_method(cls, 'textView:clickedOnLink:atIndex:', voidptr(ui2_text_view_clicked_on_link), 'B@:@@Q')
@@ -2008,6 +2036,24 @@ fn ui2_control_text_changed(_self voidptr, _cmd voidptr, notification voidptr) {
 	}
 }
 
+@[export: 'ui2_control_do_command']
+fn ui2_control_do_command(_self voidptr, _cmd voidptr, control voidptr, _text_view voidptr, command voidptr) bool {
+	mut st := state()
+	if voidptr(st.key_handler) == unsafe { nil }
+		|| u64(control) !in st.control_change_ids {
+		return false
+	}
+	key := text_command_key(command, native_current_event_modifier_flags()) or { return false }
+	if key != 'tab' && key != 'shift+tab' {
+		return false
+	}
+	st.key_consumed = false
+	st.key_handler(key)
+	consumed := st.key_consumed
+	st.key_consumed = false
+	return consumed
+}
+
 @[export: 'ui2_text_view_changed']
 fn ui2_text_view_changed(_self voidptr, _cmd voidptr, notification voidptr) {
 	st := state()
@@ -2064,6 +2110,12 @@ fn text_command_key(command voidptr, modifiers u64) ?string {
 	}
 	if selector == macos.sel('insertNewline:') || selector == macos.sel('insertParagraphSeparator:') {
 		return if shift { 'line_break' } else { 'enter' }
+	}
+	if selector == macos.sel('insertTab:') {
+		return if shift { 'shift+tab' } else { 'tab' }
+	}
+	if selector == macos.sel('insertBacktab:') {
+		return 'shift+tab'
 	}
 	return none
 }

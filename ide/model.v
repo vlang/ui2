@@ -61,13 +61,17 @@ pub mut:
 	status          string = 'Choose a component, then click the form to place it.'
 	messages        string
 mut:
-	undo_stack        []IdeSnapshot
-	redo_stack        []IdeSnapshot
-	drag_component_id int = -1
-	drag_mode         string
-	drag_grab_x       f64
-	drag_grab_y       f64
-	drag_checkpointed bool
+	undo_stack         []IdeSnapshot
+	redo_stack         []IdeSnapshot
+	drag_component_id  int = -1
+	drag_mode          string
+	drag_grab_x        f64
+	drag_grab_y        f64
+	drag_checkpointed  bool
+	palette_drag_kind  string
+	palette_drag_x     f64
+	palette_drag_y     f64
+	palette_drag_moved bool
 }
 
 fn new_ide_app(root string) IdeApp {
@@ -261,6 +265,45 @@ fn (app &IdeApp) selected_component() ?DesignerComponent {
 		return none
 	}
 	return app.components[index]
+}
+
+fn (app &IdeApp) inspector_property_ids() []string {
+	if app.inspector_tab == 'events' {
+		return if app.selected_id > 0 { ['property_event'] } else { []string{} }
+	}
+	if app.selected_id == 0 {
+		return [
+			'form_property_name',
+			'form_property_width',
+			'form_property_height',
+			'form_property_background',
+		]
+	}
+	return [
+		'property_name',
+		'property_text',
+		'property_x',
+		'property_y',
+		'property_width',
+		'property_height',
+		'property_background',
+		'property_color',
+		'property_font_size',
+	]
+}
+
+fn (app &IdeApp) adjacent_inspector_property_id(current string, reverse bool) ?string {
+	ids := app.inspector_property_ids()
+	current_index := ids.index(current)
+	if current_index < 0 || ids.len == 0 {
+		return none
+	}
+	next_index := if reverse {
+		if current_index == 0 { ids.len - 1 } else { current_index - 1 }
+	} else {
+		(current_index + 1) % ids.len
+	}
+	return ids[next_index]
 }
 
 fn (app &IdeApp) unique_component_name(kind string) string {

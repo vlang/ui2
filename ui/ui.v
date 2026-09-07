@@ -4,7 +4,7 @@ pub type BuildFn = fn () Element
 
 pub type EventFn = fn (string)
 
-// KeyFn receives normalized key strings: 'up', 'forward_delete',
+// KeyFn receives normalized key strings: 'up', 'forward_delete', 'tab',
 // 'cmd+shift+r', 'f5', or text-view commands like 'text:editor:backspace'
 // and 'text:editor:line_break'.
 pub type KeyFn = fn (string)

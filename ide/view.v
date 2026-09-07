@@ -111,6 +111,25 @@ fn ide_button(id string, title string, frame ui2.Rect, active bool) ui2.Element 
 	}, text_style(11, if active { u32(0xffffff) } else { color_text }, active)), title)
 }
 
+fn palette_drag_button(id string, title string, frame ui2.Rect, active bool) ui2.Element {
+	element := ui2.draggable_view_with_cursor(id, frame, ui2.BoxStyle{
+		bg: if active { color_primary } else { 0xffffff }
+		radius: 5
+	}, ui2.cursor_pointing_hand, [
+		ui2.label('', title, ui2.rect(4, 4, frame.width - 8, frame.height - 8), ui2.TextStyle{
+			size: 11
+			color: if active { u32(0xffffff) } else { color_text }
+			bold: active
+			align: .center
+		}),
+	])
+	return ui2.Element{
+		...ui2.with_tooltip(element, 'Drag ${title} onto the form, or click to select it')
+		accessibility_role: 'button'
+		accessibility_label: '${title} component tool'
+	}
+}
+
 fn toolbar_icon_button(id string, icon string, tooltip string, frame ui2.Rect, active bool) ui2.Element {
 	return ui2.Element{
 		...ui2.with_tooltip(ui2.button(id, icon, frame, ui2.BoxStyle{
@@ -193,14 +212,22 @@ fn build_palette(layout IdeLayout, app &IdeApp) ui2.Element {
 		} else {
 			68.0
 		}
-		children << ide_button('palette_${kind}', title, ui2.rect(x, 26, width, 28), if kind == 'pointer' {
-			app.armed_kind.len == 0
+		active := if kind == 'pointer' {
+			app.armed_kind.len == 0 && app.palette_drag_kind.len == 0
 		} else {
-			app.armed_kind == kind
-		})
+			app.armed_kind == kind || app.palette_drag_kind == kind
+		}
+		frame := ui2.rect(x, 26, width, 28)
+		children << if kind == 'pointer' {
+			ide_button('palette_${kind}', title, frame, active)
+		} else {
+			palette_drag_button('palette_${kind}', title, frame, active)
+		}
 		x += width + 6
 	}
-	children << ui2.label('', if app.armed_kind.len > 0 {
+	children << ui2.label('', if app.palette_drag_kind.len > 0 {
+		'Drag ${component_title(app.palette_drag_kind)} onto the form'
+	} else if app.armed_kind.len > 0 {
 		'${component_title(app.armed_kind)} tool selected - click the form'
 	} else {
 		'Selection tool'
@@ -360,6 +387,28 @@ fn build_tabs(layout IdeLayout, app &IdeApp) ui2.Element {
 		children << tiny_button('toggle_output', 'Messages', ui2.rect(layout.tabs.width - 80, 6, 72, 24), true)
 	}
 	return panel('document_tabs', layout.tabs, color_panel_alt, children)
+}
+
+fn palette_drag_preview(layout IdeLayout, app &IdeApp) ui2.Element {
+	component_width, component_height := component_default_size(app.palette_drag_kind)
+	width := component_width * layout.scale
+	height := component_height * layout.scale
+	valid := app.active_tab == 'designer' && app.palette_drag_x >= layout.form.x
+		&& app.palette_drag_x <= layout.form.x + layout.form.width
+		&& app.palette_drag_y >= layout.form.y
+		&& app.palette_drag_y <= layout.form.y + layout.form.height
+	return panel('palette_drag_preview', ui2.rect(app.palette_drag_x - width / 2, app.palette_drag_y - height / 2, width, height), if valid {
+		u32(0x93c5fd)
+	} else {
+		u32(0xcbd5e1)
+	}, [
+		ui2.label('', component_title(app.palette_drag_kind), ui2.rect(4, 4, width - 8, height - 8), ui2.TextStyle{
+			size: 10
+			color: color_text
+			bold: true
+			align: .center
+		}),
+	])
 }
 
 fn grid_children(app &IdeApp, scale f64) []ui2.Element {
@@ -612,5 +661,8 @@ fn build_ide(frame ui2.Rect, app &IdeApp) ui2.Element {
 	children << build_tabs(layout, app)
 	children << build_output(layout, app)
 	children << build_status(layout, app)
+	if app.palette_drag_kind.len > 0 && app.palette_drag_moved {
+		children << palette_drag_preview(layout, app)
+	}
 	return ui2.screen(color_window, children)
 }
