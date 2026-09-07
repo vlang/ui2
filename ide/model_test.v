@@ -154,6 +154,22 @@ fn test_ide_docks_tree_above_inspector_and_keeps_workspace_to_the_right() {
 	}
 }
 
+fn test_object_inspector_uses_compact_property_rows() {
+	mut app := new_ide_app('.')
+	app.add_component('button', 224, 216)
+	root := build_ide(ui2.rect(0, 0, ide_width, ide_height), app)
+	property_grid := find_ide_element(root, 'property_grid') or { panic('missing property grid') }
+	name := find_ide_element(root, 'property_name') or { panic('missing name property') }
+	font_size := find_ide_element(root, 'property_font_size') or {
+		panic('missing font size property')
+	}
+	assert property_grid.frame.y == 74
+	assert name.frame.x == 86
+	assert name.frame.y == 4
+	assert name.frame.height == ide_inspector_field_height
+	assert font_size.frame.y - name.frame.y == ide_inspector_row_height * 8
+}
+
 fn test_source_mode_uses_monospace_and_toolbar_uses_icons() {
 	mut app := new_ide_app('.')
 	app.active_tab = 'source'

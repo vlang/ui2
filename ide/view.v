@@ -6,6 +6,8 @@ const ide_toolbar_height = 46.0
 const ide_palette_height = 62.0
 const ide_status_height = 24.0
 const ide_tab_height = 36.0
+const ide_inspector_row_height = 24.0
+const ide_inspector_field_height = 22.0
 
 const color_window = u32(0xe5e7eb)
 const color_panel = u32(0xf8fafc)
@@ -252,21 +254,21 @@ fn display_file_name(app &IdeApp) string {
 
 fn inspector_field(id string, label string, value string, y f64, width f64) []ui2.Element {
 	return [
-		ui2.label('', label, ui2.rect(10, y + 7, 84, 18), text_style(10, color_muted, false)),
-		ui2.text_field_with_change(id, '', value, ui2.rect(94, y, width - 104, 30), ui2.BoxStyle{
+		ui2.label('', label, ui2.rect(4, y + 3, 78, 16), text_style(10, color_muted, false)),
+		ui2.text_field_with_change(id, '', value, ui2.rect(86, y, width - 90, ide_inspector_field_height), ui2.BoxStyle{
 			bg: 0xffffff
-			radius: 4
+			radius: 2
 		}, text_style(10, color_text, false), ui2.keyboard_default),
 	]
 }
 
 fn build_form_inspector(width f64, app &IdeApp) []ui2.Element {
 	mut children := []ui2.Element{}
-	children << inspector_field('form_property_name', 'Name', app.form_name, 8, width)
-	children << inspector_field('form_property_width', 'Width', int(app.form_width).str(), 44, width)
-	children << inspector_field('form_property_height', 'Height', int(app.form_height).str(), 80, width)
-	children << inspector_field('form_property_background', 'Background', color_hex(app.form_background), 116, width)
-	children << ui2.label('', 'Select a control or choose one from the palette, then click the form.', ui2.rect(10, 160, width - 20, 44), ui2.TextStyle{
+	children << inspector_field('form_property_name', 'Name', app.form_name, 4, width)
+	children << inspector_field('form_property_width', 'Width', int(app.form_width).str(), 4 + ide_inspector_row_height, width)
+	children << inspector_field('form_property_height', 'Height', int(app.form_height).str(), 4 + ide_inspector_row_height * 2, width)
+	children << inspector_field('form_property_background', 'Background', color_hex(app.form_background), 4 + ide_inspector_row_height * 3, width)
+	children << ui2.label('', 'Select a control or choose one from the palette, then click the form.', ui2.rect(4, 4 + ide_inspector_row_height * 4, width - 8, 40), ui2.TextStyle{
 		size: 10
 		color: color_muted
 		lines: 3
@@ -276,24 +278,26 @@ fn build_form_inspector(width f64, app &IdeApp) []ui2.Element {
 
 fn build_component_inspector(width f64, component DesignerComponent) []ui2.Element {
 	mut children := []ui2.Element{}
-	children << inspector_field('property_name', 'Name', component.name, 8, width)
+	children << inspector_field('property_name', 'Name', component.name, 4, width)
 	children << inspector_field('property_text', if component.kind == 'image' {
 		'Source'
 	} else {
 		'Text'
-	}, component.text, 44, width)
-	children << inspector_field('property_x', 'X', int(component.x).str(), 80, width)
-	children << inspector_field('property_y', 'Y', int(component.y).str(), 116, width)
-	children << inspector_field('property_width', 'Width', int(component.width).str(), 152, width)
-	children << inspector_field('property_height', 'Height', int(component.height).str(), 188, width)
-	children << inspector_field('property_background', 'Background', color_hex(component.background), 224, width)
-	children << inspector_field('property_color', 'Foreground', color_hex(component.color), 260, width)
-	children << inspector_field('property_font_size', 'Font size', '${component.font_size:g}', 296, width)
+	}, component.text, 4 + ide_inspector_row_height, width)
+	children << inspector_field('property_x', 'X', int(component.x).str(), 4 + ide_inspector_row_height * 2, width)
+	children << inspector_field('property_y', 'Y', int(component.y).str(), 4 + ide_inspector_row_height * 3, width)
+	children << inspector_field('property_width', 'Width', int(component.width).str(), 4 + ide_inspector_row_height * 4, width)
+	children << inspector_field('property_height', 'Height', int(component.height).str(), 4 + ide_inspector_row_height * 5, width)
+	children << inspector_field('property_background', 'Background', color_hex(component.background), 4 + ide_inspector_row_height * 6, width)
+	children << inspector_field('property_color', 'Foreground', color_hex(component.color), 4 + ide_inspector_row_height * 7, width)
+	children << inspector_field('property_font_size', 'Font size', '${component.font_size:g}', 4 + ide_inspector_row_height * 8, width)
+	mut final_row_y := 4 + ide_inspector_row_height * 9
 	if component.kind == 'checkbox' {
-		children << ui2.checkbox('property_checked', 'Checked', component.checked, ui2.rect(94, 334, width - 104, 28), text_style(10, color_text, false))
+		children << ui2.checkbox('property_checked', 'Checked', component.checked, ui2.rect(86, final_row_y, width - 90, ide_inspector_field_height), text_style(10, color_text, false))
+		final_row_y += ide_inspector_row_height
 	}
-	children << ui2.label('', 'Type', ui2.rect(10, 375, 84, 18), text_style(10, color_muted, false))
-	children << ui2.label('', component_tag(component.kind), ui2.rect(94, 375, width - 104, 18), text_style(10, color_text, true))
+	children << ui2.label('', 'Type', ui2.rect(4, final_row_y + 3, 78, 16), text_style(10, color_muted, false))
+	children << ui2.label('', component_tag(component.kind), ui2.rect(86, final_row_y + 3, width - 90, 16), text_style(10, color_text, true))
 	return children
 }
 
@@ -307,14 +311,14 @@ fn component_event_property(component DesignerComponent) string {
 
 fn build_events_inspector(width f64, app &IdeApp) []ui2.Element {
 	component := app.selected_component() or {
-		return [ui2.label('', 'Screen has no direct event. Select a control to bind an action id.', ui2.rect(10, 12, width - 20, 44), ui2.TextStyle{
+		return [ui2.label('', 'Screen has no direct event. Select a control to bind an action id.', ui2.rect(4, 4, width - 8, 40), ui2.TextStyle{
 			size: 10
 			color: color_muted
 			lines: 3
 		})]
 	}
-	mut children := inspector_field('property_event', component_event_property(component), component.event_handler, 8, width)
-	children << ui2.label('', 'The generated action id is emitted by run_window. Handle it in main.v.', ui2.rect(10, 52, width - 20, 44), ui2.TextStyle{
+	mut children := inspector_field('property_event', component_event_property(component), component.event_handler, 4, width)
+	children << ui2.label('', 'The generated action id is emitted by run_window. Handle it in main.v.', ui2.rect(4, 4 + ide_inspector_row_height, width - 8, 40), ui2.TextStyle{
 		size: 10
 		color: color_muted
 		lines: 3
@@ -325,15 +329,15 @@ fn build_events_inspector(width f64, app &IdeApp) []ui2.Element {
 fn build_object_inspector(layout IdeLayout, app &IdeApp) ui2.Element {
 	width := layout.inspector.width
 	mut children := []ui2.Element{}
-	children << ui2.label('', 'OBJECT INSPECTOR', ui2.rect(12, 10, width - 24, 18), text_style(10, color_muted, true))
+	children << ui2.label('', 'OBJECT INSPECTOR', ui2.rect(8, 6, width - 16, 16), text_style(10, color_muted, true))
 	selection_title := if component := app.selected_component() {
 		'${component.name}: ${component_tag(component.kind)}'
 	} else {
 		'${app.form_name}: Screen'
 	}
-	children << ui2.label('', selection_title, ui2.rect(12, 33, width - 24, 22), text_style(12, color_text, true))
-	children << ide_button('inspector_properties', 'Properties', ui2.rect(10, 62, (width - 26) / 2, 28), app.inspector_tab == 'properties')
-	children << ide_button('inspector_events', 'Events', ui2.rect(16 + (width - 26) / 2, 62, (width - 26) / 2, 28), app.inspector_tab == 'events')
+	children << ui2.label('', selection_title, ui2.rect(8, 24, width - 16, 18), text_style(11, color_text, true))
+	children << ide_button('inspector_properties', 'Properties', ui2.rect(6, 46, (width - 17) / 2, 24), app.inspector_tab == 'properties')
+	children << ide_button('inspector_events', 'Events', ui2.rect(11 + (width - 17) / 2, 46, (width - 17) / 2, 24), app.inspector_tab == 'events')
 	property_children := if app.inspector_tab == 'events' {
 		build_events_inspector(width - 12, app)
 	} else if component := app.selected_component() {
@@ -341,7 +345,7 @@ fn build_object_inspector(layout IdeLayout, app &IdeApp) ui2.Element {
 	} else {
 		build_form_inspector(width - 12, app)
 	}
-	children << ui2.scroll('property_grid', ui2.rect(6, 98, width - 12, layout.inspector.height - 104), color_panel, property_children)
+	children << ui2.scroll('property_grid', ui2.rect(4, 74, width - 8, layout.inspector.height - 78), color_panel, property_children)
 	return panel('object_inspector_panel', layout.inspector, color_panel, children)
 }
 
