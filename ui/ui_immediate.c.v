@@ -166,6 +166,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			create_window: true
 			window_title: title
 			user_data: unsafe { voidptr(g_gg_app) }
+			init_fn: on_init
 			frame_fn: on_frame
 			event_fn: on_event
 			enable_dragndrop: true
@@ -348,6 +349,15 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	// ── Frame & event loop ─────────────────────────────────────────────
 
+	fn on_init(_ &GgApp) {
+		if voidptr(g_build_screen) == unsafe { nil } {
+			return
+		}
+		// gg/Sokol must receive images during initialization to make their GPU
+		// textures available for the first rendered frame.
+		preload_images(g_build_screen())
+	}
+
 	fn on_frame(app &GgApp) {
 		if app.ctx == unsafe { nil } {
 			return
@@ -369,19 +379,27 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		// been created, so the fallback chain is attached on the way into the
 		// first frame rather than in run_window.
 		ensure_symbol_fallbacks(ctx)
-		ctx.begin()
+		mut root := Element{}
+		mut has_root := false
 		if voidptr(g_build_screen) != unsafe { nil } {
 			g_hit_targets = []HitTarget{}
 			reset_scroll_frame()
 			g_active_fields = map[string]bool{}
 			g_active_scrolls = map[string]bool{}
 			g_active_images = map[string]bool{}
-			root := g_build_screen()
+			root = g_build_screen()
 			validate_element_tree(root) or {
 				eprintln('ui2: ${err}')
-				ctx.end()
 				return
 			}
+			// Sokol resources must be created before ctx.begin() starts its draw
+			// pass. Loading here lets the Linux/custom renderer draw PNGs and BMPs
+			// on the same frame they first appear.
+			preload_images(root)
+			has_root = true
+		}
+		ctx.begin()
+		if has_root {
 			g_dropdown_popup.mounted = false
 			top := menu_bar_height()
 			render_element(ctx, root, 0, top, rect(0, top, f64(ctx.width), f64(ctx.height) - top))
@@ -1445,17 +1463,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn draw_cached_image(ctx &gg.Context, path string, x f64, y f64, width f64, height f64, rotation f64) bool {
-		if path.trim_space() == '' {
-			return false
-		}
-		g_active_images[path] = true
-		mut image_id := g_image_ids[path] or { -1 }
+		if !cache_image(path) { return false }
+		image_id := g_image_ids[path] or { return false }
 		mut image_ctx := g_gg_app.ctx
-		if image_id < 0 {
-			loaded_image := image_ctx.create_image(path) or { return false }
-			image_id = loaded_image.id
-			g_image_ids[path] = image_id
-		}
 		cached_image := image_ctx.get_cached_image_by_idx(image_id)
 		if !cached_image.ok {
 			return false
@@ -1470,6 +1480,35 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			}
 			rotation: f32(-rotation)
 		)
+		return true
+	}
+
+	fn preload_images(el Element) {
+		if el.hidden {
+			return
+		}
+		if el.kind == .image {
+			cache_image(el.image_path)
+		}
+		for child in el.children {
+			preload_images(child)
+		}
+	}
+
+	fn cache_image(path string) bool {
+		if path.trim_space() == '' {
+			return false
+		}
+		g_active_images[path] = true
+		if path in g_image_ids {
+			return true
+		}
+		mut image_ctx := g_gg_app.ctx
+		loaded_image := image_ctx.create_image(path) or {
+			eprintln('ui2: could not load image `${path}`: ${err}')
+			return false
+		}
+		g_image_ids[path] = loaded_image.id
 		return true
 	}
 
