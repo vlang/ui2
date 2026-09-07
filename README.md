@@ -130,6 +130,20 @@ through AppKit/UIKit. Standard Windows controls expose their native name and
 value; explicit Windows accessibility overrides are not yet implemented.
 `autocorrect` and `padding_left` configure applicable mobile text inputs.
 
+## Visual IDE
+
+UI2 Studio in [`ide/`](ide/) is a Delphi/Lazarus-style WYSIWYG form designer
+written in V with UI2 itself. It includes a component palette, draggable and
+resizable controls, object tree and inspector, undo/redo, QML source editing,
+live preview, project save/open, `main.v` generation, and a build messages pane.
+
+```sh
+v run ide
+```
+
+See [`ide/README.md`](ide/README.md) for the supported visual document shape
+and workflow.
+
 ## Message boxes
 
 `message_box(...)` shows the operating system's own modal alert and blocks until

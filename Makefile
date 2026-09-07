@@ -1,9 +1,15 @@
 V ?= v
 
-.PHONY: test examples examples-custom screenshot check-macos check-ios check-android check-linux check-windows check-custom-macos check-custom-windows check-custom check-backends
+.PHONY: test ide check-ide examples examples-custom screenshot check-macos check-ios check-android check-linux check-windows check-custom-macos check-custom-windows check-custom check-backends
 
 test:
 	$(V) test .
+
+ide:
+	$(V) run ide
+
+check-ide:
+	$(V) -check ide
 
 examples:
 	$(V) run examples/build_examples.vsh
