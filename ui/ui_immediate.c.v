@@ -352,7 +352,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if app.ctx == unsafe { nil } {
 			return
 		}
-		ctx := app.ctx
+		mut ctx := app.ctx
+		// Some window managers can choose a client size different from the one
+		// requested in gg.Config before gg's cached resize event catches up. UI2
+		// lays out and clips against that cache, so synchronize it from Sokol's
+		// live logical window size before building the frame.
+		live_size := ctx.window_size()
+		if live_size.width > 0 && live_size.height > 0
+			&& (ctx.width != live_size.width || ctx.height != live_size.height) {
+			ctx.width = live_size.width
+			ctx.height = live_size.height
+			ctx.window.width = live_size.width
+			ctx.window.height = live_size.height
+		}
 		// gg builds its fonts in the sokol init callback, after the window has
 		// been created, so the fallback chain is attached on the way into the
 		// first frame rather than in run_window.
