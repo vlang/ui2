@@ -40,6 +40,39 @@ $if ui2_custom_rendering ? {
 		assert pointer_event_id('up', 'surface', 40, 50) == 'pointer:up:surface:40.0:50.0'
 	}
 
+	fn test_custom_button_images_match_native_arrangements() {
+		image_only := button_image_layout(30, 28, '', 'symbol:gearshape')
+		assert image_only.visible
+		assert image_only.image == rect(6, 5, 18, 18)
+		assert image_only.text.width == 0
+
+		compact_image_only := button_image_layout(20, 17, '', 'symbol:scissors')
+		assert compact_image_only.image == rect(3.5, 2, 13, 13)
+
+		tall_image_only := button_image_layout(44, 58, '', '/tmp/paste.png')
+		assert tall_image_only.image == rect(6, 13, 32, 32)
+
+		compact := button_image_layout(100, 24, 'Open', '/tmp/open.png')
+		assert compact.image == rect(5, 5.5, 13, 13)
+		assert compact.text == rect(22, 0, 74, 24)
+
+		tall := button_image_layout(60, 62, 'Paste', '/tmp/paste.png')
+		assert tall.image == rect(14, 4, 32, 32)
+		assert tall.text == rect(2, 39, 56, 20)
+
+		text_only := button_image_layout(80, 28, 'Normal', '')
+		assert !text_only.visible
+		assert text_only.text == rect(0, 0, 80, 28)
+	}
+
+	fn test_custom_renderer_has_portable_system_symbol_fallbacks() {
+		assert system_symbol_fallback('arrow.uturn.backward') == ''
+		assert system_symbol_fallback('gearshape') == ''
+		assert system_symbol_fallback('magnifyingglass') == ''
+		assert system_symbol_fallback('xmark') == ''
+		assert system_symbol_fallback('future.symbol') == ''
+	}
+
 	fn test_custom_slider_pointer_value_uses_range_step_and_orientation() {
 		horizontal := HitTarget{
 			slider: true
