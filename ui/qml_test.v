@@ -741,6 +741,28 @@ fn test_qml_stack_layout_validates_orientation_names() {
 	}
 }
 
+fn test_qml_page_layout_exposes_adjacent_page_borders() {
+	el := element_from_qml('PageLayout {
+		page: 1
+		border: 40
+		Rectangle { id: first }
+		Rectangle { id: second }
+		Rectangle { id: third }
+	}', rect(10, 20, 300, 160)) or { panic(err) }
+	assert el.frame == rect(10, 20, 300, 160)
+	assert el.children[0].frame == rect(0, 0, 260, 160)
+	assert el.children[1].frame == rect(20, 0, 260, 160)
+	assert el.children[2].frame == rect(280, 0, 260, 160)
+}
+
+fn test_qml_page_layout_validates_border() {
+	if _ := element_from_qml('PageLayout { border: 120 Rectangle {} }', rect(0, 0, 100, 100)) {
+		assert false, 'a border wider than the page layout must fail'
+	} else {
+		assert err.msg().contains('border')
+	}
+}
+
 fn test_qml_widget_accessibility_defaults_survive_conversion() {
 	checkbox_el := element_from_qml('Checkbox { text: "Ready" checked: true }', rect(0, 0, 120, 24)) or {
 		panic(err)

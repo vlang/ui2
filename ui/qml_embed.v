@@ -37,10 +37,10 @@ pub mut:
 pub fn new_qml_app[T](source string, model T) !&QmlApp[T] {
 	template := parse_qml(source)!
 	q_validate_template[T](template, model)!
-	// Evaluate once against a nominal frame. A document that cannot be
-	// evaluated at all should fail here; one that merely lays out oddly at
-	// this size is no concern, because nothing is drawn from it.
-	probe := rect(0, 0, 1, 1)
+	// Evaluate once against a representative nominal frame. Responsive layouts
+	// commonly subtract margins from the root size, so a 1x1 probe can turn
+	// otherwise valid child dimensions negative before anything is drawn.
+	probe := rect(0, 0, 1024, 768)
 	resolved, _ := q_evaluate_template(template, model, probe)!
 	validate_element_tree(element_from_qnode(resolved, probe)!)!
 	return &QmlApp[T]{

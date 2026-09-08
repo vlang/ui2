@@ -739,6 +739,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'StackLayout' {
 			return q_stack(node, frame)!
 		}
+		'PageLayout' {
+			return q_page_layout(node, frame)!
+		}
 		'Scroll' {
 			children := q_children(node, local)!
 			if node.prop_bool('persistent') {
@@ -1243,6 +1246,34 @@ fn q_stack(node &QNode, frame Rect) !Element {
 	}
 	config := q_stack_config(node, rect(0, 0, frame.width, frame.height))!
 	frames := stack_layout_frames(config, sizes)!
+	mut children := []Element{cap: visible.len}
+	for index, child in visible {
+		children << node_to_element(child, frames[index])!
+	}
+	return view(node.id, frame, q_box(node), children)
+}
+
+fn q_page_layout_config(node &QNode, frame Rect, child_count int) PageLayoutConfig {
+	return PageLayoutConfig{
+		id: node.id
+		frame: frame
+		box: q_box(node)
+		page: node.prop_or('page', '0').int()
+		border: node.prop_or('border', '50').f64()
+		swipe_threshold: node.prop_or('swipe_threshold', '0.5').f64()
+		children: []Element{len: child_count}
+	}
+}
+
+fn q_page_layout(node &QNode, frame Rect) !Element {
+	mut visible := []&QNode{}
+	for child in node.children {
+		if child.tag !in ['MenuItem', 'Option'] {
+			visible << child
+		}
+	}
+	config := q_page_layout_config(node, rect(0, 0, frame.width, frame.height), visible.len)
+	frames := page_layout_frames(config)!
 	mut children := []Element{cap: visible.len}
 	for index, child in visible {
 		children << node_to_element(child, frames[index])!

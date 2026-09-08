@@ -509,6 +509,7 @@ enum QChildLayoutKind {
 	grid
 	anchor
 	stack
+	page
 }
 
 struct QLayoutChildMetrics {
@@ -546,6 +547,7 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 		'GridLayout' { QChildLayoutKind.grid }
 		'AnchorLayout' { QChildLayoutKind.anchor }
 		'StackLayout' { QChildLayoutKind.stack }
+		'PageLayout' { QChildLayoutKind.page }
 		else { QChildLayoutKind.overlay }
 	}
 	padding := node.prop_or('padding', '0').f64()
@@ -595,6 +597,8 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 			float_layout_frames(q_float_layout_config(node, local, float_children))!
 		} else if kind == .stack {
 			stack_layout_frames(q_stack_config(node, local)!, child_sizes)!
+		} else if kind == .page {
+			page_layout_frames(q_page_layout_config(node, local, child_sizes.len))!
 		} else {
 			[]Rect{}
 		}
@@ -637,6 +641,9 @@ fn (layout &QChildLayout) fallback(child &QNode, scope map[string]QValue) !Rect 
 		.stack {
 			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
 		}
+		.page {
+			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
+		}
 	}
 }
 
@@ -662,6 +669,9 @@ fn (mut layout QChildLayout) advance(child &QNode) {
 		}
 		.anchor {}
 		.stack {
+			layout.index++
+		}
+		.page {
 			layout.index++
 		}
 		.overlay {}

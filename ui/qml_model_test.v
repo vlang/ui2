@@ -30,6 +30,7 @@ pub mut:
 	groups    []QmlTestGroup
 	removed   int
 	saved     string
+	page      int
 }
 
 fn qml_test_control_value(_id string) f64 {
@@ -314,6 +315,20 @@ fn test_qml_model_relative_layout_resolves_local_child_geometry() {
 	panel := element_from_qml_model(source, QmlTestApp{ name: 'Action', level: 80 }, rect(0, 0, 400, 240)) or { panic(err) }
 	assert panel.frame == rect(40, 50, 200, 100)
 	assert panel.children[0].frame == rect(60, 35, 80, 30)
+}
+
+fn test_qml_model_page_layout_resolves_current_page() {
+	source := 'PageLayout {
+		page: app.page
+		border: 40
+		Rectangle { id: first }
+		Rectangle { id: second }
+		Rectangle { id: third }
+	}'
+	pager := element_from_qml_model(source, QmlTestApp{ page: 1 }, rect(0, 0, 300, 160)) or { panic(err) }
+	assert pager.children[0].frame == rect(0, 0, 260, 160)
+	assert pager.children[1].frame == rect(20, 0, 260, 160)
+	assert pager.children[2].frame == rect(280, 0, 260, 160)
 }
 
 fn test_qml_model_anchor_layout_uses_resolved_child_sizes() {

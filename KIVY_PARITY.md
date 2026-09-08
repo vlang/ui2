@@ -272,6 +272,29 @@ the parent's offset twice. The V API is
 `relative_layout(RelativeLayoutConfig{...})`, and
 `relative_layout_frames` exposes the local geometry.
 
+## PageLayout
+
+`PageLayout` presents one page with narrow border previews of adjacent pages.
+The selected `page` is clamped to the available children; `border` defaults to
+50 and `swipe_threshold` defaults to 0.5.
+
+```qml
+PageLayout {
+    page: app.page
+    border: 24
+    Rectangle { Label { text: "Page one" } }
+    Rectangle { Label { text: "Page two" } }
+    Rectangle { Label { text: "Page three" } }
+}
+```
+
+The V API is `page_layout(PageLayoutConfig{...})`. Applications can use
+`page_layout_next`, `page_layout_previous`, and
+`page_layout_page_after_swipe` to update their model, while
+`page_layout_frames` exposes the page and border-strip geometry. Page contents
+always receive the layout height and `width - border`, matching the widget's
+fixed-page sizing behavior rather than child size hints.
+
 ## StackLayout
 
 `StackLayout` packs variable-size children along one axis and wraps them when
