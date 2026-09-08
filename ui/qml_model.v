@@ -511,6 +511,7 @@ enum QChildLayoutKind {
 	stack
 	page
 	tabs
+	accordion
 }
 
 struct QLayoutChildMetrics {
@@ -550,6 +551,7 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 		'StackLayout' { QChildLayoutKind.stack }
 		'PageLayout' { QChildLayoutKind.page }
 		'TabbedPanel' { QChildLayoutKind.tabs }
+		'Accordion' { QChildLayoutKind.accordion }
 		else { QChildLayoutKind.overlay }
 	}
 	padding := node.prop_or('padding', '0').f64()
@@ -558,6 +560,7 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 	mut box_children := []BoxLayoutChild{cap: metrics.len}
 	mut float_children := []FloatLayoutChild{cap: metrics.len}
 	mut panel_tabs := []TabbedPanelTab{cap: metrics.len}
+	mut accordion_items := []AccordionItem{cap: metrics.len}
 	for metric in metrics {
 		child_sizes << metric.frame
 		if kind == .box {
@@ -586,6 +589,8 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 			}
 		} else if kind == .tabs {
 			panel_tabs << TabbedPanelTab{}
+		} else if kind == .accordion {
+			accordion_items << AccordionItem{}
 		}
 	}
 	mut cells := []Rect{}
@@ -602,6 +607,9 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 	} else if kind == .tabs {
 		geometry := tabbed_panel_geometry(q_tabbed_panel_config(node, local, panel_tabs)!)!
 		cells = []Rect{len: panel_tabs.len, init: geometry.content}
+	} else if kind == .accordion {
+		geometry := accordion_geometry(q_accordion_config(node, local, accordion_items)!)!
+		cells = []Rect{len: accordion_items.len, init: geometry.content}
 	}
 	return QChildLayout{
 		kind: kind
@@ -655,6 +663,9 @@ fn (layout &QChildLayout) fallback(child &QNode, scope map[string]QValue) !Rect 
 		.tabs {
 			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
 		}
+		.accordion {
+			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
+		}
 	}
 }
 
@@ -686,6 +697,9 @@ fn (mut layout QChildLayout) advance(child &QNode) {
 			layout.index++
 		}
 		.tabs {
+			layout.index++
+		}
+		.accordion {
 			layout.index++
 		}
 		.overlay {}
@@ -756,6 +770,9 @@ fn q_layout_child_metrics(node &QNode, scope map[string]QValue) ![]QLayoutChildM
 			continue
 		}
 		if node.tag == 'TabbedPanel' && child.tag != 'Tab' {
+			continue
+		}
+		if node.tag == 'Accordion' && child.tag != 'AccordionItem' {
 			continue
 		}
 		if child.tag != 'Repeater' {

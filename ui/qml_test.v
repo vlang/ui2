@@ -841,3 +841,39 @@ fn test_qml_tabbed_panel_validates_tab_position() {
 		assert err.msg().contains('diagonal')
 	}
 }
+
+fn test_qml_accordion_builds_headers_and_active_content() {
+	el := element_from_qml('Accordion {
+		id: help
+		current: 1
+		orientation: vertical
+		min_space: 40
+		active_title_background: #2563EB
+		AccordionItem { id: start title: "Getting started" Label { text: "Start content" } }
+		AccordionItem { id: account title: "Account" on_select: select_account Label { text: "Account content" } }
+		AccordionItem { id: privacy title: "Privacy" Label { text: "Privacy content" } }
+	}', rect(10, 20, 300, 240)) or { panic(err) }
+	assert el.frame == rect(10, 20, 300, 240)
+	assert el.children.len == 4
+	assert el.children[0].children[0].text == 'Account content'
+	assert el.children[1].frame == rect(0, 0, 300, 40)
+	assert el.children[2].frame == rect(0, 40, 300, 40)
+	assert el.children[2].box.bg == u32(0x2563eb)
+	assert el.children[2].action_id == 'select_account'
+	assert el.children[2].accessibility_value == 'expanded'
+	assert el.children[3].frame == rect(0, 200, 300, 40)
+}
+
+fn test_qml_accordion_validates_available_title_space() {
+	if _ := element_from_qml('Accordion {
+		orientation: vertical
+		min_space: 40
+		AccordionItem {}
+		AccordionItem {}
+		AccordionItem {}
+	}', rect(0, 0, 200, 100)) {
+		assert false, 'insufficient accordion title space must fail'
+	} else {
+		assert err.msg().contains('enough space')
+	}
+}

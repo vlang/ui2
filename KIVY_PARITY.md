@@ -350,6 +350,33 @@ The V constructor is `tabbed_panel(TabbedPanelConfig{...})`, using
 and `tabbed_panel_current` clamps model indexes. Only the active tab's content
 is added to the element tree.
 
+## Accordion
+
+`Accordion` presents titled sections while keeping exactly one section open.
+Declare sections as `AccordionItem` children and update `current` from each
+item's `on_select` action.
+
+```qml
+Accordion {
+    current: app.current_section
+    orientation: vertical
+    min_space: 40
+    AccordionItem { title: "Profile" on_select: app.show_profile() Rectangle {} }
+    AccordionItem { title: "Security" on_select: app.show_security() Rectangle {} }
+}
+```
+
+Horizontal and vertical layouts are supported. `min_space` reserves the title
+area for every item and gives all remaining space to the active item. Active
+and inactive titles have separate background and text colors, disabled items
+remain visible but cannot be selected, and each title exposes expanded or
+collapsed accessibility state.
+
+The V constructor is `accordion(AccordionConfig{...})`, using `AccordionItem`
+entries. `accordion_geometry` exposes item, title, and content frames, while
+`accordion_current` clamps model indexes. Only the active item's content is
+added to the element tree.
+
 ## StackLayout
 
 `StackLayout` packs variable-size children along one axis and wraps them when

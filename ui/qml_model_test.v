@@ -376,6 +376,30 @@ fn test_qml_model_tabbed_panel_switches_content_through_tab_action() {
 	assert rebuilt.children[2].accessibility_value == 'selected'
 }
 
+fn test_qml_model_accordion_switches_content_through_item_action() {
+	source := 'Accordion {
+		id: sections
+		current: app.page
+		orientation: vertical
+		min_space: 40
+		AccordionItem { id: first title: "First" Label { text: "First content" } }
+		AccordionItem {
+			id: second
+			title: "Second"
+			on_select: app.select_second_tab()
+			Label { text: "Second content" }
+		}
+	}'
+	mut app := new_qml_app(source, QmlTestApp{}) or { panic(err) }
+	initial := app.build(rect(0, 0, 300, 180)) or { panic(err) }
+	assert initial.children[0].children[0].text == 'First content'
+	app.handle(initial.children[2].action_id) or { panic(err) }
+	assert app.state().page == 1
+	rebuilt := app.build(rect(0, 0, 300, 180)) or { panic(err) }
+	assert rebuilt.children[0].children[0].text == 'Second content'
+	assert rebuilt.children[2].accessibility_value == 'expanded'
+}
+
 fn test_qml_model_anchor_layout_uses_resolved_child_sizes() {
 	source := 'AnchorLayout {
 		anchor_x: center
