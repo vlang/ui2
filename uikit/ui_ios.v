@@ -691,11 +691,11 @@ fn native_snap_slider_value(view View, spec SliderSpec) f64 {
 
 fn new_text_field_view(frame Rect, placeholder string, t string, bg_hex u32, text_hex u32, size f64, radius f64, keyboard int, secure bool) View {
 	field := macos.msg_id_rect(macos.alloc('UITextField'), 'initWithFrame:', native_rect(frame))
-	update_text_field_view(field, frame, placeholder, t, bg_hex, text_hex, size, radius, keyboard, secure, true, true, 12)
+	update_text_field_view(field, frame, placeholder, t, bg_hex, text_hex, size, radius, keyboard, secure, true, true, 12, false, true)
 	return field
 }
 
-fn update_text_field_view(field View, frame Rect, placeholder string, t string, bg_hex u32, text_hex u32, size f64, radius f64, keyboard int, secure bool, autocorrect bool, declared_text_changed bool, padding_left f64) {
+fn update_text_field_view(field View, frame Rect, placeholder string, t string, bg_hex u32, text_hex u32, size f64, radius f64, keyboard int, secure bool, autocorrect bool, declared_text_changed bool, padding_left f64, readonly bool, enabled bool) {
 	macos.msg_void_rect(field, 'setFrame:', native_rect(frame))
 	set_background(field, bg_hex)
 	macos.msg_void1(field, 'setTextColor:', ios.color(text_hex))
@@ -709,6 +709,7 @@ fn update_text_field_view(field View, frame Rect, placeholder string, t string, 
 		macos.msg_void_bool(field, 'setSecureTextEntry:', secure)
 	}
 	macos.msg_void_i64(field, 'setAutocorrectionType:', if autocorrect { i64(0) } else { i64(1) })
+	macos.msg_void_bool(field, 'setEnabled:', enabled && !readonly)
 	macos.msg_void_i64(field, 'setClearButtonMode:', 1)
 	set_corner_radius(field, radius)
 	mut pad := macos.msg_id(field, 'leftView')
@@ -883,7 +884,7 @@ fn native_create_element(el Element) View {
 		.dropdown { new_dropdown_view(el) }
 		.text_field {
 			field := new_text_field_view(el.frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure)
-			update_text_field_view(field, el.frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure, el.autocorrect, true, el.padding_left)
+			update_text_field_view(field, el.frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure, el.autocorrect, true, el.padding_left, el.readonly, el.enabled)
 			field
 		}
 		.text_area { new_text_area_view(el) }
@@ -916,7 +917,7 @@ fn native_update_element(native View, el Element, declared_text_changed bool) {
 		.toggle_button { update_toggle_button_view(native, el) }
 		.dropdown { update_dropdown_view(native, el, declared_text_changed) }
 		.text_field {
-			update_text_field_view(native, el.frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure, el.autocorrect, declared_text_changed, el.padding_left)
+			update_text_field_view(native, el.frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure, el.autocorrect, declared_text_changed, el.padding_left, el.readonly, el.enabled)
 		}
 		.text_area { update_text_area_view(native, el, declared_text_changed) }
 		.slider { update_slider_view(native, el) }

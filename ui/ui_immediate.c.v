@@ -1659,7 +1659,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 					cursor_h := el.frame.height * 0.6
 					draw_rect(ctx, cursor_x, cursor_y, 2, cursor_h, el.text_style.color, 0)
 				}
-				if el.enabled {
+				if el.enabled && !el.readonly {
 					add_hit_target(HitTarget{
 						id: el.id
 						action_id: element_action_id(el)

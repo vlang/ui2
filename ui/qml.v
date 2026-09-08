@@ -673,7 +673,7 @@ fn node_to_element(node &QNode, frame Rect) !Element {
 	el := node_to_element_base(node, resolved)!
 	key := node.prop('key')
 	menu := q_menu(node)
-	secure := node.prop_bool('secure')
+	secure := el.secure || node.prop_bool('secure') || node.prop_bool('password')
 	return Element{
 		...el
 		action_id: if el.action_id.len > 0 { el.action_id } else { node.prop('on_tap') }
@@ -694,7 +694,7 @@ fn node_to_element(node &QNode, frame Rect) !Element {
 		accessibility_value: node.prop_or('accessibility_value', el.accessibility_value)
 		native_style: node.prop_bool('native')
 		autocorrect: node.prop('autocorrect') != 'false'
-		padding_left: node.prop_or('pad_left', '12').f64()
+		padding_left: node.prop_or('pad_left', el.padding_left.str()).f64()
 	}
 }
 
@@ -908,6 +908,26 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 				readonly: node.prop('editable') == 'false'
 				emit_change: node.prop('on_change').len > 0
 			}
+		}
+		'TextInput' {
+			return text_input(
+				id: node.id
+				action_id: node.prop_or('on_text', node.prop('on_change'))
+				submit_id: node.prop_or('on_text_validate', node.prop('on_submit'))
+				frame: frame
+				text: node.prop('text')
+				hint_text: node.prop_or('hint_text', node.prop('placeholder'))
+				multiline: node.prop_or('multiline', 'true') != 'false'
+				password: node.prop_bool('password') || node.prop_bool('secure')
+				readonly: node.prop_bool('readonly')
+				disable_scroll: node.prop_bool('disable_scroll')
+				enabled: node.prop('enabled') != 'false'
+				autocorrect: node.prop('autocorrect') != 'false'
+				keyboard: q_keyboard(node.prop('keyboard'))
+				padding_left: node.prop_or('pad_left', node.prop_or('padding', '12')).f64()
+				box: q_box(node)
+				text_style: q_text_style(node)
+			)!
 		}
 		'TextField' {
 			id := node.id

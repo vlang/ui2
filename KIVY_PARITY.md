@@ -295,6 +295,33 @@ The V API is `page_layout(PageLayoutConfig{...})`. Applications can use
 always receive the layout height and `width - border`, matching the widget's
 fixed-page sizing behavior rather than child size hints.
 
+## TextInput
+
+`TextInput` is a unified plain-text editor. It defaults to multiline editing;
+set `multiline: false` for a compact field whose Return key emits
+`on_text_validate`/`on_submit`.
+
+```qml
+TextInput {
+    id: notes
+    bind.text: app.notes
+    hint_text: "Write notes"
+    on_change: app.notes_changed()
+}
+```
+
+Both modes support native Unicode editing, selection, clipboard, undo where
+the backend provides it, live `bind.text`, `readonly`, `autocorrect`, styling,
+and the shared `text(id)`/`set_text(id, value)` APIs. `password: true` selects
+native secure entry for single-line input; multiline password mode returns an
+explicit error because the native multiline editors do not provide secure
+entry.
+
+The V constructor is `text_input(TextInputConfig{...})`. `hint_text` maps to
+UI2's placeholder metadata, `disable_scroll` selects an unscrolled multiline
+editor, and `action_id`/`submit_id` distinguish live edits from Return-key
+submission.
+
 ## StackLayout
 
 `StackLayout` packs variable-size children along one axis and wraps them when

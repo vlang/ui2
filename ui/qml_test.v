@@ -777,3 +777,38 @@ fn test_qml_widget_accessibility_defaults_survive_conversion() {
 	assert progress_el.children[0].frame.width == 100
 	assert progress_el.accessibility_value == '100 of 100'
 }
+
+fn test_qml_text_input_defaults_to_multiline() {
+	el := element_from_qml('TextInput {
+		id: notes
+		text: "One\\nTwo"
+		hint_text: "Notes"
+		on_text: notes_changed
+		readonly: true
+		disable_scroll: true
+	}', rect(0, 0, 240, 120)) or { panic(err) }
+	assert el.kind == .text_area
+	assert el.text == 'One\nTwo'
+	assert el.placeholder == 'Notes'
+	assert el.action_id == 'notes_changed'
+	assert el.readonly
+	assert el.disable_scroll
+}
+
+fn test_qml_text_input_supports_single_line_password_submission() {
+	el := element_from_qml('TextInput {
+		id: password
+		multiline: false
+		password: true
+		hint_text: "Password"
+		on_text_validate: sign_in
+		autocorrect: false
+		padding: 8
+	}', rect(0, 0, 200, 36)) or { panic(err) }
+	assert el.kind == .text_field
+	assert el.secure
+	assert el.placeholder == 'Password'
+	assert el.submit_id == 'sign_in'
+	assert !el.autocorrect
+	assert el.padding_left == 8
+}

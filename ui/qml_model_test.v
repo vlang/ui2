@@ -170,6 +170,24 @@ fn test_qml_model_supports_spinner_text_bindings() {
 	assert app.state().name == 'Work'
 }
 
+fn test_qml_model_supports_text_input_bindings_and_validation_events() {
+	source := 'TextInput {
+		id: entry
+		multiline: false
+		bind.text: app.name
+		on_text_validate: app.clear()
+	}'
+	mut app := new_qml_app(source, QmlTestApp{ name: 'Before' }) or { panic(err) }
+	app.control_text = qml_test_spinner_text
+	built := app.build(rect(0, 0, 240, 36)) or { panic(err) }
+	assert built.kind == .text_field
+	assert built.text == 'Before'
+	app.handle(built.action_id) or { panic(err) }
+	assert app.state().name == 'Work'
+	app.handle(built.submit_id) or { panic(err) }
+	assert app.state().name == ''
+}
+
 fn test_qml_model_supports_toggle_button_pressed_bindings() {
 	source := 'ToggleButton { id: bold text: "Bold" bind.pressed: app.enabled }'
 	root := element_from_qml_model(source, QmlTestApp{ enabled: true }, rect(0, 0, 100, 40)) or {

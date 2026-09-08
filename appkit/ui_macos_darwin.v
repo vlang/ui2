@@ -1228,7 +1228,9 @@ fn native_update_element(native NativeView, el Element, declared_text_changed bo
 			native_update_dropdown(native, el)
 		}
 		.text_field {
-			native_update_text_field(native, element_rect(el.frame), el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, declared_text_changed)
+			native_update_text_field(native, element_rect(el.frame), el.placeholder, el.text,
+				el.box.bg, el.text_style.color, el.text_style.size, el.box.radius,
+				declared_text_changed, el.readonly, el.enabled)
 		}
 		.text_area {
 			native_update_text_area(native, el, declared_text_changed, content_changed)
@@ -1926,11 +1928,12 @@ fn native_new_text_field(el Element) NativeView {
 	frame := element_rect(el.frame)
 	cls := if el.secure { 'NSSecureTextField' } else { 'NSTextField' }
 	field := macos.msg_id_rect(macos.alloc(cls), 'initWithFrame:', appkit_rect(frame))
-	native_update_text_field(field, frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, true)
+	native_update_text_field(field, frame, el.placeholder, el.text, el.box.bg, el.text_style.color,
+		el.text_style.size, el.box.radius, true, el.readonly, el.enabled)
 	return field
 }
 
-fn native_update_text_field(field NativeView, frame NativeRect, placeholder string, text string, bg_hex u32, text_hex u32, size f64, _radius f64, declared_text_changed bool) {
+fn native_update_text_field(field NativeView, frame NativeRect, placeholder string, text string, bg_hex u32, text_hex u32, size f64, _radius f64, declared_text_changed bool, readonly bool, enabled bool) {
 	native_set_frame(field, frame)
 	// Unrelated refreshes preserve native edits. A changed declaration remains
 	// controlled and is applied explicitly.
@@ -1945,6 +1948,9 @@ fn native_update_text_field(field NativeView, frame NativeRect, placeholder stri
 	macos.msg_void_u64(field, 'setBezelStyle:', 1)
 	macos.msg_void_bool(field, 'setDrawsBackground:', true)
 	macos.msg_void1(field, 'setBackgroundColor:', native_color(bg_hex))
+	macos.msg_void_bool(field, 'setEditable:', !readonly && enabled)
+	macos.msg_void_bool(field, 'setSelectable:', true)
+	macos.msg_void_bool(field, 'setEnabled:', enabled)
 }
 
 // native_new_text_area builds an NSScrollView wrapping an NSTextView —
