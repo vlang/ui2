@@ -610,6 +610,43 @@ fn test_qml_box_layout_validates_orientation_names() {
 	}
 }
 
+fn test_qml_float_layout_applies_independent_size_and_position_hints() {
+	el := element_from_qml('FloatLayout {
+		Rectangle {
+			id: card
+			size_hint_x: 0.5
+			size_hint_y: 0.25
+			pos_hint_center_x: 0.5
+			pos_hint_center_y: 0.5
+		}
+		Button {
+			id: fixed
+			x: 20
+			y: 30
+			width: 80
+			height: 40
+			size_hint_x: -1
+			size_hint_y: -1
+		}
+	}', rect(10, 20, 300, 200)) or { panic(err) }
+	assert el.children[0].frame == rect(75, 75, 150, 50)
+	assert el.children[1].frame == rect(20, 30, 80, 40)
+}
+
+fn test_qml_float_layout_supports_edge_hints_and_bounds() {
+	el := element_from_qml('FloatLayout {
+		Button {
+			size_hint_x: 0.9
+			size_hint_y: 0.1
+			size_hint_max_x: 120
+			size_hint_min_y: 32
+			pos_hint_right: 1
+			pos_hint_bottom: 1
+		}
+	}', rect(0, 0, 300, 200)) or { panic(err) }
+	assert el.children[0].frame == rect(180, 168, 120, 32)
+}
+
 fn test_qml_grid_layout_assigns_cells_in_the_requested_orientation() {
 	el := element_from_qml('GridLayout {
 		id: tools

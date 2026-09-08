@@ -214,6 +214,34 @@ The V constructor is `anchor_layout(AnchorLayoutConfig{...})`, with typed
 both axes to `center` and supports a shared `padding` or the per-edge
 `padding_left`, `padding_top`, `padding_right`, and `padding_bottom` properties.
 
+## FloatLayout
+
+`FloatLayout` independently sizes and positions each child relative to the
+container. With no position hint, a child's declared `x` and `y` are retained.
+
+```qml
+FloatLayout {
+    Rectangle {
+        size_hint_x: 0.6
+        size_hint_y: 0.4
+        pos_hint_center_x: 0.5
+        pos_hint_center_y: 0.5
+    }
+}
+```
+
+Negative size hints preserve declared dimensions. Non-negative hints multiply
+the parent dimension and can be bounded with the same `size_hint_min_*` and
+`size_hint_max_*` properties as `BoxLayout`. Horizontal positioning supports
+`pos_hint_x`, `pos_hint_center_x`, and `pos_hint_right`; vertical positioning
+supports `pos_hint_y`/`pos_hint_top`, `pos_hint_center_y`, and
+`pos_hint_bottom`. Hint coordinates follow UI2's top-left coordinate system.
+
+The V API is `float_layout(FloatLayoutConfig{...})`. `FloatLayoutChild` uses
+typed `FloatAxisHint` values with `start`, `center`, and `end` anchors, while
+`float_layout_frames` exposes the pure geometry calculation. Model-driven QML
+Repeater children are supported.
+
 ## StackLayout
 
 `StackLayout` packs variable-size children along one axis and wraps them when

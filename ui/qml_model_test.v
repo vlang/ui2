@@ -270,6 +270,31 @@ fn test_qml_model_box_layout_uses_repeater_size_hints() {
 	assert box.children[2].frame == rect(250, 10, 70, 60)
 }
 
+fn test_qml_model_float_layout_uses_repeater_hints() {
+	source := 'FloatLayout {
+		Repeater {
+			model: app.users
+			key: item.id
+			Button {
+				text: item.name
+				height: 24
+				size_hint_x: item.weight
+				size_hint_y: -1
+				pos_hint_center_x: index == 0 ? 0.25 : 0.75
+				pos_hint_y: index * 0.25
+			}
+		}
+	}'
+	canvas := element_from_qml_model(source, QmlTestApp{
+		users: [
+			QmlTestUser{ id: 1, name: 'Small', weight: 0.25 },
+			QmlTestUser{ id: 2, name: 'Large', weight: 0.5 },
+		]
+	}, rect(0, 0, 200, 100)) or { panic(err) }
+	assert canvas.children[0].frame == rect(25, 0, 50, 24)
+	assert canvas.children[1].frame == rect(100, 25, 100, 24)
+}
+
 fn test_qml_model_anchor_layout_uses_resolved_child_sizes() {
 	source := 'AnchorLayout {
 		anchor_x: center

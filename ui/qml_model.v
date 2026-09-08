@@ -505,6 +505,7 @@ enum QChildLayoutKind {
 	column
 	row
 	box
+	float
 	grid
 	anchor
 	stack
@@ -520,6 +521,8 @@ struct QLayoutChildMetrics {
 	maximum_height   f64 = -1.0
 	horizontal_align BoxAlignment
 	vertical_align   BoxAlignment
+	x_hint           FloatAxisHint
+	y_hint           FloatAxisHint
 }
 
 struct QChildLayout {
@@ -539,6 +542,7 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 		'Column' { QChildLayoutKind.column }
 		'Row' { QChildLayoutKind.row }
 		'BoxLayout' { QChildLayoutKind.box }
+		'FloatLayout' { QChildLayoutKind.float }
 		'GridLayout' { QChildLayoutKind.grid }
 		'AnchorLayout' { QChildLayoutKind.anchor }
 		'StackLayout' { QChildLayoutKind.stack }
@@ -548,6 +552,7 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 	local := rect(0, 0, actual.width, actual.height)
 	mut child_sizes := []Rect{cap: metrics.len}
 	mut box_children := []BoxLayoutChild{cap: metrics.len}
+	mut float_children := []FloatLayoutChild{cap: metrics.len}
 	for metric in metrics {
 		child_sizes << metric.frame
 		if kind == .box {
@@ -562,6 +567,18 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 				horizontal_align: metric.horizontal_align
 				vertical_align: metric.vertical_align
 			}
+		} else if kind == .float {
+			float_children << FloatLayoutChild{
+				element: Element{ frame: metric.frame }
+				size_hint_x: metric.size_hint_x
+				size_hint_y: metric.size_hint_y
+				minimum_width: metric.minimum_width
+				minimum_height: metric.minimum_height
+				maximum_width: metric.maximum_width
+				maximum_height: metric.maximum_height
+				x_hint: metric.x_hint
+				y_hint: metric.y_hint
+			}
 		}
 	}
 	return QChildLayout{
@@ -574,6 +591,8 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 			grid_layout_frames(q_grid_config(node, local)!, child_sizes.len)!
 		} else if kind == .box {
 			box_layout_frames(q_box_layout_config(node, local, box_children)!)!
+		} else if kind == .float {
+			float_layout_frames(q_float_layout_config(node, local, float_children))!
 		} else if kind == .stack {
 			stack_layout_frames(q_stack_config(node, local)!, child_sizes)!
 		} else {
@@ -606,6 +625,9 @@ fn (layout &QChildLayout) fallback(child &QNode, scope map[string]QValue) !Rect 
 		.box {
 			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
 		}
+		.float {
+			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
+		}
 		.grid {
 			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
 		}
@@ -632,6 +654,9 @@ fn (mut layout QChildLayout) advance(child &QNode) {
 		.box {
 			layout.index++
 		}
+		.float {
+			layout.index++
+		}
 		.grid {
 			layout.index++
 		}
@@ -650,14 +675,33 @@ fn q_layout_alignment(node &QNode, key string, scope map[string]QValue) !BoxAlig
 	return box_alignment(node.prop_or(key, 'start'))!
 }
 
-fn q_layout_child_metric(node &QNode, scope map[string]QValue, box bool) !QLayoutChildMetrics {
-	if !box {
+fn q_layout_float_axis_hint(node &QNode, scope map[string]QValue, start_keys []string, center_key string, end_key string) !FloatAxisHint {
+	for key in start_keys {
+		if expr := node.expressions[key] {
+			return FloatAxisHint{ anchor: .start, value: q_eval(expr, scope)!.numeric(expr.line)! }
+		}
+	}
+	if expr := node.expressions[center_key] {
+		return FloatAxisHint{ anchor: .center, value: q_eval(expr, scope)!.numeric(expr.line)! }
+	}
+	if expr := node.expressions[end_key] {
+		return FloatAxisHint{ anchor: .end, value: q_eval(expr, scope)!.numeric(expr.line)! }
+	}
+	return FloatAxisHint{}
+}
+
+fn q_layout_child_metric(node &QNode, scope map[string]QValue, box bool, floating bool) !QLayoutChildMetrics {
+	if !box && !floating {
 		return QLayoutChildMetrics{
 			frame: rect(0, 0, q_layout_dimension(node, 'width', scope, 80)!, q_layout_dimension(node, 'height', scope, 32)!)
 		}
 	}
 	return QLayoutChildMetrics{
-		frame: rect(0, 0, q_layout_dimension(node, 'width', scope, 80)!, q_layout_dimension(node, 'height', scope, 32)!)
+		frame: rect(if floating { q_layout_dimension(node, 'x', scope, 0)! } else { 0.0 }, if floating {
+			q_layout_dimension(node, 'y', scope, 0)!
+		} else {
+			0.0
+		}, q_layout_dimension(node, 'width', scope, 80)!, q_layout_dimension(node, 'height', scope, 32)!)
 		size_hint_x: q_layout_dimension(node, 'size_hint_x', scope, 1)!
 		size_hint_y: q_layout_dimension(node, 'size_hint_y', scope, 1)!
 		minimum_width: q_layout_dimension(node, 'size_hint_min_x', scope, -1)!
@@ -666,18 +710,29 @@ fn q_layout_child_metric(node &QNode, scope map[string]QValue, box bool) !QLayou
 		maximum_height: q_layout_dimension(node, 'size_hint_max_y', scope, -1)!
 		horizontal_align: q_layout_alignment(node, 'align_x', scope)!
 		vertical_align: q_layout_alignment(node, 'align_y', scope)!
+		x_hint: if floating {
+			q_layout_float_axis_hint(node, scope, ['pos_hint_x'], 'pos_hint_center_x', 'pos_hint_right')!
+		} else {
+			FloatAxisHint{}
+		}
+		y_hint: if floating {
+			q_layout_float_axis_hint(node, scope, ['pos_hint_y', 'pos_hint_top'], 'pos_hint_center_y', 'pos_hint_bottom')!
+		} else {
+			FloatAxisHint{}
+		}
 	}
 }
 
 fn q_layout_child_metrics(node &QNode, scope map[string]QValue) ![]QLayoutChildMetrics {
 	mut metrics := []QLayoutChildMetrics{}
 	box := node.tag == 'BoxLayout'
+	floating := node.tag == 'FloatLayout'
 	for child in node.children {
 		if child.tag in ['MenuItem', 'Option'] {
 			continue
 		}
 		if child.tag != 'Repeater' {
-			metrics << q_layout_child_metric(child, scope, box)!
+			metrics << q_layout_child_metric(child, scope, box, floating)!
 			continue
 		}
 		model_expr := child.expressions['model'] or {
@@ -695,7 +750,7 @@ fn q_layout_child_metrics(node &QNode, scope map[string]QValue) ![]QLayoutChildM
 				if repeated.tag in ['MenuItem', 'Option'] {
 					continue
 				}
-				metrics << q_layout_child_metric(repeated, item_scope, box)!
+				metrics << q_layout_child_metric(repeated, item_scope, box, floating)!
 			}
 		}
 	}

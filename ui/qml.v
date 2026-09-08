@@ -727,6 +727,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'BoxLayout' {
 			return q_box_layout(node, frame)!
 		}
+		'FloatLayout' {
+			return q_float_layout(node, frame)!
+		}
 		'GridLayout' {
 			return q_grid(node, frame)!
 		}
@@ -1068,6 +1071,65 @@ fn q_box_layout(node &QNode, frame Rect) !Element {
 	}
 	config := q_box_layout_config(node, rect(0, 0, frame.width, frame.height), items)!
 	frames := box_layout_frames(config)!
+	mut children := []Element{cap: visible.len}
+	for index, child in visible {
+		children << node_to_element(child, frames[index])!
+	}
+	return view(node.id, frame, q_box(node), children)
+}
+
+fn q_float_axis_hint(node &QNode, start_keys []string, center_key string, end_key string) FloatAxisHint {
+	for key in start_keys {
+		if value := node.props[key] {
+			return FloatAxisHint{ anchor: .start, value: value.f64() }
+		}
+	}
+	if value := node.props[center_key] {
+		return FloatAxisHint{ anchor: .center, value: value.f64() }
+	}
+	if value := node.props[end_key] {
+		return FloatAxisHint{ anchor: .end, value: value.f64() }
+	}
+	return FloatAxisHint{}
+}
+
+fn q_float_layout_child(node &QNode) FloatLayoutChild {
+	return FloatLayoutChild{
+		element: Element{
+			frame: rect(q_dimension(node, 'x', 0), q_dimension(node, 'y', 0), q_dimension(node, 'width', 80), q_dimension(node, 'height', 32))
+		}
+		size_hint_x: node.prop_or('size_hint_x', '1').f64()
+		size_hint_y: node.prop_or('size_hint_y', '1').f64()
+		minimum_width: node.prop_or('size_hint_min_x', '-1').f64()
+		minimum_height: node.prop_or('size_hint_min_y', '-1').f64()
+		maximum_width: node.prop_or('size_hint_max_x', '-1').f64()
+		maximum_height: node.prop_or('size_hint_max_y', '-1').f64()
+		x_hint: q_float_axis_hint(node, ['pos_hint_x'], 'pos_hint_center_x', 'pos_hint_right')
+		y_hint: q_float_axis_hint(node, ['pos_hint_y', 'pos_hint_top'], 'pos_hint_center_y', 'pos_hint_bottom')
+	}
+}
+
+fn q_float_layout_config(node &QNode, frame Rect, children []FloatLayoutChild) FloatLayoutConfig {
+	return FloatLayoutConfig{
+		id: node.id
+		frame: frame
+		box: q_box(node)
+		children: children
+	}
+}
+
+fn q_float_layout(node &QNode, frame Rect) !Element {
+	mut visible := []&QNode{}
+	mut items := []FloatLayoutChild{}
+	for child in node.children {
+		if child.tag in ['MenuItem', 'Option'] {
+			continue
+		}
+		visible << child
+		items << q_float_layout_child(child)
+	}
+	config := q_float_layout_config(node, rect(0, 0, frame.width, frame.height), items)
+	frames := float_layout_frames(config)!
 	mut children := []Element{cap: visible.len}
 	for index, child in visible {
 		children << node_to_element(child, frames[index])!
