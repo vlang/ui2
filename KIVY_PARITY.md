@@ -467,6 +467,34 @@ drags using `min_move` and optional perpendicular-swipe filtering, while
 `carousel_frames` exposes the directional neighbor geometry. Animated movement
 and continuous drag tracking remain a future interaction layer.
 
+## ModalView
+
+`ModalView` conditionally mounts a centered content surface over a full-size
+input-blocking backdrop. It defaults to 80% of the available width and height;
+fixed `content_width`/`content_height` values override those hints and clamp to
+the available bounds.
+
+```qml
+ModalView {
+    open: app.confirming
+    on_dismiss: app.close_confirmation()
+    content_width: 320
+    content_height: 180
+    Label { text: "Continue?" }
+}
+```
+
+`auto_dismiss` defaults to `true`. The backdrop invokes `on_dismiss` only when
+automatic dismissal is enabled, while a separate surface layer consumes clicks
+inside blank content space. Child controls render above that blocker and remain
+fully interactive. Closed modals keep their whole subtree hidden, and the root
+exposes dialog accessibility semantics.
+
+The V constructor is `modal_view(ModalViewConfig{...})` and
+`modal_view_geometry` exposes the responsive overlay/content frames. Opening
+and closing are model-driven and immediate; fade animations and Escape-key
+dismissal remain future layers.
+
 ## StackLayout
 
 `StackLayout` packs variable-size children along one axis and wraps them when

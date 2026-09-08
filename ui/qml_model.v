@@ -839,7 +839,7 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
 			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
-				'on_text_validate', 'on_select', 'on_toggle'] {
+				'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 			continue
 		}
 		resolved.props[key] = q_eval(expr, scope)!.string_value()
@@ -910,7 +910,7 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		evaluation.events[event_id] = QmlEvent{ binding: binding }
 	}
 	for property in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
-		'on_text_validate', 'on_select', 'on_toggle'] {
+		'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 		expr := node.expressions[property] or { continue }
 		if expr.kind == .call {
 			event_id := q_event_id(node, scope, property)
@@ -1063,7 +1063,7 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
 			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
-				'on_text_validate', 'on_select', 'on_toggle'] {
+				'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 			continue
 		}
 		q_schema_expression(expr, scope)!
@@ -1090,7 +1090,7 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 		}
 	}
 	for property in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
-		'on_text_validate', 'on_select', 'on_toggle'] {
+		'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 		expr := node.expressions[property] or { continue }
 		if expr.kind == .call {
 			q_validate_action[T](expr, scope)!

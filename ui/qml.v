@@ -687,7 +687,7 @@ fn node_to_element(node &QNode, frame Rect) !Element {
 		rotation: node.prop_or('rotation', '0').f64()
 		cursor: node.prop('cursor')
 		tooltip: node.prop('tooltip')
-		hidden: node.prop_bool('hidden')
+		hidden: el.hidden || node.prop_bool('hidden')
 		enabled: node.prop('enabled') != 'false'
 		accessibility_role: node.prop_or('accessibility_role', el.accessibility_role)
 		accessibility_label: node.prop_or('accessibility_label', el.accessibility_label)
@@ -756,6 +756,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		}
 		'Carousel' {
 			return q_carousel(node, frame)!
+		}
+		'ModalView' {
+			return q_modal_view(node, frame)!
 		}
 		'Scroll' {
 			children := q_children(node, local)!
@@ -1594,6 +1597,33 @@ fn q_carousel(node &QNode, frame Rect) !Element {
 		}
 	}
 	return carousel(q_carousel_config(node, frame, slides)!)!
+}
+
+fn q_modal_view_config(node &QNode, frame Rect, content Element) ModalViewConfig {
+	return ModalViewConfig{
+		id: node.id
+		frame: frame
+		open: node.prop_bool('open')
+		auto_dismiss: node.prop('auto_dismiss') != 'false'
+		dismiss_action_id: node.prop('on_dismiss')
+		content_width: node.prop_or('content_width', '-1').f64()
+		content_height: node.prop_or('content_height', '-1').f64()
+		size_hint_x: node.prop_or('size_hint_x', '0.8').f64()
+		size_hint_y: node.prop_or('size_hint_y', '0.8').f64()
+		overlay_box: BoxStyle{
+			bg: q_color(node, 'overlay_background', 0x475569)
+		}
+		content_box: q_box(node)
+		content: content
+	}
+}
+
+fn q_modal_view(node &QNode, frame Rect) !Element {
+	config := q_modal_view_config(node, rect(0, 0, frame.width, frame.height), Element{})
+	geometry := modal_view_geometry(config)!
+	content_id := if node.id.len > 0 { '${node.id}__content' } else { '' }
+	content := view(content_id, rect(0, 0, geometry.content.width, geometry.content.height), BoxStyle{ transparent: true }, q_children(node, rect(0, 0, geometry.content.width, geometry.content.height))!)
+	return modal_view(q_modal_view_config(node, frame, content))!
 }
 
 fn q_frame(node &QNode, fallback Rect) Rect {

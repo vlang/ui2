@@ -34,6 +34,7 @@ pub mut:
 	tree_open   bool
 	selected    string
 	screen_name string
+	modal_open  bool
 }
 
 fn qml_test_control_value(_id string) f64 {
@@ -70,6 +71,14 @@ pub fn (mut app QmlTestApp) select_tree_leaf() {
 
 pub fn (mut app QmlTestApp) show_details_screen() {
 	app.screen_name = 'details'
+}
+
+pub fn (mut app QmlTestApp) open_modal() {
+	app.modal_open = true
+}
+
+pub fn (mut app QmlTestApp) close_modal() {
+	app.modal_open = false
 }
 
 fn qml_test_find(element Element, text string) ?Element {
@@ -492,6 +501,33 @@ fn test_qml_model_carousel_switches_active_slide_through_action() {
 	assert rebuilt.children[0].hidden
 	assert !rebuilt.children[1].hidden
 	assert rebuilt.children[1].children[0].text == 'Second slide'
+}
+
+fn test_qml_model_modal_view_opens_and_dismisses_through_actions() {
+	source := 'Screen {
+		Button { text: "Open" on_tap: app.open_modal() }
+		ModalView {
+			id: confirm
+			width: 400
+			height: 300
+			open: app.modal_open
+			on_dismiss: app.close_modal()
+			content_width: 240
+			content_height: 140
+			Label { text: "Confirmation" }
+		}
+	}'
+	mut app := new_qml_app(source, QmlTestApp{}) or { panic(err) }
+	initial := app.build(rect(0, 0, 400, 300)) or { panic(err) }
+	assert initial.children[1].hidden
+	app.handle(initial.children[0].action_id) or { panic(err) }
+	assert app.state().modal_open
+
+	opened := app.build(rect(0, 0, 400, 300)) or { panic(err) }
+	assert !opened.children[1].hidden
+	assert opened.children[1].children[2].children[0].text == 'Confirmation'
+	app.handle(opened.children[1].children[0].action_id) or { panic(err) }
+	assert !app.state().modal_open
 }
 
 fn test_qml_model_anchor_layout_uses_resolved_child_sizes() {

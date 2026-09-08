@@ -972,3 +972,36 @@ fn test_qml_carousel_validates_direction() {
 		assert err.msg().contains('diagonal')
 	}
 }
+
+fn test_qml_modal_view_builds_centered_blocking_layers() {
+	el := element_from_qml('ModalView {
+		id: confirm
+		open: true
+		on_dismiss: close_modal
+		content_width: 300
+		content_height: 160
+		overlay_background: #475569
+		background: #FFFFFF
+		corner_radius: 10
+		Label { text: "Delete item?" x: 20 y: 20 width: 260 height: 30 }
+	}', rect(0, 0, 500, 300)) or { panic(err) }
+	assert !el.hidden
+	assert el.accessibility_role == 'dialog'
+	assert el.children.len == 3
+	assert el.children[0].frame == rect(0, 0, 500, 300)
+	assert el.children[0].action_id == 'close_modal'
+	assert el.children[1].frame == rect(100, 70, 300, 160)
+	assert el.children[1].box.radius == 10
+	assert el.children[2].frame == rect(100, 70, 300, 160)
+	assert el.children[2].children[0].text == 'Delete item?'
+}
+
+fn test_qml_modal_view_supports_required_and_closed_states() {
+	el := element_from_qml('ModalView {
+		id: required
+		auto_dismiss: false
+		on_dismiss: ignored
+	}', rect(0, 0, 400, 240)) or { panic(err) }
+	assert el.hidden
+	assert el.children[0].action_id == ''
+}
