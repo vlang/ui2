@@ -108,6 +108,45 @@ ui2.run_qml[App](
 )!
 ```
 
+For QML that ships with the application, the v3 compiler can lower the document
+straight to V expressions that construct `ui2.Element` values. Name the model
+parameter `app`, use `$qml` in a build function, and pass it to
+`run_compiled_qml`:
+
+```v
+fn build(app &App) ui2.Element {
+    return $qml('app.qml')
+}
+
+fn main() {
+    ui2.run_compiled_qml[App](
+        model: App{}
+        build: build
+        title: 'My app'
+        width: 780
+        height: 420
+    )!
+}
+```
+
+`$qml` reads and validates the document during compilation, then emits direct
+element constructors and V loops for repeaters. Refreshes evaluate model
+expressions and build the element tree without parsing QML or interpreting an
+expression AST. Typed actions and `bind.text`/`bind.checked`/`bind.active`/
+`bind.value` are handled by the compiled runner. Keep using `run_qml` when the
+QML source must be loaded or edited at runtime.
+
+The compile-time form currently requires the v3 compiler. The included benchmark
+caches parsing for the runtime-QML baseline, so it compares steady-state tree
+building rather than charging runtime QML for repeatedly parsing the file:
+
+```sh
+/path/to/vnew -nocache -prod \
+    -path "$(dirname "$PWD")|@vlib|@vmodules" \
+    -o /tmp/ui2-qml-build-bench benchmarks/qml_build/main.v
+/tmp/ui2-qml-build-bench
+```
+
 Ordinary properties are one-way expressions. `bind.text` and `bind.checked`
 write control edits back to a public mutable top-level model field. Public model
 methods with no arguments, one `int`, or one `string` argument can be used as
