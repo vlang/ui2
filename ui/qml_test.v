@@ -602,6 +602,31 @@ fn test_qml_grid_layout_requires_a_constraint() {
 	}
 }
 
+fn test_qml_anchor_layout_positions_children_with_per_edge_padding() {
+	el := element_from_qml('AnchorLayout {
+		id: footer
+		anchor_x: right
+		anchor_y: bottom
+		padding_left: 4
+		padding_top: 6
+		padding_right: 10
+		padding_bottom: 12
+		Button { id: save text: "Save" width: 72 height: 32 }
+	}', rect(20, 30, 200, 100)) or { panic(err) }
+	assert el.kind == .view
+	assert el.frame == rect(20, 30, 200, 100)
+	assert el.children.len == 1
+	assert el.children[0].frame == rect(118, 56, 72, 32)
+}
+
+fn test_qml_anchor_layout_validates_anchor_names() {
+	if _ := element_from_qml('AnchorLayout { anchor_x: middle }', rect(0, 0, 100, 100)) {
+		assert false, 'unknown anchor names must fail'
+	} else {
+		assert err.msg().contains('middle')
+	}
+}
+
 fn test_qml_widget_accessibility_defaults_survive_conversion() {
 	checkbox_el := element_from_qml('Checkbox { text: "Ready" checked: true }', rect(0, 0, 120, 24)) or {
 		panic(err)

@@ -505,6 +505,7 @@ enum QChildLayoutKind {
 	column
 	row
 	grid
+	anchor
 }
 
 struct QChildLayout {
@@ -513,6 +514,7 @@ struct QChildLayout {
 	padding f64
 	spacing f64
 	cells   []Rect
+	anchor  AnchorLayoutConfig
 mut:
 	cursor f64
 	index  int
@@ -523,6 +525,7 @@ fn q_child_layout(node &QNode, actual Rect, child_count int) !QChildLayout {
 		'Column' { QChildLayoutKind.column }
 		'Row' { QChildLayoutKind.row }
 		'GridLayout' { QChildLayoutKind.grid }
+		'AnchorLayout' { QChildLayoutKind.anchor }
 		else { QChildLayoutKind.overlay }
 	}
 	padding := node.prop_or('padding', '0').f64()
@@ -538,10 +541,22 @@ fn q_child_layout(node &QNode, actual Rect, child_count int) !QChildLayout {
 		} else {
 			[]Rect{}
 		}
+		anchor: if kind == .anchor {
+			q_anchor_config(node, local)!
+		} else {
+			AnchorLayoutConfig{}
+		}
 	}
 }
 
-fn (layout &QChildLayout) fallback() Rect {
+fn q_layout_dimension(node &QNode, key string, scope map[string]QValue, fallback f64) !f64 {
+	if expr := node.expressions[key] {
+		return q_eval(expr, scope)!.numeric(expr.line)!
+	}
+	return q_dimension(node, key, fallback)
+}
+
+fn (layout &QChildLayout) fallback(child &QNode, scope map[string]QValue) !Rect {
 	return match layout.kind {
 		.overlay { layout.frame }
 		.column {
@@ -552,6 +567,9 @@ fn (layout &QChildLayout) fallback() Rect {
 		}
 		.grid {
 			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
+		}
+		.anchor {
+			anchor_layout_frame(layout.anchor, rect(0, 0, q_layout_dimension(child, 'width', scope, 80)!, q_layout_dimension(child, 'height', scope, 32)!))
 		}
 	}
 }
@@ -570,6 +588,7 @@ fn (mut layout QChildLayout) advance(child &QNode) {
 		.grid {
 			layout.index++
 		}
+		.anchor {}
 		.overlay {}
 	}
 }
@@ -728,7 +747,7 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		if child.tag == 'Repeater' {
 			q_expand_repeater(child, scope, mut resolved.children, mut evaluation, mut layout)!
 		} else {
-			resolved_child := q_eval_node(child, scope, layout.fallback(), mut evaluation)!
+			resolved_child := q_eval_node(child, scope, layout.fallback(child, scope)!, mut evaluation)!
 			resolved.children << resolved_child
 			layout.advance(resolved_child)
 		}
@@ -763,7 +782,7 @@ fn q_expand_repeater(node &QNode, scope map[string]QValue, mut output []&QNode, 
 		parent_key := (scope['__repeat_key'] or { q_string('') }).string_value()
 		item_scope['__repeat_key'] = q_string(q_repeat_identity(parent_key, key))
 		for child_index, child in node.children {
-			mut repeated := q_eval_node(child, item_scope, layout.fallback(), mut evaluation)!
+			mut repeated := q_eval_node(child, item_scope, layout.fallback(child, item_scope)!, mut evaluation)!
 			if repeated.props['key'].len == 0 {
 				repeated.props['key'] = if node.children.len == 1 {
 					key

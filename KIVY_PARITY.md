@@ -165,3 +165,23 @@ row and column sizes, and per-index minimum sizes. QML also accepts
 `spacing_y`, `col_default_width`, `row_default_height`,
 `col_force_default`, and `row_force_default`. Repeater output participates in
 the same cell calculation.
+
+## AnchorLayout
+
+`AnchorLayout` aligns each child to the left, center, or right and independently
+to the top, center, or bottom of its available bounds. Child sizes are
+preserved, and padding reduces the alignment area.
+
+```qml
+AnchorLayout {
+    anchor_x: right
+    anchor_y: bottom
+    padding: 12
+    Button { text: "Continue" width: 120 height: 40 }
+}
+```
+
+The V constructor is `anchor_layout(AnchorLayoutConfig{...})`, with typed
+`HorizontalAnchor`, `VerticalAnchor`, and `AnchorPadding` values. QML defaults
+both axes to `center` and supports a shared `padding` or the per-edge
+`padding_left`, `padding_top`, `padding_right`, and `padding_bottom` properties.

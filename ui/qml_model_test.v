@@ -247,6 +247,24 @@ fn test_qml_model_grid_layout_counts_repeater_children() {
 	assert grid.children[2].frame == rect(10, 60, 90, 40)
 }
 
+fn test_qml_model_anchor_layout_uses_resolved_child_sizes() {
+	source := 'AnchorLayout {
+		anchor_x: center
+		anchor_y: center
+		Rectangle {
+			id: card
+			width: app.level
+			height: 30
+			Label { text: "Centered" x: card.x }
+		}
+	}'
+	anchored := element_from_qml_model(source, QmlTestApp{ level: 120 }, rect(0, 0, 200, 100)) or { panic(err) }
+	assert anchored.children.len == 1
+	assert anchored.children[0].frame == rect(40, 35, 120, 30)
+	assert anchored.children[0].children[0].frame.width == 120
+	assert anchored.children[0].children[0].frame.x == 40
+}
+
 fn test_qml_model_rejects_non_numeric_slider_bindings() {
 	if _ := element_from_qml_model('Slider { bind.value: app.name }', QmlTestApp{}, rect(0, 0, 100, 30)) {
 		assert false, 'slider values must bind to numeric fields'

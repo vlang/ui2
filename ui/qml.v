@@ -727,6 +727,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'GridLayout' {
 			return q_grid(node, frame)!
 		}
+		'AnchorLayout' {
+			return q_anchor(node, frame)!
+		}
 		'Scroll' {
 			children := q_children(node, local)!
 			if node.prop_bool('persistent') {
@@ -1052,6 +1055,36 @@ fn q_grid(node &QNode, frame Rect) !Element {
 	mut children := []Element{cap: visible.len}
 	for index, child in visible {
 		children << node_to_element(child, frames[index])!
+	}
+	return view(node.id, frame, q_box(node), children)
+}
+
+fn q_anchor_config(node &QNode, frame Rect) !AnchorLayoutConfig {
+	padding := node.prop_or('padding', '0').f64()
+	return AnchorLayoutConfig{
+		id: node.id
+		frame: frame
+		box: q_box(node)
+		anchor_x: horizontal_anchor(node.prop_or('anchor_x', 'center'))!
+		anchor_y: vertical_anchor(node.prop_or('anchor_y', 'center'))!
+		padding: AnchorPadding{
+			left: node.prop_or('padding_left', padding.str()).f64()
+			top: node.prop_or('padding_top', padding.str()).f64()
+			right: node.prop_or('padding_right', padding.str()).f64()
+			bottom: node.prop_or('padding_bottom', padding.str()).f64()
+		}
+	}
+}
+
+fn q_anchor(node &QNode, frame Rect) !Element {
+	config := q_anchor_config(node, rect(0, 0, frame.width, frame.height))!
+	mut children := []Element{}
+	for child in node.children {
+		if child.tag in ['MenuItem', 'Option'] {
+			continue
+		}
+		size := rect(0, 0, q_dimension(child, 'width', 80), q_dimension(child, 'height', 32))
+		children << node_to_element(child, anchor_layout_frame(config, size))!
 	}
 	return view(node.id, frame, q_box(node), children)
 }
