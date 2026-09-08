@@ -35,6 +35,10 @@ fn qml_test_control_value(_id string) f64 {
 	return 72.5
 }
 
+fn qml_test_spinner_text(_id string) string {
+	return 'Work'
+}
+
 pub fn (mut app QmlTestApp) clear() {
 	app.name = ''
 }
@@ -146,6 +150,22 @@ fn test_qml_model_rejects_non_boolean_switch_bindings() {
 	} else {
 		assert err.msg().contains('bind.active requires a bool field')
 	}
+}
+
+fn test_qml_model_supports_spinner_text_bindings() {
+	source := 'Spinner {
+		id: location
+		bind.text: app.name
+		Option { text: "Home" }
+		Option { text: "Work" }
+	}'
+	mut app := new_qml_app(source, QmlTestApp{ name: 'Home' }) or { panic(err) }
+	app.control_text = qml_test_spinner_text
+	built := app.build(rect(0, 0, 160, 42)) or { panic(err) }
+	assert built.kind == .dropdown
+	assert built.menu.len == 2
+	app.handle(built.action_id) or { panic(err) }
+	assert app.state().name == 'Work'
 }
 
 fn test_qml_model_rejects_non_numeric_slider_bindings() {

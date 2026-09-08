@@ -820,6 +820,25 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 				action_id: node.prop('on_tap')
 			}
 		}
+		'Spinner' {
+			action_id := if node.prop('on_text').len > 0 {
+				node.prop('on_text')
+			} else if node.prop('on_change').len > 0 {
+				node.prop('on_change')
+			} else {
+				node.prop('on_tap')
+			}
+			return spinner(
+				id: node.id
+				action_id: action_id
+				frame: frame
+				text: node.prop('text')
+				values: q_options(node)
+				text_autoupdate: node.prop_bool('text_autoupdate')
+				box: q_box(node)
+				text_style: q_text_style(node)
+			)
+		}
 		'Dropdown' {
 			action_id := if node.prop('on_change').len > 0 {
 				node.prop('on_change')

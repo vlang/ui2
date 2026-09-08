@@ -88,3 +88,26 @@ The V constructor is `switch_control(SwitchConfig{...})`. A stable `id` lets
 event handlers read the newly selected state with `switch_active(id)` or update
 it with `set_switch_active(id, active)`. QML's `active` property defaults to
 `false`, and `bind.active` accepts mutable `bool` model fields.
+
+## Spinner
+
+`Spinner` selects one string from a compact dropdown list. It uses the same
+native and custom popup behavior as UI2's `Dropdown`, while exposing `text`,
+`text_autoupdate`, and `on_text`. V supplies the `values` array directly; QML
+declares each string with an `Option` child.
+
+```qml
+Spinner {
+    id: location
+    bind.text: app.location
+    on_text: app.location_changed()
+    Option { text: "Home" }
+    Option { text: "Work" }
+    Option { text: "Other" }
+}
+```
+
+The V constructor is `spinner(SpinnerConfig{...})`. Set `text_autoupdate` to
+select the first value whenever a non-empty values list is supplied. Event
+handlers can read or replace the mounted selection through UI2's existing
+`text(id)` and `set_text(id, value)` APIs.

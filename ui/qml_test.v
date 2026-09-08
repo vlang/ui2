@@ -523,6 +523,30 @@ fn test_qml_switch_exposes_active_state_action_and_style() {
 	assert el.accessibility_value == 'on'
 }
 
+fn test_qml_spinner_exposes_values_selection_and_style() {
+	el := element_from_qml('Spinner {
+		id: location
+		on_text: location_changed
+		text_autoupdate: true
+		background: #DBEAFE
+		color: #1D4ED8
+		corner_radius: 7
+		Option { text: "Home" }
+		Option { text: "Work" }
+	}', rect(0, 0, 160, 42)) or { panic(err) }
+
+	assert el.kind == .dropdown
+	assert el.id == 'location'
+	assert el.action_id == 'location_changed'
+	assert el.text == 'Home'
+	assert el.menu.len == 2
+	assert el.menu[1].title == 'Work'
+	assert el.box.bg == u32(0xdbeafe)
+	assert el.text_style.color == u32(0x1d4ed8)
+	assert el.accessibility_role == 'combobox'
+	assert el.accessibility_value == 'Home'
+}
+
 fn test_qml_widget_accessibility_defaults_survive_conversion() {
 	checkbox_el := element_from_qml('Checkbox { text: "Ready" checked: true }', rect(0, 0, 120, 24)) or {
 		panic(err)

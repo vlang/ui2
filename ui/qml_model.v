@@ -591,7 +591,7 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 	mut binding := ?QmlBinding(none)
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
-			|| key in ['on_tap', 'on_change', 'on_active', 'on_submit'] {
+			|| key in ['on_tap', 'on_change', 'on_active', 'on_text', 'on_submit'] {
 			continue
 		}
 		resolved.props[key] = q_eval(expr, scope)!.string_value()
@@ -631,7 +631,10 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		binding_event_property = match b.property {
 			'checked' { 'on_tap' }
 			'active' { 'on_active' }
-			'text', 'value' { 'on_change' }
+			'text' {
+				if node.tag == 'Spinner' { 'on_text' } else { 'on_change' }
+			}
+			'value' { 'on_change' }
 			else {
 				return error('two-way binding is not supported for `${b.property}` at line ${node.line}')
 			}
@@ -640,7 +643,7 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		resolved.props[binding_event_property] = event_id
 		evaluation.events[event_id] = QmlEvent{ binding: binding }
 	}
-	for property in ['on_tap', 'on_change', 'on_active', 'on_submit'] {
+	for property in ['on_tap', 'on_change', 'on_active', 'on_text', 'on_submit'] {
 		expr := node.expressions[property] or { continue }
 		if expr.kind == .call {
 			event_id := q_event_id(node, scope, property)
@@ -791,7 +794,7 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 	}
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
-			|| key in ['on_tap', 'on_change', 'on_active', 'on_submit'] {
+			|| key in ['on_tap', 'on_change', 'on_active', 'on_text', 'on_submit'] {
 			continue
 		}
 		q_schema_expression(expr, scope)!
@@ -817,7 +820,7 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 			return error('bind.value requires a numeric field, got `${target}` (${type_name})')
 		}
 	}
-	for property in ['on_tap', 'on_change', 'on_active', 'on_submit'] {
+	for property in ['on_tap', 'on_change', 'on_active', 'on_text', 'on_submit'] {
 		expr := node.expressions[property] or { continue }
 		if expr.kind == .call {
 			q_validate_action[T](expr, scope)!
