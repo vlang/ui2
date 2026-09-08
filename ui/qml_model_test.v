@@ -470,6 +470,30 @@ fn test_qml_model_screen_manager_switches_active_screen_through_action() {
 	assert rebuilt.children[0].children[0].text == 'Details content'
 }
 
+fn test_qml_model_carousel_switches_active_slide_through_action() {
+	source := 'Carousel {
+		id: gallery
+		index: app.page
+		loop: true
+		CarouselSlide {
+			id: first
+			Button { text: "Next" on_tap: app.select_second_tab() }
+		}
+		CarouselSlide { id: second Label { text: "Second slide" } }
+	}'
+	mut app := new_qml_app(source, QmlTestApp{}) or { panic(err) }
+	initial := app.build(rect(0, 0, 320, 200)) or { panic(err) }
+	assert !initial.children[0].hidden
+	assert initial.children[1].hidden
+	app.handle(initial.children[0].children[0].action_id) or { panic(err) }
+	assert app.state().page == 1
+
+	rebuilt := app.build(rect(0, 0, 320, 200)) or { panic(err) }
+	assert rebuilt.children[0].hidden
+	assert !rebuilt.children[1].hidden
+	assert rebuilt.children[1].children[0].text == 'Second slide'
+}
+
 fn test_qml_model_anchor_layout_uses_resolved_child_sizes() {
 	source := 'AnchorLayout {
 		anchor_x: center

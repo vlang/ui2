@@ -439,6 +439,34 @@ and `screen_manager_next`/`screen_manager_previous` provide wraparound
 navigation. Animated transitions are a separate future layer; current screen
 changes are immediate and deterministic on every backend.
 
+## Carousel
+
+`Carousel` presents full-size slides in a horizontal or vertical sequence.
+The `index` selects the visible slide, `direction` accepts `right`, `left`,
+`top`, or `bottom`, and `loop` controls whether navigation wraps at the ends.
+
+```qml
+Carousel {
+    index: app.slide
+    direction: right
+    loop: true
+    CarouselSlide { Image { source: "first.png" } }
+    CarouselSlide { Image { source: "second.png" } }
+}
+```
+
+Inactive slides retain directional offscreen geometry but are hidden, so their
+native controls cannot receive input or draw beyond the carousel bounds.
+`Slide` is accepted as a shorter alias for `CarouselSlide`; ordinary direct
+children can also be used as slides.
+
+The V constructor is `carousel(CarouselConfig{...})`. `carousel_next`,
+`carousel_previous`, and `carousel_index` implement bounded or wraparound
+navigation. `carousel_index_after_swipe` resolves horizontal and vertical
+drags using `min_move` and optional perpendicular-swipe filtering, while
+`carousel_frames` exposes the directional neighbor geometry. Animated movement
+and continuous drag tracking remain a future interaction layer.
+
 ## StackLayout
 
 `StackLayout` packs variable-size children along one axis and wraps them when

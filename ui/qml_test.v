@@ -942,3 +942,33 @@ fn test_qml_screen_manager_validates_current_name() {
 		assert err.msg().contains('missing')
 	}
 }
+
+fn test_qml_carousel_orders_slides_and_hides_inactive_content() {
+	el := element_from_qml('Carousel {
+		id: gallery
+		index: 1
+		direction: bottom
+		loop: true
+		min_move: 0.25
+		CarouselSlide { id: first Label { text: "First" } }
+		CarouselSlide { id: second Label { text: "Second" } }
+		CarouselSlide { id: third Label { text: "Third" } }
+	}', rect(10, 20, 300, 160)) or { panic(err) }
+	assert el.frame == rect(10, 20, 300, 160)
+	assert el.children.len == 3
+	assert el.children[0].frame == rect(0, -160, 300, 160)
+	assert el.children[0].hidden
+	assert el.children[1].frame == rect(0, 0, 300, 160)
+	assert !el.children[1].hidden
+	assert el.children[1].children[0].text == 'Second'
+	assert el.children[2].frame == rect(0, 160, 300, 160)
+	assert el.accessibility_value == 'Slide 2 of 3'
+}
+
+fn test_qml_carousel_validates_direction() {
+	if _ := element_from_qml('Carousel { direction: diagonal }', rect(0, 0, 300, 200)) {
+		assert false, 'unknown carousel directions must fail'
+	} else {
+		assert err.msg().contains('diagonal')
+	}
+}

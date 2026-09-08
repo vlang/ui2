@@ -754,6 +754,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'ScreenManager' {
 			return q_screen_manager(node, frame)!
 		}
+		'Carousel' {
+			return q_carousel(node, frame)!
+		}
 		'Scroll' {
 			children := q_children(node, local)!
 			if node.prop_bool('persistent') {
@@ -1561,6 +1564,36 @@ fn q_screen_manager(node &QNode, frame Rect) !Element {
 		}
 	}
 	return screen_manager(q_screen_manager_config(node, frame, screens))!
+}
+
+fn q_carousel_config(node &QNode, frame Rect, slides []Element) !CarouselConfig {
+	return CarouselConfig{
+		id: node.id
+		frame: frame
+		box: q_box(node)
+		index: node.prop_or('index', '0').int()
+		direction: carousel_direction(node.prop_or('direction', 'right'))!
+		loop: node.prop_bool('loop')
+		min_move: node.prop_or('min_move', '0.2').f64()
+		ignore_perpendicular_swipes: node.prop_bool('ignore_perpendicular_swipes')
+		slides: slides
+	}
+}
+
+fn q_carousel(node &QNode, frame Rect) !Element {
+	local := rect(0, 0, frame.width, frame.height)
+	mut slides := []Element{}
+	for child in node.children {
+		if child.tag in ['MenuItem', 'Option'] {
+			continue
+		}
+		if child.tag in ['CarouselSlide', 'Slide'] {
+			slides << view(child.id, local, q_box(child), q_children(child, local)!)
+		} else {
+			slides << node_to_element(child, local)!
+		}
+	}
+	return carousel(q_carousel_config(node, frame, slides)!)!
 }
 
 fn q_frame(node &QNode, fallback Rect) Rect {
