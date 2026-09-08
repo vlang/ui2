@@ -185,3 +185,26 @@ The V constructor is `anchor_layout(AnchorLayoutConfig{...})`, with typed
 `HorizontalAnchor`, `VerticalAnchor`, and `AnchorPadding` values. QML defaults
 both axes to `center` and supports a shared `padding` or the per-edge
 `padding_left`, `padding_top`, `padding_right`, and `padding_bottom` properties.
+
+## StackLayout
+
+`StackLayout` packs variable-size children along one axis and wraps them when
+the next child would cross the available inner width or height.
+
+```qml
+StackLayout {
+    orientation: lr-tb
+    padding: 10
+    spacing: 8
+    Button { text: "Short" width: 80 height: 32 }
+    Button { text: "A wider item" width: 140 height: 32 }
+}
+```
+
+The V constructor is `stack_layout(StackLayoutConfig{...})`; child widths and
+heights are preserved while their positions are replaced. All eight two-axis
+orientations are supported through `StackOrientation`. `StackPadding` and
+`StackSpacing` provide per-edge and per-axis control, and
+`stack_layout_minimum_size` reports the occupied dimensions for the current
+wrap. QML supports the matching `padding_*` and `spacing_x`/`spacing_y`
+properties, including model-driven Repeater child sizes.

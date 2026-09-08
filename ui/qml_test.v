@@ -627,6 +627,29 @@ fn test_qml_anchor_layout_validates_anchor_names() {
 	}
 }
 
+fn test_qml_stack_layout_wraps_variable_size_children() {
+	el := element_from_qml('StackLayout {
+		id: tags
+		padding: 10
+		spacing_x: 6
+		spacing_y: 4
+		Button { text: "One" width: 70 height: 20 }
+		Button { text: "Two" width: 80 height: 30 }
+		Button { text: "Three" width: 90 height: 24 }
+	}', rect(20, 30, 180, 120)) or { panic(err) }
+	assert el.children[0].frame == rect(10, 10, 70, 20)
+	assert el.children[1].frame == rect(86, 10, 80, 30)
+	assert el.children[2].frame == rect(10, 44, 90, 24)
+}
+
+fn test_qml_stack_layout_validates_orientation_names() {
+	if _ := element_from_qml('StackLayout { orientation: sideways }', rect(0, 0, 100, 100)) {
+		assert false, 'unknown stack orientations must fail'
+	} else {
+		assert err.msg().contains('sideways')
+	}
+}
+
 fn test_qml_widget_accessibility_defaults_survive_conversion() {
 	checkbox_el := element_from_qml('Checkbox { text: "Ready" checked: true }', rect(0, 0, 120, 24)) or {
 		panic(err)

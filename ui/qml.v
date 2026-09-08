@@ -730,6 +730,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'AnchorLayout' {
 			return q_anchor(node, frame)!
 		}
+		'StackLayout' {
+			return q_stack(node, frame)!
+		}
 		'Scroll' {
 			children := q_children(node, local)!
 			if node.prop_bool('persistent') {
@@ -1085,6 +1088,46 @@ fn q_anchor(node &QNode, frame Rect) !Element {
 		}
 		size := rect(0, 0, q_dimension(child, 'width', 80), q_dimension(child, 'height', 32))
 		children << node_to_element(child, anchor_layout_frame(config, size))!
+	}
+	return view(node.id, frame, q_box(node), children)
+}
+
+fn q_stack_config(node &QNode, frame Rect) !StackLayoutConfig {
+	padding := node.prop_or('padding', '0').f64()
+	spacing := node.prop_or('spacing', '0').f64()
+	return StackLayoutConfig{
+		id: node.id
+		frame: frame
+		box: q_box(node)
+		orientation: stack_orientation(node.prop_or('orientation', 'lr-tb'))!
+		padding: StackPadding{
+			left: node.prop_or('padding_left', padding.str()).f64()
+			top: node.prop_or('padding_top', padding.str()).f64()
+			right: node.prop_or('padding_right', padding.str()).f64()
+			bottom: node.prop_or('padding_bottom', padding.str()).f64()
+		}
+		spacing: StackSpacing{
+			horizontal: node.prop_or('spacing_x', spacing.str()).f64()
+			vertical: node.prop_or('spacing_y', spacing.str()).f64()
+		}
+	}
+}
+
+fn q_stack(node &QNode, frame Rect) !Element {
+	mut visible := []&QNode{}
+	mut sizes := []Rect{}
+	for child in node.children {
+		if child.tag in ['MenuItem', 'Option'] {
+			continue
+		}
+		visible << child
+		sizes << rect(0, 0, q_dimension(child, 'width', 80), q_dimension(child, 'height', 32))
+	}
+	config := q_stack_config(node, rect(0, 0, frame.width, frame.height))!
+	frames := stack_layout_frames(config, sizes)!
+	mut children := []Element{cap: visible.len}
+	for index, child in visible {
+		children << node_to_element(child, frames[index])!
 	}
 	return view(node.id, frame, q_box(node), children)
 }

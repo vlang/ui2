@@ -265,6 +265,30 @@ fn test_qml_model_anchor_layout_uses_resolved_child_sizes() {
 	assert anchored.children[0].children[0].frame.x == 40
 }
 
+fn test_qml_model_stack_layout_wraps_repeater_children_by_resolved_size() {
+	source := 'StackLayout {
+		padding: 10
+		spacing_x: 6
+		spacing_y: 4
+		Repeater {
+			model: app.users
+			key: item.id
+			Button { text: item.name width: item.weight height: 24 }
+		}
+	}'
+	stack := element_from_qml_model(source, QmlTestApp{
+		users: [
+			QmlTestUser{ id: 1, name: 'One', weight: 70 },
+			QmlTestUser{ id: 2, name: 'Two', weight: 80 },
+			QmlTestUser{ id: 3, name: 'Three', weight: 90 },
+		]
+	}, rect(0, 0, 180, 100)) or { panic(err) }
+	assert stack.children.len == 3
+	assert stack.children[0].frame == rect(10, 10, 70, 24)
+	assert stack.children[1].frame == rect(86, 10, 80, 24)
+	assert stack.children[2].frame == rect(10, 38, 90, 24)
+}
+
 fn test_qml_model_rejects_non_numeric_slider_bindings() {
 	if _ := element_from_qml_model('Slider { bind.value: app.name }', QmlTestApp{}, rect(0, 0, 100, 30)) {
 		assert false, 'slider values must bind to numeric fields'
