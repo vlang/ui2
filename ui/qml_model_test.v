@@ -295,6 +295,27 @@ fn test_qml_model_float_layout_uses_repeater_hints() {
 	assert canvas.children[1].frame == rect(100, 25, 100, 24)
 }
 
+fn test_qml_model_relative_layout_resolves_local_child_geometry() {
+	source := 'RelativeLayout {
+		x: 40
+		y: 50
+		width: 200
+		height: 100
+		Button {
+			text: app.name
+			width: app.level
+			height: 30
+			size_hint_x: -1
+			size_hint_y: -1
+			pos_hint_center_x: 0.5
+			pos_hint_center_y: 0.5
+		}
+	}'
+	panel := element_from_qml_model(source, QmlTestApp{ name: 'Action', level: 80 }, rect(0, 0, 400, 240)) or { panic(err) }
+	assert panel.frame == rect(40, 50, 200, 100)
+	assert panel.children[0].frame == rect(60, 35, 80, 30)
+}
+
 fn test_qml_model_anchor_layout_uses_resolved_child_sizes() {
 	source := 'AnchorLayout {
 		anchor_x: center

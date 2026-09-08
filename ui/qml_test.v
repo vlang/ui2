@@ -647,6 +647,25 @@ fn test_qml_float_layout_supports_edge_hints_and_bounds() {
 	assert el.children[0].frame == rect(180, 168, 120, 32)
 }
 
+fn test_qml_relative_layout_keeps_child_frames_local() {
+	el := element_from_qml('RelativeLayout {
+		x: 80
+		y: 60
+		width: 240
+		height: 120
+		Button {
+			x: 20
+			y: 15
+			width: 80
+			height: 30
+			size_hint_x: -1
+			size_hint_y: -1
+		}
+	}', rect(0, 0, 400, 240)) or { panic(err) }
+	assert el.frame == rect(80, 60, 240, 120)
+	assert el.children[0].frame == rect(20, 15, 80, 30)
+}
+
 fn test_qml_grid_layout_assigns_cells_in_the_requested_orientation() {
 	el := element_from_qml('GridLayout {
 		id: tools

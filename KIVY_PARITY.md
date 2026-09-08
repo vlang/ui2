@@ -242,6 +242,36 @@ typed `FloatAxisHint` values with `start`, `center`, and `end` anchors, while
 `float_layout_frames` exposes the pure geometry calculation. Model-driven QML
 Repeater children are supported.
 
+## RelativeLayout
+
+`RelativeLayout` provides the same child sizing and position hints as
+`FloatLayout`, but explicitly establishes parent-local coordinates. Moving the
+layout changes only its own frame; child `x` and `y` values remain relative to
+the layout's origin.
+
+```qml
+RelativeLayout {
+    x: 40
+    y: 50
+    width: 200
+    height: 100
+    Button {
+        width: 80
+        height: 30
+        size_hint_x: -1
+        size_hint_y: -1
+        pos_hint_center_x: 0.5
+        pos_hint_center_y: 0.5
+    }
+}
+```
+
+UI2 element children are already rendered in parent-local coordinates, so the
+QML implementation shares `FloatLayout`'s hint calculation without applying
+the parent's offset twice. The V API is
+`relative_layout(RelativeLayoutConfig{...})`, and
+`relative_layout_frames` exposes the local geometry.
+
 ## StackLayout
 
 `StackLayout` packs variable-size children along one axis and wraps them when

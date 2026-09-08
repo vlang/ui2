@@ -727,7 +727,7 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'BoxLayout' {
 			return q_box_layout(node, frame)!
 		}
-		'FloatLayout' {
+		'FloatLayout', 'RelativeLayout' {
 			return q_float_layout(node, frame)!
 		}
 		'GridLayout' {

@@ -542,7 +542,7 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 		'Column' { QChildLayoutKind.column }
 		'Row' { QChildLayoutKind.row }
 		'BoxLayout' { QChildLayoutKind.box }
-		'FloatLayout' { QChildLayoutKind.float }
+		'FloatLayout', 'RelativeLayout' { QChildLayoutKind.float }
 		'GridLayout' { QChildLayoutKind.grid }
 		'AnchorLayout' { QChildLayoutKind.anchor }
 		'StackLayout' { QChildLayoutKind.stack }
@@ -726,7 +726,7 @@ fn q_layout_child_metric(node &QNode, scope map[string]QValue, box bool, floatin
 fn q_layout_child_metrics(node &QNode, scope map[string]QValue) ![]QLayoutChildMetrics {
 	mut metrics := []QLayoutChildMetrics{}
 	box := node.tag == 'BoxLayout'
-	floating := node.tag == 'FloatLayout'
+	floating := node.tag in ['FloatLayout', 'RelativeLayout']
 	for child in node.children {
 		if child.tag in ['MenuItem', 'Option'] {
 			continue
