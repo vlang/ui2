@@ -630,7 +630,7 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 	if b := binding {
 		binding_event_property = match b.property {
 			'checked' { 'on_tap' }
-			'text' { 'on_change' }
+			'text', 'value' { 'on_change' }
 			else {
 				return error('two-way binding is not supported for `${b.property}` at line ${node.line}')
 			}
@@ -800,7 +800,7 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 			continue
 		}
 		property := key.all_after('bind.')
-		if property !in ['text', 'checked'] {
+		if property !in ['text', 'checked', 'value'] {
 			return error('two-way binding is not supported for `${property}` at line ${node.line}')
 		}
 		if expr.kind != .path || !expr.value.starts_with('app.') || expr.value.count('.') != 1 {
@@ -811,6 +811,9 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 		type_name := qml_writable_field_type[T](target)!
 		if property == 'checked' && type_name != 'bool' {
 			return error('bind.checked requires a bool field, got `${target}` (${type_name})')
+		}
+		if property == 'value' && type_name !in ['int', 'f32', 'f64'] {
+			return error('bind.value requires a numeric field, got `${target}` (${type_name})')
 		}
 	}
 	for property in ['on_tap', 'on_change', 'on_submit'] {
@@ -1014,16 +1017,23 @@ fn (mut controller QmlController[T]) handle(event_id string) {
 	event := controller.events[event_id] or { return }
 	if binding := event.binding {
 		field_name := binding.target.all_after('app.')
-		value := if binding.property == 'checked' {
-			current := q_lookup({
-				'app': q_value_from(controller.model)
-			}, binding.target, 0) or {
-				eprintln('ui2 QML binding failed: ${err}')
-				return
+		value := match binding.property {
+			'checked' {
+				current := q_lookup({
+					'app': q_value_from(controller.model)
+				}, binding.target, 0) or {
+					eprintln('ui2 QML binding failed: ${err}')
+					return
+				}
+				q_bool(!current.truthy())
 			}
-			q_bool(!current.truthy())
-		} else {
-			q_string(text(binding.control))
+			'value' {
+				live := slider_value(binding.control)
+				q_number(live, slider_number(live))
+			}
+			else {
+				q_string(text(binding.control))
+			}
 		}
 		qml_set_field[T](mut controller.model, field_name, value) or {
 			eprintln('ui2 QML binding failed: ${err}')

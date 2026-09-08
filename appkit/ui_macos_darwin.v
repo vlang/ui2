@@ -88,6 +88,7 @@ mut:
 	cursor_ids          map[u64]string // NSView pointer -> cursor name
 	control_ids         map[u64]string // NSControl pointer -> action event id
 	checkbox_controls   map[u64]bool // NSButton pointers whose state is persistent
+	slider_specs        map[u64]SliderSpec // NSSlider pointer -> range behavior
 	control_change_ids  map[u64]string // NSTextField pointer -> change event id
 	observed            map[u64]bool // clip views we already observe for scroll changes
 	run_config          RunConfig
@@ -119,6 +120,7 @@ const runtime_state_singleton = &RuntimeState{
 	cursor_ids: map[u64]string{}
 	control_ids: map[u64]string{}
 	checkbox_controls: map[u64]bool{}
+	slider_specs: map[u64]SliderSpec{}
 	control_change_ids: map[u64]string{}
 	observed: map[u64]bool{}
 }
@@ -327,6 +329,27 @@ pub fn set_text(id string, t string) {
 		return
 	}
 	native_set_text(native, t)
+}
+
+pub fn slider_value(id string) f64 {
+	st := state()
+	native := st.views[id] or { return 0 }
+	if (st.view_kinds[id] or { Kind.view }) != .slider {
+		return 0
+	}
+	spec := st.slider_specs[u64(voidptr(native))] or { return 0 }
+	return native_snap_slider_value(native, spec)
+}
+
+pub fn set_slider_value(id string, value f64) {
+	st := state()
+	native := st.views[id] or { return }
+	if (st.view_kinds[id] or { Kind.view }) != .slider {
+		return
+	}
+	spec := st.slider_specs[u64(voidptr(native))] or { return }
+	macos.msg_void_f64(native, 'setDoubleValue:', slider_clamped_value(value, spec.min,
+		spec.max))
 }
 
 pub fn focus(id string) {
@@ -738,6 +761,7 @@ fn render_root(declared Element) {
 	st.cursor_ids = map[u64]string{}
 	st.control_ids = map[u64]string{}
 	st.checkbox_controls = map[u64]bool{}
+	st.slider_specs = map[u64]SliderSpec{}
 	st.control_change_ids = map[u64]string{}
 	st.textview_ids = map[u64]string{}
 	st.textview_action_ids = map[u64]string{}
@@ -926,6 +950,9 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		.dropdown {
 			register_action_control(native, element_action_id(el))
 		}
+		.slider {
+			register_slider(native, el)
+		}
 		.text_field {
 			register_control(native, element_action_id(el), el.submit_id, el.emit_change)
 		}
@@ -1071,6 +1098,9 @@ fn native_create_element(el Element) NativeView {
 		.text_area {
 			native_new_text_area(el)
 		}
+		.slider {
+			native_new_slider(el)
+		}
 	}
 }
 
@@ -1107,6 +1137,9 @@ fn native_update_element(native NativeView, el Element, declared_text_changed bo
 		}
 		.text_area {
 			native_update_text_area(native, el, declared_text_changed, content_changed)
+		}
+		.slider {
+			native_update_slider(native, el)
 		}
 	}
 }
@@ -1159,6 +1192,13 @@ fn register_action_control(native NativeView, id string) {
 	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
 }
 
+fn register_slider(native NativeView, el Element) {
+	mut st := state()
+	pointer := u64(voidptr(native))
+	st.slider_specs[pointer] = slider_spec(el)
+	register_action_control(native, element_action_id(el))
+}
+
 fn register_control(native NativeView, id string, submit_id string, emit_change bool) {
 	mut st := state()
 	pointer := u64(voidptr(native))
@@ -1197,6 +1237,7 @@ fn unregister_node(key string, native NativeView, kind Kind, text_direct bool) {
 	st.cursor_ids.delete(pointer)
 	st.control_ids.delete(pointer)
 	st.checkbox_controls.delete(pointer)
+	st.slider_specs.delete(pointer)
 	st.control_change_ids.delete(pointer)
 	if kind == .text_field {
 		native_clear_control_target(native)
@@ -1636,6 +1677,35 @@ fn native_update_checkbox(checkbox_view NativeView, el Element) {
 	macos.msg_void_i64(checkbox_view, 'setState:', if el.checked { i64(1) } else { i64(0) })
 	macos.msg_void_bool(checkbox_view, 'setAllowsMixedState:', false)
 	macos.msg_void1(checkbox_view, 'setFont:', native_font(el.text_style.size, el.text_style.bold, el.text_style.italic))
+}
+
+fn native_new_slider(el Element) NativeView {
+	slider_view := macos.msg_id_rect(macos.alloc('NSSlider'), 'initWithFrame:', appkit_rect(element_rect(el.frame)))
+	native_update_slider(slider_view, el)
+	return slider_view
+}
+
+fn native_update_slider(slider_view NativeView, el Element) {
+	native_set_frame(slider_view, element_rect(el.frame))
+	maximum := if el.max_value > el.min_value { el.max_value } else { el.min_value }
+	macos.msg_void_f64(slider_view, 'setMinValue:', el.min_value)
+	macos.msg_void_f64(slider_view, 'setMaxValue:', maximum)
+	macos.msg_void_f64(slider_view, 'setDoubleValue:', slider_clamped_value(el.value,
+		el.min_value, el.max_value))
+	macos.msg_void_bool(slider_view, 'setContinuous:', true)
+	if macos.responds_to(slider_view, 'setVertical:') {
+		macos.msg_void_bool(slider_view, 'setVertical:', el.orientation == .vertical)
+	}
+}
+
+fn native_snap_slider_value(slider_view NativeView, spec SliderSpec) f64 {
+	raw := macos.msg_f64(slider_view, 'doubleValue')
+	normalized := slider_value_normalized(raw, spec.min, spec.max)
+	value := slider_value_from_normalized(normalized, spec.min, spec.max, spec.step)
+	if value != raw {
+		macos.msg_void_f64(slider_view, 'setDoubleValue:', value)
+	}
+	return value
 }
 
 fn native_update_button_image(button_view NativeView, frame NativeRect, image_name string) {
@@ -2087,6 +2157,9 @@ fn ui2_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
 	pointer := u64(voidptr(native))
 	id := st.control_ids[pointer] or { '' }
 	if id.len > 0 {
+		if spec := st.slider_specs[pointer] {
+			native_snap_slider_value(native, spec)
+		}
 		native_finish_button_action(native, st.checkbox_controls[pointer] or { false })
 		st.event_handler(id)
 		return

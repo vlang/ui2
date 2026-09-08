@@ -41,3 +41,27 @@ bar instead of dividing by zero. The generated element supplies progress-bar
 accessibility metadata, which can be overridden with QML's shared
 `accessibility_role`, `accessibility_label`, and `accessibility_value`
 properties.
+
+## Slider
+
+`Slider` supports horizontal and vertical orientation, arbitrary numeric
+`min`/`max` ranges, optional `step` snapping, configurable track and thumb
+styling, and an optional colored value track. Vertical sliders place the
+minimum at the bottom and maximum at the top.
+
+```qml
+Slider {
+    id: volume
+    bind.value: app.volume
+    min: 0
+    max: 100
+    step: 5
+    value_track: true
+    on_change: app.volume_changed()
+}
+```
+
+The V constructor is `slider(SliderConfig{...})`. A stable `id` lets event
+handlers read the live value with `slider_value(id)` or update it with
+`set_slider_value(id, value)`. The QML model adapter supports two-way numeric
+`bind.value` fields of type `int`, `f32`, or `f64`.

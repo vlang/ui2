@@ -71,6 +71,7 @@ __global g_action_ids = map[u64]string{}
 __global g_text_change_ids = map[u64]string{}
 __global g_text_submit_ids = map[u64]string{}
 __global g_text_area_ids = map[u64]string{}
+__global g_slider_specs = map[u64]SliderSpec{}
 __global g_scroll_ids = map[string]bool{}
 __global g_scroll_offsets = map[string]f64{}
 __global g_view_translation_x = map[voidptr]f64{}
@@ -140,6 +141,24 @@ pub fn set_text(id string, t string) {
 			macos.msg_void1(view, 'setText:', macos.nsstring(t))
 		}
 	}
+}
+
+pub fn slider_value(id string) f64 {
+	view := g_views[id] or { return 0 }
+	if (g_view_kinds[id] or { Kind.view }) != .slider {
+		return 0
+	}
+	spec := g_slider_specs[u64(view)] or { return 0 }
+	return native_snap_slider_value(view, spec)
+}
+
+pub fn set_slider_value(id string, value f64) {
+	view := g_views[id] or { return }
+	if (g_view_kinds[id] or { Kind.view }) != .slider {
+		return
+	}
+	spec := g_slider_specs[u64(view)] or { return }
+	slider_set_number(view, 'value', slider_clamped_value(value, spec.min, spec.max))
 }
 
 pub fn focus(id string) {
@@ -498,6 +517,63 @@ fn update_checkbox_view(view View, el Element) {
 	macos.msg_void_i64(view, 'setContentHorizontalAlignment:', 1)
 }
 
+fn slider_number_value(view View, key string) f64 {
+	number := macos.msg_id1(view, 'valueForKey:', macos.nsstring(key))
+	if number == unsafe { nil } {
+		return 0
+	}
+	return macos.msg_f64(number, 'doubleValue')
+}
+
+fn slider_set_number(view View, key string, value f64) {
+	number := macos.msg_id_f64(macos.get_class('NSNumber'), 'numberWithDouble:', value)
+	macos.msg_void2(view, 'setValue:forKey:', number, macos.nsstring(key))
+}
+
+fn new_slider_view(el Element) View {
+	view := macos.msg_id_rect(macos.alloc('UISlider'), 'initWithFrame:', native_rect(el.frame))
+	update_slider_view(view, el)
+	return view
+}
+
+fn update_slider_view(view View, el Element) {
+	native_set_view_rotation(view, 0)
+	if el.orientation == .vertical {
+		macos.msg_void_rect(view, 'setFrame:', native_rect(rect(
+			el.frame.x + (el.frame.width - el.frame.height) / 2,
+			el.frame.y + (el.frame.height - el.frame.width) / 2,
+			el.frame.height,
+			el.frame.width,
+		)))
+		native_set_view_rotation(view, -90)
+	} else {
+		macos.msg_void_rect(view, 'setFrame:', native_rect(el.frame))
+	}
+	maximum := if el.max_value > el.min_value { el.max_value } else { el.min_value }
+	slider_set_number(view, 'minimumValue', el.min_value)
+	slider_set_number(view, 'maximumValue', maximum)
+	slider_set_number(view, 'value', slider_clamped_value(el.value, el.min_value, el.max_value))
+	macos.msg_void_bool(view, 'setContinuous:', true)
+	minimum_track_color := if el.value_track {
+		el.slider_style.value_track_color
+	} else {
+		el.slider_style.track_color
+	}
+	macos.msg_void1(view, 'setMinimumTrackTintColor:', ios.color(minimum_track_color))
+	macos.msg_void1(view, 'setMaximumTrackTintColor:', ios.color(el.slider_style.track_color))
+	macos.msg_void1(view, 'setThumbTintColor:', ios.color(el.slider_style.thumb_color))
+}
+
+fn native_snap_slider_value(view View, spec SliderSpec) f64 {
+	raw := slider_number_value(view, 'value')
+	normalized := slider_value_normalized(raw, spec.min, spec.max)
+	value := slider_value_from_normalized(normalized, spec.min, spec.max, spec.step)
+	if value != raw {
+		slider_set_number(view, 'value', value)
+	}
+	return value
+}
+
 fn new_text_field_view(frame Rect, placeholder string, t string, bg_hex u32, text_hex u32, size f64, radius f64, keyboard int, secure bool) View {
 	field := macos.msg_id_rect(macos.alloc('UITextField'), 'initWithFrame:', native_rect(frame))
 	update_text_field_view(field, frame, placeholder, t, bg_hex, text_hex, size, radius, keyboard, secure, true, true, 12)
@@ -622,6 +698,7 @@ fn render_root(declared Element) {
 	g_text_change_ids = map[u64]string{}
 	g_text_submit_ids = map[u64]string{}
 	g_text_area_ids = map[u64]string{}
+	g_slider_specs = map[u64]SliderSpec{}
 	g_scroll_ids = map[string]bool{}
 	set_background(g_root_view, root.box.bg)
 	mut active := map[string]bool{}
@@ -688,6 +765,7 @@ fn native_create_element(el Element) View {
 			field
 		}
 		.text_area { new_text_area_view(el) }
+		.slider { new_slider_view(el) }
 	}
 }
 
@@ -717,6 +795,7 @@ fn native_update_element(native View, el Element, declared_text_changed bool) {
 			update_text_field_view(native, el.frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure, el.autocorrect, declared_text_changed, el.padding_left)
 		}
 		.text_area { update_text_area_view(native, el, declared_text_changed) }
+		.slider { update_slider_view(native, el) }
 	}
 }
 
@@ -743,6 +822,7 @@ fn forget_descendant_nodes(key string) {
 		g_text_change_ids.delete(u64(child))
 		g_text_submit_ids.delete(u64(child))
 		g_text_area_ids.delete(u64(child))
+		g_slider_specs.delete(u64(child))
 		g_view_translation_x.delete(voidptr(child))
 		g_nodes.delete(child_key_)
 		g_node_kinds.delete(child_key_)
@@ -757,7 +837,17 @@ fn register_native_handlers(native View, el Element) {
 	if action_id.len > 0 && el.kind in [.view, .button] && (el.long_press || el.swipe_left) {
 		g_action_ids[pointer] = action_id
 	}
-	if el.kind in [.button, .checkbox] {
+	if el.kind == .slider {
+		remove_control_target_action(native, g_button_handler, 'handleTap:', 131072)
+		g_slider_specs[pointer] = slider_spec(el)
+		if action_id.len > 0 {
+			g_action_ids[pointer] = action_id
+			add_control_target_action(native, g_button_handler, 'handleTap:', 131072)
+			macos.set_associated_object(native, assoc_handler_key(), g_button_handler, macos.assoc_retain_nonatomic)
+		} else {
+			macos.set_associated_object(native, assoc_handler_key(), View(unsafe { nil }), macos.assoc_retain_nonatomic)
+		}
+	} else if el.kind in [.button, .checkbox] {
 		remove_control_target_action(native, g_button_handler, 'handleTap:', 64)
 		if action_id.len > 0 {
 			g_action_ids[pointer] = action_id
@@ -894,6 +984,7 @@ fn remove_stale_nodes(active map[string]bool) {
 		g_text_change_ids.delete(u64(native))
 		g_text_submit_ids.delete(u64(native))
 		g_text_area_ids.delete(u64(native))
+		g_slider_specs.delete(u64(native))
 		g_view_translation_x.delete(voidptr(native))
 		g_nodes.delete(key)
 		g_node_kinds.delete(key)
@@ -945,7 +1036,11 @@ fn vui_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
 	if voidptr(g_event_handler) == unsafe { nil } {
 		return
 	}
-	id := g_action_ids[u64(sender)] or { return }
+	pointer := u64(sender)
+	id := g_action_ids[pointer] or { return }
+	if spec := g_slider_specs[pointer] {
+		native_snap_slider_value(View(sender), spec)
+	}
 	g_event_handler(id)
 }
 

@@ -22,7 +22,7 @@ fn C.ui2_win_create_main_window(title &u16, width int, height int) voidptr
 
 fn C.ui2_win_set_window_title(hwnd voidptr, title &u16)
 
-fn C.ui2_win_create_widget(kind int, parent voidptr, x int, y int, width int, height int, text &u16, alignment int, secure int, readonly int, disable_scroll int) voidptr
+fn C.ui2_win_create_widget(kind int, parent voidptr, x int, y int, width int, height int, text &u16, alignment int, secure int, readonly int, disable_scroll int, vertical int) voidptr
 
 fn C.ui2_win_show_main_window(hwnd voidptr)
 
@@ -73,6 +73,10 @@ fn C.ui2_win_get_text(hwnd voidptr, buffer &u16, capacity int) int
 fn C.ui2_win_set_text(hwnd voidptr, text &u16)
 
 fn C.ui2_win_set_checked(hwnd voidptr, checked int)
+
+fn C.ui2_win_slider_set_normalized(hwnd voidptr, normalized f64, vertical int)
+
+fn C.ui2_win_slider_normalized(hwnd voidptr, vertical int) f64
 
 fn C.ui2_win_set_edit_options(hwnd voidptr, placeholder &u16, readonly int, padding_left int)
 
@@ -165,6 +169,7 @@ const win_wm_close = u32(0x0010)
 const win_wm_erase_background = u32(0x0014)
 const win_wm_key_down = u32(0x0100)
 const win_wm_command = u32(0x0111)
+const win_wm_hscroll = u32(0x0114)
 const win_wm_vscroll = u32(0x0115)
 const win_wm_ctlcolor_edit = u32(0x0133)
 const win_wm_ctlcolor_listbox = u32(0x0134)
@@ -233,6 +238,7 @@ mut:
 	menus              map[u64][]MenuEntry
 	cursors            map[u64]int
 	scroll_ids         map[u64]string
+	slider_specs       map[u64]SliderSpec
 	scroll_positions   map[string]int
 	run_config         WindowsRunConfig
 	rendering          bool
@@ -275,6 +281,7 @@ const windows_state_singleton = &WindowsState{
 	menus: map[u64][]MenuEntry{}
 	cursors: map[u64]int{}
 	scroll_ids: map[u64]string{}
+	slider_specs: map[u64]SliderSpec{}
 	scroll_positions: map[string]int{}
 	suppress_click: map[u64]bool{}
 }
@@ -392,6 +399,7 @@ pub fn refresh() {
 	st.menus = map[u64][]MenuEntry{}
 	st.cursors = map[u64]int{}
 	st.scroll_ids = map[u64]string{}
+	st.slider_specs = map[u64]SliderSpec{}
 	mut active := map[string]bool{}
 	if root.kind == .screen {
 		st.node_boxes[''] = root.box
@@ -456,6 +464,29 @@ pub fn set_text(id string, value string) {
 		windows_set_native_text(hwnd, value)
 	}
 	st.rendering = was_rendering
+}
+
+pub fn slider_value(id string) f64 {
+	st := windows_state()
+	hwnd := st.views[id] or { return 0 }
+	if (st.view_kinds[id] or { Kind.view }) != .slider {
+		return 0
+	}
+	spec := st.slider_specs[windows_handle_id(hwnd)] or { return 0 }
+	return windows_snap_slider_value(hwnd, spec)
+}
+
+pub fn set_slider_value(id string, value f64) {
+	st := windows_state()
+	hwnd := st.views[id] or { return }
+	if (st.view_kinds[id] or { Kind.view }) != .slider {
+		return
+	}
+	spec := st.slider_specs[windows_handle_id(hwnd)] or { return }
+	normalized := slider_value_normalized(slider_clamped_value(value, spec.min, spec.max),
+		spec.min, spec.max)
+	C.ui2_win_slider_set_normalized(hwnd, normalized,
+		windows_bool(spec.orientation == .vertical))
 }
 
 pub fn focus(id string) {
@@ -636,7 +667,7 @@ fn windows_render_element(parent voidptr, el Element, key string, parent_key str
 
 fn windows_create_element(parent voidptr, el Element, y_offset int) voidptr {
 	wide := el.text.to_wide()
-	hwnd := C.ui2_win_create_widget(windows_widget_kind(el.kind), parent, int(el.frame.x), int(el.frame.y) + y_offset, int(el.frame.width), windows_native_height(el), wide, windows_align(el.text_style.align), windows_bool(el.secure), windows_bool(el.readonly), windows_bool(el.disable_scroll))
+	hwnd := C.ui2_win_create_widget(windows_widget_kind(el.kind), parent, int(el.frame.x), int(el.frame.y) + y_offset, int(el.frame.width), windows_native_height(el), wide, windows_align(el.text_style.align), windows_bool(el.secure), windows_bool(el.readonly), windows_bool(el.disable_scroll), windows_bool(el.orientation == .vertical))
 	unsafe { free(wide) }
 	return hwnd
 }
@@ -657,12 +688,13 @@ fn windows_widget_kind(kind Kind) int {
 		.text_field { 7 }
 		.text_area { 8 }
 		.checkbox { 9 }
+		.slider { 10 }
 		.screen { 0 }
 	}
 }
 
 fn windows_structural_signature(el Element) string {
-	return '${int(el.kind)}:${windows_bool(el.secure)}:${windows_align(el.text_style.align)}:${windows_bool(el.disable_scroll)}:${windows_bool(el.native_style)}'
+	return '${int(el.kind)}:${windows_bool(el.secure)}:${windows_align(el.text_style.align)}:${windows_bool(el.disable_scroll)}:${windows_bool(el.native_style)}:${int(el.orientation)}'
 }
 
 fn windows_content_height(children []Element) int {
@@ -741,6 +773,10 @@ fn windows_update_element(key string, hwnd voidptr, el Element, y_offset int, cr
 				st.node_image_path[key] = image_sig
 			}
 		}
+		.slider {
+			C.ui2_win_slider_set_normalized(hwnd, slider_value_normalized(el.value,
+				el.min_value, el.max_value), windows_bool(el.orientation == .vertical))
+		}
 		.view, .scroll, .screen {}
 	}
 	st.node_declared_text[key] = el.text
@@ -818,7 +854,7 @@ fn windows_update_style(key string, hwnd voidptr, el Element) {
 			unsafe { free(wide_text) }
 			st.font_sigs[key] = font_sig
 		}
-	} else if el.kind != .view && el.kind != .scroll && el.kind != .image {
+	} else if el.kind !in [.view, .scroll, .image, .slider] {
 		font_text := windows_font_text(el)
 		font_sig := '${el.text_style.size}:${el.text_style.font_family.bytes().hex()}:${windows_bool(el.text_style.bold)}:${windows_bool(el.text_style.italic)}:${windows_bool(el.text_style.underline)}:${windows_bool(el.text_style.strikethrough)}:${windows_font_glyph_key(font_text)}'
 		if (st.font_sigs[key] or { '' }) != font_sig {
@@ -838,7 +874,7 @@ fn windows_update_style(key string, hwnd voidptr, el Element) {
 			}
 		}
 	}
-	if el.kind != .view && el.kind != .scroll && el.kind != .image {
+	if el.kind !in [.view, .scroll, .image, .slider] {
 		old_brush := st.brushes[key] or { voidptr(unsafe { nil }) }
 		if old_brush == unsafe { nil } || (st.brush_sigs[key] or { u32(0xffffffff) }) != el.box.bg {
 			brush := C.ui2_win_create_brush(el.box.bg)
@@ -857,8 +893,11 @@ fn windows_register_bindings(hwnd voidptr, el Element) {
 	mut st := windows_state()
 	handle := windows_handle_id(hwnd)
 	action_id := element_action_id(el)
-	if action_id.len > 0 && el.kind in [.button, .checkbox, .dropdown] {
+	if action_id.len > 0 && el.kind in [.button, .checkbox, .dropdown, .slider] {
 		st.action_ids[handle] = action_id
+	}
+	if el.kind == .slider {
+		st.slider_specs[handle] = slider_spec(el)
 	}
 	if action_id.len > 0 && ((el.kind == .text_field && el.emit_change) || el.kind == .text_area) {
 		st.change_ids[handle] = action_id
@@ -1035,6 +1074,18 @@ fn windows_emit_action(id string) {
 	if id.len > 0 && voidptr(st.event_handler) != unsafe { nil } {
 		st.event_handler(id)
 	}
+}
+
+fn windows_snap_slider_value(hwnd voidptr, spec SliderSpec) f64 {
+	raw_normalized := C.ui2_win_slider_normalized(hwnd,
+		windows_bool(spec.orientation == .vertical))
+	value := slider_value_from_normalized(raw_normalized, spec.min, spec.max, spec.step)
+	exact_normalized := slider_value_normalized(value, spec.min, spec.max)
+	if exact_normalized != raw_normalized {
+		C.ui2_win_slider_set_normalized(hwnd, exact_normalized,
+			windows_bool(spec.orientation == .vertical))
+	}
+	return value
 }
 
 fn windows_normalized_key(virtual_key u32) string {
@@ -1222,7 +1273,19 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 				return 1
 			}
 		}
-		win_wm_vscroll {
+		win_wm_hscroll, win_wm_vscroll {
+			child := voidptr(usize(lparam))
+			if child != unsafe { nil } {
+				handle := windows_handle_id(child)
+				if spec := st.slider_specs[handle] {
+					windows_snap_slider_value(child, spec)
+					windows_emit_action(st.action_ids[handle] or { '' })
+					return 0
+				}
+			}
+			if message == win_wm_hscroll {
+				return C.ui2_win_default_proc(hwnd, message, wparam, lparam)
+			}
 			windows_handle_scroll(hwnd, wparam, false)
 			return 0
 		}

@@ -19,10 +19,7 @@ Screen {
 
         Label { text: "Duration" x: 20 y: 148 width: 100 height: 20 color: #475569 font_size: 12 bold: true }
         Label { text: app.duration_label x: card.width - 160 y: 148 width: 140 height: 20 align: right color: #334155 font_size: 12 }
-        Rectangle { id: duration_track on_tap: "duration_track" clickable: true draggable: true cursor: "pointing_hand" x: 36 y: 184 width: card.width - 72 height: 24 background: #CBD5E1 corner_radius: 12
-            Rectangle { x: 0 y: 0 width: app.duration_ratio * duration_track.width height: 24 background: #BFDBFE corner_radius: 12 }
-            Rectangle { x: app.duration_ratio * (duration_track.width - 22) y: 1 width: 22 height: 22 background: #2563EB corner_radius: 11 }
-        }
+        Slider { id: duration_slider on_change: "duration_slider" x: 36 y: 184 width: card.width - 72 height: 24 min: 1 max: 30 value: app.duration step: 1 padding: 11 value_track: true background: #CBD5E1 value_track_color: #BFDBFE thumb_color: #2563EB thumb_size: 22 accessibility_label: "Timer duration" }
         Label { text: "1 s" x: 36 y: 214 width: 50 height: 18 color: #64748B font_size: 10 }
         Label { text: "30 s" x: card.width - 86 y: 214 width: 50 height: 18 align: right color: #64748B font_size: 10 }
 

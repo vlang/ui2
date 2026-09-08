@@ -24,10 +24,15 @@ pub:
 pub mut:
 	name    string
 	enabled bool
+	level   f64
 	users   []QmlTestUser
 	groups  []QmlTestGroup
 	removed int
 	saved   string
+}
+
+fn qml_test_control_value(_id string) f64 {
+	return 72.5
 }
 
 pub fn (mut app QmlTestApp) clear() {
@@ -104,6 +109,29 @@ fn test_qml_model_expressions_bindings_and_repeaters() {
 	assert column.children[1].key == '9'
 	assert column.children[0].box.bg == u32(0xFFFFFF)
 	assert column.children[1].box.bg == u32(0xF1F5F9)
+}
+
+fn test_qml_model_supports_numeric_slider_bindings() {
+	source := 'Slider { id: volume bind.value: app.level min: 0 max: 100 step: 0.5 }'
+	root := element_from_qml_model(source, QmlTestApp{ level: 12.5 }, rect(0, 0, 240, 32)) or {
+		panic(err)
+	}
+	assert root.kind == .slider
+	assert root.value == 12.5
+
+	mut app := new_qml_app(source, QmlTestApp{ level: 12.5 }) or { panic(err) }
+	app.control_value = qml_test_control_value
+	built := app.build(rect(0, 0, 240, 32)) or { panic(err) }
+	app.handle(built.action_id) or { panic(err) }
+	assert app.state().level == 72.5
+}
+
+fn test_qml_model_rejects_non_numeric_slider_bindings() {
+	if _ := element_from_qml_model('Slider { bind.value: app.name }', QmlTestApp{}, rect(0, 0, 100, 30)) {
+		assert false, 'slider values must bind to numeric fields'
+	} else {
+		assert err.msg().contains('bind.value requires a numeric field')
+	}
 }
 
 fn test_qml_model_reports_unknown_paths_with_a_source_line() {

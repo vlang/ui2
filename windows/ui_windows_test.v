@@ -12,6 +12,7 @@ $if !ui2_custom_rendering ? {
 		assert windows_widget_kind(.dropdown) == 6
 		assert windows_widget_kind(.text_field) == 7
 		assert windows_widget_kind(.text_area) == 8
+		assert windows_widget_kind(.slider) == 10
 	}
 
 	fn test_windows_structural_transitions_recreate_controls() {
@@ -41,6 +42,15 @@ $if !ui2_custom_rendering ? {
 			kind: .button
 		}
 		assert windows_structural_signature(styled_button) != windows_structural_signature(plain_button)
+
+		horizontal_slider := Element{
+			kind: .slider
+		}
+		vertical_slider := Element{
+			kind: .slider
+			orientation: .vertical
+		}
+		assert windows_structural_signature(horizontal_slider) != windows_structural_signature(vertical_slider)
 	}
 
 	fn test_windows_scroll_content_height_uses_child_extent() {
@@ -140,7 +150,7 @@ $if !ui2_custom_rendering ? {
 		plain := 'Bond, James'.to_wide()
 		symbols := '\u2713 Bond, James'.to_wide()
 		button := C.ui2_win_create_widget(windows_widget_kind(.button), root, 0, 0, 200,
-			30, plain, 0, 0, 0, 0)
+			30, plain, 0, 0, 0, 0, 0)
 		assert button != unsafe { nil }
 		system_font := C.ui2_win_widget_font(button)
 		C.ui2_win_apply_text_font(button, plain)
@@ -168,13 +178,13 @@ $if !ui2_custom_rendering ? {
 		}
 
 		empty := ''.to_wide()
-		field := C.ui2_win_create_widget(windows_widget_kind(.text_field), root, 0, 0, 200, 32, empty, 0, 0, 0, 0)
+		field := C.ui2_win_create_widget(windows_widget_kind(.text_field), root, 0, 0, 200, 32, empty, 0, 0, 0, 0, 0)
 		placeholder := 'First name'.to_wide()
 		C.ui2_win_set_edit_options(field, placeholder, 0, 12)
 		assert C.ui2_win_placeholder_matches(field, placeholder) != 0
 
-		label := C.ui2_win_create_widget(windows_widget_kind(.label), root, 0, 40, 200, 32, empty, 0, 0, 0, 0)
-		checkbox := C.ui2_win_create_widget(windows_widget_kind(.checkbox), root, 0, 80, 210, 30, empty, 0, 0, 0, 0)
+		label := C.ui2_win_create_widget(windows_widget_kind(.label), root, 0, 40, 200, 32, empty, 0, 0, 0, 0, 0)
+		checkbox := C.ui2_win_create_widget(windows_widget_kind(.checkbox), root, 0, 80, 210, 30, empty, 0, 0, 0, 0, 0)
 		assert C.ui2_win_widget_style(label) & usize(0x0200) != 0
 		assert C.ui2_win_widget_style(checkbox) & usize(0x2000) == 0
 

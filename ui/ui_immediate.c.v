@@ -12,19 +12,23 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	import time
 
 	struct HitTarget {
-		id          string
-		action_id   string
-		submit_id   string
-		x           f64
-		y           f64
-		w           f64
-		h           f64
-		long_press  bool
-		swipe_left  bool
-		text_field  bool
-		text_area   bool
-		dropdown    bool
-		options     []string
+		id             string
+		action_id      string
+		submit_id      string
+		x              f64
+		y              f64
+		w              f64
+		h              f64
+		long_press     bool
+		swipe_left     bool
+		text_field     bool
+		text_area      bool
+		dropdown       bool
+		slider         bool
+		slider_frame   Rect
+		slider_padding f64
+		slider_spec    SliderSpec
+		options        []string
 		// dropdown_option marks one row of the open dropdown list; id names the
 		// owning dropdown and option_index the value the row selects.
 		dropdown_option bool
@@ -91,6 +95,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_text_props = map[string]string{}
 	__global g_text_editors = map[string]TextEditor{}
 	__global g_text_kinds = map[string]Kind{}
+	__global g_slider_values = map[string]f64{}
+	__global g_slider_declared = map[string]f64{}
+	__global g_slider_specs = map[string]SliderSpec{}
 	__global g_focused_field = ''
 	__global g_scroll_offsets = map[string]f64{}
 	__global g_scroll_content_h = map[string]f64{}
@@ -98,6 +105,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_touch = TouchState{}
 	__global g_scroll_areas = map[string]Rect{}
 	__global g_active_fields = map[string]bool{}
+	__global g_active_sliders = map[string]bool{}
 	__global g_active_scrolls = map[string]bool{}
 	__global g_image_ids = map[string]int{}
 	__global g_font_metrics = FontMetrics{}
@@ -212,6 +220,20 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		mut editor := g_text_editors[id] or { text_editor(t) }
 		editor.set_text(t)
 		g_text_editors[id] = editor
+	}
+
+	// slider_value returns the live value currently displayed by a mounted
+	// slider, including a value changed by pointer input before the next build.
+	pub fn slider_value(id string) f64 {
+		return g_slider_values[id] or { 0 }
+	}
+
+	pub fn set_slider_value(id string, value f64) {
+		if id !in g_active_sliders {
+			return
+		}
+		spec := g_slider_specs[id] or { return }
+		g_slider_values[id] = slider_clamped_value(value, spec.min, spec.max)
 	}
 
 	pub fn focus(id string) {
@@ -390,6 +412,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			g_hit_targets = []HitTarget{}
 			reset_scroll_frame()
 			g_active_fields = map[string]bool{}
+			g_active_sliders = map[string]bool{}
 			g_active_scrolls = map[string]bool{}
 			g_active_images = map[string]bool{}
 			root = apply_widget_animations(g_build_screen())
@@ -515,12 +538,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			update_dropdown_hover(x, y)
 			return
 		}
+		target := hit_test(x, y)
+		if target.slider {
+			commit_slider(target, x, y)
+			return
+		}
 		g_touch.scroll_id = scroll_hit_test(x, y)
 		g_touch.scroll_start_off_y = scroll_offset(g_touch.scroll_id)
 		if begin_scrollbar_drag(x, y) {
 			return
 		}
-		target := hit_test(x, y)
 		if target.action_id.len > 0 && (target.clickable || target.draggable) {
 			fire_event(pointer_event_id('down', target.action_id, x, y))
 		}
@@ -537,6 +564,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		g_touch.current_x = x
 		g_touch.current_y = y
+		target := hit_test(g_touch.start_x, g_touch.start_y)
+		if target.slider {
+			commit_slider(target, x, y)
+			return
+		}
 		if g_touch.scrollbar_drag {
 			drag_scrollbar(y)
 			return
@@ -546,7 +578,6 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			new_offset := g_touch.scroll_start_off_y + delta
 			set_scroll_offset(g_touch.scroll_id, new_offset, scroll_maximum(g_touch.scroll_id))
 		}
-		target := hit_test(g_touch.start_x, g_touch.start_y)
 		if target.action_id.len > 0 && target.draggable {
 			fire_event(pointer_event_id('drag', target.action_id, x, y))
 		}
@@ -586,6 +617,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		g_touch.down = false
+		slider_target := hit_test(g_touch.start_x, g_touch.start_y)
+		if slider_target.slider {
+			commit_slider(slider_target, x, y)
+			return
+		}
 		if g_touch.long_press_fired || g_touch.scrollbar_drag {
 			return
 		}
@@ -664,6 +700,27 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	fn fire_event(id string) {
 		if id.len > 0 && voidptr(g_event_handler) != unsafe { nil } {
 			g_event_handler(id)
+		}
+	}
+
+	fn slider_target_value(target HitTarget, x f64, y f64) f64 {
+		normalized := slider_normalized_from_point(target.slider_frame,
+			target.slider_spec.orientation, target.slider_padding, x, y)
+		return slider_value_from_normalized(normalized, target.slider_spec.min,
+			target.slider_spec.max, target.slider_spec.step)
+	}
+
+	fn commit_slider(target HitTarget, x f64, y f64) {
+		if !target.slider {
+			return
+		}
+		next := slider_target_value(target, x, y)
+		previous := g_slider_values[target.id] or { target.slider_spec.min }
+		if target.id.len > 0 {
+			g_slider_values[target.id] = next
+		}
+		if next != previous {
+			fire_event(target.action_id)
 		}
 	}
 
@@ -1120,6 +1177,17 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				g_focused_field = ''
 			}
 		}
+		mut stale_sliders := []string{}
+		for id, _ in g_slider_values {
+			if id !in g_active_sliders {
+				stale_sliders << id
+			}
+		}
+		for id in stale_sliders {
+			g_slider_values.delete(id)
+			g_slider_declared.delete(id)
+			g_slider_specs.delete(id)
+		}
 		mut stale_scrolls := []string{}
 		for id, _ in g_scroll_offsets {
 			if id !in g_active_scrolls {
@@ -1442,6 +1510,90 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 						h: el.frame.height
 						text_area: true
 						emit_change: true
+					}, clip)
+				}
+			}
+			.slider {
+				x := el.frame.x + off_x
+				y := el.frame.y + off_y
+				frame := rect(x, y, el.frame.width, el.frame.height)
+				spec := slider_spec(el)
+				mut current := el.value
+				if el.id.len > 0 {
+					previous_declared := g_slider_declared[el.id] or { el.value }
+					previous_value := g_slider_values[el.id] or { el.value }
+					if el.id !in g_slider_values
+						|| (previous_declared != el.value && previous_value != el.value) {
+						g_slider_values[el.id] = el.value
+					}
+					current = slider_clamped_value(g_slider_values[el.id] or { el.value },
+						spec.min, spec.max)
+					g_slider_values[el.id] = current
+					g_slider_declared[el.id] = el.value
+					g_slider_specs[el.id] = spec
+					g_active_sliders[el.id] = true
+				}
+				normalized := slider_value_normalized(current, spec.min, spec.max)
+				track_width := if el.slider_style.track_width > 0 {
+					el.slider_style.track_width
+				} else {
+					4.0
+				}
+				thumb_size := if el.slider_style.thumb_size > 0 {
+					el.slider_style.thumb_size
+				} else {
+					20.0
+				}
+				track_color := if el.enabled { el.slider_style.track_color } else { u32(0xe2e8f0) }
+				value_color := if el.enabled {
+					el.slider_style.value_track_color
+				} else {
+					u32(0x94a3b8)
+				}
+				thumb_color := if el.enabled { el.slider_style.thumb_color } else { u32(0x94a3b8) }
+				if el.orientation == .vertical {
+					inset := slider_track_padding(el.padding, frame.height)
+					extent := frame.height - inset * 2
+					track_x := frame.x + (frame.width - track_width) / 2
+					track_y := frame.y + inset
+					draw_rect(ctx, track_x, track_y, track_width, extent, track_color,
+						track_width / 2)
+					thumb_y := track_y + (1 - normalized) * extent
+					if el.value_track {
+						draw_rect(ctx, track_x, thumb_y, track_width, track_y + extent - thumb_y,
+							value_color, track_width / 2)
+					}
+					draw_rect(ctx, frame.x + (frame.width - thumb_size) / 2,
+						thumb_y - thumb_size / 2, thumb_size, thumb_size, thumb_color,
+						thumb_size / 2)
+				} else {
+					inset := slider_track_padding(el.padding, frame.width)
+					extent := frame.width - inset * 2
+					track_x := frame.x + inset
+					track_y := frame.y + (frame.height - track_width) / 2
+					draw_rect(ctx, track_x, track_y, extent, track_width, track_color,
+						track_width / 2)
+					thumb_x := track_x + normalized * extent
+					if el.value_track {
+						draw_rect(ctx, track_x, track_y, thumb_x - track_x, track_width,
+							value_color, track_width / 2)
+					}
+					draw_rect(ctx, thumb_x - thumb_size / 2,
+						frame.y + (frame.height - thumb_size) / 2, thumb_size, thumb_size,
+						thumb_color, thumb_size / 2)
+				}
+				if el.enabled {
+					add_hit_target(HitTarget{
+						id: el.id
+						action_id: element_action_id(el)
+						x: frame.x
+						y: frame.y
+						w: frame.width
+						h: frame.height
+						slider: true
+						slider_frame: frame
+						slider_padding: el.padding
+						slider_spec: spec
 					}, clip)
 				}
 			}

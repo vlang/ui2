@@ -440,7 +440,7 @@ fn test_qml_decimal_keyboard() {
 	assert el.keyboard == keyboard_decimal
 }
 
-fn test_qml_progress_bar_uses_kivy_value_semantics() {
+fn test_qml_progress_bar_uses_bounded_value_semantics() {
 	el := element_from_qml('ProgressBar {
 		id: loading
 		value: 75
@@ -459,6 +459,43 @@ fn test_qml_progress_bar_uses_kivy_value_semantics() {
 	assert el.children[0].box.bg == u32(0x22c55e)
 	assert el.accessibility_role == 'progressbar'
 	assert el.accessibility_value == '75 of 200'
+}
+
+fn test_qml_slider_exposes_range_orientation_and_style() {
+	el := element_from_qml('Slider {
+		id: volume
+		on_change: volume_changed
+		min: -20
+		max: 80
+		value: 55
+		step: 5
+		orientation: vertical
+		padding: 10
+		value_track: true
+		background: #111827
+		value_track_color: #22C55E
+		thumb_color: #F8FAFC
+		track_width: 6
+		thumb_size: 24
+	}', rect(0, 0, 32, 240)) or { panic(err) }
+
+	assert el.kind == .slider
+	assert el.id == 'volume'
+	assert el.action_id == 'volume_changed'
+	assert el.min_value == -20
+	assert el.max_value == 80
+	assert el.value == 55
+	assert el.step == 5
+	assert el.orientation == .vertical
+	assert el.padding == 10
+	assert el.value_track
+	assert el.slider_style.track_color == u32(0x111827)
+	assert el.slider_style.value_track_color == u32(0x22c55e)
+	assert el.slider_style.thumb_color == u32(0xf8fafc)
+	assert el.slider_style.track_width == 6
+	assert el.slider_style.thumb_size == 24
+	assert el.accessibility_role == 'slider'
+	assert el.accessibility_value == '55'
 }
 
 fn test_qml_widget_accessibility_defaults_survive_conversion() {

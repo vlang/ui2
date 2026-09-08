@@ -21,6 +21,35 @@ fn test_macos_checkbox_uses_native_switch_and_retains_state() {
 	assert macos.msg_i64(checkbox_view, 'state') == 1
 }
 
+fn test_macos_slider_uses_native_range_and_snaps_live_values() {
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	slider_view := native_new_slider(slider(
+		id: 'native-slider'
+		frame: rect(0, 0, 240, 28)
+		min: -20
+		max: 100
+		value: 42
+		step: 5
+	))
+	defer {
+		macos.release(slider_view)
+	}
+
+	assert macos.msg_f64(slider_view, 'minValue') == -20
+	assert macos.msg_f64(slider_view, 'maxValue') == 100
+	assert macos.msg_f64(slider_view, 'doubleValue') == 42
+	macos.msg_void_f64(slider_view, 'setDoubleValue:', 43)
+	assert native_snap_slider_value(slider_view, SliderSpec{
+		min: -20
+		max: 100
+		step: 5
+	}) == 45
+	assert macos.msg_f64(slider_view, 'doubleValue') == 45
+}
+
 fn test_macos_native_style_button_keeps_appkit_bezel_and_press_state() {
 	pool := macos.autorelease_pool_new()
 	defer {

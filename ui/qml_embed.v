@@ -25,6 +25,10 @@ pub mut:
 	// then writes an empty string, which is what a backend carrying no such
 	// control has to say anyway.
 	control_text fn (id string) string = unsafe { nil }
+	// control_value answers with the live value of a named numeric control.
+	// It is the embedding counterpart to the platform slider_value function
+	// used by two-way `bind.value` in a normal window.
+	control_value fn (id string) f64 = unsafe { nil }
 }
 
 // new_qml_app parses and type-checks the document against the model up front,
@@ -70,13 +74,20 @@ pub fn (mut app QmlApp[T]) handle(event_id string) ! {
 	event := app.events[event_id] or { return }
 	if binding := event.binding {
 		field_name := binding.target.all_after('app.')
-		value := if binding.property == 'checked' {
-			current := q_lookup({
-				'app': q_value_from(app.model)
-			}, binding.target, 0)!
-			q_bool(!current.truthy())
-		} else {
-			q_string(app.text_of(binding.control))
+		value := match binding.property {
+			'checked' {
+				current := q_lookup({
+					'app': q_value_from(app.model)
+				}, binding.target, 0)!
+				q_bool(!current.truthy())
+			}
+			'value' {
+				live := app.value_of(binding.control)
+				q_number(live, slider_number(live))
+			}
+			else {
+				q_string(app.text_of(binding.control))
+			}
 		}
 		qml_set_field[T](mut app.model, field_name, value)!
 	}
@@ -89,6 +100,14 @@ fn (app &QmlApp[T]) text_of(id string) string {
 	handler := app.control_text
 	if handler == unsafe { nil } {
 		return ''
+	}
+	return handler(id)
+}
+
+fn (app &QmlApp[T]) value_of(id string) f64 {
+	handler := app.control_value
+	if handler == unsafe { nil } {
+		return 0
 	}
 	return handler(id)
 }

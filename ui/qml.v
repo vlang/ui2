@@ -757,6 +757,32 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 				radius: node.prop_or('corner_radius', node.prop_or('radius', '4')).f64()
 			)
 		}
+		'Slider' {
+			action_id := if node.prop('on_change').len > 0 {
+				node.prop('on_change')
+			} else {
+				node.prop('on_tap')
+			}
+			return slider(
+				id: node.id
+				action_id: action_id
+				frame: frame
+				min: node.prop_or('min', '0').f64()
+				max: node.prop_or('max', '100').f64()
+				value: node.prop_or('value', '0').f64()
+				step: node.prop_or('step', '0').f64()
+				orientation: q_orientation(node.prop('orientation'))
+				padding: node.prop_or('padding', '16').f64()
+				value_track: node.prop_bool('value_track')
+				style: SliderStyle{
+					track_color: q_color(node, 'background', 0xcbd5e1)
+					value_track_color: q_color(node, 'value_track_color', q_color(node, 'color', 0x93c5fd))
+					thumb_color: q_color(node, 'thumb_color', 0x2563eb)
+					track_width: node.prop_or('track_width', '4').f64()
+					thumb_size: node.prop_or('thumb_size', '20').f64()
+				}
+			)
+		}
 		'Button' {
 			return Element{
 				...button(node.id, node.prop('text'), frame, q_box(node), q_text_style(node))
@@ -816,6 +842,10 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 			return view(node.id, frame, q_box(node), q_children(node, local)!)
 		}
 	}
+}
+
+fn q_orientation(raw string) Orientation {
+	return if raw == 'vertical' { .vertical } else { .horizontal }
 }
 
 // q_message_box maps the declarative dialog onto custom_message_box. Its

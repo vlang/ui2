@@ -7,7 +7,6 @@ import ui2
 const timer_width = 600
 const timer_height = 380
 const timer_qml_source = $embed_file('timer.qml').to_string()
-const timer_track_root_x = 52.0
 
 @[heap]
 pub struct TimerDemo {
@@ -40,7 +39,11 @@ fn (mut app TimerDemo) update_labels() {
 
 fn (mut app TimerDemo) set_duration_fraction(fraction f64) {
 	clamped := math.max(0.0, math.min(1.0, fraction))
-	app.duration = math.round(clamped * 29.0 + 1.0)
+	app.set_duration(clamped * 29.0 + 1.0)
+}
+
+fn (mut app TimerDemo) set_duration(value f64) {
+	app.duration = math.round(math.max(1.0, math.min(30.0, value)))
 	if app.elapsed > app.duration {
 		app.elapsed = app.duration
 		app.base_elapsed = app.elapsed
@@ -108,14 +111,6 @@ fn refresh_timer_for_duration() {
 	}
 }
 
-fn timer_pointer_x(event string) ?f64 {
-	parts := event.split(':')
-	if parts.len < 5 || parts[0] != 'pointer' || parts[2] != 'duration_track' {
-		return none
-	}
-	return parts[3].f64()
-}
-
 fn build_timer_screen() ui2.Element {
 	mut state := unsafe { timer_state }
 	state.sync_at(time.ticks())
@@ -140,11 +135,8 @@ fn handle_timer_event(event string) {
 				spawn refresh_timer_for_duration()
 			}
 		}
-		else {
-			x := timer_pointer_x(event) or { return }
-			track_width := ui2.bounds().width - 104.0
-			state.set_duration_fraction((x - timer_track_root_x) / track_width)
-		}
+		'duration_slider' { state.set_duration(ui2.slider_value('duration_slider')) }
+		else {}
 	}
 	ui2.refresh()
 }

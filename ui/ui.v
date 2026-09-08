@@ -41,6 +41,7 @@ pub enum Kind {
 	text_field
 	text_area
 	scroll
+	slider
 }
 
 // MenuEntry is one right-click context menu item attached to an element.
@@ -166,6 +167,14 @@ pub:
 	accessibility_value   string
 	autocorrect           bool = true // native text inputs
 	padding_left          f64 = 12.0 // text input content inset
+	value                 f64 // slider: current value
+	min_value             f64 // slider: lower range boundary
+	max_value             f64 = 100.0 // slider: upper range boundary
+	step                  f64 // slider: zero is continuous
+	orientation           Orientation // slider: horizontal or vertical
+	padding               f64 = 16.0 // slider: inset from each end of its track
+	value_track           bool // slider: color the track between min and value
+	slider_style          SliderStyle
 }
 
 pub enum BackendSupport {

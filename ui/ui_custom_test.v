@@ -40,6 +40,51 @@ $if ui2_custom_rendering ? {
 		assert pointer_event_id('up', 'surface', 40, 50) == 'pointer:up:surface:40.0:50.0'
 	}
 
+	fn test_custom_slider_pointer_value_uses_range_step_and_orientation() {
+		horizontal := HitTarget{
+			slider: true
+			slider_frame: rect(10, 20, 120, 30)
+			slider_padding: 10
+			slider_spec: SliderSpec{
+				min: -20
+				max: 80
+				step: 5
+			}
+		}
+		assert slider_target_value(horizontal, 70, 35) == 30
+
+		vertical := HitTarget{
+			...horizontal
+			slider_frame: rect(10, 20, 30, 120)
+			slider_spec: SliderSpec{
+				...horizontal.slider_spec
+				orientation: .vertical
+			}
+		}
+		assert slider_target_value(vertical, 25, 30) == 80
+		assert slider_target_value(vertical, 25, 130) == -20
+	}
+
+	fn test_custom_slider_value_api_only_updates_mounted_controls() {
+		g_slider_values = map[string]f64{}
+		g_slider_specs = map[string]SliderSpec{
+			'volume': SliderSpec{
+				min: -20
+				max: 80
+			}
+		}
+		g_active_sliders = map[string]bool{
+			'volume': true
+		}
+		set_slider_value('volume', 120)
+		set_slider_value('missing', 40)
+		assert slider_value('volume') == 80
+		assert slider_value('missing') == 0
+		g_slider_values = map[string]f64{}
+		g_slider_specs = map[string]SliderSpec{}
+		g_active_sliders = map[string]bool{}
+	}
+
 	fn test_custom_dropdown_popup_opens_below_its_control() {
 		row_height := dropdown_row_height(TextStyle{})
 		assert row_height == 28
@@ -263,14 +308,14 @@ $if ui2_custom_rendering ? {
 
 	fn test_custom_text_wider_than_its_box_ends_in_an_ellipsis() {
 		// Four characters of room: three of the word plus the ellipsis.
-		assert fit_text_to_width('abcde', 40, custom_test_text_width) == 'abc\u2026'
+		assert fit_text_to_width('abcde', 40, custom_test_text_width) == 'abc…'
 		// Room for the ellipsis alone, and for less than that.
-		assert fit_text_to_width('abcde', 10, custom_test_text_width) == '\u2026'
-		assert fit_text_to_width('abcde', 5, custom_test_text_width) == '\u2026'
+		assert fit_text_to_width('abcde', 10, custom_test_text_width) == '…'
+		assert fit_text_to_width('abcde', 5, custom_test_text_width) == '…'
 	}
 
 	fn test_custom_text_is_shortened_by_whole_runes() {
 		// A multi-byte rune has to be dropped as one character, not as bytes.
-		assert fit_text_to_width('\u00e9\u00e9\u00e9\u00e9', 30, custom_test_text_width) == '\u00e9\u00e9\u2026'
+		assert fit_text_to_width('éééé', 30, custom_test_text_width) == 'éé…'
 	}
 }

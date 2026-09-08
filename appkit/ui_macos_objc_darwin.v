@@ -251,6 +251,7 @@ fn native_accessibility_role(role string) macos.Id {
 		'text_field' { macos.nsstring('AXTextField') }
 		'image' { macos.nsstring('AXImage') }
 		'link' { macos.nsstring('AXLink') }
+		'slider' { macos.nsstring('AXSlider') }
 		else { macos.nsstring(role) }
 	}
 }

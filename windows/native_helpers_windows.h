@@ -39,7 +39,8 @@ enum {
 	UI2_WIN_DROPDOWN = 6,
 	UI2_WIN_TEXT_FIELD = 7,
 	UI2_WIN_TEXT_AREA = 8,
-	UI2_WIN_CHECKBOX = 9
+	UI2_WIN_CHECKBOX = 9,
+	UI2_WIN_SLIDER = 10
 };
 
 extern intptr_t ui2_windows_window_proc(void *hwnd, unsigned int message,
@@ -347,7 +348,7 @@ static inline DWORD ui2_win_edit_style(int alignment) {
 
 static inline void *ui2_win_create_widget(int kind, void *parent_ptr, int x, int y,
 		int width, int height, const wchar_t *text, int alignment, int secure,
-		int readonly, int disable_scroll) {
+		int readonly, int disable_scroll, int vertical) {
 	HWND parent = (HWND)parent_ptr;
 	DWORD style = WS_CHILD | WS_VISIBLE;
 	DWORD ex_style = 0;
@@ -400,6 +401,10 @@ static inline void *ui2_win_create_widget(int kind, void *parent_ptr, int x, int
 		if (readonly) style |= ES_READONLY;
 		ex_style = WS_EX_CLIENTEDGE;
 		break;
+	case UI2_WIN_SLIDER:
+		class_name = TRACKBAR_CLASSW;
+		style |= WS_TABSTOP | (vertical ? TBS_VERT : TBS_HORZ);
+		break;
 	default:
 		return NULL;
 	}
@@ -410,6 +415,29 @@ static inline void *ui2_win_create_widget(int kind, void *parent_ptr, int x, int
 		SetWindowSubclass(hwnd, ui2_win_control_subclass, 1, 0);
 	}
 	return hwnd;
+}
+
+#define UI2_WIN_SLIDER_STEPS 10000
+
+static inline void ui2_win_slider_set_normalized(void *hwnd_ptr,
+		double normalized, int vertical) {
+	if (hwnd_ptr == NULL) return;
+	if (normalized < 0.0) normalized = 0.0;
+	if (normalized > 1.0) normalized = 1.0;
+	double position = vertical ? 1.0 - normalized : normalized;
+	HWND hwnd = (HWND)hwnd_ptr;
+	SendMessageW(hwnd, TBM_SETRANGEMIN, FALSE, 0);
+	SendMessageW(hwnd, TBM_SETRANGEMAX, FALSE, UI2_WIN_SLIDER_STEPS);
+	SendMessageW(hwnd, TBM_SETPAGESIZE, 0, UI2_WIN_SLIDER_STEPS / 10);
+	SendMessageW(hwnd, TBM_SETPOS, TRUE,
+		(LPARAM)(int)(position * UI2_WIN_SLIDER_STEPS + 0.5));
+}
+
+static inline double ui2_win_slider_normalized(void *hwnd_ptr, int vertical) {
+	if (hwnd_ptr == NULL) return 0.0;
+	double position = (double)SendMessageW((HWND)hwnd_ptr, TBM_GETPOS, 0, 0)
+		/ (double)UI2_WIN_SLIDER_STEPS;
+	return vertical ? 1.0 - position : position;
 }
 
 static inline void ui2_win_show_main_window(void *hwnd_ptr) {
