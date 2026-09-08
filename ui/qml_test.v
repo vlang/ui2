@@ -575,6 +575,41 @@ fn test_qml_toggle_button_exposes_pressed_and_released_styles() {
 	assert el.accessibility_value == 'pressed'
 }
 
+fn test_qml_box_layout_combines_fixed_and_proportional_children() {
+	el := element_from_qml('BoxLayout {
+		id: actions
+		padding: 10
+		spacing: 10
+		Button { text: "Fixed" width: 80 size_hint_x: -1 }
+		Button { text: "Wide" size_hint_x: 2 }
+		Button { text: "Narrow" size_hint_x: 1 }
+	}', rect(20, 30, 330, 80)) or { panic(err) }
+	assert el.frame == rect(20, 30, 330, 80)
+	assert el.children[0].frame == rect(10, 10, 80, 60)
+	assert el.children[1].frame == rect(100, 10, 140, 60)
+	assert el.children[2].frame == rect(250, 10, 70, 60)
+}
+
+fn test_qml_vertical_box_layout_aligns_fixed_width_children() {
+	el := element_from_qml('BoxLayout {
+		orientation: vertical
+		padding: 10
+		spacing: 4
+		Button { text: "Centered" width: 60 height: 20 size_hint_x: -1 size_hint_y: -1 align_x: center }
+		Button { text: "Fill" }
+	}', rect(0, 0, 200, 120)) or { panic(err) }
+	assert el.children[0].frame == rect(70, 10, 60, 20)
+	assert el.children[1].frame == rect(10, 34, 180, 76)
+}
+
+fn test_qml_box_layout_validates_orientation_names() {
+	if _ := element_from_qml('BoxLayout { orientation: diagonal }', rect(0, 0, 100, 100)) {
+		assert false, 'unknown box orientations must fail'
+	} else {
+		assert err.msg().contains('diagonal')
+	}
+}
+
 fn test_qml_grid_layout_assigns_cells_in_the_requested_orientation() {
 	el := element_from_qml('GridLayout {
 		id: tools

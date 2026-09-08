@@ -504,9 +504,22 @@ enum QChildLayoutKind {
 	overlay
 	column
 	row
+	box
 	grid
 	anchor
 	stack
+}
+
+struct QLayoutChildMetrics {
+	frame            Rect
+	size_hint_x      f64 = 1.0
+	size_hint_y      f64 = 1.0
+	minimum_width    f64 = -1.0
+	minimum_height   f64 = -1.0
+	maximum_width    f64 = -1.0
+	maximum_height   f64 = -1.0
+	horizontal_align BoxAlignment
+	vertical_align   BoxAlignment
 }
 
 struct QChildLayout {
@@ -521,10 +534,11 @@ mut:
 	index  int
 }
 
-fn q_child_layout(node &QNode, actual Rect, child_sizes []Rect) !QChildLayout {
+fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChildLayout {
 	kind := match node.tag {
 		'Column' { QChildLayoutKind.column }
 		'Row' { QChildLayoutKind.row }
+		'BoxLayout' { QChildLayoutKind.box }
 		'GridLayout' { QChildLayoutKind.grid }
 		'AnchorLayout' { QChildLayoutKind.anchor }
 		'StackLayout' { QChildLayoutKind.stack }
@@ -532,6 +546,24 @@ fn q_child_layout(node &QNode, actual Rect, child_sizes []Rect) !QChildLayout {
 	}
 	padding := node.prop_or('padding', '0').f64()
 	local := rect(0, 0, actual.width, actual.height)
+	mut child_sizes := []Rect{cap: metrics.len}
+	mut box_children := []BoxLayoutChild{cap: metrics.len}
+	for metric in metrics {
+		child_sizes << metric.frame
+		if kind == .box {
+			box_children << BoxLayoutChild{
+				element: Element{ frame: metric.frame }
+				size_hint_x: metric.size_hint_x
+				size_hint_y: metric.size_hint_y
+				minimum_width: metric.minimum_width
+				minimum_height: metric.minimum_height
+				maximum_width: metric.maximum_width
+				maximum_height: metric.maximum_height
+				horizontal_align: metric.horizontal_align
+				vertical_align: metric.vertical_align
+			}
+		}
+	}
 	return QChildLayout{
 		kind: kind
 		frame: local
@@ -540,6 +572,8 @@ fn q_child_layout(node &QNode, actual Rect, child_sizes []Rect) !QChildLayout {
 		cursor: padding
 		cells: if kind == .grid {
 			grid_layout_frames(q_grid_config(node, local)!, child_sizes.len)!
+		} else if kind == .box {
+			box_layout_frames(q_box_layout_config(node, local, box_children)!)!
 		} else if kind == .stack {
 			stack_layout_frames(q_stack_config(node, local)!, child_sizes)!
 		} else {
@@ -569,6 +603,9 @@ fn (layout &QChildLayout) fallback(child &QNode, scope map[string]QValue) !Rect 
 		.row {
 			rect(layout.cursor, layout.padding, 80, layout.frame.height - layout.padding * 2)
 		}
+		.box {
+			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
+		}
 		.grid {
 			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
 		}
@@ -592,6 +629,9 @@ fn (mut layout QChildLayout) advance(child &QNode) {
 		.row {
 			layout.cursor += q_dimension(child, 'width', 80) + layout.spacing
 		}
+		.box {
+			layout.index++
+		}
 		.grid {
 			layout.index++
 		}
@@ -603,14 +643,41 @@ fn (mut layout QChildLayout) advance(child &QNode) {
 	}
 }
 
-fn q_layout_child_sizes(node &QNode, scope map[string]QValue) ![]Rect {
-	mut sizes := []Rect{}
+fn q_layout_alignment(node &QNode, key string, scope map[string]QValue) !BoxAlignment {
+	if expr := node.expressions[key] {
+		return box_alignment(q_eval(expr, scope)!.string_value())!
+	}
+	return box_alignment(node.prop_or(key, 'start'))!
+}
+
+fn q_layout_child_metric(node &QNode, scope map[string]QValue, box bool) !QLayoutChildMetrics {
+	if !box {
+		return QLayoutChildMetrics{
+			frame: rect(0, 0, q_layout_dimension(node, 'width', scope, 80)!, q_layout_dimension(node, 'height', scope, 32)!)
+		}
+	}
+	return QLayoutChildMetrics{
+		frame: rect(0, 0, q_layout_dimension(node, 'width', scope, 80)!, q_layout_dimension(node, 'height', scope, 32)!)
+		size_hint_x: q_layout_dimension(node, 'size_hint_x', scope, 1)!
+		size_hint_y: q_layout_dimension(node, 'size_hint_y', scope, 1)!
+		minimum_width: q_layout_dimension(node, 'size_hint_min_x', scope, -1)!
+		minimum_height: q_layout_dimension(node, 'size_hint_min_y', scope, -1)!
+		maximum_width: q_layout_dimension(node, 'size_hint_max_x', scope, -1)!
+		maximum_height: q_layout_dimension(node, 'size_hint_max_y', scope, -1)!
+		horizontal_align: q_layout_alignment(node, 'align_x', scope)!
+		vertical_align: q_layout_alignment(node, 'align_y', scope)!
+	}
+}
+
+fn q_layout_child_metrics(node &QNode, scope map[string]QValue) ![]QLayoutChildMetrics {
+	mut metrics := []QLayoutChildMetrics{}
+	box := node.tag == 'BoxLayout'
 	for child in node.children {
 		if child.tag in ['MenuItem', 'Option'] {
 			continue
 		}
 		if child.tag != 'Repeater' {
-			sizes << rect(0, 0, q_layout_dimension(child, 'width', scope, 80)!, q_layout_dimension(child, 'height', scope, 32)!)
+			metrics << q_layout_child_metric(child, scope, box)!
 			continue
 		}
 		model_expr := child.expressions['model'] or {
@@ -628,11 +695,11 @@ fn q_layout_child_sizes(node &QNode, scope map[string]QValue) ![]Rect {
 				if repeated.tag in ['MenuItem', 'Option'] {
 					continue
 				}
-				sizes << rect(0, 0, q_layout_dimension(repeated, 'width', item_scope, 80)!, q_layout_dimension(repeated, 'height', item_scope, 32)!)
+				metrics << q_layout_child_metric(repeated, item_scope, box)!
 			}
 		}
 	}
-	return sizes
+	return metrics
 }
 
 fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut evaluation QmlEvaluation) !&QNode {
@@ -760,8 +827,8 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		}
 	}
 
-	child_sizes := q_layout_child_sizes(node, scope)!
-	mut layout := q_child_layout(resolved, actual, child_sizes)!
+	child_metrics := q_layout_child_metrics(node, scope)!
+	mut layout := q_child_layout(resolved, actual, child_metrics)!
 	for child in node.children {
 		if child.tag == 'Repeater' {
 			q_expand_repeater(child, scope, mut resolved.children, mut evaluation, mut layout)!

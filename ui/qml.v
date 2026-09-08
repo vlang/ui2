@@ -724,6 +724,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'Row' {
 			return q_row(node, frame)!
 		}
+		'BoxLayout' {
+			return q_box_layout(node, frame)!
+		}
 		'GridLayout' {
 			return q_grid(node, frame)!
 		}
@@ -1017,6 +1020,59 @@ fn q_row(node &QNode, frame Rect) !Element {
 		x += child_w + spacing
 	}
 	return view(node.id, container, q_box(node), children)
+}
+
+fn q_box_layout_child(node &QNode) !BoxLayoutChild {
+	return BoxLayoutChild{
+		element: Element{
+			frame: rect(0, 0, q_dimension(node, 'width', 80), q_dimension(node, 'height', 32))
+		}
+		size_hint_x: node.prop_or('size_hint_x', '1').f64()
+		size_hint_y: node.prop_or('size_hint_y', '1').f64()
+		minimum_width: node.prop_or('size_hint_min_x', '-1').f64()
+		minimum_height: node.prop_or('size_hint_min_y', '-1').f64()
+		maximum_width: node.prop_or('size_hint_max_x', '-1').f64()
+		maximum_height: node.prop_or('size_hint_max_y', '-1').f64()
+		horizontal_align: box_alignment(node.prop_or('align_x', 'start'))!
+		vertical_align: box_alignment(node.prop_or('align_y', 'start'))!
+	}
+}
+
+fn q_box_layout_config(node &QNode, frame Rect, children []BoxLayoutChild) !BoxLayoutConfig {
+	padding := node.prop_or('padding', '0').f64()
+	return BoxLayoutConfig{
+		id: node.id
+		frame: frame
+		box: q_box(node)
+		orientation: box_orientation(node.prop_or('orientation', 'horizontal'))!
+		padding: BoxPadding{
+			left: node.prop_or('padding_left', padding.str()).f64()
+			top: node.prop_or('padding_top', padding.str()).f64()
+			right: node.prop_or('padding_right', padding.str()).f64()
+			bottom: node.prop_or('padding_bottom', padding.str()).f64()
+		}
+		spacing: node.prop_or('spacing', '0').f64()
+		children: children
+	}
+}
+
+fn q_box_layout(node &QNode, frame Rect) !Element {
+	mut visible := []&QNode{}
+	mut items := []BoxLayoutChild{}
+	for child in node.children {
+		if child.tag in ['MenuItem', 'Option'] {
+			continue
+		}
+		visible << child
+		items << q_box_layout_child(child)!
+	}
+	config := q_box_layout_config(node, rect(0, 0, frame.width, frame.height), items)!
+	frames := box_layout_frames(config)!
+	mut children := []Element{cap: visible.len}
+	for index, child in visible {
+		children << node_to_element(child, frames[index])!
+	}
+	return view(node.id, frame, q_box(node), children)
 }
 
 fn q_grid_config(node &QNode, frame Rect) !GridLayoutConfig {

@@ -247,6 +247,29 @@ fn test_qml_model_grid_layout_counts_repeater_children() {
 	assert grid.children[2].frame == rect(10, 60, 90, 40)
 }
 
+fn test_qml_model_box_layout_uses_repeater_size_hints() {
+	source := 'BoxLayout {
+		padding: 10
+		spacing: 10
+		Button { text: "Fixed" width: 80 size_hint_x: -1 }
+		Repeater {
+			model: app.users
+			key: item.id
+			Button { text: item.name size_hint_x: item.weight }
+		}
+	}'
+	box := element_from_qml_model(source, QmlTestApp{
+		users: [
+			QmlTestUser{ id: 1, name: 'Wide', weight: 2 },
+			QmlTestUser{ id: 2, name: 'Narrow', weight: 1 },
+		]
+	}, rect(0, 0, 330, 80)) or { panic(err) }
+	assert box.children.len == 3
+	assert box.children[0].frame == rect(10, 10, 80, 60)
+	assert box.children[1].frame == rect(100, 10, 140, 60)
+	assert box.children[2].frame == rect(250, 10, 70, 60)
+}
+
 fn test_qml_model_anchor_layout_uses_resolved_child_sizes() {
 	source := 'AnchorLayout {
 		anchor_x: center

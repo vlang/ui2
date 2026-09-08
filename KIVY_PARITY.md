@@ -166,6 +166,34 @@ row and column sizes, and per-index minimum sizes. QML also accepts
 `col_force_default`, and `row_force_default`. Repeater output participates in
 the same cell calculation.
 
+## BoxLayout
+
+`BoxLayout` places children in a horizontal or vertical line. Fixed-size
+children reserve their declared space first; the remaining main-axis space is
+distributed between hinted children in proportion to their hints.
+
+```qml
+BoxLayout {
+    padding: 10
+    spacing: 8
+    Button { text: "Fixed" width: 88 size_hint_x: -1 }
+    Button { text: "Two shares" size_hint_x: 2 }
+    Button { text: "One share" size_hint_x: 1 }
+}
+```
+
+Use a negative `size_hint_x` or `size_hint_y` to preserve the declared size on
+that axis. Non-negative hints are proportional. The matching
+`size_hint_min_x`, `size_hint_min_y`, `size_hint_max_x`, and
+`size_hint_max_y` properties bound the result. `align_x` and `align_y` accept
+`start`, `center`, or `end` (plus edge aliases) when a child does not fill the
+cross axis.
+
+The V API uses `box_layout(BoxLayoutConfig{...})` with `BoxLayoutChild`
+entries. It also exposes typed orientation, padding, alignment,
+`box_layout_frames`, and `box_layout_minimum_size`. QML Repeater children can
+bind every numeric size hint to model data.
+
 ## AnchorLayout
 
 `AnchorLayout` aligns each child to the left, center, or right and independently
