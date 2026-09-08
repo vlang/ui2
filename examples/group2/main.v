@@ -4,7 +4,7 @@ import ui2
 
 const group2_width = 680
 const group2_height = 370
-const group2_qml_source = $embed_file('group2.qml').to_string()
+const group2_vml_source = $embed_file('group2.vml').to_string()
 
 pub struct Group2Demo {
 pub mut:
@@ -36,8 +36,8 @@ pub fn (mut app Group2Demo) submit() {
 }
 
 fn main() {
-	ui2.run_qml[Group2Demo](
-		source: group2_qml_source
+	ui2.run_vml[Group2Demo](
+		source: group2_vml_source
 		model: Group2Demo{}
 		title: 'Group 2 Demo'
 		width: group2_width

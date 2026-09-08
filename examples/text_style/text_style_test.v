@@ -58,7 +58,7 @@ fn test_text_style_size_and_emphasis_are_reported() {
 	assert app.font_size == 6
 }
 
-fn test_text_style_qml_applies_the_chosen_family_to_the_preview() {
+fn test_text_style_vml_applies_the_chosen_family_to_the_preview() {
 	mut app := text_style_demo()
 	if app.fonts.len > 1 {
 		app.choose_font(2)
@@ -68,7 +68,7 @@ fn test_text_style_qml_applies_the_chosen_family_to_the_preview() {
 	app.size_choice = '24'
 	app.size_changed()
 	frame := ui2.rect(0, 0, text_style_width, text_style_height)
-	root := ui2.element_from_qml_model(text_style_qml_source, app, frame) or { panic(err) }
+	root := ui2.element_from_vml_model(text_style_vml_source, app, frame) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	preview := find_text_style_element(root, 'preview_text') or { panic('missing preview') }
 	assert preview.text == app.sample

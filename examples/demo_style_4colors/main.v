@@ -4,7 +4,7 @@ import ui2
 
 const style_colors_width = 640
 const style_colors_height = 420
-const style_colors_qml_source = $embed_file('demo_style_4colors.qml').to_string()
+const style_colors_vml_source = $embed_file('demo_style_4colors.vml').to_string()
 
 pub struct StyleFourColorsDemo {
 pub mut:
@@ -53,8 +53,8 @@ pub fn (mut app StyleFourColorsDemo) apply_palette() {
 }
 
 fn main() {
-	ui2.run_qml[StyleFourColorsDemo](
-		source: style_colors_qml_source
+	ui2.run_vml[StyleFourColorsDemo](
+		source: style_colors_vml_source
 		model: StyleFourColorsDemo{}
 		title: 'Four Colors'
 		width: style_colors_width

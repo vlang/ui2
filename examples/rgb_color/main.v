@@ -4,7 +4,7 @@ import ui2
 
 const rgb_color_width = 380
 const rgb_color_height = 330
-const rgb_color_qml_source = $embed_file('rgb_color.qml').to_string()
+const rgb_color_vml_source = $embed_file('rgb_color.vml').to_string()
 
 pub struct RgbColorDemo {
 pub mut:
@@ -62,8 +62,8 @@ pub fn (mut app RgbColorDemo) show_color() {
 }
 
 fn main() {
-	ui2.run_qml[RgbColorDemo](
-		source: rgb_color_qml_source
+	ui2.run_vml[RgbColorDemo](
+		source: rgb_color_vml_source
 		model: RgbColorDemo{}
 		title: 'RGB Color'
 		width: rgb_color_width

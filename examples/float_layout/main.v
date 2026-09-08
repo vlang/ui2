@@ -4,13 +4,13 @@ import ui2
 
 const float_width = 400
 const float_height = 260
-const float_qml_source = $embed_file('float_layout.qml').to_string()
+const float_vml_source = $embed_file('float_layout.vml').to_string()
 
 pub struct FloatLayoutDemo {}
 
 fn main() {
-	ui2.run_qml[FloatLayoutDemo](
-		source: float_qml_source
+	ui2.run_vml[FloatLayoutDemo](
+		source: float_vml_source
 		model: FloatLayoutDemo{}
 		title: 'Float Layout'
 		width: float_width

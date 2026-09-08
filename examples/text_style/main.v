@@ -5,7 +5,7 @@ import ui2
 
 const text_style_width = 900
 const text_style_height = 620
-const text_style_qml_source = $embed_file('text_style.qml').to_string()
+const text_style_vml_source = $embed_file('text_style.vml').to_string()
 const text_style_max_fonts = 60
 
 pub struct FontEntry {
@@ -180,8 +180,8 @@ pub fn (mut app TextStyleDemo) emphasis_changed() {
 }
 
 fn main() {
-	ui2.run_qml[TextStyleDemo](
-		source: text_style_qml_source
+	ui2.run_vml[TextStyleDemo](
+		source: text_style_vml_source
 		model: text_style_demo()
 		title: 'Text Style'
 		width: text_style_width

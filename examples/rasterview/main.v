@@ -5,7 +5,7 @@ import ui2
 
 const rasterview_width = 560
 const rasterview_height = 500
-const rasterview_qml_source = $embed_file('rasterview.qml').to_string()
+const rasterview_vml_source = $embed_file('rasterview.vml').to_string()
 
 pub struct RasterviewDemo {
 pub:
@@ -33,8 +33,8 @@ pub fn (mut app RasterviewDemo) toggle_details() {
 }
 
 fn main() {
-	ui2.run_qml[RasterviewDemo](
-		source: rasterview_qml_source
+	ui2.run_vml[RasterviewDemo](
+		source: rasterview_vml_source
 		model: initial_rasterview()
 		title: 'Raster View'
 		width: rasterview_width

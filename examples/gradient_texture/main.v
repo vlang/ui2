@@ -7,7 +7,7 @@ const gradient_texture_width = 700
 const gradient_texture_height = 500
 const gradient_columns = 20
 const gradient_rows = 14
-const gradient_texture_qml_source = $embed_file('gradient_texture.qml').to_string()
+const gradient_texture_vml_source = $embed_file('gradient_texture.vml').to_string()
 
 pub struct GradientCell {
 pub:
@@ -103,8 +103,8 @@ pub fn (mut app GradientTextureDemo) next_hue() {
 }
 
 fn main() {
-	ui2.run_qml[GradientTextureDemo](
-		source: gradient_texture_qml_source
+	ui2.run_vml[GradientTextureDemo](
+		source: gradient_texture_vml_source
 		model: gradient_demo(0)
 		title: 'Gradient Texture'
 		width: gradient_texture_width

@@ -5,7 +5,7 @@ import ui2
 
 const filebrowser_width = 760
 const filebrowser_height = 520
-const filebrowser_qml_source = $embed_file('filebrowser.qml').to_string()
+const filebrowser_vml_source = $embed_file('filebrowser.vml').to_string()
 
 pub struct BrowserEntry {
 pub:
@@ -98,8 +98,8 @@ pub fn (mut app FileBrowserDemo) cancel_selection() {
 }
 
 fn main() {
-	ui2.run_qml[FileBrowserDemo](
-		source: filebrowser_qml_source
+	ui2.run_vml[FileBrowserDemo](
+		source: filebrowser_vml_source
 		model: file_browser_at(os.getwd())
 		title: 'File Browser'
 		width: filebrowser_width

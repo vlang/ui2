@@ -24,9 +24,9 @@ fn test_resizable_menu_actions_update_feedback() {
 	assert app.status == 'Add user selected.'
 }
 
-fn test_resizable_menu_qml_builds_native_context_menu() {
+fn test_resizable_menu_vml_builds_native_context_menu() {
 	app := ResizableMenuDemo{}
-	root := ui2.element_from_qml_model(menu_window_qml_source, app, ui2.rect(0, 0, menu_window_width, menu_window_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(menu_window_vml_source, app, ui2.rect(0, 0, menu_window_width, menu_window_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	actions := find_menu_window_element(root, 'actions') or { panic('missing actions') }
 	assert actions.native_style

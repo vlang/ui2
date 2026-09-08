@@ -4,7 +4,7 @@ import ui2
 
 const child_window_width = 640
 const child_window_height = 440
-const child_window_qml_source = $embed_file('child_window.qml').to_string()
+const child_window_vml_source = $embed_file('child_window.vml').to_string()
 const child_card_root_x = 16.0
 const child_card_root_y = 16.0
 const child_panel_width = 320.0
@@ -129,8 +129,8 @@ fn child_card_size(frame ui2.Rect) (f64, f64) {
 
 fn build_child_window_screen() ui2.Element {
 	state := unsafe { child_window_state }
-	return ui2.element_from_qml_model(child_window_qml_source, *state, ui2.bounds()) or {
-		eprintln('child-window QML failed: ${err}')
+	return ui2.element_from_vml_model(child_window_vml_source, *state, ui2.bounds()) or {
+		eprintln('child-window VML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
 	}
 }

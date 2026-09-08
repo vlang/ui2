@@ -3,7 +3,7 @@ module main
 import ui2
 
 fn test_tree_view_widget_demo_expands_and_selects_nodes() {
-	mut app := ui2.new_qml_app(tree_view_widget_qml_source, TreeViewWidgetDemo{}) or {
+	mut app := ui2.new_vml_app(tree_view_widget_vml_source, TreeViewWidgetDemo{}) or {
 		panic(err)
 	}
 	initial := app.build(ui2.rect(0, 0, tree_view_widget_width, tree_view_widget_height)) or {

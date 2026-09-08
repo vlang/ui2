@@ -4,7 +4,7 @@ import ui2
 
 const modal_view_width = 460
 const modal_view_height = 340
-const modal_view_qml_source = $embed_file('modal_view.qml').to_string()
+const modal_view_vml_source = $embed_file('modal_view.vml').to_string()
 
 pub struct ModalViewDemo {
 pub mut:
@@ -28,8 +28,8 @@ pub fn (mut app ModalViewDemo) confirm() {
 }
 
 fn main() {
-	ui2.run_qml[ModalViewDemo](
-		source: modal_view_qml_source
+	ui2.run_vml[ModalViewDemo](
+		source: modal_view_vml_source
 		model: ModalViewDemo{}
 		title: 'Modal View'
 		width: modal_view_width

@@ -76,8 +76,8 @@ fn test_tray_status_from_id_only_matches_status_rows() {
 	}
 }
 
-fn test_tray_qml_offers_the_same_rows_where_there_is_no_status_area() {
-	root := ui2.element_from_qml_model(tray_icon_qml_source, TrayDemo{
+fn test_tray_vml_offers_the_same_rows_where_there_is_no_status_area() {
+	root := ui2.element_from_vml_model(tray_icon_vml_source, TrayDemo{
 		supported: false
 		docked: false
 	}, ui2.rect(0, 0, tray_icon_width, tray_icon_height)) or { panic(err) }
@@ -99,8 +99,8 @@ fn test_tray_qml_offers_the_same_rows_where_there_is_no_status_area() {
 	assert !(find_tray_element(root, 'tray_hide') or { panic('missing hide button') }).enabled
 }
 
-fn test_tray_qml_hides_the_fallback_rows_where_the_status_area_is_real() {
-	root := ui2.element_from_qml_model(tray_icon_qml_source, TrayDemo{
+fn test_tray_vml_hides_the_fallback_rows_where_the_status_area_is_real() {
+	root := ui2.element_from_vml_model(tray_icon_vml_source, TrayDemo{
 		supported: true
 	}, ui2.rect(0, 0, tray_icon_width, tray_icon_height)) or { panic(err) }
 	assert (find_tray_element(root, 'fallback_status') or { panic('missing fallback') }).hidden

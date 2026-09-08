@@ -28,8 +28,8 @@ fn test_demo_event_records_pointer_keys_and_clear() {
 	assert app.key_events == 0
 }
 
-fn test_demo_event_qml_builds_draggable_surface_and_native_buttons() {
-	root := ui2.element_from_qml_model(demo_event_qml_source, DemoEvent{}, ui2.rect(0, 0, demo_event_width, demo_event_height)) or { panic(err) }
+fn test_demo_event_vml_builds_draggable_surface_and_native_buttons() {
+	root := ui2.element_from_vml_model(demo_event_vml_source, DemoEvent{}, ui2.rect(0, 0, demo_event_width, demo_event_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	surface := find_demo_event_element(root, 'event_surface') or { panic('missing event surface') }
 	assert surface.clickable

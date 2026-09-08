@@ -4,7 +4,7 @@ import ui2
 
 const accent_color_width = 800
 const accent_color_height = 600
-const accent_color_qml_source = $embed_file('accent_color.qml').to_string()
+const accent_color_vml_source = $embed_file('accent_color.vml').to_string()
 // The three tracks share one geometry, so a pointer position converts with the
 // card inset plus the label gutter in front of them.
 const track_root_x = 92.0
@@ -195,8 +195,8 @@ fn (mut app AccentColorDemo) handle_event(event string, track_width f64) {
 
 fn build_accent_color_screen() ui2.Element {
 	state := unsafe { accent_color_state }
-	return ui2.element_from_qml_model(accent_color_qml_source, *state, ui2.bounds()) or {
-		eprintln('accent-color QML failed: ${err}')
+	return ui2.element_from_vml_model(accent_color_vml_source, *state, ui2.bounds()) or {
+		eprintln('accent-color VML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
 	}
 }

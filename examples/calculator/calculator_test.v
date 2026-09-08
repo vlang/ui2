@@ -55,7 +55,7 @@ fn test_clear_and_division_by_zero_recovery() {
 
 fn test_calculator_screen_contains_display_and_every_key() {
 	calculator := initial_calculator()
-	root := ui2.element_from_qml_model(calculator_qml_source, calculator, ui2.rect(0, 0, window_width, window_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(calculator_vml_source, calculator, ui2.rect(0, 0, window_width, window_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	assert (find_calculator_element(root, 'display') or { panic('missing display') }).text == '0'
 	panel := find_calculator_element(root, 'calculator') or { panic('missing calculator panel') }

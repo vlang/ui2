@@ -54,7 +54,7 @@ fn test_editor_rejects_unsafe_or_duplicate_names() {
 	assert app.status == 'alpha.txt already exists.'
 }
 
-fn test_editor_qml_builds_keyed_file_list_and_responsive_editor() {
+fn test_editor_vml_builds_keyed_file_list_and_responsive_editor() {
 	app := EditorDemo{
 		root_path: '/tmp'
 		files: [EditorFile{ id: 1, name: 'demo.v', path: '/tmp/demo.v' }]
@@ -62,7 +62,7 @@ fn test_editor_qml_builds_keyed_file_list_and_responsive_editor() {
 		current_name: 'demo.v'
 		text: 'fn main() {}'
 	}
-	root := ui2.element_from_qml_model(editor_qml_source, app, ui2.rect(0, 0, editor_width, editor_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(editor_vml_source, app, ui2.rect(0, 0, editor_width, editor_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	list := find_editor_element(root, 'editor_files') or { panic('missing file list') }
 	area := find_editor_element(root, 'editor_text') or { panic('missing editor') }

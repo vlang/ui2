@@ -5,7 +5,7 @@ import ui2
 
 const colorbox_width = 760
 const colorbox_height = 580
-const colorbox_qml_source = $embed_file('colorbox.qml').to_string()
+const colorbox_vml_source = $embed_file('colorbox.vml').to_string()
 const hue_bands = 32
 const sv_side = 16
 const swatch_columns = 2
@@ -344,8 +344,8 @@ fn (mut app ColorBoxDemo) handle_event(event string) {
 
 fn build_colorbox_screen() ui2.Element {
 	state := unsafe { colorbox_state }
-	return ui2.element_from_qml_model(colorbox_qml_source, *state, ui2.bounds()) or {
-		eprintln('colorbox QML failed: ${err}')
+	return ui2.element_from_vml_model(colorbox_vml_source, *state, ui2.bounds()) or {
+		eprintln('colorbox VML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
 	}
 }

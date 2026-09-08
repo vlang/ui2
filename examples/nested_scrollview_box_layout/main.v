@@ -4,7 +4,7 @@ import ui2
 
 const nested_box_width = 660
 const nested_box_height = 430
-const nested_box_qml_source = $embed_file('nested_scrollview_box_layout.qml').to_string()
+const nested_box_vml_source = $embed_file('nested_scrollview_box_layout.vml').to_string()
 
 pub struct ScrollGridBox {
 pub:
@@ -35,8 +35,8 @@ fn initial_nested_scroll_box_layout() NestedScrollBoxLayoutDemo {
 }
 
 fn main() {
-	ui2.run_qml[NestedScrollBoxLayoutDemo](
-		source: nested_box_qml_source
+	ui2.run_vml[NestedScrollBoxLayoutDemo](
+		source: nested_box_vml_source
 		model: initial_nested_scroll_box_layout()
 		title: 'Nested Scrollviews in Box Layout'
 		width: nested_box_width

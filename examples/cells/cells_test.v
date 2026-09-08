@@ -41,9 +41,9 @@ fn test_cells_edit_recalculates_dependent_formula() {
 	assert app.status == 'B2 updated.'
 }
 
-fn test_cells_qml_builds_keyed_native_spreadsheet_cells() {
+fn test_cells_vml_builds_keyed_native_spreadsheet_cells() {
 	app := initial_cells()
-	root := ui2.element_from_qml_model(cells_qml_source, app, ui2.rect(0, 0, cells_width, cells_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(cells_vml_source, app, ui2.rect(0, 0, cells_width, cells_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	sheet := find_cells_element(root, 'sheet') or { panic('missing sheet') }
 	assert sheet.children.len == 42

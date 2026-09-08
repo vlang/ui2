@@ -4,7 +4,7 @@ import ui2
 
 const textbox_width = 640
 const textbox_height = 430
-const textbox_qml_source = $embed_file('textbox.qml').to_string()
+const textbox_vml_source = $embed_file('textbox.vml').to_string()
 
 pub struct TextboxDemo {
 pub mut:
@@ -24,8 +24,8 @@ pub fn (mut app TextboxDemo) clear() {
 }
 
 fn main() {
-	ui2.run_qml[TextboxDemo](
-		source: textbox_qml_source
+	ui2.run_vml[TextboxDemo](
+		source: textbox_vml_source
 		model: TextboxDemo{}
 		title: 'Textbox Demo'
 		width: textbox_width

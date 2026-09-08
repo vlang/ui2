@@ -14,7 +14,7 @@ import ui2
 
 const tray_icon_width = 640
 const tray_icon_height = 460
-const tray_icon_qml_source = $embed_file('tray_icon.qml').to_string()
+const tray_icon_vml_source = $embed_file('tray_icon.vml').to_string()
 
 const tray_statuses = ['Available', 'Busy', 'Away']
 
@@ -135,8 +135,8 @@ fn on_off(value bool) string {
 
 fn build_tray_icon_screen() ui2.Element {
 	state := unsafe { tray_demo_state }
-	return ui2.element_from_qml_model(tray_icon_qml_source, *state, ui2.bounds()) or {
-		eprintln('tray QML failed: ${err}')
+	return ui2.element_from_vml_model(tray_icon_vml_source, *state, ui2.bounds()) or {
+		eprintln('tray VML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
 	}
 }

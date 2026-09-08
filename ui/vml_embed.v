@@ -1,23 +1,23 @@
-// Hosting a QML application inside something that is not a platform window.
+// Hosting a VML application inside something that is not a platform window.
 //
-// `run_qml` is shaped for the usual case: one document, one window, and a call
+// `run_vml` is shaped for the usual case: one document, one window, and a call
 // that blocks until that window closes. A window manager can use none of that.
 // It has several applications open at once, it owns the event loop itself, and
 // it — not the platform — decides how large each application's content area
-// is. `QmlApp` is the same machinery with those three assumptions removed, so
+// is. `VmlApp` is the same machinery with those three assumptions removed, so
 // an embedder can hold as many as it likes and drive them from its own loop.
 module ui2
 
-// QmlApp holds a parsed QML document together with its model and turns the two
+// VmlApp holds a parsed VML document together with its model and turns the two
 // into an element tree on demand. It draws nothing and waits for nothing: the
 // embedder asks for a tree, renders it however it likes, and reports back the
 // action id of whatever the user hit.
 @[heap]
-pub struct QmlApp[T] {
-	template &QNode
+pub struct VmlApp[T] {
+	template &VNode
 mut:
 	model  T
-	events map[string]QmlEvent
+	events map[string]VmlEvent
 pub mut:
 	// control_text answers with the live text of a named control, which a
 	// two-way `bind.text` needs in order to write an edit back to the model.
@@ -31,19 +31,19 @@ pub mut:
 	control_value fn (id string) f64 = unsafe { nil }
 }
 
-// new_qml_app parses and type-checks the document against the model up front,
+// new_vml_app parses and type-checks the document against the model up front,
 // so a mistake in either is reported when the application is created rather
 // than on the first frame the embedder tries to draw.
-pub fn new_qml_app[T](source string, model T) !&QmlApp[T] {
-	template := parse_qml(source)!
-	q_validate_template[T](template, model)!
+pub fn new_vml_app[T](source string, model T) !&VmlApp[T] {
+	template := parse_vml(source)!
+	v_validate_template[T](template, model)!
 	// Evaluate once against a representative nominal frame. Responsive layouts
 	// commonly subtract margins from the root size, so a 1x1 probe can turn
 	// otherwise valid child dimensions negative before anything is drawn.
 	probe := rect(0, 0, 1024, 768)
-	resolved, _ := q_evaluate_template(template, model, probe)!
-	validate_element_tree(element_from_qnode(resolved, probe)!)!
-	return &QmlApp[T]{
+	resolved, _ := v_evaluate_template(template, model, probe)!
+	validate_element_tree(element_from_vnode(resolved, probe)!)!
+	return &VmlApp[T]{
 		template: template
 		model: model
 	}
@@ -58,11 +58,11 @@ pub fn new_qml_app[T](source string, model T) !&QmlApp[T] {
 // empty: an embedder places the children itself and takes the background from
 // `box.bg`, since a screen inside someone else's window is a content area, not
 // a display.
-pub fn (mut app QmlApp[T]) build(size Rect) !Element {
+pub fn (mut app VmlApp[T]) build(size Rect) !Element {
 	frame := rect(0, 0, size.width, size.height)
-	resolved, events := q_evaluate_template(app.template, app.model, frame)!
+	resolved, events := v_evaluate_template(app.template, app.model, frame)!
 	app.events = events.clone()
-	return element_from_qnode(resolved, frame)!
+	return element_from_vnode(resolved, frame)!
 }
 
 // handle applies whatever action or binding an element's id names. The ids come
@@ -70,56 +70,56 @@ pub fn (mut app QmlApp[T]) build(size Rect) !Element {
 // own hit testing produced without having to know what any of it means. An id
 // that names nothing is ignored, which is what lets an embedder route every
 // click it did not recognise here.
-pub fn (mut app QmlApp[T]) handle(event_id string) ! {
+pub fn (mut app VmlApp[T]) handle(event_id string) ! {
 	event := app.events[event_id] or { return }
 	if binding := event.binding {
 		field_name := binding.target.all_after('app.')
 		value := match binding.property {
 			'checked', 'active' {
-				current := q_lookup({
-					'app': q_value_from(app.model)
+				current := v_lookup({
+					'app': v_value_from(app.model)
 				}, binding.target, 0)!
-				q_bool(!current.truthy())
+				v_bool(!current.truthy())
 			}
 			'pressed' {
-				current := q_lookup({
-					'app': q_value_from(app.model)
+				current := v_lookup({
+					'app': v_value_from(app.model)
 				}, binding.target, 0)!
 				if binding.group.len > 0 && current.truthy() && !binding.allow_no_selection {
-					q_bool(true)
+					v_bool(true)
 				} else {
-					q_bool(!current.truthy())
+					v_bool(!current.truthy())
 				}
 			}
 			'value' {
 				live := app.value_of(binding.control)
-				q_number(live, slider_number(live))
+				v_number(live, slider_number(live))
 			}
 			else {
-				q_string(app.text_of(binding.control))
+				v_string(app.text_of(binding.control))
 			}
 		}
-		qml_set_field[T](mut app.model, field_name, value)!
+		vml_set_field[T](mut app.model, field_name, value)!
 		if binding.property == 'pressed' && value.truthy() {
 			for peer in event.group_bindings {
 				if peer.control == binding.control || peer.target == binding.target {
 					continue
 				}
 				target := peer.target.all_after('app.')
-				type_name := qml_writable_field_type[T](target)!
+				type_name := vml_writable_field_type[T](target)!
 				if type_name != 'bool' {
 					return error('bind.pressed requires a bool field, got `${target}` (${type_name})')
 				}
-				qml_set_field[T](mut app.model, target, q_bool(false))!
+				vml_set_field[T](mut app.model, target, v_bool(false))!
 			}
 		}
 	}
 	if invocation := event.invocation {
-		qml_dispatch[T](mut app.model, invocation)!
+		vml_dispatch[T](mut app.model, invocation)!
 	}
 }
 
-fn (app &QmlApp[T]) text_of(id string) string {
+fn (app &VmlApp[T]) text_of(id string) string {
 	handler := app.control_text
 	if handler == unsafe { nil } {
 		return ''
@@ -127,7 +127,7 @@ fn (app &QmlApp[T]) text_of(id string) string {
 	return handler(id)
 }
 
-fn (app &QmlApp[T]) value_of(id string) f64 {
+fn (app &VmlApp[T]) value_of(id string) f64 {
 	handler := app.control_value
 	if handler == unsafe { nil } {
 		return 0
@@ -137,6 +137,6 @@ fn (app &QmlApp[T]) value_of(id string) f64 {
 
 // state is the application's model as it now stands, for an embedder that
 // wants to show something about it outside the window — in a title bar, say.
-pub fn (app &QmlApp[T]) state() T {
+pub fn (app &VmlApp[T]) state() T {
 	return app.model
 }

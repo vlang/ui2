@@ -24,8 +24,8 @@ fn test_rasterview_uses_bundled_logo_and_toggles_details() {
 	assert app.status == 'Image details hidden.'
 }
 
-fn test_rasterview_qml_centers_image_in_responsive_frame() {
-	root := ui2.element_from_qml_model(rasterview_qml_source, initial_rasterview(), ui2.rect(0, 0, rasterview_width, rasterview_height)) or { panic(err) }
+fn test_rasterview_vml_centers_image_in_responsive_frame() {
+	root := ui2.element_from_vml_model(rasterview_vml_source, initial_rasterview(), ui2.rect(0, 0, rasterview_width, rasterview_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	frame := find_rasterview_element(root, 'image_frame') or { panic('missing image frame') }
 	logo := find_rasterview_element(root, 'logo') or { panic('missing logo') }

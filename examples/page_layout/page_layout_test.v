@@ -15,7 +15,7 @@ fn find_page_element(element ui2.Element, id string) ?ui2.Element {
 }
 
 fn test_page_layout_demo_navigates_through_model_actions() {
-	mut app := ui2.new_qml_app(page_qml_source, PageLayoutDemo{}) or { panic(err) }
+	mut app := ui2.new_vml_app(page_vml_source, PageLayoutDemo{}) or { panic(err) }
 	initial := app.build(ui2.rect(0, 0, page_width, page_height)) or {
 		panic('initial page build failed: ${err}')
 	}

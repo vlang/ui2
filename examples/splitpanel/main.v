@@ -4,7 +4,7 @@ import ui2
 
 const splitpanel_width = 800
 const splitpanel_height = 600
-const splitpanel_qml_source = $embed_file('splitpanel.qml').to_string()
+const splitpanel_vml_source = $embed_file('splitpanel.vml').to_string()
 
 pub struct SplitRow {
 pub:
@@ -73,8 +73,8 @@ pub fn (mut app SplitPanelDemo) reset_splits() {
 }
 
 fn main() {
-	ui2.run_qml[SplitPanelDemo](
-		source: splitpanel_qml_source
+	ui2.run_vml[SplitPanelDemo](
+		source: splitpanel_vml_source
 		model: initial_splitpanel()
 		title: 'Split Panel'
 		width: splitpanel_width

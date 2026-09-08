@@ -4,7 +4,7 @@ import ui2
 
 const canvas_layout_width = 900
 const canvas_layout_height = 660
-const canvas_layout_qml_source = $embed_file('canvas_layout.qml').to_string()
+const canvas_layout_vml_source = $embed_file('canvas_layout.vml').to_string()
 const canvas_sheet_root_x = 34.0
 const canvas_sheet_root_y = 100.0
 const canvas_sheet_height = 760.0
@@ -175,8 +175,8 @@ fn canvas_sheet_width(frame ui2.Rect) f64 {
 
 fn build_canvas_layout_screen() ui2.Element {
 	state := unsafe { canvas_layout_state }
-	return ui2.element_from_qml_model(canvas_layout_qml_source, *state, ui2.bounds()) or {
-		eprintln('canvas-layout QML failed: ${err}')
+	return ui2.element_from_vml_model(canvas_layout_vml_source, *state, ui2.bounds()) or {
+		eprintln('canvas-layout VML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
 	}
 }

@@ -335,7 +335,7 @@ Screen {
             align: center
         }
         Label {
-            text: "Built with V, ui2 QML, and native controls."
+            text: "Built with V, ui2 VML, and native controls."
             x: 20
             y: 52
             width: 280

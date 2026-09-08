@@ -4,7 +4,7 @@ import ui2
 
 const crud_width = 620
 const crud_height = 390
-const crud_qml_source = $embed_file('crud.qml').to_string()
+const crud_vml_source = $embed_file('crud.vml').to_string()
 
 pub struct CrudPerson {
 pub:
@@ -133,8 +133,8 @@ pub fn (mut app CrudDemo) delete_person() {
 }
 
 fn main() {
-	ui2.run_qml[CrudDemo](
-		source: crud_qml_source
+	ui2.run_vml[CrudDemo](
+		source: crud_vml_source
 		model: initial_crud()
 		title: 'CRUD'
 		width: crud_width

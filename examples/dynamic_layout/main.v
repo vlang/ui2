@@ -4,7 +4,7 @@ import ui2
 
 const dynamic_layout_width = 640
 const dynamic_layout_height = 420
-const dynamic_layout_qml_source = $embed_file('dynamic_layout.qml').to_string()
+const dynamic_layout_vml_source = $embed_file('dynamic_layout.vml').to_string()
 
 pub struct DynamicItem {
 pub:
@@ -86,8 +86,8 @@ pub fn (mut app DynamicLayoutDemo) rename(id int) {
 }
 
 fn main() {
-	ui2.run_qml[DynamicLayoutDemo](
-		source: dynamic_layout_qml_source
+	ui2.run_vml[DynamicLayoutDemo](
+		source: dynamic_layout_vml_source
 		model: initial_dynamic_layout()
 		title: 'Dynamic Layout'
 		width: dynamic_layout_width

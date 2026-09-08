@@ -42,11 +42,11 @@ fn test_nested_clipping_toggles_single_boxes_and_whole_quadrants() {
 	assert app.boxes.all(it.clipping)
 }
 
-fn test_nested_clipping_qml_swaps_a_scroll_viewport_for_the_spilling_bars() {
+fn test_nested_clipping_vml_swaps_a_scroll_viewport_for_the_spilling_bars() {
 	mut app := nested_clipping_demo()
 	app.toggle_box(1)
 	frame := ui2.rect(0, 0, nested_clipping_width, nested_clipping_height)
-	root := ui2.element_from_qml_model(nested_clipping_qml_source, app, frame) or { panic(err) }
+	root := ui2.element_from_vml_model(nested_clipping_vml_source, app, frame) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	stage := find_clipping_element(root, 'stage') or { panic('missing stage') }
 	assert stage.children.len == 16

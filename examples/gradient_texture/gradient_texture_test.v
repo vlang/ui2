@@ -27,9 +27,9 @@ fn test_gradient_texture_generates_expected_hsv_corners_and_cycles() {
 	assert app.hue_name == 'Red'
 }
 
-fn test_gradient_texture_qml_builds_keyed_tiles_and_native_controls() {
+fn test_gradient_texture_vml_builds_keyed_tiles_and_native_controls() {
 	app := gradient_demo(0)
-	root := ui2.element_from_qml_model(gradient_texture_qml_source, app, ui2.rect(0, 0, gradient_texture_width, gradient_texture_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(gradient_texture_vml_source, app, ui2.rect(0, 0, gradient_texture_width, gradient_texture_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	gradient := find_gradient_element(root, 'gradient') or { panic('missing gradient') }
 	assert gradient.children.len == gradient_columns * gradient_rows

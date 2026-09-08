@@ -4,7 +4,7 @@ import ui2
 
 const scrollview_width = 720
 const scrollview_height = 430
-const scrollview_qml_source = $embed_file('scrollview.qml').to_string()
+const scrollview_vml_source = $embed_file('scrollview.vml').to_string()
 
 pub struct ScrollviewDemo {
 pub:
@@ -24,8 +24,8 @@ fn initial_scrollview() ScrollviewDemo {
 }
 
 fn main() {
-	ui2.run_qml[ScrollviewDemo](
-		source: scrollview_qml_source
+	ui2.run_vml[ScrollviewDemo](
+		source: scrollview_vml_source
 		model: initial_scrollview()
 		title: 'Scrollview'
 		width: scrollview_width

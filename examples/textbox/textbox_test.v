@@ -25,8 +25,8 @@ fn test_textbox_demo_updates_character_count_and_clears() {
 	assert app.status == '0 characters'
 }
 
-fn test_textbox_qml_contains_editable_and_readonly_areas() {
-	root := ui2.element_from_qml_model(textbox_qml_source, TextboxDemo{}, ui2.rect(0, 0, textbox_width, textbox_height)) or { panic(err) }
+fn test_textbox_vml_contains_editable_and_readonly_areas() {
+	root := ui2.element_from_vml_model(textbox_vml_source, TextboxDemo{}, ui2.rect(0, 0, textbox_width, textbox_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	notes := find_textbox_element(root, 'notes') or { panic('missing editable notes') }

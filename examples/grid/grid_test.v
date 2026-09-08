@@ -23,8 +23,8 @@ fn test_grid_model_flattens_headers_and_rows() {
 	assert app.cells[8].text == 'Beautiful'
 }
 
-fn test_grid_qml_renders_every_cell_in_a_responsive_table() {
-	root := ui2.element_from_qml_model(grid_qml_source, initial_grid(), ui2.rect(0, 0, grid_width, grid_height)) or { panic(err) }
+fn test_grid_vml_renders_every_cell_in_a_responsive_table() {
+	root := ui2.element_from_vml_model(grid_vml_source, initial_grid(), ui2.rect(0, 0, grid_width, grid_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	header := find_grid_text(root, 'One') or { panic('missing first header') }

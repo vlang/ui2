@@ -3,7 +3,7 @@ module main
 import ui2
 
 fn test_modal_view_demo_opens_confirms_and_dismisses() {
-	mut app := ui2.new_qml_app(modal_view_qml_source, ModalViewDemo{}) or { panic(err) }
+	mut app := ui2.new_vml_app(modal_view_vml_source, ModalViewDemo{}) or { panic(err) }
 	initial := app.build(ui2.rect(0, 0, modal_view_width, modal_view_height)) or { panic(err) }
 	assert initial.children[3].hidden
 	app.handle(initial.children[2].action_id) or { panic(err) }

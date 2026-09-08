@@ -5,7 +5,7 @@ import ui2
 
 const flight_booker_width = 400
 const flight_booker_height = 390
-const flight_booker_qml_source = $embed_file('flight_booker.qml').to_string()
+const flight_booker_vml_source = $embed_file('flight_booker.vml').to_string()
 
 pub struct FlightBooker {
 pub mut:
@@ -92,8 +92,8 @@ pub fn (mut app FlightBooker) book() {
 }
 
 fn main() {
-	ui2.run_qml[FlightBooker](
-		source: flight_booker_qml_source
+	ui2.run_vml[FlightBooker](
+		source: flight_booker_vml_source
 		model: initial_flight_booker()
 		title: 'Flight Booker'
 		width: flight_booker_width

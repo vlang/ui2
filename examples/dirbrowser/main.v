@@ -5,7 +5,7 @@ import ui2
 
 const dirbrowser_width = 720
 const dirbrowser_height = 480
-const dirbrowser_qml_source = $embed_file('dirbrowser.qml').to_string()
+const dirbrowser_vml_source = $embed_file('dirbrowser.vml').to_string()
 
 pub struct DirectoryEntry {
 pub:
@@ -70,8 +70,8 @@ pub fn (mut app DirectoryBrowserDemo) choose_current() {
 }
 
 fn main() {
-	ui2.run_qml[DirectoryBrowserDemo](
-		source: dirbrowser_qml_source
+	ui2.run_vml[DirectoryBrowserDemo](
+		source: dirbrowser_vml_source
 		model: directory_browser_at(os.getwd())
 		title: 'Directory Browser'
 		width: dirbrowser_width

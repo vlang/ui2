@@ -4,7 +4,7 @@ import ui2
 
 const menu_window_width = 680
 const menu_window_height = 360
-const menu_window_qml_source = $embed_file('resizable_menu_window.qml').to_string()
+const menu_window_vml_source = $embed_file('resizable_menu_window.vml').to_string()
 
 pub struct ResizableMenuDemo {
 pub mut:
@@ -37,8 +37,8 @@ pub fn (mut app ResizableMenuDemo) add_user() {
 }
 
 fn main() {
-	ui2.run_qml[ResizableMenuDemo](
-		source: menu_window_qml_source
+	ui2.run_vml[ResizableMenuDemo](
+		source: menu_window_vml_source
 		model: ResizableMenuDemo{}
 		title: 'Resizable Menu Window'
 		width: menu_window_width

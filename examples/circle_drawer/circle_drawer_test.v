@@ -31,10 +31,10 @@ fn test_circle_drawer_add_select_resize_undo_and_redo() {
 	assert app.circles.len == 2
 }
 
-fn test_circle_drawer_qml_builds_clickable_canvas_and_keyed_circles() {
+fn test_circle_drawer_vml_builds_clickable_canvas_and_keyed_circles() {
 	mut app := CircleDrawerDemo{}
 	app.add_or_select(120, 100)
-	root := ui2.element_from_qml_model(circle_drawer_qml_source, app, ui2.rect(0, 0, circle_drawer_width, circle_drawer_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(circle_drawer_vml_source, app, ui2.rect(0, 0, circle_drawer_width, circle_drawer_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	canvas := find_circle_drawer_element(root, 'circle_canvas') or { panic('missing canvas') }
 	assert canvas.clickable

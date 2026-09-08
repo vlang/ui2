@@ -4,7 +4,7 @@ import ui2
 
 const screen_manager_width = 440
 const screen_manager_height = 320
-const screen_manager_qml_source = $embed_file('screen_manager.qml').to_string()
+const screen_manager_vml_source = $embed_file('screen_manager.vml').to_string()
 
 pub struct ScreenManagerDemo {
 pub mut:
@@ -20,8 +20,8 @@ pub fn (mut app ScreenManagerDemo) show_details() {
 }
 
 fn main() {
-	ui2.run_qml[ScreenManagerDemo](
-		source: screen_manager_qml_source
+	ui2.run_vml[ScreenManagerDemo](
+		source: screen_manager_vml_source
 		model: ScreenManagerDemo{}
 		title: 'Screen Manager'
 		width: screen_manager_width

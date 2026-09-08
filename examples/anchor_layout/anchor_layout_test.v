@@ -15,7 +15,7 @@ fn find_anchor_element(element ui2.Element, id string) ?ui2.Element {
 }
 
 fn test_anchor_layout_demo_places_each_control() {
-	root := ui2.element_from_qml_model(anchor_qml_source, AnchorLayoutDemo{}, ui2.rect(0, 0, anchor_width, anchor_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(anchor_vml_source, AnchorLayoutDemo{}, ui2.rect(0, 0, anchor_width, anchor_height)) or { panic(err) }
 	top_left := find_anchor_element(root, 'top_left') or { panic('missing top-left layout') }
 	centered := find_anchor_element(root, 'centered') or { panic('missing centered layout') }
 	bottom_right := find_anchor_element(root, 'bottom_right') or {

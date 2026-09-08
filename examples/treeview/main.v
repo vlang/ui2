@@ -4,7 +4,7 @@ import ui2
 
 const treeview_width = 680
 const treeview_height = 480
-const treeview_qml_source = $embed_file('treeview.qml').to_string()
+const treeview_vml_source = $embed_file('treeview.vml').to_string()
 
 pub struct TreeNode {
 pub:
@@ -110,8 +110,8 @@ pub fn (mut app TreeviewDemo) select_node(id int) {
 }
 
 fn main() {
-	ui2.run_qml[TreeviewDemo](
-		source: treeview_qml_source
+	ui2.run_vml[TreeviewDemo](
+		source: treeview_vml_source
 		model: initial_treeview()
 		title: 'Tree View'
 		width: treeview_width

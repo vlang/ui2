@@ -39,12 +39,12 @@ fn test_temperature_rejects_invalid_input() {
 	assert app.fahrenheit == '9.5'
 }
 
-fn test_temperature_qml_builds_bound_fields() {
+fn test_temperature_vml_builds_bound_fields() {
 	app := TemperatureConverter{
 		celsius: '20'
 		fahrenheit: '68'
 	}
-	root := ui2.element_from_qml_model(temperature_qml_source, app, ui2.rect(0, 0, temperature_width, temperature_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(temperature_vml_source, app, ui2.rect(0, 0, temperature_width, temperature_height)) or { panic(err) }
 	celsius := find_temperature_element(root, 'celsius') or { panic('missing Celsius field') }
 	fahrenheit := find_temperature_element(root, 'fahrenheit') or {
 		panic('missing Fahrenheit field')

@@ -14,8 +14,8 @@ fn find_rectangle_element(element ui2.Element, id string) ?ui2.Element {
 	return none
 }
 
-fn test_rectangles_qml_preserves_the_original_palette() {
-	root := ui2.element_from_qml_model(rectangles_qml_source, RectanglesDemo{}, ui2.rect(0, 0, rectangles_width, rectangles_height)) or { panic(err) }
+fn test_rectangles_vml_preserves_the_original_palette() {
+	root := ui2.element_from_vml_model(rectangles_vml_source, RectanglesDemo{}, ui2.rect(0, 0, rectangles_width, rectangles_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	red := find_rectangle_element(root, 'red') or { panic('missing red rectangle') }

@@ -4,7 +4,7 @@ import ui2
 
 const tree_view_widget_width = 460
 const tree_view_widget_height = 360
-const tree_view_widget_qml_source = $embed_file('tree_view_widget.qml').to_string()
+const tree_view_widget_vml_source = $embed_file('tree_view_widget.vml').to_string()
 
 pub struct TreeViewWidgetDemo {
 pub mut:
@@ -29,8 +29,8 @@ pub fn (mut app TreeViewWidgetDemo) select_license() {
 }
 
 fn main() {
-	ui2.run_qml[TreeViewWidgetDemo](
-		source: tree_view_widget_qml_source
+	ui2.run_vml[TreeViewWidgetDemo](
+		source: tree_view_widget_vml_source
 		model: TreeViewWidgetDemo{}
 		title: 'Tree View'
 		width: tree_view_widget_width

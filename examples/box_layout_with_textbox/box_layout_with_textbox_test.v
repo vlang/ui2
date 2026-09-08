@@ -23,8 +23,8 @@ fn test_box_layout_textbox_updates_status() {
 	assert app.status == 'coucou toto!'
 }
 
-fn test_box_layout_textbox_qml_keeps_percentage_geometry() {
-	root := ui2.element_from_qml_model(box_textbox_qml_source, initial_box_layout_textbox(), ui2.rect(0, 0, box_textbox_width, box_textbox_height)) or { panic(err) }
+fn test_box_layout_textbox_vml_keeps_percentage_geometry() {
+	root := ui2.element_from_vml_model(box_textbox_vml_source, initial_box_layout_textbox(), ui2.rect(0, 0, box_textbox_width, box_textbox_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	canvas := find_box_textbox_element(root, 'canvas') or { panic('missing canvas') }
 	notes := find_box_textbox_element(root, 'notes') or { panic('missing notes') }

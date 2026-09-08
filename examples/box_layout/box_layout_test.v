@@ -14,8 +14,8 @@ fn find_box_layout_element(element ui2.Element, id string) ?ui2.Element {
 	return none
 }
 
-fn test_box_layout_qml_keeps_fixed_and_relative_geometry() {
-	root := ui2.element_from_qml_model(box_layout_qml_source, BoxLayoutDemo{}, ui2.rect(0, 0, box_layout_width, box_layout_height)) or { panic(err) }
+fn test_box_layout_vml_keeps_fixed_and_relative_geometry() {
+	root := ui2.element_from_vml_model(box_layout_vml_source, BoxLayoutDemo{}, ui2.rect(0, 0, box_layout_width, box_layout_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	canvas := find_box_layout_element(root, 'canvas') or { panic('missing canvas') }
@@ -34,8 +34,8 @@ fn test_box_layout_qml_keeps_fixed_and_relative_geometry() {
 	assert black.frame.width == 40
 }
 
-fn test_box_layout_qml_keeps_the_blue_caption_clear_of_the_corner_anchor() {
-	root := ui2.element_from_qml_model(box_layout_qml_source, BoxLayoutDemo{}, ui2.rect(0, 0, box_layout_width, box_layout_height)) or { panic(err) }
+fn test_box_layout_vml_keeps_the_blue_caption_clear_of_the_corner_anchor() {
+	root := ui2.element_from_vml_model(box_layout_vml_source, BoxLayoutDemo{}, ui2.rect(0, 0, box_layout_width, box_layout_height)) or { panic(err) }
 
 	blue := find_box_layout_element(root, 'blue') or { panic('missing anchored rectangle') }
 	caption := find_box_layout_element(root, 'blue_caption') or { panic('missing caption') }

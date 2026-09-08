@@ -4,7 +4,7 @@ import ui2
 
 const box_textbox_width = 560
 const box_textbox_height = 400
-const box_textbox_qml_source = $embed_file('box_layout_with_textbox.qml').to_string()
+const box_textbox_vml_source = $embed_file('box_layout_with_textbox.vml').to_string()
 
 pub struct BoxLayoutTextboxDemo {
 pub mut:
@@ -29,8 +29,8 @@ pub fn (mut app BoxLayoutTextboxDemo) show_message() {
 }
 
 fn main() {
-	ui2.run_qml[BoxLayoutTextboxDemo](
-		source: box_textbox_qml_source
+	ui2.run_vml[BoxLayoutTextboxDemo](
+		source: box_textbox_vml_source
 		model: initial_box_layout_textbox()
 		title: 'Box Layout with Textbox'
 		width: box_textbox_width

@@ -5,7 +5,7 @@ import ui2
 
 const users_box_width = 880
 const users_box_height = 600
-const users_box_qml_source = $embed_file('users_box_layout.qml').to_string()
+const users_box_vml_source = $embed_file('users_box_layout.vml').to_string()
 const users_box_capacity = 10
 const first_name_max = 20
 const last_name_max = 50
@@ -181,8 +181,8 @@ pub fn (mut app UsersBoxLayoutDemo) about() {
 }
 
 fn main() {
-	ui2.run_qml[UsersBoxLayoutDemo](
-		source: users_box_qml_source
+	ui2.run_vml[UsersBoxLayoutDemo](
+		source: users_box_vml_source
 		model: users_box_demo()
 		title: 'Users (box layout)'
 		width: users_box_width

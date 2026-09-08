@@ -4,7 +4,7 @@ import ui2
 
 const nested_scrollview_width = 620
 const nested_scrollview_height = 400
-const nested_scrollview_qml_source = $embed_file('nested_scrollview.qml').to_string()
+const nested_scrollview_vml_source = $embed_file('nested_scrollview.vml').to_string()
 
 pub struct NestedScrollBox {
 pub:
@@ -34,8 +34,8 @@ fn initial_nested_scrollview() NestedScrollviewDemo {
 }
 
 fn main() {
-	ui2.run_qml[NestedScrollviewDemo](
-		source: nested_scrollview_qml_source
+	ui2.run_vml[NestedScrollviewDemo](
+		source: nested_scrollview_vml_source
 		model: initial_nested_scrollview()
 		title: 'Nested Scrollviews'
 		width: nested_scrollview_width

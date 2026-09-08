@@ -29,10 +29,10 @@ fn test_splitpanel_adjusts_and_clamps_both_axes() {
 	assert app.left_weight == 0.34
 }
 
-fn test_splitpanel_qml_reflows_nested_panes() {
+fn test_splitpanel_vml_reflows_nested_panes() {
 	app := initial_splitpanel()
-	root := ui2.element_from_qml_model(splitpanel_qml_source, app, ui2.rect(0, 0, splitpanel_width, splitpanel_height)) or { panic(err) }
-	wide := ui2.element_from_qml_model(splitpanel_qml_source, app, ui2.rect(0, 0, 1000, splitpanel_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(splitpanel_vml_source, app, ui2.rect(0, 0, splitpanel_width, splitpanel_height)) or { panic(err) }
+	wide := ui2.element_from_vml_model(splitpanel_vml_source, app, ui2.rect(0, 0, 1000, splitpanel_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	stage := find_splitpanel_element(root, 'stage') or { panic('missing stage') }
 	top := find_splitpanel_element(root, 'top_panel') or { panic('missing top pane') }

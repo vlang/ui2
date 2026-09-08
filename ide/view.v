@@ -180,7 +180,7 @@ fn build_toolbar(layout IdeLayout, app &IdeApp) ui2.Element {
 	} else {
 		180.0
 	}
-	children << ui2.text_field_with_change_and_submit('project_path', 'open_path', 'path/to/form.qml', app.path_input, ui2.rect(path_x, 8, path_width, 30), ui2.BoxStyle{
+	children << ui2.text_field_with_change_and_submit('project_path', 'open_path', 'path/to/form.vml', app.path_input, ui2.rect(path_x, 8, path_width, 30), ui2.BoxStyle{
 		bg: 0xffffff
 		radius: 5
 	}, text_style(10, color_text, false), ui2.keyboard_default)
@@ -276,7 +276,7 @@ fn display_file_name(app &IdeApp) string {
 		return os_name(app.file_path)
 	}
 	name := os_name(app.path_input)
-	return if name.len > 0 { name } else { 'form.qml' }
+	return if name.len > 0 { name } else { 'form.vml' }
 }
 
 fn inspector_field(id string, label string, value string, y f64, width f64) []ui2.Element {
@@ -601,7 +601,7 @@ fn build_source_editor(layout IdeLayout, app &IdeApp) []ui2.Element {
 		panel('source_stage', layout.stage, 0x1e293b, []),
 		editor,
 		ide_button('apply_source', 'Apply to designer', ui2.rect(layout.stage.x + layout.stage.width - apply_width - padding, layout.stage.y + layout.stage.height - 38, apply_width, 28), false),
-		ui2.label('', 'Edit generated QML, then apply it to return to Design.', ui2.rect(layout.stage.x + padding, layout.stage.y + layout.stage.height - 34, layout.stage.width - apply_width - 32, 18), text_style(10, 0xcbd5e1, false)),
+		ui2.label('', 'Edit generated VML, then apply it to return to Design.', ui2.rect(layout.stage.x + padding, layout.stage.y + layout.stage.height - 34, layout.stage.width - apply_width - 32, 18), text_style(10, 0xcbd5e1, false)),
 	]
 }
 

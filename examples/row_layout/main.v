@@ -4,7 +4,7 @@ import ui2
 
 const row_layout_width = 760
 const row_layout_height = 420
-const row_layout_qml_source = $embed_file('row_layout.qml').to_string()
+const row_layout_vml_source = $embed_file('row_layout.vml').to_string()
 
 pub struct RowLayoutDemo {
 pub mut:
@@ -40,8 +40,8 @@ pub fn (mut app RowLayoutDemo) reset_layout() {
 }
 
 fn main() {
-	ui2.run_qml[RowLayoutDemo](
-		source: row_layout_qml_source
+	ui2.run_vml[RowLayoutDemo](
+		source: row_layout_vml_source
 		model: RowLayoutDemo{}
 		title: 'Row Layout'
 		width: row_layout_width

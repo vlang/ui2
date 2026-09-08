@@ -9,7 +9,7 @@ const window_height = 420
 const maximum_users = 10
 const users_data_directory = 'ui2-users-example'
 const users_data_filename = 'users.json'
-const users_qml_source = $embed_file('users.qml').to_string()
+const users_vml_source = $embed_file('users.vml').to_string()
 
 pub struct User {
 pub:
@@ -181,8 +181,8 @@ pub fn (mut app App) close_help() {
 }
 
 fn main() {
-	ui2.run_qml[App](
-		source: users_qml_source
+	ui2.run_vml[App](
+		source: users_vml_source
 		model: initial_app()
 		title: 'V UI Demo'
 		width: window_width

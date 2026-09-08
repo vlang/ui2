@@ -4,7 +4,7 @@ import ui2
 
 const change_title_width = 520
 const change_title_height = 250
-const change_title_qml_source = $embed_file('change_title.qml').to_string()
+const change_title_vml_source = $embed_file('change_title.vml').to_string()
 
 pub struct ChangeTitleDemo {
 pub mut:
@@ -29,8 +29,8 @@ pub fn (mut app ChangeTitleDemo) apply_title() {
 }
 
 fn main() {
-	ui2.run_qml[ChangeTitleDemo](
-		source: change_title_qml_source
+	ui2.run_vml[ChangeTitleDemo](
+		source: change_title_vml_source
 		model: ChangeTitleDemo{}
 		title: 'Name'
 		width: change_title_width

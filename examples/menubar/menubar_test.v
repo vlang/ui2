@@ -96,8 +96,8 @@ fn test_menubar_log_keeps_only_the_recent_rows() {
 	assert app.log.split_into_lines()[0].contains('20.')
 }
 
-fn test_menubar_qml_shows_the_model_state() {
-	root := ui2.element_from_qml_model(menubar_qml_source, MenubarDemo{}, ui2.rect(0, 0,
+fn test_menubar_vml_shows_the_model_state() {
+	root := ui2.element_from_vml_model(menubar_vml_source, MenubarDemo{}, ui2.rect(0, 0,
 		menubar_width, menubar_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	assert (find_menubar_element(root, 'details_state') or { panic('missing details chip') }).text == 'on'

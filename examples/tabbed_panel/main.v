@@ -4,7 +4,7 @@ import ui2
 
 const tabbed_width = 440
 const tabbed_height = 300
-const tabbed_qml_source = $embed_file('tabbed_panel.qml').to_string()
+const tabbed_vml_source = $embed_file('tabbed_panel.vml').to_string()
 
 pub struct TabbedPanelDemo {
 pub mut:
@@ -24,8 +24,8 @@ pub fn (mut app TabbedPanelDemo) show_security() {
 }
 
 fn main() {
-	ui2.run_qml[TabbedPanelDemo](
-		source: tabbed_qml_source
+	ui2.run_vml[TabbedPanelDemo](
+		source: tabbed_vml_source
 		model: TabbedPanelDemo{}
 		title: 'Tabbed Panel'
 		width: tabbed_width

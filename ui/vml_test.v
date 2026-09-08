@@ -1,7 +1,7 @@
 module ui2
 
 fn testsuite_begin() {
-	println('--- QML parser tests ---')
+	println('--- VML parser tests ---')
 }
 
 fn test_parse_simple_label() {
@@ -11,7 +11,7 @@ fn test_parse_simple_label() {
 		font_size: 32
 		bold: true
 	}'
-	node := parse_qml(source) or { panic(err) }
+	node := parse_vml(source) or { panic(err) }
 	assert node.tag == 'Label'
 	assert node.prop('text') == 'Hello'
 	assert node.prop('color') == '#ECECEC'
@@ -34,7 +34,7 @@ fn test_parse_nested() {
 			on_tap: handle_ok
 		}
 	}'
-	node := parse_qml(source) or { panic(err) }
+	node := parse_vml(source) or { panic(err) }
 	assert node.tag == 'Column'
 	assert node.prop_int('spacing') == 12
 	assert node.children.len == 2
@@ -60,7 +60,7 @@ fn test_find_by_id() {
 			text: "Log In"
 		}
 	}'
-	node := parse_qml(source) or { panic(err) }
+	node := parse_vml(source) or { panic(err) }
 	pwd := node.find('password') or { panic('not found') }
 	assert pwd.prop('placeholder') == 'Password'
 	assert pwd.prop_bool('secure') == true
@@ -80,7 +80,7 @@ fn test_parse_comments() {
 			text: "Go"
 		}
 	}'
-	node := parse_qml(source) or { panic(err) }
+	node := parse_vml(source) or { panic(err) }
 	assert node.children.len == 2
 }
 
@@ -140,7 +140,7 @@ fn test_parse_login_screen() {
 			on_tap: do_login
 		}
 	}'
-	node := parse_qml(source) or { panic(err) }
+	node := parse_vml(source) or { panic(err) }
 	assert node.tag == 'Column'
 	assert node.children.len == 5
 	assert node.prop('background') == '#303338'
@@ -162,28 +162,28 @@ fn test_parse_hex_color() {
 }
 
 fn test_parse_requires_a_single_complete_root() {
-	if _ := parse_qml('Label {} Button {}') {
+	if _ := parse_vml('Label {} Button {}') {
 		assert false, 'a second root must be rejected'
 	}
-	if _ := parse_qml('Label {} }') {
+	if _ := parse_vml('Label {} }') {
 		assert false, 'a trailing brace must be rejected'
 	}
 }
 
 fn test_plain_container_children_use_resolved_local_frame() {
-	node := parse_qml('View { x: 30 y: 40 width: 200 height: 100 Label {} }') or {
+	node := parse_vml('View { x: 30 y: 40 width: 200 height: 100 Label {} }') or {
 		panic(err)
 	}
-	el := element_from_qnode(node, rect(0, 0, 800, 600)) or { panic(err) }
+	el := element_from_vnode(node, rect(0, 0, 800, 600)) or { panic(err) }
 	assert el.frame == rect(30, 40, 200, 100)
 	assert el.children[0].frame == rect(0, 0, 200, 100)
 }
 
 fn test_nested_child_coordinates_are_parent_local() {
-	node := parse_qml('View { x: 30 y: 40 width: 200 height: 100 Label { x: 7 y: 9 width: 50 height: 20 } }') or {
+	node := parse_vml('View { x: 30 y: 40 width: 200 height: 100 Label { x: 7 y: 9 width: 50 height: 20 } }') or {
 		panic(err)
 	}
-	el := element_from_qnode(node, rect(0, 0, 800, 600)) or { panic(err) }
+	el := element_from_vnode(node, rect(0, 0, 800, 600)) or { panic(err) }
 	assert el.children[0].frame == rect(7, 9, 50, 20)
 }
 
@@ -191,7 +191,7 @@ fn test_parse_escaped_string() {
 	source := 'Label {
 		text: "Hello \\"World\\""
 	}'
-	node := parse_qml(source) or { panic(err) }
+	node := parse_vml(source) or { panic(err) }
 	assert node.prop('text') == 'Hello "World"'
 }
 
@@ -209,7 +209,7 @@ fn test_parse_row() {
 			width: 100
 		}
 	}'
-	node := parse_qml(source) or { panic(err) }
+	node := parse_vml(source) or { panic(err) }
 	assert node.tag == 'Row'
 	assert node.children.len == 2
 	assert node.children[0].prop('text') == 'Accept'
@@ -224,9 +224,9 @@ fn test_parse_text_area() {
 		editable: false
 		background: #FAFAFA
 	}'
-	node := parse_qml(source) or { panic(err) }
+	node := parse_vml(source) or { panic(err) }
 	assert node.tag == 'TextArea'
-	el := element_from_qnode(node, rect(0, 0, 400, 300)) or { panic(err) }
+	el := element_from_vnode(node, rect(0, 0, 400, 300)) or { panic(err) }
 	assert el.id == 'body'
 	assert el.action_id == 'body_changed'
 	assert el.readonly == true
@@ -248,8 +248,8 @@ fn test_parse_menu_items() {
 			on_tap: ctx_delete
 		}
 	}'
-	node := parse_qml(source) or { panic(err) }
-	el := element_from_qnode(node, rect(0, 0, 100, 30)) or { panic(err) }
+	node := parse_vml(source) or { panic(err) }
+	el := element_from_vnode(node, rect(0, 0, 100, 30)) or { panic(err) }
 	assert el.key == 'row42'
 	assert el.id == ''
 	assert el.action_id == 'open_row'
@@ -261,11 +261,11 @@ fn test_parse_menu_items() {
 	assert el.children.len == 0
 }
 
-fn test_qml_applies_shared_control_state_properties() {
-	node := parse_qml('TextField { id: email hidden: true enabled: false autocorrect: false pad_left: 20 accessibility_role: text_field accessibility_label: "Email" }') or {
+fn test_vml_applies_shared_control_state_properties() {
+	node := parse_vml('TextField { id: email hidden: true enabled: false autocorrect: false pad_left: 20 accessibility_role: text_field accessibility_label: "Email" }') or {
 		panic(err)
 	}
-	el := element_from_qnode(node, rect(0, 0, 200, 40)) or { panic(err) }
+	el := element_from_vnode(node, rect(0, 0, 200, 40)) or { panic(err) }
 	assert el.hidden
 	assert !el.enabled
 	assert !el.autocorrect
@@ -274,8 +274,8 @@ fn test_qml_applies_shared_control_state_properties() {
 	assert el.accessibility_label == 'Email'
 }
 
-fn test_qml_applies_independent_box_borders() {
-	node := parse_qml('Rectangle {
+fn test_vml_applies_independent_box_borders() {
+	node := parse_vml('Rectangle {
 		background: #10131F
 		border_color: #28314A
 		border_left: 1
@@ -283,7 +283,7 @@ fn test_qml_applies_independent_box_borders() {
 		border_right: 3
 		border_bottom: 4
 	}') or { panic(err) }
-	el := element_from_qnode(node, rect(0, 0, 200, 100)) or { panic(err) }
+	el := element_from_vnode(node, rect(0, 0, 200, 100)) or { panic(err) }
 	assert el.box.border_color == 0x28314a
 	assert el.box.border_left == 1
 	assert el.box.border_top == 2.5
@@ -291,35 +291,35 @@ fn test_qml_applies_independent_box_borders() {
 	assert el.box.border_bottom == 4
 }
 
-fn test_qml_border_width_is_an_all_sides_shorthand_with_edge_overrides() {
-	node := parse_qml('Button {
+fn test_vml_border_width_is_an_all_sides_shorthand_with_edge_overrides() {
+	node := parse_vml('Button {
 		text: "Panel"
 		border_width: 2
 		border_left: 0
 		border_bottom: 5
 	}') or { panic(err) }
-	el := element_from_qnode(node, rect(0, 0, 120, 32)) or { panic(err) }
+	el := element_from_vnode(node, rect(0, 0, 120, 32)) or { panic(err) }
 	assert el.box.border_left == 0
 	assert el.box.border_top == 2
 	assert el.box.border_right == 2
 	assert el.box.border_bottom == 5
 }
 
-fn test_qml_scroll_preserves_box_borders() {
-	node := parse_qml('Scroll {
+fn test_vml_scroll_preserves_box_borders() {
+	node := parse_vml('Scroll {
 		border_color: #334155
 		border_left: 1
 		border_right: 2
 	}') or { panic(err) }
-	el := element_from_qnode(node, rect(0, 0, 120, 80)) or { panic(err) }
+	el := element_from_vnode(node, rect(0, 0, 120, 80)) or { panic(err) }
 	assert el.kind == .scroll
 	assert el.box.border_color == 0x334155
 	assert el.box.border_left == 1
 	assert el.box.border_right == 2
 }
 
-fn test_qml_applies_pointer_and_transform_properties() {
-	node := parse_qml('Image {
+fn test_vml_applies_pointer_and_transform_properties() {
+	node := parse_vml('Image {
 		id: movable_logo
 		path: "logo.png"
 		on_tap: move_logo
@@ -330,7 +330,7 @@ fn test_qml_applies_pointer_and_transform_properties() {
 		rotation: 37.5
 		cursor: "rotate"
 	}') or { panic(err) }
-	el := element_from_qnode(node, rect(0, 0, 100, 100)) or { panic(err) }
+	el := element_from_vnode(node, rect(0, 0, 100, 100)) or { panic(err) }
 	assert el.action_id == 'move_logo'
 	assert el.clickable
 	assert el.draggable
@@ -340,8 +340,8 @@ fn test_qml_applies_pointer_and_transform_properties() {
 	assert el.cursor == cursor_rotate
 }
 
-fn test_qml_applies_extended_text_style_properties() {
-	node := parse_qml('Label {
+fn test_vml_applies_extended_text_style_properties() {
+	node := parse_vml('Label {
 		text: "Styled"
 		color: #123456
 		background_color: #F0F1F2
@@ -359,7 +359,7 @@ fn test_qml_applies_extended_text_style_properties() {
 		first_line_indent: 4
 		hyphenation_factor: 0.5
 	}') or { panic(err) }
-	el := element_from_qnode(node, rect(0, 0, 200, 40)) or { panic(err) }
+	el := element_from_vnode(node, rect(0, 0, 200, 40)) or { panic(err) }
 	assert el.text_style.color == 0x123456
 	assert el.text_style.background_color == 0xf0f1f2
 	assert el.text_style.size == 22
@@ -385,8 +385,8 @@ fn test_parse_text_field_change_and_submit_events() {
 		on_submit: send_message
 		secure: true
 	}'
-	node := parse_qml(source) or { panic(err) }
-	el := element_from_qnode(node, rect(0, 0, 200, 40)) or { panic(err) }
+	node := parse_vml(source) or { panic(err) }
+	el := element_from_vnode(node, rect(0, 0, 200, 40)) or { panic(err) }
 	assert el.kind == .text_field
 	assert el.id == 'message'
 	assert el.action_id == 'message_changed'
@@ -400,14 +400,14 @@ fn test_parse_submit_only_text_field() {
 		id: search
 		on_submit: run_search
 	}'
-	node := parse_qml(source) or { panic(err) }
-	el := element_from_qnode(node, rect(0, 0, 200, 40)) or { panic(err) }
+	node := parse_vml(source) or { panic(err) }
+	el := element_from_vnode(node, rect(0, 0, 200, 40)) or { panic(err) }
 	assert el.id == 'search'
 	assert el.submit_id == 'run_search'
 	assert !el.emit_change
 }
 
-fn test_qml_dropdown_options_persistent_scroll_and_tooltip() {
+fn test_vml_dropdown_options_persistent_scroll_and_tooltip() {
 	source := 'Scroll {
 		id: users
 		persistent: true
@@ -420,7 +420,7 @@ fn test_qml_dropdown_options_persistent_scroll_and_tooltip() {
 			Option { text: "Canada" }
 		}
 	}'
-	el := element_from_qml(source, rect(0, 0, 300, 200)) or { panic(err) }
+	el := element_from_vml(source, rect(0, 0, 300, 200)) or { panic(err) }
 	assert el.kind == .scroll
 	assert el.persistent_scrollbars
 	assert el.children.len == 1
@@ -435,13 +435,13 @@ fn test_qml_dropdown_options_persistent_scroll_and_tooltip() {
 	assert dropdown_el.menu[1].title == 'Canada'
 }
 
-fn test_qml_decimal_keyboard() {
-	el := element_from_qml('TextField { id: age keyboard: decimal }', rect(0, 0, 120, 32)) or { panic(err) }
+fn test_vml_decimal_keyboard() {
+	el := element_from_vml('TextField { id: age keyboard: decimal }', rect(0, 0, 120, 32)) or { panic(err) }
 	assert el.keyboard == keyboard_decimal
 }
 
-fn test_qml_progress_bar_uses_bounded_value_semantics() {
-	el := element_from_qml('ProgressBar {
+fn test_vml_progress_bar_uses_bounded_value_semantics() {
+	el := element_from_vml('ProgressBar {
 		id: loading
 		value: 75
 		max: 200
@@ -461,8 +461,8 @@ fn test_qml_progress_bar_uses_bounded_value_semantics() {
 	assert el.accessibility_value == '75 of 200'
 }
 
-fn test_qml_slider_exposes_range_orientation_and_style() {
-	el := element_from_qml('Slider {
+fn test_vml_slider_exposes_range_orientation_and_style() {
+	el := element_from_vml('Slider {
 		id: volume
 		on_change: volume_changed
 		min: -20
@@ -498,8 +498,8 @@ fn test_qml_slider_exposes_range_orientation_and_style() {
 	assert el.accessibility_value == '55'
 }
 
-fn test_qml_switch_exposes_active_state_action_and_style() {
-	el := element_from_qml('Switch {
+fn test_vml_switch_exposes_active_state_action_and_style() {
+	el := element_from_vml('Switch {
 		id: airplane_mode
 		on_active: airplane_mode_changed
 		active: true
@@ -523,8 +523,8 @@ fn test_qml_switch_exposes_active_state_action_and_style() {
 	assert el.accessibility_value == 'on'
 }
 
-fn test_qml_spinner_exposes_values_selection_and_style() {
-	el := element_from_qml('Spinner {
+fn test_vml_spinner_exposes_values_selection_and_style() {
+	el := element_from_vml('Spinner {
 		id: location
 		on_text: location_changed
 		text_autoupdate: true
@@ -547,8 +547,8 @@ fn test_qml_spinner_exposes_values_selection_and_style() {
 	assert el.accessibility_value == 'Home'
 }
 
-fn test_qml_toggle_button_exposes_pressed_and_released_styles() {
-	el := element_from_qml('ToggleButton {
+fn test_vml_toggle_button_exposes_pressed_and_released_styles() {
+	el := element_from_vml('ToggleButton {
 		id: bold
 		text: "Bold"
 		on_state: bold_changed
@@ -575,8 +575,8 @@ fn test_qml_toggle_button_exposes_pressed_and_released_styles() {
 	assert el.accessibility_value == 'pressed'
 }
 
-fn test_qml_box_layout_combines_fixed_and_proportional_children() {
-	el := element_from_qml('BoxLayout {
+fn test_vml_box_layout_combines_fixed_and_proportional_children() {
+	el := element_from_vml('BoxLayout {
 		id: actions
 		padding: 10
 		spacing: 10
@@ -590,8 +590,8 @@ fn test_qml_box_layout_combines_fixed_and_proportional_children() {
 	assert el.children[2].frame == rect(250, 10, 70, 60)
 }
 
-fn test_qml_vertical_box_layout_aligns_fixed_width_children() {
-	el := element_from_qml('BoxLayout {
+fn test_vml_vertical_box_layout_aligns_fixed_width_children() {
+	el := element_from_vml('BoxLayout {
 		orientation: vertical
 		padding: 10
 		spacing: 4
@@ -602,16 +602,16 @@ fn test_qml_vertical_box_layout_aligns_fixed_width_children() {
 	assert el.children[1].frame == rect(10, 34, 180, 76)
 }
 
-fn test_qml_box_layout_validates_orientation_names() {
-	if _ := element_from_qml('BoxLayout { orientation: diagonal }', rect(0, 0, 100, 100)) {
+fn test_vml_box_layout_validates_orientation_names() {
+	if _ := element_from_vml('BoxLayout { orientation: diagonal }', rect(0, 0, 100, 100)) {
 		assert false, 'unknown box orientations must fail'
 	} else {
 		assert err.msg().contains('diagonal')
 	}
 }
 
-fn test_qml_float_layout_applies_independent_size_and_position_hints() {
-	el := element_from_qml('FloatLayout {
+fn test_vml_float_layout_applies_independent_size_and_position_hints() {
+	el := element_from_vml('FloatLayout {
 		Rectangle {
 			id: card
 			size_hint_x: 0.5
@@ -633,8 +633,8 @@ fn test_qml_float_layout_applies_independent_size_and_position_hints() {
 	assert el.children[1].frame == rect(20, 30, 80, 40)
 }
 
-fn test_qml_float_layout_supports_edge_hints_and_bounds() {
-	el := element_from_qml('FloatLayout {
+fn test_vml_float_layout_supports_edge_hints_and_bounds() {
+	el := element_from_vml('FloatLayout {
 		Button {
 			size_hint_x: 0.9
 			size_hint_y: 0.1
@@ -647,8 +647,8 @@ fn test_qml_float_layout_supports_edge_hints_and_bounds() {
 	assert el.children[0].frame == rect(180, 168, 120, 32)
 }
 
-fn test_qml_relative_layout_keeps_child_frames_local() {
-	el := element_from_qml('RelativeLayout {
+fn test_vml_relative_layout_keeps_child_frames_local() {
+	el := element_from_vml('RelativeLayout {
 		x: 80
 		y: 60
 		width: 240
@@ -666,8 +666,8 @@ fn test_qml_relative_layout_keeps_child_frames_local() {
 	assert el.children[0].frame == rect(20, 15, 80, 30)
 }
 
-fn test_qml_grid_layout_assigns_cells_in_the_requested_orientation() {
-	el := element_from_qml('GridLayout {
+fn test_vml_grid_layout_assigns_cells_in_the_requested_orientation() {
+	el := element_from_vml('GridLayout {
 		id: tools
 		columns: 2
 		orientation: rl-bt
@@ -685,16 +685,16 @@ fn test_qml_grid_layout_assigns_cells_in_the_requested_orientation() {
 	assert el.children[2].frame == rect(110, 10, 90, 40)
 }
 
-fn test_qml_grid_layout_requires_a_constraint() {
-	if _ := element_from_qml('GridLayout { Button { text: "Missing constraint" } }', rect(0, 0, 200, 100)) {
-		assert false, 'an unconstrained QML grid must fail'
+fn test_vml_grid_layout_requires_a_constraint() {
+	if _ := element_from_vml('GridLayout { Button { text: "Missing constraint" } }', rect(0, 0, 200, 100)) {
+		assert false, 'an unconstrained VML grid must fail'
 	} else {
 		assert err.msg().contains('requires columns or rows')
 	}
 }
 
-fn test_qml_anchor_layout_positions_children_with_per_edge_padding() {
-	el := element_from_qml('AnchorLayout {
+fn test_vml_anchor_layout_positions_children_with_per_edge_padding() {
+	el := element_from_vml('AnchorLayout {
 		id: footer
 		anchor_x: right
 		anchor_y: bottom
@@ -710,16 +710,16 @@ fn test_qml_anchor_layout_positions_children_with_per_edge_padding() {
 	assert el.children[0].frame == rect(118, 56, 72, 32)
 }
 
-fn test_qml_anchor_layout_validates_anchor_names() {
-	if _ := element_from_qml('AnchorLayout { anchor_x: middle }', rect(0, 0, 100, 100)) {
+fn test_vml_anchor_layout_validates_anchor_names() {
+	if _ := element_from_vml('AnchorLayout { anchor_x: middle }', rect(0, 0, 100, 100)) {
 		assert false, 'unknown anchor names must fail'
 	} else {
 		assert err.msg().contains('middle')
 	}
 }
 
-fn test_qml_stack_layout_wraps_variable_size_children() {
-	el := element_from_qml('StackLayout {
+fn test_vml_stack_layout_wraps_variable_size_children() {
+	el := element_from_vml('StackLayout {
 		id: tags
 		padding: 10
 		spacing_x: 6
@@ -733,16 +733,16 @@ fn test_qml_stack_layout_wraps_variable_size_children() {
 	assert el.children[2].frame == rect(10, 44, 90, 24)
 }
 
-fn test_qml_stack_layout_validates_orientation_names() {
-	if _ := element_from_qml('StackLayout { orientation: sideways }', rect(0, 0, 100, 100)) {
+fn test_vml_stack_layout_validates_orientation_names() {
+	if _ := element_from_vml('StackLayout { orientation: sideways }', rect(0, 0, 100, 100)) {
 		assert false, 'unknown stack orientations must fail'
 	} else {
 		assert err.msg().contains('sideways')
 	}
 }
 
-fn test_qml_page_layout_exposes_adjacent_page_borders() {
-	el := element_from_qml('PageLayout {
+fn test_vml_page_layout_exposes_adjacent_page_borders() {
+	el := element_from_vml('PageLayout {
 		page: 1
 		border: 40
 		Rectangle { id: first }
@@ -755,31 +755,31 @@ fn test_qml_page_layout_exposes_adjacent_page_borders() {
 	assert el.children[2].frame == rect(280, 0, 260, 160)
 }
 
-fn test_qml_page_layout_validates_border() {
-	if _ := element_from_qml('PageLayout { border: 120 Rectangle {} }', rect(0, 0, 100, 100)) {
+fn test_vml_page_layout_validates_border() {
+	if _ := element_from_vml('PageLayout { border: 120 Rectangle {} }', rect(0, 0, 100, 100)) {
 		assert false, 'a border wider than the page layout must fail'
 	} else {
 		assert err.msg().contains('border')
 	}
 }
 
-fn test_qml_widget_accessibility_defaults_survive_conversion() {
-	checkbox_el := element_from_qml('Checkbox { text: "Ready" checked: true }', rect(0, 0, 120, 24)) or {
+fn test_vml_widget_accessibility_defaults_survive_conversion() {
+	checkbox_el := element_from_vml('Checkbox { text: "Ready" checked: true }', rect(0, 0, 120, 24)) or {
 		panic(err)
 	}
 	assert checkbox_el.accessibility_role == 'checkbox'
 	assert checkbox_el.accessibility_label == 'Ready'
 	assert checkbox_el.accessibility_value == 'checked'
 
-	progress_el := element_from_qml('ProgressBar { value: 150 }', rect(0, 0, 100, 8)) or {
+	progress_el := element_from_vml('ProgressBar { value: 150 }', rect(0, 0, 100, 8)) or {
 		panic(err)
 	}
 	assert progress_el.children[0].frame.width == 100
 	assert progress_el.accessibility_value == '100 of 100'
 }
 
-fn test_qml_text_input_defaults_to_multiline() {
-	el := element_from_qml('TextInput {
+fn test_vml_text_input_defaults_to_multiline() {
+	el := element_from_vml('TextInput {
 		id: notes
 		text: "One\\nTwo"
 		hint_text: "Notes"
@@ -795,8 +795,8 @@ fn test_qml_text_input_defaults_to_multiline() {
 	assert el.disable_scroll
 }
 
-fn test_qml_text_input_supports_single_line_password_submission() {
-	el := element_from_qml('TextInput {
+fn test_vml_text_input_supports_single_line_password_submission() {
+	el := element_from_vml('TextInput {
 		id: password
 		multiline: false
 		password: true
@@ -813,8 +813,8 @@ fn test_qml_text_input_supports_single_line_password_submission() {
 	assert el.padding_left == 8
 }
 
-fn test_qml_tabbed_panel_builds_headers_and_active_content() {
-	el := element_from_qml('TabbedPanel {
+fn test_vml_tabbed_panel_builds_headers_and_active_content() {
+	el := element_from_vml('TabbedPanel {
 		id: settings
 		current: 1
 		tab_pos: bottom_right
@@ -834,16 +834,16 @@ fn test_qml_tabbed_panel_builds_headers_and_active_content() {
 	assert el.children[2].accessibility_value == 'selected'
 }
 
-fn test_qml_tabbed_panel_validates_tab_position() {
-	if _ := element_from_qml('TabbedPanel { tab_pos: diagonal }', rect(0, 0, 300, 200)) {
+fn test_vml_tabbed_panel_validates_tab_position() {
+	if _ := element_from_vml('TabbedPanel { tab_pos: diagonal }', rect(0, 0, 300, 200)) {
 		assert false, 'invalid tab positions must fail'
 	} else {
 		assert err.msg().contains('diagonal')
 	}
 }
 
-fn test_qml_accordion_builds_headers_and_active_content() {
-	el := element_from_qml('Accordion {
+fn test_vml_accordion_builds_headers_and_active_content() {
+	el := element_from_vml('Accordion {
 		id: help
 		current: 1
 		orientation: vertical
@@ -864,8 +864,8 @@ fn test_qml_accordion_builds_headers_and_active_content() {
 	assert el.children[3].frame == rect(0, 200, 300, 40)
 }
 
-fn test_qml_accordion_validates_available_title_space() {
-	if _ := element_from_qml('Accordion {
+fn test_vml_accordion_validates_available_title_space() {
+	if _ := element_from_vml('Accordion {
 		orientation: vertical
 		min_space: 40
 		AccordionItem {}
@@ -878,8 +878,8 @@ fn test_qml_accordion_validates_available_title_space() {
 	}
 }
 
-fn test_qml_tree_view_flattens_expanded_nodes_and_styles_selection() {
-	el := element_from_qml('TreeView {
+fn test_vml_tree_view_flattens_expanded_nodes_and_styles_selection() {
+	el := element_from_vml('TreeView {
 		id: navigation
 		row_height: 32
 		spacing: 4
@@ -908,16 +908,16 @@ fn test_qml_tree_view_flattens_expanded_nodes_and_styles_selection() {
 	assert el.children[2].children[1].accessibility_value == 'selected'
 }
 
-fn test_qml_tree_view_validates_geometry() {
-	if _ := element_from_qml('TreeView { row_height: -1 }', rect(0, 0, 300, 200)) {
+fn test_vml_tree_view_validates_geometry() {
+	if _ := element_from_vml('TreeView { row_height: -1 }', rect(0, 0, 300, 200)) {
 		assert false, 'negative tree row height must fail'
 	} else {
 		assert err.msg().contains('geometry')
 	}
 }
 
-fn test_qml_screen_manager_renders_only_named_active_screen() {
-	el := element_from_qml('ScreenManager {
+fn test_vml_screen_manager_renders_only_named_active_screen() {
+	el := element_from_vml('ScreenManager {
 		id: navigation
 		current: details
 		Screen { id: home Label { text: "Home content" } }
@@ -932,8 +932,8 @@ fn test_qml_screen_manager_renders_only_named_active_screen() {
 	assert el.children[0].children[0].text == 'Details content'
 }
 
-fn test_qml_screen_manager_validates_current_name() {
-	if _ := element_from_qml('ScreenManager {
+fn test_vml_screen_manager_validates_current_name() {
+	if _ := element_from_vml('ScreenManager {
 		current: missing
 		Screen { id: home }
 	}', rect(0, 0, 300, 200)) {
@@ -943,8 +943,8 @@ fn test_qml_screen_manager_validates_current_name() {
 	}
 }
 
-fn test_qml_carousel_orders_slides_and_hides_inactive_content() {
-	el := element_from_qml('Carousel {
+fn test_vml_carousel_orders_slides_and_hides_inactive_content() {
+	el := element_from_vml('Carousel {
 		id: gallery
 		index: 1
 		direction: bottom
@@ -965,16 +965,16 @@ fn test_qml_carousel_orders_slides_and_hides_inactive_content() {
 	assert el.accessibility_value == 'Slide 2 of 3'
 }
 
-fn test_qml_carousel_validates_direction() {
-	if _ := element_from_qml('Carousel { direction: diagonal }', rect(0, 0, 300, 200)) {
+fn test_vml_carousel_validates_direction() {
+	if _ := element_from_vml('Carousel { direction: diagonal }', rect(0, 0, 300, 200)) {
 		assert false, 'unknown carousel directions must fail'
 	} else {
 		assert err.msg().contains('diagonal')
 	}
 }
 
-fn test_qml_modal_view_builds_centered_blocking_layers() {
-	el := element_from_qml('ModalView {
+fn test_vml_modal_view_builds_centered_blocking_layers() {
+	el := element_from_vml('ModalView {
 		id: confirm
 		open: true
 		on_dismiss: close_modal
@@ -996,8 +996,8 @@ fn test_qml_modal_view_builds_centered_blocking_layers() {
 	assert el.children[2].children[0].text == 'Delete item?'
 }
 
-fn test_qml_modal_view_supports_required_and_closed_states() {
-	el := element_from_qml('ModalView {
+fn test_vml_modal_view_supports_required_and_closed_states() {
+	el := element_from_vml('ModalView {
 		id: required
 		auto_dismiss: false
 		on_dismiss: ignored
@@ -1006,8 +1006,8 @@ fn test_qml_modal_view_supports_required_and_closed_states() {
 	assert el.children[0].action_id == ''
 }
 
-fn test_qml_popup_builds_title_separator_and_body() {
-	el := element_from_qml('Popup {
+fn test_vml_popup_builds_title_separator_and_body() {
+	el := element_from_vml('Popup {
 		id: editor
 		open: true
 		title: "Edit profile"
@@ -1030,8 +1030,8 @@ fn test_qml_popup_builds_title_separator_and_body() {
 	assert surface.children[2].children[0].text == 'Profile form'
 }
 
-fn test_qml_popup_validates_header_height() {
-	if _ := element_from_qml('Popup {
+fn test_vml_popup_validates_header_height() {
+	if _ := element_from_vml('Popup {
 		content_height: 40
 		title_height: 48
 	}', rect(0, 0, 300, 200)) {

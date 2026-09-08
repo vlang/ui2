@@ -23,10 +23,10 @@ fn test_tabs_selects_existing_page_only() {
 	assert app.active_tab == 3
 }
 
-fn test_tabs_qml_shows_only_active_page() {
+fn test_tabs_vml_shows_only_active_page() {
 	mut app := initial_tabs()
 	app.select_tab(2)
-	root := ui2.element_from_qml_model(tabs_qml_source, app, ui2.rect(0, 0, tabs_width, tabs_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(tabs_vml_source, app, ui2.rect(0, 0, tabs_width, tabs_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	bar := find_tabs_element(root, 'tab_bar') or { panic('missing tab bar') }
 	assert bar.children.len == 3

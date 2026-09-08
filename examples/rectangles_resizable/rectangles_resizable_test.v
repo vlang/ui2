@@ -22,10 +22,10 @@ fn test_resizable_rectangles_has_original_color_order() {
 
 fn test_resizable_rectangles_share_extra_width() {
 	app := initial_resizable_rectangles()
-	initial_root := ui2.element_from_qml_model(resizable_rectangles_qml_source, app, ui2.rect(0, 0, resizable_rectangles_width, resizable_rectangles_height)) or {
+	initial_root := ui2.element_from_vml_model(resizable_rectangles_vml_source, app, ui2.rect(0, 0, resizable_rectangles_width, resizable_rectangles_height)) or {
 		panic(err)
 	}
-	wide_root := ui2.element_from_qml_model(resizable_rectangles_qml_source, app, ui2.rect(0, 0, 760, resizable_rectangles_height)) or { panic(err) }
+	wide_root := ui2.element_from_vml_model(resizable_rectangles_vml_source, app, ui2.rect(0, 0, 760, resizable_rectangles_height)) or { panic(err) }
 	initial_card := find_resizable_rectangles_element(initial_root, 'card') or {
 		panic('missing initial card')
 	}

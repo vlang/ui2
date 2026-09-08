@@ -2,7 +2,7 @@ module ui2
 
 import math
 
-enum QValueKind {
+enum VValueKind {
 	invalid
 	string_
 	number
@@ -11,103 +11,103 @@ enum QValueKind {
 	list
 }
 
-struct QValue {
-	kind   QValueKind
+struct VValue {
+	kind   VValueKind
 	text   string
 	number f64
 	bool_  bool
-	items  []QValue
+	items  []VValue
 mut:
-	fields map[string]QValue
+	fields map[string]VValue
 }
 
-struct QSchema {
-	kind    QValueKind
-	element &QSchema = unsafe { nil }
+struct VSchema {
+	kind    VValueKind
+	element &VSchema = unsafe { nil }
 mut:
-	fields map[string]QSchema
+	fields map[string]VSchema
 }
 
-fn q_string(value string) QValue {
-	return QValue{ kind: .string_, text: value }
+fn v_string(value string) VValue {
+	return VValue{ kind: .string_, text: value }
 }
 
-fn q_number(value f64, text string) QValue {
-	return QValue{ kind: .number, number: value, text: text }
+fn v_number(value f64, text string) VValue {
+	return VValue{ kind: .number, number: value, text: text }
 }
 
-fn q_bool(value bool) QValue {
-	return QValue{ kind: .bool_, bool_: value }
+fn v_bool(value bool) VValue {
+	return VValue{ kind: .bool_, bool_: value }
 }
 
-fn q_object(fields map[string]QValue) QValue {
-	return QValue{ kind: .object, fields: fields }
+fn v_object(fields map[string]VValue) VValue {
+	return VValue{ kind: .object, fields: fields }
 }
 
-fn q_list(items []QValue) QValue {
-	return QValue{ kind: .list, items: items }
+fn v_list(items []VValue) VValue {
+	return VValue{ kind: .list, items: items }
 }
 
-fn q_value_from[T](value T) QValue {
+fn v_value_from[T](value T) VValue {
 	$if T is string {
-		return q_string(value)
+		return v_string(value)
 	} $else $if T is bool {
-		return q_bool(value)
+		return v_bool(value)
 	} $else $if T is $int {
-		return q_number(f64(value), value.str())
+		return v_number(f64(value), value.str())
 	} $else $if T is $float {
-		return q_number(f64(value), value.str())
+		return v_number(f64(value), value.str())
 	} $else $if T is $array {
-		mut items := []QValue{cap: value.len}
+		mut items := []VValue{cap: value.len}
 		for item in value {
-			items << q_value_from(item)
+			items << v_value_from(item)
 		}
-		return q_list(items)
+		return v_list(items)
 	} $else $if T is $struct {
-		mut fields := map[string]QValue{}
+		mut fields := map[string]VValue{}
 		$for field in T.fields {
 			$if field.is_pub {
-				fields[field.name] = q_value_from(value.$(field.name))
+				fields[field.name] = v_value_from(value.$(field.name))
 			}
 		}
-		return q_object(fields)
+		return v_object(fields)
 	} $else {
-		return QValue{}
+		return VValue{}
 	}
 }
 
-fn q_array_element_schema[E](_ []E) QSchema {
+fn v_array_element_schema[E](_ []E) VSchema {
 	$if E is $struct {
-		return q_schema_from(E{})
+		return v_schema_from(E{})
 	} $else {
-		return q_schema_from($zero(E))
+		return v_schema_from($zero(E))
 	}
 }
 
-fn q_schema_from[T](value T) QSchema {
+fn v_schema_from[T](value T) VSchema {
 	$if T is string {
-		return QSchema{ kind: .string_ }
+		return VSchema{ kind: .string_ }
 	} $else $if T is bool {
-		return QSchema{ kind: .bool_ }
+		return VSchema{ kind: .bool_ }
 	} $else $if T is $int || T is $float {
-		return QSchema{ kind: .number }
+		return VSchema{ kind: .number }
 	} $else $if T is $array {
-		element := q_array_element_schema(value)
-		return QSchema{ kind: .list, element: &element }
+		element := v_array_element_schema(value)
+		return VSchema{ kind: .list, element: &element }
 	} $else $if T is $struct {
-		mut fields := map[string]QSchema{}
+		mut fields := map[string]VSchema{}
 		$for field in T.fields {
 			$if field.is_pub {
-				fields[field.name] = q_schema_from(value.$(field.name))
+				fields[field.name] = v_schema_from(value.$(field.name))
 			}
 		}
-		return QSchema{ kind: .object, fields: fields }
+		return VSchema{ kind: .object, fields: fields }
 	} $else {
-		return QSchema{}
+		return VSchema{}
 	}
 }
 
-fn (value QValue) string_value() string {
+fn (value VValue) string_value() string {
 	return match value.kind {
 		.string_, .number { value.text }
 		.bool_ {
@@ -119,7 +119,7 @@ fn (value QValue) string_value() string {
 	}
 }
 
-fn (value QValue) truthy() bool {
+fn (value VValue) truthy() bool {
 	return match value.kind {
 		.bool_ { value.bool_ }
 		.number { value.number != 0 }
@@ -130,7 +130,7 @@ fn (value QValue) truthy() bool {
 	}
 }
 
-fn (value QValue) numeric(line int) !f64 {
+fn (value VValue) numeric(line int) !f64 {
 	if value.kind == .number {
 		return value.number
 	}
@@ -140,16 +140,16 @@ fn (value QValue) numeric(line int) !f64 {
 	return error('expected a number at line ${line}')
 }
 
-fn q_lookup(scope map[string]QValue, path string, line int) !QValue {
+fn v_lookup(scope map[string]VValue, path string, line int) !VValue {
 	parts := path.split('.')
 	if parts.len == 0 {
 		return error('empty property path at line ${line}')
 	}
 	mut value := scope[parts[0]] or {
-		// Unresolved single identifiers are QML enum/string literals such as
+		// Unresolved single identifiers are VML enum/string literals such as
 		// `center`, `decimal`, and `#FFFFFF`.
 		if parts.len == 1 {
-			return q_string(path)
+			return v_string(path)
 		}
 		return error('unknown property path `${path}` at line ${line}')
 	}
@@ -164,14 +164,14 @@ fn q_lookup(scope map[string]QValue, path string, line int) !QValue {
 				if part != 'len' {
 					return error('unknown collection property `${part}` in `${path}` at line ${line}')
 				}
-				q_number(f64(value.items.len), value.items.len.str())
+				v_number(f64(value.items.len), value.items.len.str())
 			}
 			.string_ {
 				if part != 'len' {
 					return error('unknown string property `${part}` in `${path}` at line ${line}')
 				}
 				length := rune_len(value.text)
-				q_number(f64(length), length.str())
+				v_number(f64(length), length.str())
 			}
 			else {
 				return error('cannot read `${part}` from `${path}` at line ${line}')
@@ -181,16 +181,16 @@ fn q_lookup(scope map[string]QValue, path string, line int) !QValue {
 	return value
 }
 
-fn q_schema_lookup(scope map[string]QSchema, path string, line int) !QSchema {
+fn v_schema_lookup(scope map[string]VSchema, path string, line int) !VSchema {
 	parts := path.split('.')
 	if parts.len == 0 {
 		return error('empty property path at line ${line}')
 	}
 	mut schema := scope[parts[0]] or {
-		// Bare QML enum and color values are string-like literals. Qualified
+		// Bare VML enum and color values are string-like literals. Qualified
 		// paths must always resolve against the schema.
 		if parts.len == 1 {
-			return QSchema{ kind: .string_ }
+			return VSchema{ kind: .string_ }
 		}
 		return error('unknown property path `${path}` at line ${line}')
 	}
@@ -205,13 +205,13 @@ fn q_schema_lookup(scope map[string]QSchema, path string, line int) !QSchema {
 				if part != 'len' {
 					return error('unknown collection property `${part}` in `${path}` at line ${line}')
 				}
-				QSchema{ kind: .number }
+				VSchema{ kind: .number }
 			}
 			.string_ {
 				if part != 'len' {
 					return error('unknown string property `${part}` in `${path}` at line ${line}')
 				}
-				QSchema{ kind: .number }
+				VSchema{ kind: .number }
 			}
 			else {
 				return error('cannot read `${part}` from `${path}` at line ${line}')
@@ -221,45 +221,45 @@ fn q_schema_lookup(scope map[string]QSchema, path string, line int) !QSchema {
 	return schema
 }
 
-fn q_require_schema(schema QSchema, expected QValueKind, line int) ! {
+fn v_require_schema(schema VSchema, expected VValueKind, line int) ! {
 	if schema.kind != expected {
 		return error('expected ${expected} expression at line ${line}')
 	}
 }
 
-fn q_schema_expression(expr &QExpression, scope map[string]QSchema) !QSchema {
+fn v_schema_expression(expr &VExpression, scope map[string]VSchema) !VSchema {
 	return match expr.kind {
 		.literal {
 			if expr.quoted {
-				QSchema{ kind: .string_ }
+				VSchema{ kind: .string_ }
 			} else if expr.value in ['true', 'false'] {
-				QSchema{ kind: .bool_ }
+				VSchema{ kind: .bool_ }
 			} else {
-				QSchema{ kind: .number }
+				VSchema{ kind: .number }
 			}
 		}
-		.path { q_schema_lookup(scope, expr.value, expr.line)! }
+		.path { v_schema_lookup(scope, expr.value, expr.line)! }
 		.call {
 			return error('calls are only allowed in event handlers at line ${expr.line}')
 		}
 		.unary {
-			value := q_schema_expression(expr.left, scope)!
+			value := v_schema_expression(expr.left, scope)!
 			match expr.value {
-				'!' { QSchema{ kind: .bool_ } }
+				'!' { VSchema{ kind: .bool_ } }
 				'-' {
-					q_require_schema(value, .number, expr.line)!
-					QSchema{ kind: .number }
+					v_require_schema(value, .number, expr.line)!
+					VSchema{ kind: .number }
 				}
 				else {
 					return error('unknown unary operator `${expr.value}` at line ${expr.line}')
 				}
 			}
 		}
-		.binary { q_schema_binary(expr, scope)! }
+		.binary { v_schema_binary(expr, scope)! }
 		.conditional {
-			q_schema_expression(expr.left, scope)!
-			when_true := q_schema_expression(expr.right, scope)!
-			when_false := q_schema_expression(expr.third, scope)!
+			v_schema_expression(expr.left, scope)!
+			when_true := v_schema_expression(expr.right, scope)!
+			when_false := v_schema_expression(expr.third, scope)!
 			if when_true.kind != when_false.kind {
 				return error('conditional branches have different types at line ${expr.line}')
 			}
@@ -268,45 +268,45 @@ fn q_schema_expression(expr &QExpression, scope map[string]QSchema) !QSchema {
 		.interpolation {
 			for part in expr.parts {
 				if !isnil(part.expr) {
-					q_schema_expression(part.expr, scope)!
+					v_schema_expression(part.expr, scope)!
 				}
 			}
-			QSchema{ kind: .string_ }
+			VSchema{ kind: .string_ }
 		}
 	}
 }
 
-fn q_schema_binary(expr &QExpression, scope map[string]QSchema) !QSchema {
-	left := q_schema_expression(expr.left, scope)!
-	right := q_schema_expression(expr.right, scope)!
+fn v_schema_binary(expr &VExpression, scope map[string]VSchema) !VSchema {
+	left := v_schema_expression(expr.left, scope)!
+	right := v_schema_expression(expr.right, scope)!
 	return match expr.value {
 		'+' {
 			if left.kind == .string_ || right.kind == .string_ {
-				QSchema{ kind: .string_ }
+				VSchema{ kind: .string_ }
 			} else {
-				q_require_schema(left, .number, expr.line)!
-				q_require_schema(right, .number, expr.line)!
-				QSchema{ kind: .number }
+				v_require_schema(left, .number, expr.line)!
+				v_require_schema(right, .number, expr.line)!
+				VSchema{ kind: .number }
 			}
 		}
 		'-', '*', '/', '%' {
-			q_require_schema(left, .number, expr.line)!
-			q_require_schema(right, .number, expr.line)!
-			QSchema{ kind: .number }
+			v_require_schema(left, .number, expr.line)!
+			v_require_schema(right, .number, expr.line)!
+			VSchema{ kind: .number }
 		}
 		'<', '<=', '>', '>=' {
-			q_require_schema(left, .number, expr.line)!
-			q_require_schema(right, .number, expr.line)!
-			QSchema{ kind: .bool_ }
+			v_require_schema(left, .number, expr.line)!
+			v_require_schema(right, .number, expr.line)!
+			VSchema{ kind: .bool_ }
 		}
-		'==', '!=', '&&', '||' { QSchema{ kind: .bool_ } }
+		'==', '!=', '&&', '||' { VSchema{ kind: .bool_ } }
 		else {
 			return error('unknown operator `${expr.value}` at line ${expr.line}')
 		}
 	}
 }
 
-fn q_values_equal(left QValue, right QValue) bool {
+fn v_values_equal(left VValue, right VValue) bool {
 	if left.kind == .number && right.kind == .number {
 		return left.number == right.number
 	}
@@ -316,7 +316,7 @@ fn q_values_equal(left QValue, right QValue) bool {
 	return left.string_value() == right.string_value()
 }
 
-fn q_validate_declared_property(name string, type_name string, value QValue, line int) ! {
+fn v_validate_declared_property(name string, type_name string, value VValue, line int) ! {
 	valid := match type_name {
 		'bool' { value.kind == .bool_ }
 		'string' { value.kind == .string_ }
@@ -330,42 +330,42 @@ fn q_validate_declared_property(name string, type_name string, value QValue, lin
 	}
 }
 
-fn q_eval(expr &QExpression, scope map[string]QValue) !QValue {
+fn v_eval(expr &VExpression, scope map[string]VValue) !VValue {
 	return match expr.kind {
 		.literal {
 			if expr.quoted {
-				q_string(expr.value)
+				v_string(expr.value)
 			} else if expr.value == 'true' {
-				q_bool(true)
+				v_bool(true)
 			} else if expr.value == 'false' {
-				q_bool(false)
+				v_bool(false)
 			} else {
-				q_number(expr.value.f64(), expr.value)
+				v_number(expr.value.f64(), expr.value)
 			}
 		}
-		.path { q_lookup(scope, expr.value, expr.line)! }
+		.path { v_lookup(scope, expr.value, expr.line)! }
 		.call {
 			return error('calls are only allowed in event handlers at line ${expr.line}')
 		}
 		.unary {
-			value := q_eval(expr.left, scope)!
+			value := v_eval(expr.left, scope)!
 			match expr.value {
-				'!' { q_bool(!value.truthy()) }
+				'!' { v_bool(!value.truthy()) }
 				'-' {
 					number := -value.numeric(expr.line)!
-					q_number(number, number.str())
+					v_number(number, number.str())
 				}
 				else {
 					return error('unknown unary operator `${expr.value}` at line ${expr.line}')
 				}
 			}
 		}
-		.binary { q_eval_binary(expr, scope)! }
+		.binary { v_eval_binary(expr, scope)! }
 		.conditional {
-			if q_eval(expr.left, scope)!.truthy() {
-				q_eval(expr.right, scope)!
+			if v_eval(expr.left, scope)!.truthy() {
+				v_eval(expr.right, scope)!
 			} else {
-				q_eval(expr.third, scope)!
+				v_eval(expr.third, scope)!
 			}
 		}
 		.interpolation {
@@ -374,39 +374,39 @@ fn q_eval(expr &QExpression, scope map[string]QValue) !QValue {
 				if isnil(part.expr) {
 					output += part.text
 				} else {
-					output += q_eval(part.expr, scope)!.string_value()
+					output += v_eval(part.expr, scope)!.string_value()
 				}
 			}
-			q_string(output)
+			v_string(output)
 		}
 	}
 }
 
-fn q_eval_binary(expr &QExpression, scope map[string]QValue) !QValue {
-	left := q_eval(expr.left, scope)!
+fn v_eval_binary(expr &VExpression, scope map[string]VValue) !VValue {
+	left := v_eval(expr.left, scope)!
 	if expr.value == '&&' && !left.truthy() {
-		return q_bool(false)
+		return v_bool(false)
 	}
 	if expr.value == '||' && left.truthy() {
-		return q_bool(true)
+		return v_bool(true)
 	}
-	right := q_eval(expr.right, scope)!
+	right := v_eval(expr.right, scope)!
 	return match expr.value {
 		'+' {
 			if left.kind == .string_ || right.kind == .string_ {
-				q_string(left.string_value() + right.string_value())
+				v_string(left.string_value() + right.string_value())
 			} else {
 				value := left.numeric(expr.line)! + right.numeric(expr.line)!
-				q_number(value, value.str())
+				v_number(value, value.str())
 			}
 		}
 		'-' {
 			value := left.numeric(expr.line)! - right.numeric(expr.line)!
-			q_number(value, value.str())
+			v_number(value, value.str())
 		}
 		'*' {
 			value := left.numeric(expr.line)! * right.numeric(expr.line)!
-			q_number(value, value.str())
+			v_number(value, value.str())
 		}
 		'/' {
 			divisor := right.numeric(expr.line)!
@@ -414,7 +414,7 @@ fn q_eval_binary(expr &QExpression, scope map[string]QValue) !QValue {
 				return error('division by zero at line ${expr.line}')
 			}
 			value := left.numeric(expr.line)! / divisor
-			q_number(value, value.str())
+			v_number(value, value.str())
 		}
 		'%' {
 			divisor := right.numeric(expr.line)!
@@ -422,30 +422,30 @@ fn q_eval_binary(expr &QExpression, scope map[string]QValue) !QValue {
 				return error('division by zero at line ${expr.line}')
 			}
 			value := math.fmod(left.numeric(expr.line)!, divisor)
-			q_number(value, value.str())
+			v_number(value, value.str())
 		}
-		'==' { q_bool(q_values_equal(left, right)) }
-		'!=' { q_bool(!q_values_equal(left, right)) }
-		'<' { q_bool(left.numeric(expr.line)! < right.numeric(expr.line)!) }
-		'<=' { q_bool(left.numeric(expr.line)! <= right.numeric(expr.line)!) }
-		'>' { q_bool(left.numeric(expr.line)! > right.numeric(expr.line)!) }
-		'>=' { q_bool(left.numeric(expr.line)! >= right.numeric(expr.line)!) }
-		'&&' { q_bool(left.truthy() && right.truthy()) }
-		'||' { q_bool(left.truthy() || right.truthy()) }
+		'==' { v_bool(v_values_equal(left, right)) }
+		'!=' { v_bool(!v_values_equal(left, right)) }
+		'<' { v_bool(left.numeric(expr.line)! < right.numeric(expr.line)!) }
+		'<=' { v_bool(left.numeric(expr.line)! <= right.numeric(expr.line)!) }
+		'>' { v_bool(left.numeric(expr.line)! > right.numeric(expr.line)!) }
+		'>=' { v_bool(left.numeric(expr.line)! >= right.numeric(expr.line)!) }
+		'&&' { v_bool(left.truthy() && right.truthy()) }
+		'||' { v_bool(left.truthy() || right.truthy()) }
 		else {
 			return error('unknown operator `${expr.value}` at line ${expr.line}')
 		}
 	}
 }
 
-struct QmlInvocation {
+struct VmlInvocation {
 	name  string
-	args  []&QExpression
-	scope map[string]QValue
+	args  []&VExpression
+	scope map[string]VValue
 	line  int
 }
 
-struct QmlBinding {
+struct VmlBinding {
 	property           string
 	target             string
 	control            string
@@ -453,19 +453,19 @@ struct QmlBinding {
 	allow_no_selection bool = true
 }
 
-struct QmlEvent {
-	binding        ?QmlBinding
-	group_bindings []QmlBinding
-	invocation     ?QmlInvocation
+struct VmlEvent {
+	binding        ?VmlBinding
+	group_bindings []VmlBinding
+	invocation     ?VmlInvocation
 }
 
-struct QmlEvaluation {
+struct VmlEvaluation {
 mut:
-	events                map[string]QmlEvent
-	toggle_group_bindings map[string][]QmlBinding
+	events                map[string]VmlEvent
+	toggle_group_bindings map[string][]VmlBinding
 }
 
-fn q_action(expr &QExpression, scope map[string]QValue) !QmlInvocation {
+fn v_action(expr &VExpression, scope map[string]VValue) !VmlInvocation {
 	if expr.kind != .call || !expr.value.starts_with('app.') {
 		return error('event handlers must call an app action at line ${expr.line}')
 	}
@@ -475,7 +475,7 @@ fn q_action(expr &QExpression, scope map[string]QValue) !QmlInvocation {
 	}
 	mut action_scope := scope.clone()
 	action_scope.delete('app')
-	return QmlInvocation{
+	return VmlInvocation{
 		name: name
 		args: expr.args.clone()
 		scope: action_scope
@@ -483,24 +483,24 @@ fn q_action(expr &QExpression, scope map[string]QValue) !QmlInvocation {
 	}
 }
 
-fn q_event_id(node &QNode, scope map[string]QValue, property string) string {
-	repeated := (scope['__repeat_key'] or { q_string('') }).string_value()
-	return '__qml_event_${node.path.replace('.', '_')}_${property}_${repeated.bytes().hex()}'
+fn v_event_id(node &VNode, scope map[string]VValue, property string) string {
+	repeated := (scope['__repeat_key'] or { v_string('') }).string_value()
+	return '__vml_event_${node.path.replace('.', '_')}_${property}_${repeated.bytes().hex()}'
 }
 
-fn q_control_id(node &QNode, scope map[string]QValue) string {
-	repeated := (scope['__repeat_key'] or { q_string('') }).string_value()
-	return '__qml_control_${node.path.replace('.', '_')}_${repeated.bytes().hex()}'
+fn v_control_id(node &VNode, scope map[string]VValue) string {
+	repeated := (scope['__repeat_key'] or { v_string('') }).string_value()
+	return '__vml_control_${node.path.replace('.', '_')}_${repeated.bytes().hex()}'
 }
 
-fn q_repeat_identity(parent string, key string) string {
+fn v_repeat_identity(parent string, key string) string {
 	// Encode each key independently. Encoding only the final joined path makes
 	// (`a/b`, `c`) indistinguishable from (`a`, `b/c`).
 	segment := key.bytes().hex()
 	return if parent.len > 0 { '${parent}/${segment}' } else { segment }
 }
 
-enum QChildLayoutKind {
+enum VChildLayoutKind {
 	overlay
 	column
 	row
@@ -514,7 +514,7 @@ enum QChildLayoutKind {
 	accordion
 }
 
-struct QLayoutChildMetrics {
+struct VLayoutChildMetrics {
 	frame            Rect
 	size_hint_x      f64 = 1.0
 	size_hint_y      f64 = 1.0
@@ -528,8 +528,8 @@ struct QLayoutChildMetrics {
 	y_hint           FloatAxisHint
 }
 
-struct QChildLayout {
-	kind    QChildLayoutKind
+struct VChildLayout {
+	kind    VChildLayoutKind
 	frame   Rect
 	padding f64
 	spacing f64
@@ -540,19 +540,19 @@ mut:
 	index  int
 }
 
-fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChildLayout {
+fn v_child_layout(node &VNode, actual Rect, metrics []VLayoutChildMetrics) !VChildLayout {
 	kind := match node.tag {
-		'Column' { QChildLayoutKind.column }
-		'Row' { QChildLayoutKind.row }
-		'BoxLayout' { QChildLayoutKind.box }
-		'FloatLayout', 'RelativeLayout' { QChildLayoutKind.float }
-		'GridLayout' { QChildLayoutKind.grid }
-		'AnchorLayout' { QChildLayoutKind.anchor }
-		'StackLayout' { QChildLayoutKind.stack }
-		'PageLayout' { QChildLayoutKind.page }
-		'TabbedPanel' { QChildLayoutKind.tabs }
-		'Accordion' { QChildLayoutKind.accordion }
-		else { QChildLayoutKind.overlay }
+		'Column' { VChildLayoutKind.column }
+		'Row' { VChildLayoutKind.row }
+		'BoxLayout' { VChildLayoutKind.box }
+		'FloatLayout', 'RelativeLayout' { VChildLayoutKind.float }
+		'GridLayout' { VChildLayoutKind.grid }
+		'AnchorLayout' { VChildLayoutKind.anchor }
+		'StackLayout' { VChildLayoutKind.stack }
+		'PageLayout' { VChildLayoutKind.page }
+		'TabbedPanel' { VChildLayoutKind.tabs }
+		'Accordion' { VChildLayoutKind.accordion }
+		else { VChildLayoutKind.overlay }
 	}
 	padding := node.prop_or('padding', '0').f64()
 	local := rect(0, 0, actual.width, actual.height)
@@ -595,23 +595,23 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 	}
 	mut cells := []Rect{}
 	if kind == .grid {
-		cells = grid_layout_frames(q_grid_config(node, local)!, child_sizes.len)!
+		cells = grid_layout_frames(v_grid_config(node, local)!, child_sizes.len)!
 	} else if kind == .box {
-		cells = box_layout_frames(q_box_layout_config(node, local, box_children)!)!
+		cells = box_layout_frames(v_box_layout_config(node, local, box_children)!)!
 	} else if kind == .float {
-		cells = float_layout_frames(q_float_layout_config(node, local, float_children))!
+		cells = float_layout_frames(v_float_layout_config(node, local, float_children))!
 	} else if kind == .stack {
-		cells = stack_layout_frames(q_stack_config(node, local)!, child_sizes)!
+		cells = stack_layout_frames(v_stack_config(node, local)!, child_sizes)!
 	} else if kind == .page {
-		cells = page_layout_frames(q_page_layout_config(node, local, child_sizes.len))!
+		cells = page_layout_frames(v_page_layout_config(node, local, child_sizes.len))!
 	} else if kind == .tabs {
-		geometry := tabbed_panel_geometry(q_tabbed_panel_config(node, local, panel_tabs)!)!
+		geometry := tabbed_panel_geometry(v_tabbed_panel_config(node, local, panel_tabs)!)!
 		cells = []Rect{len: panel_tabs.len, init: geometry.content}
 	} else if kind == .accordion {
-		geometry := accordion_geometry(q_accordion_config(node, local, accordion_items)!)!
+		geometry := accordion_geometry(v_accordion_config(node, local, accordion_items)!)!
 		cells = []Rect{len: accordion_items.len, init: geometry.content}
 	}
-	return QChildLayout{
+	return VChildLayout{
 		kind: kind
 		frame: local
 		padding: padding
@@ -619,21 +619,21 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 		cursor: padding
 		cells: cells
 		anchor: if kind == .anchor {
-			q_anchor_config(node, local)!
+			v_anchor_config(node, local)!
 		} else {
 			AnchorLayoutConfig{}
 		}
 	}
 }
 
-fn q_layout_dimension(node &QNode, key string, scope map[string]QValue, fallback f64) !f64 {
+fn v_layout_dimension(node &VNode, key string, scope map[string]VValue, fallback f64) !f64 {
 	if expr := node.expressions[key] {
-		return q_eval(expr, scope)!.numeric(expr.line)!
+		return v_eval(expr, scope)!.numeric(expr.line)!
 	}
-	return q_dimension(node, key, fallback)
+	return v_dimension(node, key, fallback)
 }
 
-fn (layout &QChildLayout) fallback(child &QNode, scope map[string]QValue) !Rect {
+fn (layout &VChildLayout) fallback(child &VNode, scope map[string]VValue) !Rect {
 	return match layout.kind {
 		.overlay { layout.frame }
 		.column {
@@ -652,7 +652,7 @@ fn (layout &QChildLayout) fallback(child &QNode, scope map[string]QValue) !Rect 
 			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
 		}
 		.anchor {
-			anchor_layout_frame(layout.anchor, rect(0, 0, q_layout_dimension(child, 'width', scope, 80)!, q_layout_dimension(child, 'height', scope, 32)!))
+			anchor_layout_frame(layout.anchor, rect(0, 0, v_layout_dimension(child, 'width', scope, 80)!, v_layout_dimension(child, 'height', scope, 32)!))
 		}
 		.stack {
 			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
@@ -669,16 +669,16 @@ fn (layout &QChildLayout) fallback(child &QNode, scope map[string]QValue) !Rect 
 	}
 }
 
-fn (mut layout QChildLayout) advance(child &QNode) {
+fn (mut layout VChildLayout) advance(child &VNode) {
 	if child.tag in ['MenuItem', 'Option'] {
 		return
 	}
 	match layout.kind {
 		.column {
-			layout.cursor += q_dimension(child, 'height', 32) + layout.spacing
+			layout.cursor += v_dimension(child, 'height', 32) + layout.spacing
 		}
 		.row {
-			layout.cursor += q_dimension(child, 'width', 80) + layout.spacing
+			layout.cursor += v_dimension(child, 'width', 80) + layout.spacing
 		}
 		.box {
 			layout.index++
@@ -706,63 +706,63 @@ fn (mut layout QChildLayout) advance(child &QNode) {
 	}
 }
 
-fn q_layout_alignment(node &QNode, key string, scope map[string]QValue) !BoxAlignment {
+fn v_layout_alignment(node &VNode, key string, scope map[string]VValue) !BoxAlignment {
 	if expr := node.expressions[key] {
-		return box_alignment(q_eval(expr, scope)!.string_value())!
+		return box_alignment(v_eval(expr, scope)!.string_value())!
 	}
 	return box_alignment(node.prop_or(key, 'start'))!
 }
 
-fn q_layout_float_axis_hint(node &QNode, scope map[string]QValue, start_keys []string, center_key string, end_key string) !FloatAxisHint {
+fn v_layout_float_axis_hint(node &VNode, scope map[string]VValue, start_keys []string, center_key string, end_key string) !FloatAxisHint {
 	for key in start_keys {
 		if expr := node.expressions[key] {
-			return FloatAxisHint{ anchor: .start, value: q_eval(expr, scope)!.numeric(expr.line)! }
+			return FloatAxisHint{ anchor: .start, value: v_eval(expr, scope)!.numeric(expr.line)! }
 		}
 	}
 	if expr := node.expressions[center_key] {
-		return FloatAxisHint{ anchor: .center, value: q_eval(expr, scope)!.numeric(expr.line)! }
+		return FloatAxisHint{ anchor: .center, value: v_eval(expr, scope)!.numeric(expr.line)! }
 	}
 	if expr := node.expressions[end_key] {
-		return FloatAxisHint{ anchor: .end, value: q_eval(expr, scope)!.numeric(expr.line)! }
+		return FloatAxisHint{ anchor: .end, value: v_eval(expr, scope)!.numeric(expr.line)! }
 	}
 	return FloatAxisHint{}
 }
 
-fn q_layout_child_metric(node &QNode, scope map[string]QValue, box bool, floating bool) !QLayoutChildMetrics {
+fn v_layout_child_metric(node &VNode, scope map[string]VValue, box bool, floating bool) !VLayoutChildMetrics {
 	if !box && !floating {
-		return QLayoutChildMetrics{
-			frame: rect(0, 0, q_layout_dimension(node, 'width', scope, 80)!, q_layout_dimension(node, 'height', scope, 32)!)
+		return VLayoutChildMetrics{
+			frame: rect(0, 0, v_layout_dimension(node, 'width', scope, 80)!, v_layout_dimension(node, 'height', scope, 32)!)
 		}
 	}
-	return QLayoutChildMetrics{
-		frame: rect(if floating { q_layout_dimension(node, 'x', scope, 0)! } else { 0.0 }, if floating {
-			q_layout_dimension(node, 'y', scope, 0)!
+	return VLayoutChildMetrics{
+		frame: rect(if floating { v_layout_dimension(node, 'x', scope, 0)! } else { 0.0 }, if floating {
+			v_layout_dimension(node, 'y', scope, 0)!
 		} else {
 			0.0
-		}, q_layout_dimension(node, 'width', scope, 80)!, q_layout_dimension(node, 'height', scope, 32)!)
-		size_hint_x: q_layout_dimension(node, 'size_hint_x', scope, 1)!
-		size_hint_y: q_layout_dimension(node, 'size_hint_y', scope, 1)!
-		minimum_width: q_layout_dimension(node, 'size_hint_min_x', scope, -1)!
-		minimum_height: q_layout_dimension(node, 'size_hint_min_y', scope, -1)!
-		maximum_width: q_layout_dimension(node, 'size_hint_max_x', scope, -1)!
-		maximum_height: q_layout_dimension(node, 'size_hint_max_y', scope, -1)!
-		horizontal_align: q_layout_alignment(node, 'align_x', scope)!
-		vertical_align: q_layout_alignment(node, 'align_y', scope)!
+		}, v_layout_dimension(node, 'width', scope, 80)!, v_layout_dimension(node, 'height', scope, 32)!)
+		size_hint_x: v_layout_dimension(node, 'size_hint_x', scope, 1)!
+		size_hint_y: v_layout_dimension(node, 'size_hint_y', scope, 1)!
+		minimum_width: v_layout_dimension(node, 'size_hint_min_x', scope, -1)!
+		minimum_height: v_layout_dimension(node, 'size_hint_min_y', scope, -1)!
+		maximum_width: v_layout_dimension(node, 'size_hint_max_x', scope, -1)!
+		maximum_height: v_layout_dimension(node, 'size_hint_max_y', scope, -1)!
+		horizontal_align: v_layout_alignment(node, 'align_x', scope)!
+		vertical_align: v_layout_alignment(node, 'align_y', scope)!
 		x_hint: if floating {
-			q_layout_float_axis_hint(node, scope, ['pos_hint_x'], 'pos_hint_center_x', 'pos_hint_right')!
+			v_layout_float_axis_hint(node, scope, ['pos_hint_x'], 'pos_hint_center_x', 'pos_hint_right')!
 		} else {
 			FloatAxisHint{}
 		}
 		y_hint: if floating {
-			q_layout_float_axis_hint(node, scope, ['pos_hint_y', 'pos_hint_top'], 'pos_hint_center_y', 'pos_hint_bottom')!
+			v_layout_float_axis_hint(node, scope, ['pos_hint_y', 'pos_hint_top'], 'pos_hint_center_y', 'pos_hint_bottom')!
 		} else {
 			FloatAxisHint{}
 		}
 	}
 }
 
-fn q_layout_child_metrics(node &QNode, scope map[string]QValue) ![]QLayoutChildMetrics {
-	mut metrics := []QLayoutChildMetrics{}
+fn v_layout_child_metrics(node &VNode, scope map[string]VValue) ![]VLayoutChildMetrics {
+	mut metrics := []VLayoutChildMetrics{}
 	box := node.tag == 'BoxLayout'
 	floating := node.tag in ['FloatLayout', 'RelativeLayout']
 	for child in node.children {
@@ -776,34 +776,34 @@ fn q_layout_child_metrics(node &QNode, scope map[string]QValue) ![]QLayoutChildM
 			continue
 		}
 		if child.tag != 'Repeater' {
-			metrics << q_layout_child_metric(child, scope, box, floating)!
+			metrics << v_layout_child_metric(child, scope, box, floating)!
 			continue
 		}
 		model_expr := child.expressions['model'] or {
 			return error('Repeater requires `model` at line ${child.line}')
 		}
-		items := q_eval(model_expr, scope)!
+		items := v_eval(model_expr, scope)!
 		if items.kind != .list {
 			return error('Repeater model must be a collection at line ${model_expr.line}')
 		}
 		for index, item in items.items {
 			mut item_scope := scope.clone()
 			item_scope['item'] = item
-			item_scope['index'] = q_number(f64(index), index.str())
+			item_scope['index'] = v_number(f64(index), index.str())
 			for repeated in child.children {
 				if repeated.tag in ['MenuItem', 'Option'] {
 					continue
 				}
-				metrics << q_layout_child_metric(repeated, item_scope, box, floating)!
+				metrics << v_layout_child_metric(repeated, item_scope, box, floating)!
 			}
 		}
 	}
 	return metrics
 }
 
-fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut evaluation QmlEvaluation) !&QNode {
+fn v_eval_node(node &VNode, incoming_scope map[string]VValue, frame Rect, mut evaluation VmlEvaluation) !&VNode {
 	mut scope := incoming_scope.clone()
-	mut resolved := &QNode{
+	mut resolved := &VNode{
 		tag: node.tag
 		id: node.id
 		line: node.line
@@ -812,37 +812,37 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 
 	// Root ids are available while evaluating root-level declared properties.
 	if node.id.len > 0 {
-		scope[node.id] = q_object({
-			'x':      q_number(frame.x, frame.x.str())
-			'y':      q_number(frame.y, frame.y.str())
-			'width':  q_number(frame.width, frame.width.str())
-			'height': q_number(frame.height, frame.height.str())
+		scope[node.id] = v_object({
+			'x':      v_number(frame.x, frame.x.str())
+			'y':      v_number(frame.y, frame.y.str())
+			'width':  v_number(frame.width, frame.width.str())
+			'height': v_number(frame.height, frame.height.str())
 		})
 	}
 	for name in node.property_order {
 		expr := node.expressions[name] or { continue }
-		value := q_eval(expr, scope)!
-		q_validate_declared_property(name, node.property_types[name], value, expr.line)!
+		value := v_eval(expr, scope)!
+		v_validate_declared_property(name, node.property_types[name], value, expr.line)!
 		resolved.props[name] = value.string_value()
 		resolved.property_types[name] = node.property_types[name]
 		resolved.property_order << name
 		if node.id.len > 0 {
 			mut object := scope[node.id] or {
-				return error('internal QML scope error for `${node.id}` at line ${node.line}')
+				return error('internal VML scope error for `${node.id}` at line ${node.line}')
 			}
 			object.fields[name] = value
 			scope[node.id] = object
 		}
 	}
 
-	mut binding := ?QmlBinding(none)
+	mut binding := ?VmlBinding(none)
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
 			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
 				'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 			continue
 		}
-		resolved.props[key] = q_eval(expr, scope)!.string_value()
+		resolved.props[key] = v_eval(expr, scope)!.string_value()
 	}
 	for key, expr in node.expressions {
 		if !key.starts_with('bind.') {
@@ -855,11 +855,11 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		if expr.kind != .path || !expr.value.starts_with('app.') || expr.value.count('.') != 1 {
 			return error('`${key}` must target a mutable top-level app field at line ${expr.line}')
 		}
-		resolved.props[property] = q_eval(expr, scope)!.string_value()
+		resolved.props[property] = v_eval(expr, scope)!.string_value()
 		if resolved.id.len == 0 {
-			resolved.id = q_control_id(node, scope)
+			resolved.id = v_control_id(node, scope)
 		}
-		resolved_binding := QmlBinding{
+		resolved_binding := VmlBinding{
 			property: property
 			target: expr.value
 			control: resolved.id
@@ -873,21 +873,21 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		binding = resolved_binding
 		if resolved_binding.group.len > 0 {
 			mut group_bindings := evaluation.toggle_group_bindings[resolved_binding.group] or {
-				[]QmlBinding{}
+				[]VmlBinding{}
 			}
 			group_bindings << resolved_binding
 			evaluation.toggle_group_bindings[resolved_binding.group] = group_bindings
 		}
 	}
-	actual := q_frame(resolved, frame)
+	actual := v_frame(resolved, frame)
 	if node.id.len > 0 {
 		mut object := scope[node.id] or {
-			return error('internal QML scope error for `${node.id}` at line ${node.line}')
+			return error('internal VML scope error for `${node.id}` at line ${node.line}')
 		}
-		object.fields['x'] = q_number(actual.x, actual.x.str())
-		object.fields['y'] = q_number(actual.y, actual.y.str())
-		object.fields['width'] = q_number(actual.width, actual.width.str())
-		object.fields['height'] = q_number(actual.height, actual.height.str())
+		object.fields['x'] = v_number(actual.x, actual.x.str())
+		object.fields['y'] = v_number(actual.y, actual.y.str())
+		object.fields['width'] = v_number(actual.width, actual.width.str())
+		object.fields['height'] = v_number(actual.height, actual.height.str())
 		scope[node.id] = object
 	}
 
@@ -905,20 +905,20 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 				return error('two-way binding is not supported for `${b.property}` at line ${node.line}')
 			}
 		}
-		event_id := q_event_id(node, scope, binding_event_property)
+		event_id := v_event_id(node, scope, binding_event_property)
 		resolved.props[binding_event_property] = event_id
-		evaluation.events[event_id] = QmlEvent{ binding: binding }
+		evaluation.events[event_id] = VmlEvent{ binding: binding }
 	}
 	for property in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
 		'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 		expr := node.expressions[property] or { continue }
 		if expr.kind == .call {
-			event_id := q_event_id(node, scope, property)
-			existing := evaluation.events[event_id] or { QmlEvent{} }
+			event_id := v_event_id(node, scope, property)
+			existing := evaluation.events[event_id] or { VmlEvent{} }
 			resolved.props[property] = event_id
-			evaluation.events[event_id] = QmlEvent{
+			evaluation.events[event_id] = VmlEvent{
 				binding: existing.binding
-				invocation: q_action(expr, scope)!
+				invocation: v_action(expr, scope)!
 			}
 		} else {
 			if property == binding_event_property {
@@ -928,13 +928,13 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		}
 	}
 
-	child_metrics := q_layout_child_metrics(node, scope)!
-	mut layout := q_child_layout(resolved, actual, child_metrics)!
+	child_metrics := v_layout_child_metrics(node, scope)!
+	mut layout := v_child_layout(resolved, actual, child_metrics)!
 	for child in node.children {
 		if child.tag == 'Repeater' {
-			q_expand_repeater(child, scope, mut resolved.children, mut evaluation, mut layout)!
+			v_expand_repeater(child, scope, mut resolved.children, mut evaluation, mut layout)!
 		} else {
-			resolved_child := q_eval_node(child, scope, layout.fallback(child, scope)!, mut evaluation)!
+			resolved_child := v_eval_node(child, scope, layout.fallback(child, scope)!, mut evaluation)!
 			resolved.children << resolved_child
 			layout.advance(resolved_child)
 		}
@@ -942,14 +942,14 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 	return resolved
 }
 
-fn q_expand_repeater(node &QNode, scope map[string]QValue, mut output []&QNode, mut evaluation QmlEvaluation, mut layout QChildLayout) ! {
+fn v_expand_repeater(node &VNode, scope map[string]VValue, mut output []&VNode, mut evaluation VmlEvaluation, mut layout VChildLayout) ! {
 	model_expr := node.expressions['model'] or {
 		return error('Repeater requires `model` at line ${node.line}')
 	}
 	key_expr := node.expressions['key'] or {
 		return error('Repeater requires a stable `key` at line ${node.line}')
 	}
-	items := q_eval(model_expr, scope)!
+	items := v_eval(model_expr, scope)!
 	if items.kind != .list {
 		return error('Repeater model must be a collection at line ${model_expr.line}')
 	}
@@ -957,8 +957,8 @@ fn q_expand_repeater(node &QNode, scope map[string]QValue, mut output []&QNode, 
 	for index, item in items.items {
 		mut item_scope := scope.clone()
 		item_scope['item'] = item
-		item_scope['index'] = q_number(f64(index), index.str())
-		key := q_eval(key_expr, item_scope)!.string_value()
+		item_scope['index'] = v_number(f64(index), index.str())
+		key := v_eval(key_expr, item_scope)!.string_value()
 		if key.len == 0 {
 			return error('Repeater key cannot be empty at line ${key_expr.line}')
 		}
@@ -966,10 +966,10 @@ fn q_expand_repeater(node &QNode, scope map[string]QValue, mut output []&QNode, 
 			return error('duplicate Repeater key `${key}` at line ${key_expr.line}')
 		}
 		keys[key] = true
-		parent_key := (scope['__repeat_key'] or { q_string('') }).string_value()
-		item_scope['__repeat_key'] = q_string(q_repeat_identity(parent_key, key))
+		parent_key := (scope['__repeat_key'] or { v_string('') }).string_value()
+		item_scope['__repeat_key'] = v_string(v_repeat_identity(parent_key, key))
 		for child_index, child in node.children {
-			mut repeated := q_eval_node(child, item_scope, layout.fallback(child, item_scope)!, mut evaluation)!
+			mut repeated := v_eval_node(child, item_scope, layout.fallback(child, item_scope)!, mut evaluation)!
 			if repeated.props['key'].len == 0 {
 				repeated.props['key'] = if node.children.len == 1 {
 					key
@@ -983,11 +983,11 @@ fn q_expand_repeater(node &QNode, scope map[string]QValue, mut output []&QNode, 
 	}
 }
 
-fn q_validate_declared_schema(name string, type_name string, schema QSchema, line int) ! {
+fn v_validate_declared_schema(name string, type_name string, schema VSchema, line int) ! {
 	expected := match type_name {
-		'bool' { QValueKind.bool_ }
-		'string' { QValueKind.string_ }
-		'int', 'f32', 'f64' { QValueKind.number }
+		'bool' { VValueKind.bool_ }
+		'string' { VValueKind.string_ }
+		'int', 'f32', 'f64' { VValueKind.number }
 		else {
 			return error('unsupported property type `${type_name}` at line ${line}')
 		}
@@ -997,7 +997,7 @@ fn q_validate_declared_schema(name string, type_name string, schema QSchema, lin
 	}
 }
 
-fn q_validate_action[T](expr &QExpression, scope map[string]QSchema) ! {
+fn v_validate_action[T](expr &VExpression, scope map[string]VSchema) ! {
 	if expr.kind != .call || !expr.value.starts_with('app.') {
 		return error('event handlers must call an app action at line ${expr.line}')
 	}
@@ -1005,56 +1005,56 @@ fn q_validate_action[T](expr &QExpression, scope map[string]QSchema) ! {
 	if name.len == 0 || name.contains('.') {
 		return error('invalid app action `${expr.value}` at line ${expr.line}')
 	}
-	mut args := []QSchema{cap: expr.args.len}
+	mut args := []VSchema{cap: expr.args.len}
 	for arg in expr.args {
-		args << q_schema_expression(arg, scope)!
+		args << v_schema_expression(arg, scope)!
 	}
 	type_check_action[T](name, args, expr.line)!
 }
 
-fn q_validate_repeater_schema[T](node &QNode, scope map[string]QSchema) ! {
+fn v_validate_repeater_schema[T](node &VNode, scope map[string]VSchema) ! {
 	model_expr := node.expressions['model'] or {
 		return error('Repeater requires `model` at line ${node.line}')
 	}
 	key_expr := node.expressions['key'] or {
 		return error('Repeater requires a stable `key` at line ${node.line}')
 	}
-	items := q_schema_expression(model_expr, scope)!
+	items := v_schema_expression(model_expr, scope)!
 	if items.kind != .list || isnil(items.element) {
 		return error('Repeater model must be a collection at line ${model_expr.line}')
 	}
 	mut item_scope := scope.clone()
 	item_scope['item'] = *items.element
-	item_scope['index'] = QSchema{ kind: .number }
-	key := q_schema_expression(key_expr, item_scope)!
+	item_scope['index'] = VSchema{ kind: .number }
+	key := v_schema_expression(key_expr, item_scope)!
 	if key.kind in [.invalid, .object, .list] {
 		return error('Repeater key must be a scalar value at line ${key_expr.line}')
 	}
 	for child in node.children {
-		q_validate_node_schema[T](child, item_scope)!
+		v_validate_node_schema[T](child, item_scope)!
 	}
 }
 
-fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
+fn v_validate_node_schema[T](node &VNode, incoming_scope map[string]VSchema) ! {
 	mut scope := incoming_scope.clone()
 	if node.id.len > 0 {
-		scope[node.id] = QSchema{
+		scope[node.id] = VSchema{
 			kind: .object
 			fields: {
-				'x':      QSchema{ kind: .number }
-				'y':      QSchema{ kind: .number }
-				'width':  QSchema{ kind: .number }
-				'height': QSchema{ kind: .number }
+				'x':      VSchema{ kind: .number }
+				'y':      VSchema{ kind: .number }
+				'width':  VSchema{ kind: .number }
+				'height': VSchema{ kind: .number }
 			}
 		}
 	}
 	for name in node.property_order {
 		expr := node.expressions[name] or { continue }
-		schema := q_schema_expression(expr, scope)!
-		q_validate_declared_schema(name, node.property_types[name], schema, expr.line)!
+		schema := v_schema_expression(expr, scope)!
+		v_validate_declared_schema(name, node.property_types[name], schema, expr.line)!
 		if node.id.len > 0 {
 			mut object := scope[node.id] or {
-				return error('internal QML schema error for `${node.id}` at line ${node.line}')
+				return error('internal VML schema error for `${node.id}` at line ${node.line}')
 			}
 			object.fields[name] = schema
 			scope[node.id] = object
@@ -1066,7 +1066,7 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 				'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 			continue
 		}
-		q_schema_expression(expr, scope)!
+		v_schema_expression(expr, scope)!
 	}
 	for key, expr in node.expressions {
 		if !key.starts_with('bind.') {
@@ -1079,9 +1079,9 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 		if expr.kind != .path || !expr.value.starts_with('app.') || expr.value.count('.') != 1 {
 			return error('`${key}` must target a mutable top-level app field at line ${expr.line}')
 		}
-		q_schema_expression(expr, scope)!
+		v_schema_expression(expr, scope)!
 		target := expr.value.all_after('app.')
-		type_name := qml_writable_field_type[T](target)!
+		type_name := vml_writable_field_type[T](target)!
 		if property in ['checked', 'active', 'pressed'] && type_name != 'bool' {
 			return error('bind.${property} requires a bool field, got `${target}` (${type_name})')
 		}
@@ -1093,27 +1093,27 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 		'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 		expr := node.expressions[property] or { continue }
 		if expr.kind == .call {
-			q_validate_action[T](expr, scope)!
+			v_validate_action[T](expr, scope)!
 		} else {
-			q_schema_expression(expr, scope)!
+			v_schema_expression(expr, scope)!
 		}
 	}
 	for child in node.children {
 		if child.tag == 'Repeater' {
-			q_validate_repeater_schema[T](child, scope)!
+			v_validate_repeater_schema[T](child, scope)!
 		} else {
-			q_validate_node_schema[T](child, scope)!
+			v_validate_node_schema[T](child, scope)!
 		}
 	}
 }
 
-fn q_validate_template[T](root &QNode, model T) ! {
-	q_validate_node_schema[T](root, {
-		'app': q_schema_from(model)
+fn v_validate_template[T](root &VNode, model T) ! {
+	v_validate_node_schema[T](root, {
+		'app': v_schema_from(model)
 	})!
 }
 
-fn q_normalize_toggle_groups(node &QNode, mut selected map[string]bool) &QNode {
+fn v_normalize_toggle_groups(node &VNode, mut selected map[string]bool) &VNode {
 	mut props := node.props.clone()
 	if node.tag == 'ToggleButton' {
 		group := node.prop('group')
@@ -1127,11 +1127,11 @@ fn q_normalize_toggle_groups(node &QNode, mut selected map[string]bool) &QNode {
 			}
 		}
 	}
-	mut children := []&QNode{cap: node.children.len}
+	mut children := []&VNode{cap: node.children.len}
 	for child in node.children {
-		children << q_normalize_toggle_groups(child, mut selected)
+		children << v_normalize_toggle_groups(child, mut selected)
 	}
-	return &QNode{
+	return &VNode{
 		tag: node.tag
 		id: node.id
 		props: props
@@ -1144,22 +1144,22 @@ fn q_normalize_toggle_groups(node &QNode, mut selected map[string]bool) &QNode {
 	}
 }
 
-fn q_evaluate_template[T](root &QNode, model T, frame Rect) !(&QNode, map[string]QmlEvent) {
-	mut evaluation := QmlEvaluation{
-		events: map[string]QmlEvent{}
-		toggle_group_bindings: map[string][]QmlBinding{}
+fn v_evaluate_template[T](root &VNode, model T, frame Rect) !(&VNode, map[string]VmlEvent) {
+	mut evaluation := VmlEvaluation{
+		events: map[string]VmlEvent{}
+		toggle_group_bindings: map[string][]VmlBinding{}
 	}
 	scope := {
-		'app': q_value_from(model)
+		'app': v_value_from(model)
 	}
-	resolved := q_eval_node(root, scope, frame, mut evaluation)!
+	resolved := v_eval_node(root, scope, frame, mut evaluation)!
 	mut selected := map[string]bool{}
-	normalized := q_normalize_toggle_groups(resolved, mut selected)
+	normalized := v_normalize_toggle_groups(resolved, mut selected)
 	mut events := evaluation.events.clone()
 	for event_id, event in evaluation.events {
 		if binding := event.binding {
 			if binding.group.len > 0 {
-				events[event_id] = QmlEvent{
+				events[event_id] = VmlEvent{
 					binding: event.binding
 					group_bindings: evaluation.toggle_group_bindings[binding.group].clone()
 					invocation: event.invocation
@@ -1170,19 +1170,19 @@ fn q_evaluate_template[T](root &QNode, model T, frame Rect) !(&QNode, map[string
 	return normalized, events
 }
 
-// element_from_qml_model evaluates a QML document against a typed V model.
-// It is useful for previews and tests; run_qml keeps the parsed document cached
+// element_from_vml_model evaluates a VML document against a typed V model.
+// It is useful for previews and tests; run_vml keeps the parsed document cached
 // and additionally wires two-way bindings and actions to the live model.
-pub fn element_from_qml_model[T](source string, model T, frame Rect) !Element {
-	template := parse_qml(source)!
-	q_validate_template[T](template, model)!
-	resolved, _ := q_evaluate_template(template, model, frame)!
-	element := element_from_qnode(resolved, frame)!
+pub fn element_from_vml_model[T](source string, model T, frame Rect) !Element {
+	template := parse_vml(source)!
+	v_validate_template[T](template, model)!
+	resolved, _ := v_evaluate_template(template, model, frame)!
+	element := element_from_vnode(resolved, frame)!
 	validate_element_tree(element)!
 	return element
 }
 
-fn qml_writable_field_type[T](name string) !string {
+fn vml_writable_field_type[T](name string) !string {
 	$for field in T.fields {
 		if field.name == name {
 			$if !field.is_pub {
@@ -1197,7 +1197,7 @@ fn qml_writable_field_type[T](name string) !string {
 	return error('unknown app field `${name}`')
 }
 
-fn type_check_action[T](name string, args []QSchema, line int) ! {
+fn type_check_action[T](name string, args []VSchema, line int) ! {
 	$for method in T.methods {
 		if method.name == name {
 			$if !method.is_pub {
@@ -1225,7 +1225,7 @@ fn type_check_action[T](name string, args []QSchema, line int) ! {
 	return error('unknown app action `${name}` at line ${line}')
 }
 
-fn qml_set_field[T](mut model T, name string, value QValue) ! {
+fn vml_set_field[T](mut model T, name string, value VValue) ! {
 	$for field in T.fields {
 		if field.name == name {
 			$if !field.is_pub {
@@ -1255,14 +1255,14 @@ fn qml_set_field[T](mut model T, name string, value QValue) ! {
 	return error('unknown app field `${name}`')
 }
 
-fn qml_dispatch[T](mut model T, invocation QmlInvocation) ! {
+fn vml_dispatch[T](mut model T, invocation VmlInvocation) ! {
 	mut scope := invocation.scope.clone()
 	// The app object is intentionally refreshed here. Repeater-local values stay
 	// attached to the stable event identity from the rendered instance.
-	scope['app'] = q_value_from(model)
-	mut args := []QValue{cap: invocation.args.len}
+	scope['app'] = v_value_from(model)
+	mut args := []VValue{cap: invocation.args.len}
 	for expr in invocation.args {
-		args << q_eval(expr, scope)!
+		args << v_eval(expr, scope)!
 	}
 	$for method in T.methods {
 		if method.name == invocation.name {
@@ -1281,7 +1281,7 @@ fn qml_dispatch[T](mut model T, invocation QmlInvocation) ! {
 	return error('unknown or unsupported app action `${invocation.name}`')
 }
 
-pub struct QmlRunConfig[T] {
+pub struct VmlRunConfig[T] {
 pub:
 	source string
 	model  T
@@ -1291,77 +1291,77 @@ pub:
 }
 
 @[heap]
-struct QmlController[T] {
-	template &QNode
+struct VmlController[T] {
+	template &VNode
 mut:
 	model  T
-	events map[string]QmlEvent
+	events map[string]VmlEvent
 }
 
 @[heap]
-struct QmlRuntime {
+struct VmlRuntime {
 mut:
 	controller voidptr
 }
 
-const qml_runtime_singleton = &QmlRuntime{}
+const vml_runtime_singleton = &VmlRuntime{}
 
-fn qml_runtime() &QmlRuntime {
-	return unsafe { qml_runtime_singleton }
+fn vml_runtime() &VmlRuntime {
+	return unsafe { vml_runtime_singleton }
 }
 
-fn qml_controller_build[T]() Element {
-	runtime := qml_runtime()
-	mut controller := unsafe { &QmlController[T](runtime.controller) }
+fn vml_controller_build[T]() Element {
+	runtime := vml_runtime()
+	mut controller := unsafe { &VmlController[T](runtime.controller) }
 	return controller.build()
 }
 
-fn qml_controller_handle[T](event_id string) {
-	runtime := qml_runtime()
-	mut controller := unsafe { &QmlController[T](runtime.controller) }
+fn vml_controller_handle[T](event_id string) {
+	runtime := vml_runtime()
+	mut controller := unsafe { &VmlController[T](runtime.controller) }
 	controller.handle(event_id)
 }
 
-fn (mut controller QmlController[T]) build() Element {
+fn (mut controller VmlController[T]) build() Element {
 	frame := bounds()
-	resolved, events := q_evaluate_template(controller.template, controller.model, rect(0, 0, frame.width, frame.height)) or {
-		eprintln('ui2 QML evaluation failed: ${err}')
+	resolved, events := v_evaluate_template(controller.template, controller.model, rect(0, 0, frame.width, frame.height)) or {
+		eprintln('ui2 VML evaluation failed: ${err}')
 		return screen(0xffffff, [])
 	}
 	controller.events = events.clone()
-	return element_from_qnode(resolved, rect(0, 0, frame.width, frame.height)) or {
-		eprintln('ui2 QML element conversion failed: ${err}')
+	return element_from_vnode(resolved, rect(0, 0, frame.width, frame.height)) or {
+		eprintln('ui2 VML element conversion failed: ${err}')
 		screen(0xffffff, [])
 	}
 }
 
-fn (mut controller QmlController[T]) handle(event_id string) {
+fn (mut controller VmlController[T]) handle(event_id string) {
 	event := controller.events[event_id] or { return }
 	if binding := event.binding {
 		field_name := binding.target.all_after('app.')
 		value := match binding.property {
 			'checked', 'active' {
-				current := q_lookup({
-					'app': q_value_from(controller.model)
+				current := v_lookup({
+					'app': v_value_from(controller.model)
 				}, binding.target, 0) or {
-					eprintln('ui2 QML binding failed: ${err}')
+					eprintln('ui2 VML binding failed: ${err}')
 					return
 				}
-				q_bool(!current.truthy())
+				v_bool(!current.truthy())
 			}
 			'pressed' {
-				q_bool(toggle_button_pressed(binding.control))
+				v_bool(toggle_button_pressed(binding.control))
 			}
 			'value' {
 				live := slider_value(binding.control)
-				q_number(live, slider_number(live))
+				v_number(live, slider_number(live))
 			}
 			else {
-				q_string(text(binding.control))
+				v_string(text(binding.control))
 			}
 		}
-		qml_set_field[T](mut controller.model, field_name, value) or {
-			eprintln('ui2 QML binding failed: ${err}')
+		vml_set_field[T](mut controller.model, field_name, value) or {
+			eprintln('ui2 VML binding failed: ${err}')
 			return
 		}
 		if binding.property == 'pressed' && value.truthy() {
@@ -1369,40 +1369,40 @@ fn (mut controller QmlController[T]) handle(event_id string) {
 				if peer.control == binding.control || peer.target == binding.target {
 					continue
 				}
-				qml_set_field[T](mut controller.model, peer.target.all_after('app.'), q_bool(false)) or {
-					eprintln('ui2 QML group binding failed: ${err}')
+				vml_set_field[T](mut controller.model, peer.target.all_after('app.'), v_bool(false)) or {
+					eprintln('ui2 VML group binding failed: ${err}')
 					return
 				}
 			}
 		}
 	}
 	if invocation := event.invocation {
-		qml_dispatch[T](mut controller.model, invocation) or {
-			eprintln('ui2 QML action failed: ${err}')
+		vml_dispatch[T](mut controller.model, invocation) or {
+			eprintln('ui2 VML action failed: ${err}')
 			return
 		}
 	}
 	refresh()
 }
 
-// run_qml owns one typed model for the window, exposes it to QML as `app`, and
+// run_vml owns one typed model for the window, exposes it to VML as `app`, and
 // reconciles the cached document after each binding write or app action.
-pub fn run_qml[T](config QmlRunConfig[T]) ! {
-	template := parse_qml(config.source)!
-	q_validate_template[T](template, config.model)!
+pub fn run_vml[T](config VmlRunConfig[T]) ! {
+	template := parse_vml(config.source)!
+	v_validate_template[T](template, config.model)!
 	initial_frame := rect(0, 0, f64(config.width), f64(config.height))
-	resolved, events := q_evaluate_template(template, config.model, initial_frame)!
-	validate_element_tree(element_from_qnode(resolved, initial_frame)!)!
-	mut controller := &QmlController[T]{
+	resolved, events := v_evaluate_template(template, config.model, initial_frame)!
+	validate_element_tree(element_from_vnode(resolved, initial_frame)!)!
+	mut controller := &VmlController[T]{
 		template: template
 		model: config.model
 		events: events
 	}
-	mut runtime := qml_runtime()
+	mut runtime := vml_runtime()
 	runtime.controller = voidptr(controller)
 	$if macos || windows || linux {
-		run_window(config.title, config.width, config.height, qml_controller_build[T], qml_controller_handle[T])
+		run_window(config.title, config.width, config.height, vml_controller_build[T], vml_controller_handle[T])
 	} $else {
-		run(qml_controller_build[T], qml_controller_handle[T])
+		run(vml_controller_build[T], vml_controller_handle[T])
 	}
 }

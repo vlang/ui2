@@ -5,7 +5,7 @@ import ui2
 
 const transitions_width = 640
 const transitions_height = 500
-const transitions_qml_source = $embed_file('transitions.qml').to_string()
+const transitions_vml_source = $embed_file('transitions.vml').to_string()
 const transition_logo_size = 82.0
 
 @[heap]
@@ -68,8 +68,8 @@ fn build_transitions_screen() ui2.Element {
 	if info.status == .running {
 		state.progress = info.progress
 	}
-	return ui2.element_from_qml_model(transitions_qml_source, *state, ui2.bounds()) or {
-		eprintln('transitions QML failed: ${err}')
+	return ui2.element_from_vml_model(transitions_vml_source, *state, ui2.bounds()) or {
+		eprintln('transitions VML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
 	}
 }

@@ -5,7 +5,7 @@ import ui2
 
 const inside_row_width = 880
 const inside_row_height = 580
-const inside_row_qml_source = $embed_file('canvas_layout_inside_row.qml').to_string()
+const inside_row_vml_source = $embed_file('canvas_layout_inside_row.vml').to_string()
 const card_root_x = 16.0
 const card_root_y = 16.0
 const tray_x = 18.0
@@ -130,8 +130,8 @@ fn (mut app InsideRowDemo) handle_event(event string, card_width f64, card_heigh
 
 fn build_inside_row_screen() ui2.Element {
 	state := unsafe { inside_row_state }
-	return ui2.element_from_qml_model(inside_row_qml_source, *state, ui2.bounds()) or {
-		eprintln('canvas-layout-inside-row QML failed: ${err}')
+	return ui2.element_from_vml_model(inside_row_vml_source, *state, ui2.bounds()) or {
+		eprintln('canvas-layout-inside-row VML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
 	}
 }

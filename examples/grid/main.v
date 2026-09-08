@@ -4,7 +4,7 @@ import ui2
 
 const grid_width = 600
 const grid_height = 300
-const grid_qml_source = $embed_file('grid.qml').to_string()
+const grid_vml_source = $embed_file('grid.vml').to_string()
 
 pub struct GridCell {
 pub:
@@ -44,8 +44,8 @@ fn initial_grid() GridDemo {
 }
 
 fn main() {
-	ui2.run_qml[GridDemo](
-		source: grid_qml_source
+	ui2.run_vml[GridDemo](
+		source: grid_vml_source
 		model: initial_grid()
 		title: 'Grid'
 		width: grid_width

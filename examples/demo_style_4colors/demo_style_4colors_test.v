@@ -26,11 +26,11 @@ fn test_four_color_style_switches_complete_palettes() {
 	assert app.status == 'Sunset palette applied to the preview.'
 }
 
-fn test_four_color_style_qml_applies_model_colors() {
+fn test_four_color_style_vml_applies_model_colors() {
 	mut app := StyleFourColorsDemo{}
 	app.palette = 'Forest'
 	app.palette_changed()
-	root := ui2.element_from_qml_model(style_colors_qml_source, app, ui2.rect(0, 0, style_colors_width, style_colors_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(style_colors_vml_source, app, ui2.rect(0, 0, style_colors_width, style_colors_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	assert (find_style_colors_element(root, 'color0') or { panic('missing color 0') }).box.bg == 0xf0fdf4
 	assert (find_style_colors_element(root, 'color3') or { panic('missing color 3') }).box.bg == 0x14532d

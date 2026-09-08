@@ -2,7 +2,7 @@
 
 UI2 is gradually adopting useful concepts and widgets from
 [Kivy](https://kivy.org/doc/stable/api-kivy.uix.html). The goal is consistent
-behavior in UI2's V and QML APIs on every backend, not Python/KV source
+behavior in UI2's V and VML APIs on every backend, not Python/KV source
 compatibility or a copy of Kivy's default theme.
 
 The screenshots below are generated from the runnable examples with UI2's
@@ -15,7 +15,7 @@ custom renderer.
 `ProgressBar` follows Kivy's horizontal, display-only behavior. `max` defaults
 to 100, and `value` is clamped to `0...max`.
 
-```qml
+```vml
 ProgressBar {
     id: download
     value: app.downloaded
@@ -43,7 +43,7 @@ bar := ui2.progress_bar(
 Use `progress_bar_value_normalized(value, max)` when application logic also
 needs the normalized `0...1` value. A non-positive maximum produces an empty
 bar instead of dividing by zero. The generated element supplies progress-bar
-accessibility metadata, which can be overridden with QML's shared
+accessibility metadata, which can be overridden with VML's shared
 `accessibility_role`, `accessibility_label`, and `accessibility_value`
 properties.
 
@@ -56,7 +56,7 @@ properties.
 styling, and an optional colored value track. Vertical sliders place the
 minimum at the bottom and maximum at the top.
 
-```qml
+```vml
 Slider {
     id: volume
     bind.value: app.volume
@@ -70,7 +70,7 @@ Slider {
 
 The V constructor is `slider(SliderConfig{...})`. A stable `id` lets event
 handlers read the live value with `slider_value(id)` or update it with
-`set_slider_value(id, value)`. The QML model adapter supports two-way numeric
+`set_slider_value(id, value)`. The VML model adapter supports two-way numeric
 `bind.value` fields of type `int`, `f32`, or `f64`.
 
 ## Switch
@@ -82,7 +82,7 @@ entire frame is interactive, while the switch chrome is centered inside it.
 Native backends use their platform toggle controls where available; the custom
 renderer provides matching pill-and-thumb geometry and configurable colors.
 
-```qml
+```vml
 Switch {
     id: notifications
     bind.active: app.notifications_enabled
@@ -95,7 +95,7 @@ Switch {
 
 The V constructor is `switch_control(SwitchConfig{...})`. A stable `id` lets
 event handlers read the newly selected state with `switch_active(id)` or update
-it with `set_switch_active(id, active)`. QML's `active` property defaults to
+it with `set_switch_active(id, active)`. VML's `active` property defaults to
 `false`, and `bind.active` accepts mutable `bool` model fields.
 
 ## Spinner
@@ -104,10 +104,10 @@ it with `set_switch_active(id, active)`. QML's `active` property defaults to
 
 `Spinner` selects one string from a compact dropdown list. It uses the same
 native and custom popup behavior as UI2's `Dropdown`, while exposing `text`,
-`text_autoupdate`, and `on_text`. V supplies the `values` array directly; QML
+`text_autoupdate`, and `on_text`. V supplies the `values` array directly; VML
 declares each string with an `Option` child.
 
-```qml
+```vml
 Spinner {
     id: location
     bind.text: app.location
@@ -131,7 +131,7 @@ handlers can read or replace the mounted selection through UI2's existing
 supports distinct released and pressed colors while retaining the ordinary
 button label, bounds, enabled state, and accessibility behavior.
 
-```qml
+```vml
 ToggleButton {
     id: bold
     text: "Bold"
@@ -160,7 +160,7 @@ one of `columns`/`cols` or `rows` is required. With one constraint, the other
 dimension grows to fit the children; setting both places a fixed limit on the
 number of cells.
 
-```qml
+```vml
 GridLayout {
     columns: 3
     padding: 8
@@ -175,7 +175,7 @@ GridLayout {
 The V API is `grid_layout(GridLayoutConfig{...})` and returns an error for an
 invalid constraint or capacity. It supports all eight two-axis orientations,
 per-edge `GridPadding`, horizontal/vertical `GridSpacing`, default or forced
-row and column sizes, and per-index minimum sizes. QML also accepts
+row and column sizes, and per-index minimum sizes. VML also accepts
 `padding_left`, `padding_top`, `padding_right`, `padding_bottom`, `spacing_x`,
 `spacing_y`, `col_default_width`, `row_default_height`,
 `col_force_default`, and `row_force_default`. Repeater output participates in
@@ -189,7 +189,7 @@ the same cell calculation.
 children reserve their declared space first; the remaining main-axis space is
 distributed between hinted children in proportion to their hints.
 
-```qml
+```vml
 BoxLayout {
     padding: 10
     spacing: 8
@@ -208,7 +208,7 @@ cross axis.
 
 The V API uses `box_layout(BoxLayoutConfig{...})` with `BoxLayoutChild`
 entries. It also exposes typed orientation, padding, alignment,
-`box_layout_frames`, and `box_layout_minimum_size`. QML Repeater children can
+`box_layout_frames`, and `box_layout_minimum_size`. VML Repeater children can
 bind every numeric size hint to model data.
 
 ## AnchorLayout
@@ -219,7 +219,7 @@ bind every numeric size hint to model data.
 to the top, center, or bottom of its available bounds. Child sizes are
 preserved, and padding reduces the alignment area.
 
-```qml
+```vml
 AnchorLayout {
     anchor_x: right
     anchor_y: bottom
@@ -229,7 +229,7 @@ AnchorLayout {
 ```
 
 The V constructor is `anchor_layout(AnchorLayoutConfig{...})`, with typed
-`HorizontalAnchor`, `VerticalAnchor`, and `AnchorPadding` values. QML defaults
+`HorizontalAnchor`, `VerticalAnchor`, and `AnchorPadding` values. VML defaults
 both axes to `center` and supports a shared `padding` or the per-edge
 `padding_left`, `padding_top`, `padding_right`, and `padding_bottom` properties.
 
@@ -240,7 +240,7 @@ both axes to `center` and supports a shared `padding` or the per-edge
 `FloatLayout` independently sizes and positions each child relative to the
 container. With no position hint, a child's declared `x` and `y` are retained.
 
-```qml
+```vml
 FloatLayout {
     Rectangle {
         size_hint_x: 0.6
@@ -260,7 +260,7 @@ supports `pos_hint_y`/`pos_hint_top`, `pos_hint_center_y`, and
 
 The V API is `float_layout(FloatLayoutConfig{...})`. `FloatLayoutChild` uses
 typed `FloatAxisHint` values with `start`, `center`, and `end` anchors, while
-`float_layout_frames` exposes the pure geometry calculation. Model-driven QML
+`float_layout_frames` exposes the pure geometry calculation. Model-driven VML
 Repeater children are supported.
 
 ## RelativeLayout
@@ -272,7 +272,7 @@ Repeater children are supported.
 layout changes only its own frame; child `x` and `y` values remain relative to
 the layout's origin.
 
-```qml
+```vml
 RelativeLayout {
     x: 40
     y: 50
@@ -290,7 +290,7 @@ RelativeLayout {
 ```
 
 UI2 element children are already rendered in parent-local coordinates, so the
-QML implementation shares `FloatLayout`'s hint calculation without applying
+VML implementation shares `FloatLayout`'s hint calculation without applying
 the parent's offset twice. The V API is
 `relative_layout(RelativeLayoutConfig{...})`, and
 `relative_layout_frames` exposes the local geometry.
@@ -303,7 +303,7 @@ the parent's offset twice. The V API is
 The selected `page` is clamped to the available children; `border` defaults to
 50 and `swipe_threshold` defaults to 0.5.
 
-```qml
+```vml
 PageLayout {
     page: app.page
     border: 24
@@ -328,7 +328,7 @@ fixed-page sizing behavior rather than child size hints.
 set `multiline: false` for a compact field whose Return key emits
 `on_text_validate`/`on_submit`.
 
-```qml
+```vml
 TextInput {
     id: notes
     bind.text: app.notes
@@ -357,7 +357,7 @@ submission.
 each page as a `Tab`; its `on_select` action updates the application's current
 tab model.
 
-```qml
+```vml
 TabbedPanel {
     current: app.current_tab
     tab_pos: top_left
@@ -387,7 +387,7 @@ is added to the element tree.
 Declare sections as `AccordionItem` children and update `current` from each
 item's `on_select` action.
 
-```qml
+```vml
 Accordion {
     current: app.current_section
     orientation: vertical
@@ -416,7 +416,7 @@ added to the element tree.
 Expanded state controls which descendants are visible; applications update
 that state with `on_toggle` and track the active leaf with `on_select`.
 
-```qml
+```vml
 TreeView {
     TreeNode {
         text: "Documentation"
@@ -449,7 +449,7 @@ tree inside a `Scroll` container.
 element tree. `current` may use a screen's `name` property or its `id`; an empty
 value selects the first declared screen.
 
-```qml
+```vml
 ScreenManager {
     current: app.current_screen
     Screen {
@@ -482,7 +482,7 @@ changes are immediate and deterministic on every backend.
 The `index` selects the visible slide, `direction` accepts `right`, `left`,
 `top`, or `bottom`, and `loop` controls whether navigation wraps at the ends.
 
-```qml
+```vml
 Carousel {
     index: app.slide
     direction: right
@@ -513,7 +513,7 @@ input-blocking backdrop. It defaults to 80% of the available width and height;
 fixed `content_width`/`content_height` values override those hints and clamp to
 the available bounds.
 
-```qml
+```vml
 ModalView {
     open: app.confirming
     on_dismiss: app.close_confirmation()
@@ -542,7 +542,7 @@ dismissal remain future layers.
 shares the modal's responsive sizing, backdrop input blocking, open state,
 automatic outside dismissal, and `on_dismiss` action.
 
-```qml
+```vml
 Popup {
     open: app.editing
     title: "Edit profile"
@@ -569,7 +569,7 @@ closing are state-driven on every backend.
 `StackLayout` packs variable-size children along one axis and wraps them when
 the next child would cross the available inner width or height.
 
-```qml
+```vml
 StackLayout {
     orientation: lr-tb
     padding: 10
@@ -584,5 +584,5 @@ heights are preserved while their positions are replaced. All eight two-axis
 orientations are supported through `StackOrientation`. `StackPadding` and
 `StackSpacing` provide per-edge and per-axis control, and
 `stack_layout_minimum_size` reports the occupied dimensions for the current
-wrap. QML supports the matching `padding_*` and `spacing_x`/`spacing_y`
+wrap. VML supports the matching `padding_*` and `spacing_x`/`spacing_y`
 properties, including model-driven Repeater child sizes.
