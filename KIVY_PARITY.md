@@ -5,7 +5,12 @@ UI2 is gradually adopting useful concepts and widgets from
 behavior in UI2's V and QML APIs on every backend, not Python/KV source
 compatibility or a copy of Kivy's default theme.
 
+The screenshots below are generated from the runnable examples with UI2's
+custom renderer.
+
 ## ProgressBar
+
+![ProgressBar example](docs/images/widgets/progress_bar.png)
 
 `ProgressBar` follows Kivy's horizontal, display-only behavior. `max` defaults
 to 100, and `value` is clamped to `0...max`.
@@ -44,6 +49,8 @@ properties.
 
 ## Slider
 
+![Slider example](docs/images/widgets/slider.png)
+
 `Slider` supports horizontal and vertical orientation, arbitrary numeric
 `min`/`max` ranges, optional `step` snapping, configurable track and thumb
 styling, and an optional colored value track. Vertical sliders place the
@@ -68,6 +75,8 @@ handlers read the live value with `slider_value(id)` or update it with
 
 ## Switch
 
+![Switch example](docs/images/widgets/switch.png)
+
 `Switch` is a reusable boolean control with tap and horizontal-drag input. Its
 entire frame is interactive, while the switch chrome is centered inside it.
 Native backends use their platform toggle controls where available; the custom
@@ -91,6 +100,8 @@ it with `set_switch_active(id, active)`. QML's `active` property defaults to
 
 ## Spinner
 
+![Spinner example](docs/images/widgets/spinner.png)
+
 `Spinner` selects one string from a compact dropdown list. It uses the same
 native and custom popup behavior as UI2's `Dropdown`, while exposing `text`,
 `text_autoupdate`, and `on_text`. V supplies the `values` array directly; QML
@@ -113,6 +124,8 @@ handlers can read or replace the mounted selection through UI2's existing
 `text(id)` and `set_text(id, value)` APIs.
 
 ## ToggleButton
+
+![ToggleButton example](docs/images/widgets/toggle_button.png)
 
 `ToggleButton` keeps a boolean pressed state after the pointer is released. It
 supports distinct released and pressed colors while retaining the ordinary
@@ -139,6 +152,8 @@ when one member must remain selected. `toggle_button_group_members(id)` returns
 the mounted IDs belonging to the same group.
 
 ## GridLayout
+
+![GridLayout example](docs/images/widgets/grid_layout.png)
 
 `GridLayout` assigns children to matrix cells in declaration order. At least
 one of `columns`/`cols` or `rows` is required. With one constraint, the other
@@ -168,6 +183,8 @@ the same cell calculation.
 
 ## BoxLayout
 
+![BoxLayout example](docs/images/widgets/box_layout.png)
+
 `BoxLayout` places children in a horizontal or vertical line. Fixed-size
 children reserve their declared space first; the remaining main-axis space is
 distributed between hinted children in proportion to their hints.
@@ -196,6 +213,8 @@ bind every numeric size hint to model data.
 
 ## AnchorLayout
 
+![AnchorLayout example](docs/images/widgets/anchor_layout.png)
+
 `AnchorLayout` aligns each child to the left, center, or right and independently
 to the top, center, or bottom of its available bounds. Child sizes are
 preserved, and padding reduces the alignment area.
@@ -215,6 +234,8 @@ both axes to `center` and supports a shared `padding` or the per-edge
 `padding_left`, `padding_top`, `padding_right`, and `padding_bottom` properties.
 
 ## FloatLayout
+
+![FloatLayout example](docs/images/widgets/float_layout.png)
 
 `FloatLayout` independently sizes and positions each child relative to the
 container. With no position hint, a child's declared `x` and `y` are retained.
@@ -243,6 +264,8 @@ typed `FloatAxisHint` values with `start`, `center`, and `end` anchors, while
 Repeater children are supported.
 
 ## RelativeLayout
+
+![RelativeLayout example](docs/images/widgets/relative_layout.png)
 
 `RelativeLayout` provides the same child sizing and position hints as
 `FloatLayout`, but explicitly establishes parent-local coordinates. Moving the
@@ -274,6 +297,8 @@ the parent's offset twice. The V API is
 
 ## PageLayout
 
+![PageLayout example](docs/images/widgets/page_layout.png)
+
 `PageLayout` presents one page with narrow border previews of adjacent pages.
 The selected `page` is clamped to the available children; `border` defaults to
 50 and `swipe_threshold` defaults to 0.5.
@@ -296,6 +321,8 @@ always receive the layout height and `width - border`, matching the widget's
 fixed-page sizing behavior rather than child size hints.
 
 ## TextInput
+
+![TextInput example](docs/images/widgets/text_input.png)
 
 `TextInput` is a unified plain-text editor. It defaults to multiline editing;
 set `multiline: false` for a compact field whose Return key emits
@@ -323,6 +350,8 @@ editor, and `action_id`/`submit_id` distinguish live edits from Return-key
 submission.
 
 ## TabbedPanel
+
+![TabbedPanel example](docs/images/widgets/tabbed_panel.png)
 
 `TabbedPanel` combines a header strip with one active content area. Declare
 each page as a `Tab`; its `on_select` action updates the application's current
@@ -352,6 +381,8 @@ is added to the element tree.
 
 ## Accordion
 
+![Accordion example](docs/images/widgets/accordion.png)
+
 `Accordion` presents titled sections while keeping exactly one section open.
 Declare sections as `AccordionItem` children and update `current` from each
 item's `on_select` action.
@@ -378,6 +409,8 @@ entries. `accordion_geometry` exposes item, title, and content frames, while
 added to the element tree.
 
 ## TreeView
+
+![TreeView example](docs/images/widgets/tree_view.png)
 
 `TreeView` renders hierarchical `TreeNode` declarations as indented rows.
 Expanded state controls which descendants are visible; applications update
@@ -410,6 +443,8 @@ tree inside a `Scroll` container.
 
 ## ScreenManager
 
+![ScreenManager example](docs/images/widgets/screen_manager.png)
+
 `ScreenManager` owns named screens and adds only the active screen to the
 element tree. `current` may use a screen's `name` property or its `id`; an empty
 value selects the first declared screen.
@@ -441,6 +476,8 @@ changes are immediate and deterministic on every backend.
 
 ## Carousel
 
+![Carousel example](docs/images/widgets/carousel.png)
+
 `Carousel` presents full-size slides in a horizontal or vertical sequence.
 The `index` selects the visible slide, `direction` accepts `right`, `left`,
 `top`, or `bottom`, and `loop` controls whether navigation wraps at the ends.
@@ -468,6 +505,8 @@ drags using `min_move` and optional perpendicular-swipe filtering, while
 and continuous drag tracking remain a future interaction layer.
 
 ## ModalView
+
+![ModalView example](docs/images/widgets/modal_view.png)
 
 `ModalView` conditionally mounts a centered content surface over a full-size
 input-blocking backdrop. It defaults to 80% of the available width and height;
@@ -497,6 +536,8 @@ dismissal remain future layers.
 
 ## Popup
 
+![Popup example](docs/images/widgets/popup.png)
+
 `Popup` composes `ModalView` with a title header, separator, and body area. It
 shares the modal's responsive sizing, backdrop input blocking, open state,
 automatic outside dismissal, and `on_dismiss` action.
@@ -522,6 +563,8 @@ overlay, centered surface, title, separator, and body frames. Popup opening and
 closing are state-driven on every backend.
 
 ## StackLayout
+
+![StackLayout example](docs/images/widgets/stack_layout.png)
 
 `StackLayout` packs variable-size children along one axis and wraps them when
 the next child would cross the available inner width or height.
