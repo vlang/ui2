@@ -40,6 +40,11 @@ fn test_timer_duration_mapping_and_qml_controls() {
 	assert timer_pointer_x('pointer:drag:duration_track:160.0:200.0') or { 0 } == 160
 	root := ui2.element_from_qml_model(timer_qml_source, app, ui2.rect(0, 0, timer_width, timer_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
+	progress := find_timer_element(root, 'elapsed_progress') or { panic('missing progress bar') }
+	assert progress.accessibility_role == 'progressbar'
+	assert progress.accessibility_label == 'Elapsed time'
+	assert progress.children.len == 1
+	assert progress.children[0].frame.width == 0
 	track := find_timer_element(root, 'duration_track') or { panic('missing duration track') }
 	assert track.clickable
 	assert track.draggable

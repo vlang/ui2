@@ -689,9 +689,9 @@ fn node_to_element(node &QNode, frame Rect) !Element {
 		tooltip: node.prop('tooltip')
 		hidden: node.prop_bool('hidden')
 		enabled: node.prop('enabled') != 'false'
-		accessibility_role: node.prop('accessibility_role')
-		accessibility_label: node.prop('accessibility_label')
-		accessibility_value: node.prop('accessibility_value')
+		accessibility_role: node.prop_or('accessibility_role', el.accessibility_role)
+		accessibility_label: node.prop_or('accessibility_label', el.accessibility_label)
+		accessibility_value: node.prop_or('accessibility_value', el.accessibility_value)
 		native_style: node.prop_bool('native')
 		autocorrect: node.prop('autocorrect') != 'false'
 		padding_left: node.prop_or('pad_left', '12').f64()
@@ -745,6 +745,17 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		}
 		'Image' {
 			return image(node.id, node.prop_or('source', node.prop('path')), frame)
+		}
+		'ProgressBar' {
+			return progress_bar(
+				id: node.id
+				frame: frame
+				value: node.prop_or('value', '0').f64()
+				max: node.prop_or('max', '100').f64()
+				background: q_color(node, 'background', 0xe2e8f0)
+				color: q_color(node, 'color', 0x3b82f6)
+				radius: node.prop_or('corner_radius', node.prop_or('radius', '4')).f64()
+			)
 		}
 		'Button' {
 			return Element{

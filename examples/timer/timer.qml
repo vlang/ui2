@@ -15,9 +15,7 @@ Screen {
         Label { text: app.elapsed_label x: card.width - 170 y: 12 width: 152 height: 34 align: right color: #2563EB font_size: 21 bold: true font_family: "Courier New" }
 
         Label { text: "Elapsed time" x: 20 y: 64 width: card.width - 40 height: 20 color: #475569 font_size: 12 }
-        Rectangle { id: progress_track x: 20 y: 92 width: card.width - 40 height: 28 background: #E2E8F0 corner_radius: 14
-            Rectangle { id: progress_fill x: 0 y: 0 width: app.progress * progress_track.width height: 28 background: app.running ? #22C55E : #60A5FA corner_radius: 14 }
-        }
+        ProgressBar { id: elapsed_progress x: 20 y: 92 width: card.width - 40 height: 28 value: app.elapsed max: app.duration background: #E2E8F0 color: app.running ? #22C55E : #60A5FA corner_radius: 14 accessibility_label: "Elapsed time" }
 
         Label { text: "Duration" x: 20 y: 148 width: 100 height: 20 color: #475569 font_size: 12 bold: true }
         Label { text: app.duration_label x: card.width - 160 y: 148 width: 140 height: 20 align: right color: #334155 font_size: 12 }

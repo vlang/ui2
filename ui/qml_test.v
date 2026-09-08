@@ -439,3 +439,39 @@ fn test_qml_decimal_keyboard() {
 	el := element_from_qml('TextField { id: age keyboard: decimal }', rect(0, 0, 120, 32)) or { panic(err) }
 	assert el.keyboard == keyboard_decimal
 }
+
+fn test_qml_progress_bar_uses_kivy_value_semantics() {
+	el := element_from_qml('ProgressBar {
+		id: loading
+		value: 75
+		max: 200
+		background: #111827
+		color: #22C55E
+		corner_radius: 6
+	}', rect(0, 0, 240, 16)) or { panic(err) }
+
+	assert el.kind == .view
+	assert el.id == 'loading'
+	assert el.box.bg == u32(0x111827)
+	assert el.box.radius == 6
+	assert el.children.len == 1
+	assert el.children[0].frame.width == 90
+	assert el.children[0].box.bg == u32(0x22c55e)
+	assert el.accessibility_role == 'progressbar'
+	assert el.accessibility_value == '75 of 200'
+}
+
+fn test_qml_widget_accessibility_defaults_survive_conversion() {
+	checkbox_el := element_from_qml('Checkbox { text: "Ready" checked: true }', rect(0, 0, 120, 24)) or {
+		panic(err)
+	}
+	assert checkbox_el.accessibility_role == 'checkbox'
+	assert checkbox_el.accessibility_label == 'Ready'
+	assert checkbox_el.accessibility_value == 'checked'
+
+	progress_el := element_from_qml('ProgressBar { value: 150 }', rect(0, 0, 100, 8)) or {
+		panic(err)
+	}
+	assert progress_el.children[0].frame.width == 100
+	assert progress_el.accessibility_value == '100 of 100'
+}
