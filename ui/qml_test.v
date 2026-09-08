@@ -812,3 +812,32 @@ fn test_qml_text_input_supports_single_line_password_submission() {
 	assert !el.autocorrect
 	assert el.padding_left == 8
 }
+
+fn test_qml_tabbed_panel_builds_headers_and_active_content() {
+	el := element_from_qml('TabbedPanel {
+		id: settings
+		current: 1
+		tab_pos: bottom_right
+		tab_width: 100
+		active_tab_background: #2563EB
+		Tab { id: general text: "General" Label { text: "General content" } }
+		Tab { id: account text: "Account" on_select: select_account Label { text: "Account content" } }
+		Tab { id: privacy text: "Privacy" Label { text: "Privacy content" } }
+	}', rect(10, 20, 360, 200)) or { panic(err) }
+	assert el.frame == rect(10, 20, 360, 200)
+	assert el.children.len == 4
+	assert el.children[0].children[0].text == 'Account content'
+	assert el.children[1].frame == rect(60, 160, 100, 40)
+	assert el.children[2].frame == rect(160, 160, 100, 40)
+	assert el.children[2].box.bg == u32(0x2563eb)
+	assert el.children[2].action_id == 'select_account'
+	assert el.children[2].accessibility_value == 'selected'
+}
+
+fn test_qml_tabbed_panel_validates_tab_position() {
+	if _ := element_from_qml('TabbedPanel { tab_pos: diagonal }', rect(0, 0, 300, 200)) {
+		assert false, 'invalid tab positions must fail'
+	} else {
+		assert err.msg().contains('diagonal')
+	}
+}

@@ -322,6 +322,34 @@ UI2's placeholder metadata, `disable_scroll` selects an unscrolled multiline
 editor, and `action_id`/`submit_id` distinguish live edits from Return-key
 submission.
 
+## TabbedPanel
+
+`TabbedPanel` combines a header strip with one active content area. Declare
+each page as a `Tab`; its `on_select` action updates the application's current
+tab model.
+
+```qml
+TabbedPanel {
+    current: app.current_tab
+    tab_pos: top_left
+    tab_width: 100
+    Tab { text: "General" on_select: app.show_general() Rectangle {} }
+    Tab { text: "Account" on_select: app.show_account() Rectangle {} }
+}
+```
+
+All twelve `tab_pos` values are supported: top/bottom strips aligned left,
+middle, or right, and left/right strips aligned top, middle, or bottom.
+`tab_height` controls strip thickness and `tab_width` controls each header's
+length; set `tab_width: 0` to distribute headers evenly. Active and inactive
+headers have separate background and text colors, and expose tab accessibility
+state.
+
+The V constructor is `tabbed_panel(TabbedPanelConfig{...})`, using
+`TabbedPanelTab` entries. `tabbed_panel_geometry` exposes header/content frames,
+and `tabbed_panel_current` clamps model indexes. Only the active tab's content
+is added to the element tree.
+
 ## StackLayout
 
 `StackLayout` packs variable-size children along one axis and wraps them when

@@ -742,6 +742,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'PageLayout' {
 			return q_page_layout(node, frame)!
 		}
+		'TabbedPanel' {
+			return q_tabbed_panel(node, frame)!
+		}
 		'Scroll' {
 			children := q_children(node, local)!
 			if node.prop_bool('persistent') {
@@ -1299,6 +1302,77 @@ fn q_page_layout(node &QNode, frame Rect) !Element {
 		children << node_to_element(child, frames[index])!
 	}
 	return view(node.id, frame, q_box(node), children)
+}
+
+fn q_tabbed_panel_config(node &QNode, frame Rect, tabs []TabbedPanelTab) !TabbedPanelConfig {
+	header_radius := node.prop_or('tab_corner_radius', '6').f64()
+	return TabbedPanelConfig{
+		id: node.id
+		frame: frame
+		box: q_box(node)
+		current: node.prop_or('current', node.prop_or('current_tab', '0')).int()
+		tab_position: tab_position(node.prop_or('tab_pos', 'top_left'))!
+		tab_height: node.prop_or('tab_height', '40').f64()
+		tab_width: node.prop_or('tab_width', '100').f64()
+		header_box: BoxStyle{
+			bg: q_color(node, 'tab_background', 0xe2e8f0)
+			radius: header_radius
+		}
+		active_header_box: BoxStyle{
+			bg: q_color(node, 'active_tab_background', 0xffffff)
+			radius: header_radius
+		}
+		header_text_style: TextStyle{
+			color: q_color(node, 'tab_color', 0x475569)
+			size: node.prop_or('tab_font_size', '14').f64()
+			align: .center
+		}
+		active_header_text_style: TextStyle{
+			color: q_color(node, 'active_tab_color', 0x0f172a)
+			size: node.prop_or('tab_font_size', '14').f64()
+			bold: true
+			align: .center
+		}
+		tabs: tabs
+	}
+}
+
+fn q_tabbed_panel(node &QNode, frame Rect) !Element {
+	mut tab_nodes := []&QNode{}
+	mut dummy_tabs := []TabbedPanelTab{}
+	for child in node.children {
+		if child.tag != 'Tab' {
+			continue
+		}
+		tab_nodes << child
+		dummy_tabs << TabbedPanelTab{
+			id: child.id
+			title: child.prop('text')
+			action_id: child.prop('on_select')
+			enabled: child.prop('enabled') != 'false'
+		}
+	}
+	local := rect(0, 0, frame.width, frame.height)
+	dummy_config := q_tabbed_panel_config(node, local, dummy_tabs)!
+	geometry := tabbed_panel_geometry(dummy_config)!
+	current := tabbed_panel_current(dummy_config.current, tab_nodes.len)
+	content_id := if node.id.len > 0 { '${node.id}__content' } else { '' }
+	mut tabs := []TabbedPanelTab{cap: tab_nodes.len}
+	for index, child in tab_nodes {
+		content := if index == current {
+			view(content_id, geometry.content, q_box(child), q_children(child, rect(0, 0, geometry.content.width, geometry.content.height))!)
+		} else {
+			Element{}
+		}
+		tabs << TabbedPanelTab{
+			id: child.id
+			title: child.prop('text')
+			action_id: child.prop('on_select')
+			content: content
+			enabled: child.prop('enabled') != 'false'
+		}
+	}
+	return tabbed_panel(q_tabbed_panel_config(node, frame, tabs)!)!
 }
 
 fn q_frame(node &QNode, fallback Rect) Rect {

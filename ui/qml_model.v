@@ -510,6 +510,7 @@ enum QChildLayoutKind {
 	anchor
 	stack
 	page
+	tabs
 }
 
 struct QLayoutChildMetrics {
@@ -548,6 +549,7 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 		'AnchorLayout' { QChildLayoutKind.anchor }
 		'StackLayout' { QChildLayoutKind.stack }
 		'PageLayout' { QChildLayoutKind.page }
+		'TabbedPanel' { QChildLayoutKind.tabs }
 		else { QChildLayoutKind.overlay }
 	}
 	padding := node.prop_or('padding', '0').f64()
@@ -555,6 +557,7 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 	mut child_sizes := []Rect{cap: metrics.len}
 	mut box_children := []BoxLayoutChild{cap: metrics.len}
 	mut float_children := []FloatLayoutChild{cap: metrics.len}
+	mut panel_tabs := []TabbedPanelTab{cap: metrics.len}
 	for metric in metrics {
 		child_sizes << metric.frame
 		if kind == .box {
@@ -581,7 +584,24 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 				x_hint: metric.x_hint
 				y_hint: metric.y_hint
 			}
+		} else if kind == .tabs {
+			panel_tabs << TabbedPanelTab{}
 		}
+	}
+	mut cells := []Rect{}
+	if kind == .grid {
+		cells = grid_layout_frames(q_grid_config(node, local)!, child_sizes.len)!
+	} else if kind == .box {
+		cells = box_layout_frames(q_box_layout_config(node, local, box_children)!)!
+	} else if kind == .float {
+		cells = float_layout_frames(q_float_layout_config(node, local, float_children))!
+	} else if kind == .stack {
+		cells = stack_layout_frames(q_stack_config(node, local)!, child_sizes)!
+	} else if kind == .page {
+		cells = page_layout_frames(q_page_layout_config(node, local, child_sizes.len))!
+	} else if kind == .tabs {
+		geometry := tabbed_panel_geometry(q_tabbed_panel_config(node, local, panel_tabs)!)!
+		cells = []Rect{len: panel_tabs.len, init: geometry.content}
 	}
 	return QChildLayout{
 		kind: kind
@@ -589,19 +609,7 @@ fn q_child_layout(node &QNode, actual Rect, metrics []QLayoutChildMetrics) !QChi
 		padding: padding
 		spacing: node.prop_or('spacing', '0').f64()
 		cursor: padding
-		cells: if kind == .grid {
-			grid_layout_frames(q_grid_config(node, local)!, child_sizes.len)!
-		} else if kind == .box {
-			box_layout_frames(q_box_layout_config(node, local, box_children)!)!
-		} else if kind == .float {
-			float_layout_frames(q_float_layout_config(node, local, float_children))!
-		} else if kind == .stack {
-			stack_layout_frames(q_stack_config(node, local)!, child_sizes)!
-		} else if kind == .page {
-			page_layout_frames(q_page_layout_config(node, local, child_sizes.len))!
-		} else {
-			[]Rect{}
-		}
+		cells: cells
 		anchor: if kind == .anchor {
 			q_anchor_config(node, local)!
 		} else {
@@ -644,6 +652,9 @@ fn (layout &QChildLayout) fallback(child &QNode, scope map[string]QValue) !Rect 
 		.page {
 			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
 		}
+		.tabs {
+			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
+		}
 	}
 }
 
@@ -672,6 +683,9 @@ fn (mut layout QChildLayout) advance(child &QNode) {
 			layout.index++
 		}
 		.page {
+			layout.index++
+		}
+		.tabs {
 			layout.index++
 		}
 		.overlay {}
@@ -741,6 +755,9 @@ fn q_layout_child_metrics(node &QNode, scope map[string]QValue) ![]QLayoutChildM
 		if child.tag in ['MenuItem', 'Option'] {
 			continue
 		}
+		if node.tag == 'TabbedPanel' && child.tag != 'Tab' {
+			continue
+		}
 		if child.tag != 'Repeater' {
 			metrics << q_layout_child_metric(child, scope, box, floating)!
 			continue
@@ -805,7 +822,7 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
 			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
-				'on_text_validate'] {
+				'on_text_validate', 'on_select'] {
 			continue
 		}
 		resolved.props[key] = q_eval(expr, scope)!.string_value()
@@ -876,7 +893,7 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		evaluation.events[event_id] = QmlEvent{ binding: binding }
 	}
 	for property in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
-		'on_text_validate'] {
+		'on_text_validate', 'on_select'] {
 		expr := node.expressions[property] or { continue }
 		if expr.kind == .call {
 			event_id := q_event_id(node, scope, property)
@@ -1029,7 +1046,7 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
 			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
-				'on_text_validate'] {
+				'on_text_validate', 'on_select'] {
 			continue
 		}
 		q_schema_expression(expr, scope)!
@@ -1056,7 +1073,7 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 		}
 	}
 	for property in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
-		'on_text_validate'] {
+		'on_text_validate', 'on_select'] {
 		expr := node.expressions[property] or { continue }
 		if expr.kind == .call {
 			q_validate_action[T](expr, scope)!

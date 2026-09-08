@@ -53,6 +53,10 @@ pub fn (mut app QmlTestApp) save_name(name string) {
 	app.saved = name
 }
 
+pub fn (mut app QmlTestApp) select_second_tab() {
+	app.page = 1
+}
+
 fn qml_test_find(element Element, text string) ?Element {
 	if element.text == text {
 		return element
@@ -347,6 +351,29 @@ fn test_qml_model_page_layout_resolves_current_page() {
 	assert pager.children[0].frame == rect(0, 0, 260, 160)
 	assert pager.children[1].frame == rect(20, 0, 260, 160)
 	assert pager.children[2].frame == rect(280, 0, 260, 160)
+}
+
+fn test_qml_model_tabbed_panel_switches_content_through_tab_action() {
+	source := 'TabbedPanel {
+		id: panel
+		current: app.page
+		tab_width: 100
+		Tab { id: first text: "First" Label { text: "First content" } }
+		Tab {
+			id: second
+			text: "Second"
+			on_select: app.select_second_tab()
+			Label { text: "Second content" }
+		}
+	}'
+	mut app := new_qml_app(source, QmlTestApp{}) or { panic(err) }
+	initial := app.build(rect(0, 0, 300, 180)) or { panic(err) }
+	assert initial.children[0].children[0].text == 'First content'
+	app.handle(initial.children[2].action_id) or { panic(err) }
+	assert app.state().page == 1
+	rebuilt := app.build(rect(0, 0, 300, 180)) or { panic(err) }
+	assert rebuilt.children[0].children[0].text == 'Second content'
+	assert rebuilt.children[2].accessibility_value == 'selected'
 }
 
 fn test_qml_model_anchor_layout_uses_resolved_child_sizes() {
