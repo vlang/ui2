@@ -25,6 +25,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		text_area      bool
 		dropdown       bool
 		slider         bool
+		switch_control bool
+		switch_state   bool
 		slider_frame   Rect
 		slider_padding f64
 		slider_spec    SliderSpec
@@ -98,6 +100,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_slider_values = map[string]f64{}
 	__global g_slider_declared = map[string]f64{}
 	__global g_slider_specs = map[string]SliderSpec{}
+	__global g_switch_values = map[string]bool{}
+	__global g_switch_declared = map[string]bool{}
 	__global g_focused_field = ''
 	__global g_scroll_offsets = map[string]f64{}
 	__global g_scroll_content_h = map[string]f64{}
@@ -106,6 +110,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_scroll_areas = map[string]Rect{}
 	__global g_active_fields = map[string]bool{}
 	__global g_active_sliders = map[string]bool{}
+	__global g_active_switches = map[string]bool{}
 	__global g_active_scrolls = map[string]bool{}
 	__global g_image_ids = map[string]int{}
 	__global g_font_metrics = FontMetrics{}
@@ -234,6 +239,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		spec := g_slider_specs[id] or { return }
 		g_slider_values[id] = slider_clamped_value(value, spec.min, spec.max)
+	}
+
+	// switch_active returns the live value, including a pointer change made
+	// before the declarative tree is rebuilt.
+	pub fn switch_active(id string) bool {
+		return g_switch_values[id] or { false }
+	}
+
+	pub fn set_switch_active(id string, active bool) {
+		if id !in g_active_switches {
+			return
+		}
+		g_switch_values[id] = active
 	}
 
 	pub fn focus(id string) {
@@ -413,6 +431,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			reset_scroll_frame()
 			g_active_fields = map[string]bool{}
 			g_active_sliders = map[string]bool{}
+			g_active_switches = map[string]bool{}
 			g_active_scrolls = map[string]bool{}
 			g_active_images = map[string]bool{}
 			root = apply_widget_animations(g_build_screen())
@@ -543,6 +562,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			commit_slider(target, x, y)
 			return
 		}
+		if target.switch_control {
+			return
+		}
 		g_touch.scroll_id = scroll_hit_test(x, y)
 		g_touch.scroll_start_off_y = scroll_offset(g_touch.scroll_id)
 		if begin_scrollbar_drag(x, y) {
@@ -567,6 +589,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		target := hit_test(g_touch.start_x, g_touch.start_y)
 		if target.slider {
 			commit_slider(target, x, y)
+			return
+		}
+		if target.switch_control {
+			commit_switch(target, x >= target.x + target.w / 2)
 			return
 		}
 		if g_touch.scrollbar_drag {
@@ -620,6 +646,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		slider_target := hit_test(g_touch.start_x, g_touch.start_y)
 		if slider_target.slider {
 			commit_slider(slider_target, x, y)
+			return
+		}
+		if slider_target.switch_control {
+			if g_touch.moved {
+				commit_switch(slider_target, x >= slider_target.x + slider_target.w / 2)
+			} else {
+				current := if slider_target.id.len > 0 {
+					switch_active(slider_target.id)
+				} else {
+					slider_target.switch_state
+				}
+				commit_switch(slider_target, !current)
+			}
 			return
 		}
 		if g_touch.long_press_fired || g_touch.scrollbar_drag {
@@ -720,6 +759,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			g_slider_values[target.id] = next
 		}
 		if next != previous {
+			fire_event(target.action_id)
+		}
+	}
+
+	fn commit_switch(target HitTarget, active bool) {
+		if !target.switch_control {
+			return
+		}
+		previous := if target.id.len > 0 { switch_active(target.id) } else { target.switch_state }
+		if target.id.len > 0 {
+			g_switch_values[target.id] = active
+		}
+		if active != previous {
 			fire_event(target.action_id)
 		}
 	}
@@ -1188,6 +1240,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			g_slider_declared.delete(id)
 			g_slider_specs.delete(id)
 		}
+		mut stale_switches := []string{}
+		for id, _ in g_switch_values {
+			if id !in g_active_switches {
+				stale_switches << id
+			}
+		}
+		for id in stale_switches {
+			g_switch_values.delete(id)
+			g_switch_declared.delete(id)
+		}
 		mut stale_scrolls := []string{}
 		for id, _ in g_scroll_offsets {
 			if id !in g_active_scrolls {
@@ -1594,6 +1656,54 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 						slider_frame: frame
 						slider_padding: el.padding
 						slider_spec: spec
+					}, clip)
+				}
+			}
+			.switch_control {
+				frame := rect(el.frame.x + off_x, el.frame.y + off_y, el.frame.width,
+					el.frame.height)
+				mut active := el.checked
+				if el.id.len > 0 {
+					previous_declared := g_switch_declared[el.id] or { el.checked }
+					previous_value := g_switch_values[el.id] or { el.checked }
+					if el.id !in g_switch_values
+						|| (previous_declared != el.checked && previous_value != el.checked) {
+						g_switch_values[el.id] = el.checked
+					}
+					active = g_switch_values[el.id] or { el.checked }
+					g_switch_declared[el.id] = el.checked
+					g_active_switches[el.id] = true
+				}
+				track := switch_track_frame(frame)
+				thumb := switch_thumb_frame(track, active)
+				track_color := if el.enabled {
+					if active {
+						el.switch_style.active_track_color
+					} else {
+						el.switch_style.inactive_track_color
+					}
+				} else {
+					el.switch_style.disabled_track_color
+				}
+				thumb_color := if el.enabled {
+					el.switch_style.thumb_color
+				} else {
+					el.switch_style.disabled_thumb_color
+				}
+				draw_rect(ctx, track.x, track.y, track.width, track.height, track_color,
+					track.height / 2)
+				draw_rect(ctx, thumb.x, thumb.y, thumb.width, thumb.height, thumb_color,
+					thumb.height / 2)
+				if el.enabled {
+					add_hit_target(HitTarget{
+						id: el.id
+						action_id: element_action_id(el)
+						x: frame.x
+						y: frame.y
+						w: frame.width
+						h: frame.height
+						switch_control: true
+						switch_state: active
 					}, clip)
 				}
 			}

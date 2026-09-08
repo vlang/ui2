@@ -161,6 +161,22 @@ pub fn set_slider_value(id string, value f64) {
 	slider_set_number(view, 'value', slider_clamped_value(value, spec.min, spec.max))
 }
 
+pub fn switch_active(id string) bool {
+	view := g_views[id] or { return false }
+	if (g_view_kinds[id] or { Kind.view }) != .switch_control {
+		return false
+	}
+	return macos.msg_bool(view, 'isOn')
+}
+
+pub fn set_switch_active(id string, active bool) {
+	view := g_views[id] or { return }
+	if (g_view_kinds[id] or { Kind.view }) != .switch_control {
+		return
+	}
+	macos.msg_void_bool(view, 'setOn:', active)
+}
+
 pub fn focus(id string) {
 	view := g_views[id] or { return }
 	macos.msg_bool(view, 'becomeFirstResponder')
@@ -517,6 +533,20 @@ fn update_checkbox_view(view View, el Element) {
 	macos.msg_void_i64(view, 'setContentHorizontalAlignment:', 1)
 }
 
+fn new_switch_control_view(el Element) View {
+	view := macos.msg_id_rect(macos.alloc('UISwitch'), 'initWithFrame:', native_rect(el.frame))
+	update_switch_control_view(view, el)
+	return view
+}
+
+fn update_switch_control_view(view View, el Element) {
+	macos.msg_void_rect(view, 'setFrame:', native_rect(el.frame))
+	macos.msg_void_bool(view, 'setOn:', el.checked)
+	macos.msg_void1(view, 'setOnTintColor:', ios.color(el.switch_style.active_track_color))
+	macos.msg_void1(view, 'setTintColor:', ios.color(el.switch_style.inactive_track_color))
+	macos.msg_void1(view, 'setThumbTintColor:', ios.color(el.switch_style.thumb_color))
+}
+
 fn slider_number_value(view View, key string) f64 {
 	number := macos.msg_id1(view, 'valueForKey:', macos.nsstring(key))
 	if number == unsafe { nil } {
@@ -758,6 +788,7 @@ fn native_create_element(el Element) View {
 			new_button_view(el.frame, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.box.radius, el.text_style.lines)
 		}
 		.checkbox { new_checkbox_view(el) }
+		.switch_control { new_switch_control_view(el) }
 		.dropdown { new_dropdown_view(el) }
 		.text_field {
 			field := new_text_field_view(el.frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure)
@@ -790,6 +821,7 @@ fn native_update_element(native View, el Element, declared_text_changed bool) {
 			update_button_view(native, el.frame, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.box.radius, el.text_style.lines)
 		}
 		.checkbox { update_checkbox_view(native, el) }
+		.switch_control { update_switch_control_view(native, el) }
 		.dropdown { update_dropdown_view(native, el, declared_text_changed) }
 		.text_field {
 			update_text_field_view(native, el.frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure, el.autocorrect, declared_text_changed, el.padding_left)
@@ -840,6 +872,15 @@ fn register_native_handlers(native View, el Element) {
 	if el.kind == .slider {
 		remove_control_target_action(native, g_button_handler, 'handleTap:', 131072)
 		g_slider_specs[pointer] = slider_spec(el)
+		if action_id.len > 0 {
+			g_action_ids[pointer] = action_id
+			add_control_target_action(native, g_button_handler, 'handleTap:', 131072)
+			macos.set_associated_object(native, assoc_handler_key(), g_button_handler, macos.assoc_retain_nonatomic)
+		} else {
+			macos.set_associated_object(native, assoc_handler_key(), View(unsafe { nil }), macos.assoc_retain_nonatomic)
+		}
+	} else if el.kind == .switch_control {
+		remove_control_target_action(native, g_button_handler, 'handleTap:', 131072)
 		if action_id.len > 0 {
 			g_action_ids[pointer] = action_id
 			add_control_target_action(native, g_button_handler, 'handleTap:', 131072)

@@ -21,6 +21,25 @@ fn test_macos_checkbox_uses_native_switch_and_retains_state() {
 	assert macos.msg_i64(checkbox_view, 'state') == 1
 }
 
+fn test_macos_switch_uses_native_boolean_state() {
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	view := native_new_switch_control(switch_control(
+		id: 'native-switch'
+		frame: rect(0, 0, 83, 32)
+		active: true
+	))
+	defer {
+		macos.release(view)
+	}
+
+	assert macos.msg_i64(view, 'state') == 1
+	macos.msg_void_i64(view, 'setState:', 0)
+	assert macos.msg_i64(view, 'state') == 0
+}
+
 fn test_macos_slider_uses_native_range_and_snaps_live_values() {
 	pool := macos.autorelease_pool_new()
 	defer {

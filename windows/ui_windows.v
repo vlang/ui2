@@ -74,6 +74,8 @@ fn C.ui2_win_set_text(hwnd voidptr, text &u16)
 
 fn C.ui2_win_set_checked(hwnd voidptr, checked int)
 
+fn C.ui2_win_get_checked(hwnd voidptr) int
+
 fn C.ui2_win_slider_set_normalized(hwnd voidptr, normalized f64, vertical int)
 
 fn C.ui2_win_slider_normalized(hwnd voidptr, vertical int) f64
@@ -489,6 +491,24 @@ pub fn set_slider_value(id string, value f64) {
 		windows_bool(spec.orientation == .vertical))
 }
 
+pub fn switch_active(id string) bool {
+	st := windows_state()
+	hwnd := st.views[id] or { return false }
+	if (st.view_kinds[id] or { Kind.view }) != .switch_control {
+		return false
+	}
+	return C.ui2_win_get_checked(hwnd) != 0
+}
+
+pub fn set_switch_active(id string, active bool) {
+	st := windows_state()
+	hwnd := st.views[id] or { return }
+	if (st.view_kinds[id] or { Kind.view }) != .switch_control {
+		return
+	}
+	C.ui2_win_set_checked(hwnd, windows_bool(active))
+}
+
 pub fn focus(id string) {
 	st := windows_state()
 	hwnd := st.views[id] or { return }
@@ -689,6 +709,7 @@ fn windows_widget_kind(kind Kind) int {
 		.text_area { 8 }
 		.checkbox { 9 }
 		.slider { 10 }
+		.switch_control { 11 }
 		.screen { 0 }
 	}
 }
@@ -723,11 +744,11 @@ fn windows_update_element(key string, hwnd voidptr, el Element, y_offset int, cr
 	C.ui2_win_enable(hwnd, windows_bool(el.enabled))
 	declared_changed := (st.node_declared_text[key] or { '' }) != el.text
 	match el.kind {
-		.label, .button, .checkbox {
+		.label, .button, .checkbox, .switch_control {
 			if declared_changed || windows_native_text(hwnd) != el.text {
 				windows_set_native_text(hwnd, el.text)
 			}
-			if el.kind == .checkbox {
+			if el.kind in [.checkbox, .switch_control] {
 				C.ui2_win_set_checked(hwnd, windows_bool(el.checked))
 			}
 		}
@@ -854,7 +875,7 @@ fn windows_update_style(key string, hwnd voidptr, el Element) {
 			unsafe { free(wide_text) }
 			st.font_sigs[key] = font_sig
 		}
-	} else if el.kind !in [.view, .scroll, .image, .slider] {
+	} else if el.kind !in [.view, .scroll, .image, .slider, .switch_control] {
 		font_text := windows_font_text(el)
 		font_sig := '${el.text_style.size}:${el.text_style.font_family.bytes().hex()}:${windows_bool(el.text_style.bold)}:${windows_bool(el.text_style.italic)}:${windows_bool(el.text_style.underline)}:${windows_bool(el.text_style.strikethrough)}:${windows_font_glyph_key(font_text)}'
 		if (st.font_sigs[key] or { '' }) != font_sig {
@@ -874,7 +895,7 @@ fn windows_update_style(key string, hwnd voidptr, el Element) {
 			}
 		}
 	}
-	if el.kind !in [.view, .scroll, .image, .slider] {
+	if el.kind !in [.view, .scroll, .image, .slider, .switch_control] {
 		old_brush := st.brushes[key] or { voidptr(unsafe { nil }) }
 		if old_brush == unsafe { nil } || (st.brush_sigs[key] or { u32(0xffffffff) }) != el.box.bg {
 			brush := C.ui2_win_create_brush(el.box.bg)
@@ -893,7 +914,8 @@ fn windows_register_bindings(hwnd voidptr, el Element) {
 	mut st := windows_state()
 	handle := windows_handle_id(hwnd)
 	action_id := element_action_id(el)
-	if action_id.len > 0 && el.kind in [.button, .checkbox, .dropdown, .slider] {
+	if action_id.len > 0
+		&& el.kind in [.button, .checkbox, .dropdown, .slider, .switch_control] {
 		st.action_ids[handle] = action_id
 	}
 	if el.kind == .slider {

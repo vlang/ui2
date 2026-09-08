@@ -783,6 +783,28 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 				}
 			)
 		}
+		'Switch' {
+			action_id := if node.prop('on_active').len > 0 {
+				node.prop('on_active')
+			} else if node.prop('on_change').len > 0 {
+				node.prop('on_change')
+			} else {
+				node.prop('on_tap')
+			}
+			return switch_control(
+				id: node.id
+				action_id: action_id
+				frame: frame
+				active: node.prop_bool('active')
+				style: SwitchStyle{
+					inactive_track_color: q_color(node, 'inactive_color', 0xcbd5e1)
+					active_track_color: q_color(node, 'active_color', q_color(node, 'color', 0x22c55e))
+					thumb_color: q_color(node, 'thumb_color', 0xffffff)
+					disabled_track_color: q_color(node, 'disabled_track_color', 0xe2e8f0)
+					disabled_thumb_color: q_color(node, 'disabled_thumb_color', 0xf8fafc)
+				}
+			)
+		}
 		'Button' {
 			return Element{
 				...button(node.id, node.prop('text'), frame, q_box(node), q_text_style(node))

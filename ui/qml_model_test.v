@@ -126,6 +126,28 @@ fn test_qml_model_supports_numeric_slider_bindings() {
 	assert app.state().level == 72.5
 }
 
+fn test_qml_model_supports_active_switch_bindings() {
+	source := 'Switch { id: notifications bind.active: app.enabled }'
+	root := element_from_qml_model(source, QmlTestApp{ enabled: true }, rect(0, 0, 83, 32)) or {
+		panic(err)
+	}
+	assert root.kind == .switch_control
+	assert root.checked
+
+	mut app := new_qml_app(source, QmlTestApp{ enabled: false }) or { panic(err) }
+	built := app.build(rect(0, 0, 83, 32)) or { panic(err) }
+	app.handle(built.action_id) or { panic(err) }
+	assert app.state().enabled
+}
+
+fn test_qml_model_rejects_non_boolean_switch_bindings() {
+	if _ := element_from_qml_model('Switch { bind.active: app.name }', QmlTestApp{}, rect(0, 0, 83, 32)) {
+		assert false, 'switch active state must bind to a bool field'
+	} else {
+		assert err.msg().contains('bind.active requires a bool field')
+	}
+}
+
 fn test_qml_model_rejects_non_numeric_slider_bindings() {
 	if _ := element_from_qml_model('Slider { bind.value: app.name }', QmlTestApp{}, rect(0, 0, 100, 30)) {
 		assert false, 'slider values must bind to numeric fields'

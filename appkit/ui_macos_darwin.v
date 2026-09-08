@@ -352,6 +352,24 @@ pub fn set_slider_value(id string, value f64) {
 		spec.max))
 }
 
+pub fn switch_active(id string) bool {
+	st := state()
+	native := st.views[id] or { return false }
+	if (st.view_kinds[id] or { Kind.view }) != .switch_control {
+		return false
+	}
+	return macos.msg_i64(native, 'state') != 0
+}
+
+pub fn set_switch_active(id string, active bool) {
+	st := state()
+	native := st.views[id] or { return }
+	if (st.view_kinds[id] or { Kind.view }) != .switch_control {
+		return
+	}
+	macos.msg_void_i64(native, 'setState:', if active { i64(1) } else { i64(0) })
+}
+
 pub fn focus(id string) {
 	st := state()
 	native := st.views[id] or { return }
@@ -947,6 +965,9 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		.checkbox {
 			register_checkbox(native, element_action_id(el))
 		}
+		.switch_control {
+			register_checkbox(native, element_action_id(el))
+		}
 		.dropdown {
 			register_action_control(native, element_action_id(el))
 		}
@@ -1089,6 +1110,9 @@ fn native_create_element(el Element) NativeView {
 		.checkbox {
 			native_new_checkbox(el)
 		}
+		.switch_control {
+			native_new_switch_control(el)
+		}
 		.dropdown {
 			native_new_dropdown(el)
 		}
@@ -1128,6 +1152,9 @@ fn native_update_element(native NativeView, el Element, declared_text_changed bo
 		}
 		.checkbox {
 			native_update_checkbox(native, el)
+		}
+		.switch_control {
+			native_update_switch_control(native, el)
 		}
 		.dropdown {
 			native_update_dropdown(native, el)
@@ -1677,6 +1704,23 @@ fn native_update_checkbox(checkbox_view NativeView, el Element) {
 	macos.msg_void_i64(checkbox_view, 'setState:', if el.checked { i64(1) } else { i64(0) })
 	macos.msg_void_bool(checkbox_view, 'setAllowsMixedState:', false)
 	macos.msg_void1(checkbox_view, 'setFont:', native_font(el.text_style.size, el.text_style.bold, el.text_style.italic))
+}
+
+fn native_new_switch_control(el Element) NativeView {
+	class_name := if macos.get_class('NSSwitch') == unsafe { nil } { 'NSButton' } else { 'NSSwitch' }
+	switch_view := macos.msg_id_rect(macos.alloc(class_name), 'initWithFrame:', appkit_rect(element_rect(el.frame)))
+	native_update_switch_control(switch_view, el)
+	return switch_view
+}
+
+fn native_update_switch_control(view NativeView, el Element) {
+	native_set_frame(view, element_rect(el.frame))
+	if macos.msg_bool_id(view, 'isKindOfClass:', macos.get_class('NSButton')) {
+		macos.msg_void_i64(view, 'setButtonType:', ns_button_type_switch)
+		macos.msg_void1(view, 'setTitle:', macos.nsstring(''))
+		macos.msg_void_bool(view, 'setAllowsMixedState:', false)
+	}
+	macos.msg_void_i64(view, 'setState:', if el.checked { i64(1) } else { i64(0) })
 }
 
 fn native_new_slider(el Element) NativeView {

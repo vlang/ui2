@@ -174,6 +174,7 @@ fn accessibility_traits(role string) u64 {
 		'link' { extern_u64('UIAccessibilityTraitLink', 2) }
 		'header' { extern_u64('UIAccessibilityTraitHeader', 0x10000) }
 		'adjustable', 'slider' { extern_u64('UIAccessibilityTraitAdjustable', 0x1000) }
+		'switch' { extern_u64('UIAccessibilityTraitButton', 1) }
 		else { extern_u64('UIAccessibilityTraitNone', 0) }
 	}
 }

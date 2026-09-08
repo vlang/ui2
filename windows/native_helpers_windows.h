@@ -40,7 +40,8 @@ enum {
 	UI2_WIN_TEXT_FIELD = 7,
 	UI2_WIN_TEXT_AREA = 8,
 	UI2_WIN_CHECKBOX = 9,
-	UI2_WIN_SLIDER = 10
+	UI2_WIN_SLIDER = 10,
+	UI2_WIN_SWITCH = 11
 };
 
 extern intptr_t ui2_windows_window_proc(void *hwnd, unsigned int message,
@@ -381,6 +382,10 @@ static inline void *ui2_win_create_widget(int kind, void *parent_ptr, int x, int
 		class_name = L"BUTTON";
 		style |= BS_AUTOCHECKBOX | BS_LEFT | BS_VCENTER | WS_TABSTOP;
 		break;
+	case UI2_WIN_SWITCH:
+		class_name = L"BUTTON";
+		style |= BS_AUTOCHECKBOX | BS_PUSHLIKE | BS_CENTER | BS_VCENTER | WS_TABSTOP;
+		break;
 	case UI2_WIN_DROPDOWN:
 		class_name = L"COMBOBOX";
 		style |= CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL | WS_TABSTOP;
@@ -451,6 +456,11 @@ static inline void ui2_win_set_checked(void *hwnd_ptr, int checked) {
 		SendMessageW((HWND)hwnd_ptr, BM_SETCHECK,
 			checked ? BST_CHECKED : BST_UNCHECKED, 0);
 	}
+}
+
+static inline int ui2_win_get_checked(void *hwnd_ptr) {
+	if (hwnd_ptr == NULL) return 0;
+	return SendMessageW((HWND)hwnd_ptr, BM_GETCHECK, 0, 0) == BST_CHECKED;
 }
 
 #define UI2_WIN_MAX_ACCELERATORS 128

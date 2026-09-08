@@ -85,6 +85,44 @@ $if ui2_custom_rendering ? {
 		g_active_sliders = map[string]bool{}
 	}
 
+	fn test_custom_switch_tap_and_drag_update_live_state() {
+		g_switch_values = map[string]bool{
+			'network': false
+		}
+		g_active_switches = map[string]bool{
+			'network': true
+		}
+		target := HitTarget{
+			id: 'network'
+			action_id: 'network_changed'
+			x: 10
+			y: 20
+			w: 80
+			h: 32
+			switch_control: true
+		}
+		g_hit_targets = [target]
+		handle_touch_down(20, 30)
+		handle_touch_up(20, 30)
+		assert switch_active('network')
+		set_switch_active('network', false)
+		handle_touch_down(20, 30)
+		handle_touch_move(80, 30)
+		handle_touch_up(80, 30)
+		assert switch_active('network')
+		set_switch_active('network', false)
+		assert !switch_active('network')
+		set_switch_active('network', true)
+		set_switch_active('missing', true)
+		assert switch_active('network')
+		assert !switch_active('missing')
+		g_switch_values = map[string]bool{}
+		g_switch_declared = map[string]bool{}
+		g_active_switches = map[string]bool{}
+		g_hit_targets = []HitTarget{}
+		g_touch = TouchState{}
+	}
+
 	fn test_custom_dropdown_popup_opens_below_its_control() {
 		row_height := dropdown_row_height(TextStyle{})
 		assert row_height == 28

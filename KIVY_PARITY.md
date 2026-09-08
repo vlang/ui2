@@ -65,3 +65,26 @@ The V constructor is `slider(SliderConfig{...})`. A stable `id` lets event
 handlers read the live value with `slider_value(id)` or update it with
 `set_slider_value(id, value)`. The QML model adapter supports two-way numeric
 `bind.value` fields of type `int`, `f32`, or `f64`.
+
+## Switch
+
+`Switch` is a reusable boolean control with tap and horizontal-drag input. Its
+entire frame is interactive, while the switch chrome is centered inside it.
+Native backends use their platform toggle controls where available; the custom
+renderer provides matching pill-and-thumb geometry and configurable colors.
+
+```qml
+Switch {
+    id: notifications
+    bind.active: app.notifications_enabled
+    on_active: app.save_preferences()
+    active_color: #16A34A
+    inactive_color: #CBD5E1
+    thumb_color: #FFFFFF
+}
+```
+
+The V constructor is `switch_control(SwitchConfig{...})`. A stable `id` lets
+event handlers read the newly selected state with `switch_active(id)` or update
+it with `set_switch_active(id, active)`. QML's `active` property defaults to
+`false`, and `bind.active` accepts mutable `bool` model fields.

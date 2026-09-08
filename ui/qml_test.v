@@ -498,6 +498,31 @@ fn test_qml_slider_exposes_range_orientation_and_style() {
 	assert el.accessibility_value == '55'
 }
 
+fn test_qml_switch_exposes_active_state_action_and_style() {
+	el := element_from_qml('Switch {
+		id: airplane_mode
+		on_active: airplane_mode_changed
+		active: true
+		inactive_color: #334155
+		active_color: #16A34A
+		thumb_color: #F8FAFC
+		disabled_track_color: #64748B
+		disabled_thumb_color: #CBD5E1
+	}', rect(0, 0, 83, 32)) or { panic(err) }
+
+	assert el.kind == .switch_control
+	assert el.id == 'airplane_mode'
+	assert el.action_id == 'airplane_mode_changed'
+	assert el.checked
+	assert el.switch_style.inactive_track_color == u32(0x334155)
+	assert el.switch_style.active_track_color == u32(0x16a34a)
+	assert el.switch_style.thumb_color == u32(0xf8fafc)
+	assert el.switch_style.disabled_track_color == u32(0x64748b)
+	assert el.switch_style.disabled_thumb_color == u32(0xcbd5e1)
+	assert el.accessibility_role == 'switch'
+	assert el.accessibility_value == 'on'
+}
+
 fn test_qml_widget_accessibility_defaults_survive_conversion() {
 	checkbox_el := element_from_qml('Checkbox { text: "Ready" checked: true }', rect(0, 0, 120, 24)) or {
 		panic(err)

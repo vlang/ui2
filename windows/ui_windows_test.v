@@ -13,6 +13,7 @@ $if !ui2_custom_rendering ? {
 		assert windows_widget_kind(.text_field) == 7
 		assert windows_widget_kind(.text_area) == 8
 		assert windows_widget_kind(.slider) == 10
+		assert windows_widget_kind(.switch_control) == 11
 	}
 
 	fn test_windows_structural_transitions_recreate_controls() {
@@ -185,8 +186,12 @@ $if !ui2_custom_rendering ? {
 
 		label := C.ui2_win_create_widget(windows_widget_kind(.label), root, 0, 40, 200, 32, empty, 0, 0, 0, 0, 0)
 		checkbox := C.ui2_win_create_widget(windows_widget_kind(.checkbox), root, 0, 80, 210, 30, empty, 0, 0, 0, 0, 0)
+		switch_view := C.ui2_win_create_widget(windows_widget_kind(.switch_control), root, 0, 120, 60, 32, empty, 0, 0, 0, 0, 0)
 		assert C.ui2_win_widget_style(label) & usize(0x0200) != 0
 		assert C.ui2_win_widget_style(checkbox) & usize(0x2000) == 0
+		assert C.ui2_win_widget_style(switch_view) & usize(0x1000) != 0
+		C.ui2_win_set_checked(switch_view, 1)
+		assert C.ui2_win_get_checked(switch_view) != 0
 
 		unsafe {
 			free(empty)

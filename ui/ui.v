@@ -42,6 +42,7 @@ pub enum Kind {
 	text_area
 	scroll
 	slider
+	switch_control
 }
 
 // MenuEntry is one right-click context menu item attached to an element.
@@ -175,6 +176,7 @@ pub:
 	padding               f64 = 16.0 // slider: inset from each end of its track
 	value_track           bool // slider: color the track between min and value
 	slider_style          SliderStyle
+	switch_style          SwitchStyle
 }
 
 pub enum BackendSupport {

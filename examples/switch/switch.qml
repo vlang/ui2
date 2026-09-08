@@ -26,16 +26,24 @@ Screen {
             bold: true
         }
 
-        Checkbox {
-            id: switch-control
+        Label {
             text: "Feature enabled"
-            bind.checked: app.enabled
             x: 16
             y: 62
-            width: card.width - 32
+            width: card.width - 96
             height: 42
             color: #111827
             font_size: 15
+        }
+
+        Switch {
+            id: switch-control
+            bind.active: app.enabled
+            x: card.width - 76
+            y: 67
+            width: 60
+            height: 32
+            active_color: #16A34A
         }
     }
 }
