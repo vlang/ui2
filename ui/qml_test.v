@@ -1005,3 +1005,38 @@ fn test_qml_modal_view_supports_required_and_closed_states() {
 	assert el.hidden
 	assert el.children[0].action_id == ''
 }
+
+fn test_qml_popup_builds_title_separator_and_body() {
+	el := element_from_qml('Popup {
+		id: editor
+		open: true
+		title: "Edit profile"
+		on_dismiss: close_editor
+		content_width: 320
+		content_height: 200
+		title_height: 48
+		separator_height: 2
+		separator_color: #CBD5E1
+		Label { text: "Profile form" x: 20 y: 20 width: 280 height: 30 }
+	}', rect(0, 0, 500, 300)) or { panic(err) }
+	assert !el.hidden
+	assert el.children[0].action_id == 'close_editor'
+	assert el.children[1].frame == rect(90, 50, 320, 200)
+	surface := el.children[2]
+	assert surface.children[0].text == 'Edit profile'
+	assert surface.children[1].frame == rect(0, 48, 320, 2)
+	assert surface.children[1].box.bg == u32(0xcbd5e1)
+	assert surface.children[2].frame == rect(0, 50, 320, 150)
+	assert surface.children[2].children[0].text == 'Profile form'
+}
+
+fn test_qml_popup_validates_header_height() {
+	if _ := element_from_qml('Popup {
+		content_height: 40
+		title_height: 48
+	}', rect(0, 0, 300, 200)) {
+		assert false, 'popup headers must fit their surface'
+	} else {
+		assert err.msg().contains('exceed')
+	}
+}

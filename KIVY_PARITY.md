@@ -495,6 +495,32 @@ The V constructor is `modal_view(ModalViewConfig{...})` and
 and closing are model-driven and immediate; fade animations and Escape-key
 dismissal remain future layers.
 
+## Popup
+
+`Popup` composes `ModalView` with a title header, separator, and body area. It
+shares the modal's responsive sizing, backdrop input blocking, open state,
+automatic outside dismissal, and `on_dismiss` action.
+
+```qml
+Popup {
+    open: app.editing
+    title: "Edit profile"
+    on_dismiss: app.close_editor()
+    content_width: 360
+    content_height: 240
+    ProfileForm {}
+}
+```
+
+`title_height` and `separator_height` reserve body space and are validated
+against the resolved surface height. Title font/color and separator color are
+independently configurable; declared children are laid out in the remaining
+body-local bounds.
+
+The V constructor is `popup(PopupConfig{...})`. `popup_geometry` returns the
+overlay, centered surface, title, separator, and body frames. Popup opening and
+closing are state-driven on every backend.
+
 ## StackLayout
 
 `StackLayout` packs variable-size children along one axis and wraps them when

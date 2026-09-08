@@ -1907,9 +1907,9 @@ fn native_update_button_image(button_view NativeView, frame NativeRect, image_na
 }
 
 fn native_new_dropdown(el Element) NativeView {
-	popup := macos.msg_id_rect(macos.alloc('NSPopUpButton'), 'initWithFrame:', appkit_rect(element_rect(el.frame)))
-	native_update_dropdown(popup, el)
-	return popup
+	dropdown_view := macos.msg_id_rect(macos.alloc('NSPopUpButton'), 'initWithFrame:', appkit_rect(element_rect(el.frame)))
+	native_update_dropdown(dropdown_view, el)
+	return dropdown_view
 }
 
 fn native_update_dropdown(popup NativeView, el Element) {

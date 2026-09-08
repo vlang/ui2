@@ -73,13 +73,13 @@ fn menu_win32_set_menu_bar(menus []Menu) {
 	mut commands := map[u32]string{}
 	mut next := win_menu_command_base
 	for m in menus {
-		popup := C.ui2_win_menu_create()
-		if popup == unsafe { nil } {
+		popup_menu := C.ui2_win_menu_create()
+		if popup_menu == unsafe { nil } {
 			continue
 		}
-		next = windows_fill_menu(popup, m.items, true, mut commands, next)
+		next = windows_fill_menu(popup_menu, m.items, true, mut commands, next)
 		wide_title := m.title.to_wide()
-		C.ui2_win_menu_add_submenu(menubar, popup, wide_title)
+		C.ui2_win_menu_add_submenu(menubar, popup_menu, wide_title)
 		unsafe { free(wide_title) }
 	}
 	st.bar_commands = commands.move()

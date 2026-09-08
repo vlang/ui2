@@ -530,6 +530,33 @@ fn test_qml_model_modal_view_opens_and_dismisses_through_actions() {
 	assert !app.state().modal_open
 }
 
+fn test_qml_model_popup_opens_and_dismisses_through_actions() {
+	source := 'Screen {
+		Button { text: "Edit" on_tap: app.open_modal() }
+		Popup {
+			id: editor
+			width: 400
+			height: 300
+			open: app.modal_open
+			title: "Edit profile"
+			on_dismiss: app.close_modal()
+			content_width: 260
+			content_height: 180
+			Label { text: "Profile fields" }
+		}
+	}'
+	mut app := new_qml_app(source, QmlTestApp{}) or { panic(err) }
+	initial := app.build(rect(0, 0, 400, 300)) or { panic(err) }
+	assert initial.children[1].hidden
+	app.handle(initial.children[0].action_id) or { panic(err) }
+	opened := app.build(rect(0, 0, 400, 300)) or { panic(err) }
+	assert !opened.children[1].hidden
+	assert opened.children[1].children[2].children[0].text == 'Edit profile'
+	assert opened.children[1].children[2].children[2].children[0].text == 'Profile fields'
+	app.handle(opened.children[1].children[0].action_id) or { panic(err) }
+	assert !app.state().modal_open
+}
+
 fn test_qml_model_anchor_layout_uses_resolved_child_sizes() {
 	source := 'AnchorLayout {
 		anchor_x: center

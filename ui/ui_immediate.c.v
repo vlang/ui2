@@ -1063,11 +1063,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn handle_dropdown_key(key gg.KeyCode) bool {
-		popup := g_dropdown_popup
-		if popup.options.len == 0 {
+		dropdown_state := g_dropdown_popup
+		if dropdown_state.options.len == 0 {
 			return false
 		}
-		highlighted := if g_dropdown_hover >= 0 { g_dropdown_hover } else { popup.selected }
+		highlighted := if g_dropdown_hover >= 0 { g_dropdown_hover } else { dropdown_state.selected }
 		match key {
 			.escape {
 				close_dropdown()
@@ -1077,8 +1077,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				step := if key == .down { 1 } else { -1 }
 				mut next := highlighted + step
 				if next < 0 {
-					next = popup.options.len - 1
-				} else if next >= popup.options.len {
+					next = dropdown_state.options.len - 1
+				} else if next >= dropdown_state.options.len {
 					next = 0
 				}
 				g_dropdown_hover = next
@@ -1086,11 +1086,12 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				return true
 			}
 			.enter, .kp_enter {
-				if highlighted < 0 || highlighted >= popup.options.len {
+				if highlighted < 0 || highlighted >= dropdown_state.options.len {
 					close_dropdown()
 					return true
 				}
-				commit_dropdown(popup.id, popup.action_id, popup.options[highlighted])
+				commit_dropdown(dropdown_state.id, dropdown_state.action_id,
+					dropdown_state.options[highlighted])
 				return true
 			}
 			else {
@@ -1121,14 +1122,14 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn reveal_dropdown_row(index int) {
-		popup := g_dropdown_popup
-		if index < 0 || popup.max_scroll <= 0 {
+		dropdown_state := g_dropdown_popup
+		if index < 0 || dropdown_state.max_scroll <= 0 {
 			g_dropdown_scroll = clamped_dropdown_scroll(g_dropdown_scroll)
 			return
 		}
-		view_height := popup.height - dropdown_popup_padding * 2
-		row_top := f64(index) * popup.row_height
-		row_bottom := row_top + popup.row_height
+		view_height := dropdown_state.height - dropdown_popup_padding * 2
+		row_top := f64(index) * dropdown_state.row_height
+		row_bottom := row_top + dropdown_state.row_height
 		mut offset := g_dropdown_scroll
 		if row_top < offset {
 			offset = row_top
@@ -1230,55 +1231,64 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn draw_dropdown_popup(ctx &gg.Context) {
-		popup := g_dropdown_popup
-		if popup.options.len == 0 || popup.width <= 0 || popup.height <= 0 {
+		dropdown_state := g_dropdown_popup
+		if dropdown_state.options.len == 0 || dropdown_state.width <= 0
+			|| dropdown_state.height <= 0 {
 			return
 		}
 		window := rect(0, 0, f64(ctx.width), f64(ctx.height))
 		apply_clip(ctx, window)
-		draw_rect(ctx, popup.x + 1, popup.y + 2, popup.width, popup.height, 0xdbe2ea, popup.radius)
-		draw_rect(ctx, popup.x, popup.y, popup.width, popup.height, 0xffffff, popup.radius)
-		draw_outline(ctx, popup.x, popup.y, popup.width, popup.height, 0xb8c2cf, popup.radius)
-		list := intersect_rect(rect(popup.x + 1, popup.y + dropdown_popup_padding, popup.width - 2,
-			popup.height - dropdown_popup_padding * 2), window)
+		draw_rect(ctx, dropdown_state.x + 1, dropdown_state.y + 2, dropdown_state.width,
+			dropdown_state.height, 0xdbe2ea, dropdown_state.radius)
+		draw_rect(ctx, dropdown_state.x, dropdown_state.y, dropdown_state.width,
+			dropdown_state.height, 0xffffff, dropdown_state.radius)
+		draw_outline(ctx, dropdown_state.x, dropdown_state.y, dropdown_state.width,
+			dropdown_state.height, 0xb8c2cf, dropdown_state.radius)
+		list := intersect_rect(rect(dropdown_state.x + 1,
+			dropdown_state.y + dropdown_popup_padding, dropdown_state.width - 2,
+			dropdown_state.height - dropdown_popup_padding * 2), window)
 		if list.width <= 0 || list.height <= 0 {
 			return
 		}
 		apply_clip(ctx, list)
 		row_style := TextStyle{
-			...popup.text_style
+			...dropdown_state.text_style
 			align: .left
 		}
-		for index, option in popup.options {
-			row_y := popup.y + dropdown_popup_padding + f64(index) * popup.row_height - g_dropdown_scroll
-			if row_y + popup.row_height <= list.y || row_y >= list.y + list.height {
+		for index, option in dropdown_state.options {
+			row_y := dropdown_state.y + dropdown_popup_padding + f64(index) * dropdown_state.row_height -
+				g_dropdown_scroll
+			if row_y + dropdown_state.row_height <= list.y || row_y >= list.y + list.height {
 				continue
 			}
 			if index == g_dropdown_hover {
-				draw_rect(ctx, popup.x + 2, row_y, popup.width - 4, popup.row_height, 0xdbeafe, 4)
-			} else if index == popup.selected {
-				draw_rect(ctx, popup.x + 2, row_y, popup.width - 4, popup.row_height, 0xf1f5f9, 4)
+				draw_rect(ctx, dropdown_state.x + 2, row_y, dropdown_state.width - 4,
+					dropdown_state.row_height, 0xdbeafe, 4)
+			} else if index == dropdown_state.selected {
+				draw_rect(ctx, dropdown_state.x + 2, row_y, dropdown_state.width - 4,
+					dropdown_state.row_height, 0xf1f5f9, 4)
 			}
-			if index == popup.selected {
-				mark := if popup.row_height < 13 { popup.row_height } else { 13.0 }
-				draw_check_mark(ctx, popup.x + 7, row_y + (popup.row_height - mark) / 2, mark,
-					row_style.color)
+			if index == dropdown_state.selected {
+				mark := if dropdown_state.row_height < 13 { dropdown_state.row_height } else { 13.0 }
+				draw_check_mark(ctx, dropdown_state.x + 7,
+					row_y + (dropdown_state.row_height - mark) / 2, mark, row_style.color)
 			}
-			draw_text(ctx, option, popup.x + 26, row_y, popup.width - 34, popup.row_height,
-				row_style)
+			draw_text(ctx, option, dropdown_state.x + 26, row_y, dropdown_state.width - 34,
+				dropdown_state.row_height, row_style)
 			add_hit_target(HitTarget{
-				id: popup.id
-				action_id: popup.action_id
-				x: popup.x
+				id: dropdown_state.id
+				action_id: dropdown_state.action_id
+				x: dropdown_state.x
 				y: row_y
-				w: popup.width
-				h: popup.row_height
+				w: dropdown_state.width
+				h: dropdown_state.row_height
 				dropdown_option: true
 				option_index: index
-				options: popup.options
+				options: dropdown_state.options
 			}, list)
 		}
-		draw_scrollbar(ctx, popup.x, popup.y, popup.width, popup.height, f64(popup.options.len) * popup.row_height +
+		draw_scrollbar(ctx, dropdown_state.x, dropdown_state.y, dropdown_state.width,
+			dropdown_state.height, f64(dropdown_state.options.len) * dropdown_state.row_height +
 			dropdown_popup_padding * 2, g_dropdown_scroll, false)
 		apply_clip(ctx, window)
 	}

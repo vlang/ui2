@@ -760,6 +760,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'ModalView' {
 			return q_modal_view(node, frame)!
 		}
+		'Popup' {
+			return q_popup(node, frame)!
+		}
 		'Scroll' {
 			children := q_children(node, local)!
 			if node.prop_bool('persistent') {
@@ -1624,6 +1627,45 @@ fn q_modal_view(node &QNode, frame Rect) !Element {
 	content_id := if node.id.len > 0 { '${node.id}__content' } else { '' }
 	content := view(content_id, rect(0, 0, geometry.content.width, geometry.content.height), BoxStyle{ transparent: true }, q_children(node, rect(0, 0, geometry.content.width, geometry.content.height))!)
 	return modal_view(q_modal_view_config(node, frame, content))!
+}
+
+fn q_popup_config(node &QNode, frame Rect, content Element) PopupConfig {
+	return PopupConfig{
+		id: node.id
+		frame: frame
+		open: node.prop_bool('open')
+		auto_dismiss: node.prop('auto_dismiss') != 'false'
+		dismiss_action_id: node.prop('on_dismiss')
+		content_width: node.prop_or('content_width', '-1').f64()
+		content_height: node.prop_or('content_height', '-1').f64()
+		size_hint_x: node.prop_or('size_hint_x', '0.8').f64()
+		size_hint_y: node.prop_or('size_hint_y', '0.8').f64()
+		overlay_box: BoxStyle{
+			bg: q_color(node, 'overlay_background', 0x475569)
+		}
+		surface_box: q_box(node)
+		title: node.prop('title')
+		title_height: node.prop_or('title_height', '48').f64()
+		title_style: TextStyle{
+			color: q_color(node, 'title_color', 0x0f172a)
+			size: node.prop_or('title_font_size', '18').f64()
+			bold: node.prop('title_bold') != 'false'
+			align: .center
+		}
+		separator_height: node.prop_or('separator_height', '1').f64()
+		separator_box: BoxStyle{
+			bg: q_color(node, 'separator_color', 0xe2e8f0)
+		}
+		content: content
+	}
+}
+
+fn q_popup(node &QNode, frame Rect) !Element {
+	config := q_popup_config(node, rect(0, 0, frame.width, frame.height), Element{})
+	geometry := popup_geometry(config)!
+	body_id := if node.id.len > 0 { '${node.id}__body' } else { '' }
+	body := view(body_id, rect(0, 0, geometry.body.width, geometry.body.height), BoxStyle{ transparent: true }, q_children(node, rect(0, 0, geometry.body.width, geometry.body.height))!)
+	return popup(q_popup_config(node, frame, body))!
 }
 
 fn q_frame(node &QNode, fallback Rect) Rect {
