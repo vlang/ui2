@@ -591,7 +591,7 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 	mut binding := ?QmlBinding(none)
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
-			|| key in ['on_tap', 'on_change', 'on_active', 'on_text', 'on_submit'] {
+			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit'] {
 			continue
 		}
 		resolved.props[key] = q_eval(expr, scope)!.string_value()
@@ -631,6 +631,7 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		binding_event_property = match b.property {
 			'checked' { 'on_tap' }
 			'active' { 'on_active' }
+			'pressed' { 'on_state' }
 			'text' {
 				if node.tag == 'Spinner' { 'on_text' } else { 'on_change' }
 			}
@@ -643,7 +644,7 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		resolved.props[binding_event_property] = event_id
 		evaluation.events[event_id] = QmlEvent{ binding: binding }
 	}
-	for property in ['on_tap', 'on_change', 'on_active', 'on_text', 'on_submit'] {
+	for property in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit'] {
 		expr := node.expressions[property] or { continue }
 		if expr.kind == .call {
 			event_id := q_event_id(node, scope, property)
@@ -794,7 +795,7 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 	}
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
-			|| key in ['on_tap', 'on_change', 'on_active', 'on_text', 'on_submit'] {
+			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit'] {
 			continue
 		}
 		q_schema_expression(expr, scope)!
@@ -804,7 +805,7 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 			continue
 		}
 		property := key.all_after('bind.')
-		if property !in ['text', 'checked', 'active', 'value'] {
+		if property !in ['text', 'checked', 'active', 'pressed', 'value'] {
 			return error('two-way binding is not supported for `${property}` at line ${node.line}')
 		}
 		if expr.kind != .path || !expr.value.starts_with('app.') || expr.value.count('.') != 1 {
@@ -813,14 +814,14 @@ fn q_validate_node_schema[T](node &QNode, incoming_scope map[string]QSchema) ! {
 		q_schema_expression(expr, scope)!
 		target := expr.value.all_after('app.')
 		type_name := qml_writable_field_type[T](target)!
-		if property in ['checked', 'active'] && type_name != 'bool' {
+		if property in ['checked', 'active', 'pressed'] && type_name != 'bool' {
 			return error('bind.${property} requires a bool field, got `${target}` (${type_name})')
 		}
 		if property == 'value' && type_name !in ['int', 'f32', 'f64'] {
 			return error('bind.value requires a numeric field, got `${target}` (${type_name})')
 		}
 	}
-	for property in ['on_tap', 'on_change', 'on_active', 'on_text', 'on_submit'] {
+	for property in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit'] {
 		expr := node.expressions[property] or { continue }
 		if expr.kind == .call {
 			q_validate_action[T](expr, scope)!
@@ -1030,6 +1031,9 @@ fn (mut controller QmlController[T]) handle(event_id string) {
 					return
 				}
 				q_bool(!current.truthy())
+			}
+			'pressed' {
+				q_bool(toggle_button_pressed(binding.control))
 			}
 			'value' {
 				live := slider_value(binding.control)

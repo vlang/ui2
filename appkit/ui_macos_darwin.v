@@ -22,6 +22,7 @@ const ns_backing_store_buffered = u64(2)
 const ns_button_type_momentary_change = i64(5)
 const ns_button_type_momentary_push_in = i64(7)
 const ns_button_type_switch = i64(3)
+const ns_button_type_push_on_push_off = i64(1)
 
 type NativeView = voidptr
 
@@ -368,6 +369,24 @@ pub fn set_switch_active(id string, active bool) {
 		return
 	}
 	macos.msg_void_i64(native, 'setState:', if active { i64(1) } else { i64(0) })
+}
+
+pub fn toggle_button_pressed(id string) bool {
+	st := state()
+	native := st.views[id] or { return false }
+	if (st.view_kinds[id] or { Kind.view }) != .toggle_button {
+		return false
+	}
+	return macos.msg_i64(native, 'state') != 0
+}
+
+pub fn set_toggle_button_pressed(id string, pressed bool) {
+	st := state()
+	native := st.views[id] or { return }
+	if (st.view_kinds[id] or { Kind.view }) != .toggle_button {
+		return
+	}
+	macos.msg_void_i64(native, 'setState:', if pressed { i64(1) } else { i64(0) })
 }
 
 pub fn focus(id string) {
@@ -968,6 +987,9 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		.switch_control {
 			register_checkbox(native, element_action_id(el))
 		}
+		.toggle_button {
+			register_checkbox(native, element_action_id(el))
+		}
 		.dropdown {
 			register_action_control(native, element_action_id(el))
 		}
@@ -1113,6 +1135,9 @@ fn native_create_element(el Element) NativeView {
 		.switch_control {
 			native_new_switch_control(el)
 		}
+		.toggle_button {
+			native_new_toggle_button(el)
+		}
 		.dropdown {
 			native_new_dropdown(el)
 		}
@@ -1155,6 +1180,9 @@ fn native_update_element(native NativeView, el Element, declared_text_changed bo
 		}
 		.switch_control {
 			native_update_switch_control(native, el)
+		}
+		.toggle_button {
+			native_update_toggle_button(native, el)
 		}
 		.dropdown {
 			native_update_dropdown(native, el)
@@ -1721,6 +1749,24 @@ fn native_update_switch_control(view NativeView, el Element) {
 		macos.msg_void_bool(view, 'setAllowsMixedState:', false)
 	}
 	macos.msg_void_i64(view, 'setState:', if el.checked { i64(1) } else { i64(0) })
+}
+
+fn native_new_toggle_button(el Element) NativeView {
+	native := native_new_button(element_rect(el.frame), el.text, el.box.bg, el.text_style.color,
+		el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline,
+		el.box.radius, el.text_style.lines, el.image_path, el.native_style)
+	native_update_toggle_button(native, el)
+	return native
+}
+
+fn native_update_toggle_button(native NativeView, el Element) {
+	box := if el.checked { el.toggle_down_box } else { el.box }
+	style := if el.checked { el.toggle_down_text_style } else { el.text_style }
+	native_update_button(native, element_rect(el.frame), el.text, box.bg, style.color, style.size,
+		style.bold, style.italic, style.underline, box.radius, style.lines, el.image_path,
+		el.native_style)
+	macos.msg_void_i64(native, 'setButtonType:', ns_button_type_push_on_push_off)
+	macos.msg_void_i64(native, 'setState:', if el.checked { i64(1) } else { i64(0) })
 }
 
 fn native_new_slider(el Element) NativeView {

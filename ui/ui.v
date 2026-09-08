@@ -43,6 +43,7 @@ pub enum Kind {
 	scroll
 	slider
 	switch_control
+	toggle_button
 }
 
 // MenuEntry is one right-click context menu item attached to an element.
@@ -177,6 +178,8 @@ pub:
 	value_track           bool // slider: color the track between min and value
 	slider_style          SliderStyle
 	switch_style          SwitchStyle
+	toggle_down_box        BoxStyle
+	toggle_down_text_style TextStyle
 }
 
 pub enum BackendSupport {

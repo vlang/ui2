@@ -40,6 +40,26 @@ fn test_macos_switch_uses_native_boolean_state() {
 	assert macos.msg_i64(view, 'state') == 0
 }
 
+fn test_macos_toggle_button_retains_pressed_state() {
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	native := native_new_toggle_button(toggle_button(
+		id: 'native-toggle'
+		title: 'Bold'
+		frame: rect(0, 0, 100, 32)
+		pressed: true
+	))
+	defer {
+		macos.release(native)
+	}
+
+	assert macos.msg_i64(native, 'state') == 1
+	native_finish_button_action(native, true)
+	assert macos.msg_i64(native, 'state') == 1
+}
+
 fn test_macos_slider_uses_native_range_and_snaps_live_values() {
 	pool := macos.autorelease_pool_new()
 	defer {

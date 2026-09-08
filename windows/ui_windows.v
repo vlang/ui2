@@ -509,6 +509,24 @@ pub fn set_switch_active(id string, active bool) {
 	C.ui2_win_set_checked(hwnd, windows_bool(active))
 }
 
+pub fn toggle_button_pressed(id string) bool {
+	st := windows_state()
+	hwnd := st.views[id] or { return false }
+	if (st.view_kinds[id] or { Kind.view }) != .toggle_button {
+		return false
+	}
+	return C.ui2_win_get_checked(hwnd) != 0
+}
+
+pub fn set_toggle_button_pressed(id string, pressed bool) {
+	st := windows_state()
+	hwnd := st.views[id] or { return }
+	if (st.view_kinds[id] or { Kind.view }) != .toggle_button {
+		return
+	}
+	C.ui2_win_set_checked(hwnd, windows_bool(pressed))
+}
+
 pub fn focus(id string) {
 	st := windows_state()
 	hwnd := st.views[id] or { return }
@@ -659,8 +677,14 @@ fn windows_render_element(parent voidptr, el Element, key string, parent_key str
 	}
 	st.node_parents[key] = parent_key
 	st.node_frames[key] = el.frame
-	st.node_boxes[key] = el.box
-	st.node_text_styles[key] = el.text_style
+	visual_box := if el.kind == .toggle_button && el.checked { el.toggle_down_box } else { el.box }
+	visual_text_style := if el.kind == .toggle_button && el.checked {
+		el.toggle_down_text_style
+	} else {
+		el.text_style
+	}
+	st.node_boxes[key] = visual_box
+	st.node_text_styles[key] = visual_text_style
 	st.node_ids[key] = el.id
 	st.handle_keys[windows_handle_id(hwnd)] = key
 	if el.id.len > 0 {
@@ -668,7 +692,11 @@ fn windows_render_element(parent voidptr, el Element, key string, parent_key str
 		st.view_keys[el.id] = key
 		st.view_kinds[el.id] = el.kind
 	}
-	windows_update_element(key, hwnd, el, y_offset, must_create)
+	windows_update_element(key, hwnd, Element{
+		...el
+		box: visual_box
+		text_style: visual_text_style
+	}, y_offset, must_create)
 	windows_register_bindings(hwnd, el)
 	if el.children.len > 0 {
 		if el.kind == .scroll {
@@ -710,6 +738,7 @@ fn windows_widget_kind(kind Kind) int {
 		.checkbox { 9 }
 		.slider { 10 }
 		.switch_control { 11 }
+		.toggle_button { 12 }
 		.screen { 0 }
 	}
 }
@@ -744,11 +773,11 @@ fn windows_update_element(key string, hwnd voidptr, el Element, y_offset int, cr
 	C.ui2_win_enable(hwnd, windows_bool(el.enabled))
 	declared_changed := (st.node_declared_text[key] or { '' }) != el.text
 	match el.kind {
-		.label, .button, .checkbox, .switch_control {
+		.label, .button, .checkbox, .switch_control, .toggle_button {
 			if declared_changed || windows_native_text(hwnd) != el.text {
 				windows_set_native_text(hwnd, el.text)
 			}
-			if el.kind in [.checkbox, .switch_control] {
+			if el.kind in [.checkbox, .switch_control, .toggle_button] {
 				C.ui2_win_set_checked(hwnd, windows_bool(el.checked))
 			}
 		}
@@ -915,7 +944,7 @@ fn windows_register_bindings(hwnd voidptr, el Element) {
 	handle := windows_handle_id(hwnd)
 	action_id := element_action_id(el)
 	if action_id.len > 0
-		&& el.kind in [.button, .checkbox, .dropdown, .slider, .switch_control] {
+		&& el.kind in [.button, .checkbox, .dropdown, .slider, .switch_control, .toggle_button] {
 		st.action_ids[handle] = action_id
 	}
 	if el.kind == .slider {

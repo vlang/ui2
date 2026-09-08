@@ -50,3 +50,11 @@ fn test_compiled_qml_event_applies_active_switch_binding() {
 	assert handled
 	assert model.checked
 }
+
+fn test_compiled_qml_event_applies_pressed_toggle_binding() {
+	mut model := CompiledQmlTestModel{ checked: true }
+	event := compiled_qml_event('missing-toggle', 'pressed', 'app.checked', '')
+	handled := handle_compiled_qml_event[CompiledQmlTestModel](mut model, event) or { panic(err) }
+	assert handled
+	assert !model.checked
+}

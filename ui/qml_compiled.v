@@ -106,6 +106,8 @@ pub fn handle_compiled_qml_event[T](mut model T, event_id string) !bool {
 		} else if binding_property == 'value' {
 			live := slider_value(control)
 			q_number(live, slider_number(live))
+		} else if binding_property == 'pressed' {
+			q_bool(toggle_button_pressed(control))
 		} else {
 			return error('unsupported compiled QML binding `${binding_property}`')
 		}

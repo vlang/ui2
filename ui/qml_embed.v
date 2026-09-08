@@ -75,7 +75,7 @@ pub fn (mut app QmlApp[T]) handle(event_id string) ! {
 	if binding := event.binding {
 		field_name := binding.target.all_after('app.')
 		value := match binding.property {
-			'checked', 'active' {
+			'checked', 'active', 'pressed' {
 				current := q_lookup({
 					'app': q_value_from(app.model)
 				}, binding.target, 0)!

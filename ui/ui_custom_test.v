@@ -123,6 +123,36 @@ $if ui2_custom_rendering ? {
 		g_touch = TouchState{}
 	}
 
+	fn test_custom_toggle_button_updates_live_pressed_state() {
+		g_toggle_values = map[string]bool{
+			'bold': false
+		}
+		g_active_toggles = map[string]bool{
+			'bold': true
+		}
+		g_hit_targets = [HitTarget{
+			id: 'bold'
+			action_id: 'bold_changed'
+			x: 10
+			y: 20
+			w: 80
+			h: 32
+			toggle_button: true
+		}]
+		handle_touch_down(20, 30)
+		handle_touch_up(20, 30)
+		assert toggle_button_pressed('bold')
+		set_toggle_button_pressed('bold', false)
+		set_toggle_button_pressed('missing', true)
+		assert !toggle_button_pressed('bold')
+		assert !toggle_button_pressed('missing')
+		g_toggle_values = map[string]bool{}
+		g_toggle_declared = map[string]bool{}
+		g_active_toggles = map[string]bool{}
+		g_hit_targets = []HitTarget{}
+		g_touch = TouchState{}
+	}
+
 	fn test_custom_dropdown_popup_opens_below_its_control() {
 		row_height := dropdown_row_height(TextStyle{})
 		assert row_height == 28

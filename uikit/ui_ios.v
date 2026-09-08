@@ -72,6 +72,7 @@ __global g_text_change_ids = map[u64]string{}
 __global g_text_submit_ids = map[u64]string{}
 __global g_text_area_ids = map[u64]string{}
 __global g_slider_specs = map[u64]SliderSpec{}
+__global g_toggle_controls = map[u64]bool{}
 __global g_scroll_ids = map[string]bool{}
 __global g_scroll_offsets = map[string]f64{}
 __global g_view_translation_x = map[voidptr]f64{}
@@ -175,6 +176,22 @@ pub fn set_switch_active(id string, active bool) {
 		return
 	}
 	macos.msg_void_bool(view, 'setOn:', active)
+}
+
+pub fn toggle_button_pressed(id string) bool {
+	view := g_views[id] or { return false }
+	if (g_view_kinds[id] or { Kind.view }) != .toggle_button {
+		return false
+	}
+	return macos.msg_bool(view, 'isSelected')
+}
+
+pub fn set_toggle_button_pressed(id string, pressed bool) {
+	view := g_views[id] or { return }
+	if (g_view_kinds[id] or { Kind.view }) != .toggle_button {
+		return
+	}
+	macos.msg_void_bool(view, 'setSelected:', pressed)
 }
 
 pub fn focus(id string) {
@@ -547,6 +564,19 @@ fn update_switch_control_view(view View, el Element) {
 	macos.msg_void1(view, 'setThumbTintColor:', ios.color(el.switch_style.thumb_color))
 }
 
+fn new_toggle_button_view(el Element) View {
+	view := new_button_view(el.frame, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.box.radius, el.text_style.lines)
+	update_toggle_button_view(view, el)
+	return view
+}
+
+fn update_toggle_button_view(view View, el Element) {
+	box := if el.checked { el.toggle_down_box } else { el.box }
+	style := if el.checked { el.toggle_down_text_style } else { el.text_style }
+	update_button_view(view, el.frame, el.text, box.bg, style.color, style.size, style.bold, box.radius, style.lines)
+	macos.msg_void_bool(view, 'setSelected:', el.checked)
+}
+
 fn slider_number_value(view View, key string) f64 {
 	number := macos.msg_id1(view, 'valueForKey:', macos.nsstring(key))
 	if number == unsafe { nil } {
@@ -729,6 +759,7 @@ fn render_root(declared Element) {
 	g_text_submit_ids = map[u64]string{}
 	g_text_area_ids = map[u64]string{}
 	g_slider_specs = map[u64]SliderSpec{}
+	g_toggle_controls = map[u64]bool{}
 	g_scroll_ids = map[string]bool{}
 	set_background(g_root_view, root.box.bg)
 	mut active := map[string]bool{}
@@ -789,6 +820,7 @@ fn native_create_element(el Element) View {
 		}
 		.checkbox { new_checkbox_view(el) }
 		.switch_control { new_switch_control_view(el) }
+		.toggle_button { new_toggle_button_view(el) }
 		.dropdown { new_dropdown_view(el) }
 		.text_field {
 			field := new_text_field_view(el.frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure)
@@ -822,6 +854,7 @@ fn native_update_element(native View, el Element, declared_text_changed bool) {
 		}
 		.checkbox { update_checkbox_view(native, el) }
 		.switch_control { update_switch_control_view(native, el) }
+		.toggle_button { update_toggle_button_view(native, el) }
 		.dropdown { update_dropdown_view(native, el, declared_text_changed) }
 		.text_field {
 			update_text_field_view(native, el.frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure, el.autocorrect, declared_text_changed, el.padding_left)
@@ -855,6 +888,7 @@ fn forget_descendant_nodes(key string) {
 		g_text_submit_ids.delete(u64(child))
 		g_text_area_ids.delete(u64(child))
 		g_slider_specs.delete(u64(child))
+		g_toggle_controls.delete(u64(child))
 		g_view_translation_x.delete(voidptr(child))
 		g_nodes.delete(child_key_)
 		g_node_kinds.delete(child_key_)
@@ -888,10 +922,15 @@ fn register_native_handlers(native View, el Element) {
 		} else {
 			macos.set_associated_object(native, assoc_handler_key(), View(unsafe { nil }), macos.assoc_retain_nonatomic)
 		}
-	} else if el.kind in [.button, .checkbox] {
+	} else if el.kind in [.button, .checkbox, .toggle_button] {
 		remove_control_target_action(native, g_button_handler, 'handleTap:', 64)
-		if action_id.len > 0 {
-			g_action_ids[pointer] = action_id
+		if el.kind == .toggle_button {
+			g_toggle_controls[pointer] = true
+		}
+		if action_id.len > 0 || el.kind == .toggle_button {
+			if action_id.len > 0 {
+				g_action_ids[pointer] = action_id
+			}
 			add_button_target(native, g_button_handler)
 			macos.set_associated_object(native, assoc_handler_key(), g_button_handler, macos.assoc_retain_nonatomic)
 		} else {
@@ -1026,6 +1065,7 @@ fn remove_stale_nodes(active map[string]bool) {
 		g_text_submit_ids.delete(u64(native))
 		g_text_area_ids.delete(u64(native))
 		g_slider_specs.delete(u64(native))
+		g_toggle_controls.delete(u64(native))
 		g_view_translation_x.delete(voidptr(native))
 		g_nodes.delete(key)
 		g_node_kinds.delete(key)
@@ -1074,14 +1114,18 @@ fn vui_app_did_finish_launching(self voidptr, _cmd voidptr, _application voidptr
 
 @[export: 'vui_button_tap']
 fn vui_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
-	if voidptr(g_event_handler) == unsafe { nil } {
-		return
-	}
 	pointer := u64(sender)
-	id := g_action_ids[pointer] or { return }
 	if spec := g_slider_specs[pointer] {
 		native_snap_slider_value(View(sender), spec)
 	}
+	if g_toggle_controls[pointer] or { false } {
+		control := View(sender)
+		macos.msg_void_bool(control, 'setSelected:', !macos.msg_bool(control, 'isSelected'))
+	}
+	if voidptr(g_event_handler) == unsafe { nil } {
+		return
+	}
+	id := g_action_ids[pointer] or { return }
 	g_event_handler(id)
 }
 

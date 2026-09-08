@@ -41,7 +41,8 @@ enum {
 	UI2_WIN_TEXT_AREA = 8,
 	UI2_WIN_CHECKBOX = 9,
 	UI2_WIN_SLIDER = 10,
-	UI2_WIN_SWITCH = 11
+	UI2_WIN_SWITCH = 11,
+	UI2_WIN_TOGGLE_BUTTON = 12
 };
 
 extern intptr_t ui2_windows_window_proc(void *hwnd, unsigned int message,
@@ -383,6 +384,10 @@ static inline void *ui2_win_create_widget(int kind, void *parent_ptr, int x, int
 		style |= BS_AUTOCHECKBOX | BS_LEFT | BS_VCENTER | WS_TABSTOP;
 		break;
 	case UI2_WIN_SWITCH:
+		class_name = L"BUTTON";
+		style |= BS_AUTOCHECKBOX | BS_PUSHLIKE | BS_CENTER | BS_VCENTER | WS_TABSTOP;
+		break;
+	case UI2_WIN_TOGGLE_BUTTON:
 		class_name = L"BUTTON";
 		style |= BS_AUTOCHECKBOX | BS_PUSHLIKE | BS_CENTER | BS_VCENTER | WS_TABSTOP;
 		break;

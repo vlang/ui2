@@ -168,6 +168,20 @@ fn test_qml_model_supports_spinner_text_bindings() {
 	assert app.state().name == 'Work'
 }
 
+fn test_qml_model_supports_toggle_button_pressed_bindings() {
+	source := 'ToggleButton { id: bold text: "Bold" bind.pressed: app.enabled }'
+	root := element_from_qml_model(source, QmlTestApp{ enabled: true }, rect(0, 0, 100, 40)) or {
+		panic(err)
+	}
+	assert root.kind == .toggle_button
+	assert root.checked
+
+	mut app := new_qml_app(source, QmlTestApp{ enabled: false }) or { panic(err) }
+	built := app.build(rect(0, 0, 100, 40)) or { panic(err) }
+	app.handle(built.action_id) or { panic(err) }
+	assert app.state().enabled
+}
+
 fn test_qml_model_rejects_non_numeric_slider_bindings() {
 	if _ := element_from_qml_model('Slider { bind.value: app.name }', QmlTestApp{}, rect(0, 0, 100, 30)) {
 		assert false, 'slider values must bind to numeric fields'

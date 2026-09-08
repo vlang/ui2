@@ -547,6 +547,30 @@ fn test_qml_spinner_exposes_values_selection_and_style() {
 	assert el.accessibility_value == 'Home'
 }
 
+fn test_qml_toggle_button_exposes_pressed_and_released_styles() {
+	el := element_from_qml('ToggleButton {
+		id: bold
+		text: "Bold"
+		on_state: bold_changed
+		pressed: true
+		background: #E2E8F0
+		color: #1E293B
+		down_background: #1D4ED8
+		down_color: #FFFFFF
+		corner_radius: 6
+	}', rect(0, 0, 100, 40)) or { panic(err) }
+
+	assert el.kind == .toggle_button
+	assert el.action_id == 'bold_changed'
+	assert el.checked
+	assert el.box.bg == u32(0xe2e8f0)
+	assert el.text_style.color == u32(0x1e293b)
+	assert el.toggle_down_box.bg == u32(0x1d4ed8)
+	assert el.toggle_down_box.radius == 6
+	assert el.toggle_down_text_style.color == u32(0xffffff)
+	assert el.accessibility_value == 'pressed'
+}
+
 fn test_qml_widget_accessibility_defaults_survive_conversion() {
 	checkbox_el := element_from_qml('Checkbox { text: "Ready" checked: true }', rect(0, 0, 120, 24)) or {
 		panic(err)

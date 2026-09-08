@@ -14,6 +14,7 @@ $if !ui2_custom_rendering ? {
 		assert windows_widget_kind(.text_area) == 8
 		assert windows_widget_kind(.slider) == 10
 		assert windows_widget_kind(.switch_control) == 11
+		assert windows_widget_kind(.toggle_button) == 12
 	}
 
 	fn test_windows_structural_transitions_recreate_controls() {

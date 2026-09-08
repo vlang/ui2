@@ -27,6 +27,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		slider         bool
 		switch_control bool
 		switch_state   bool
+		toggle_button  bool
 		slider_frame   Rect
 		slider_padding f64
 		slider_spec    SliderSpec
@@ -102,6 +103,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_slider_specs = map[string]SliderSpec{}
 	__global g_switch_values = map[string]bool{}
 	__global g_switch_declared = map[string]bool{}
+	__global g_toggle_values = map[string]bool{}
+	__global g_toggle_declared = map[string]bool{}
 	__global g_focused_field = ''
 	__global g_scroll_offsets = map[string]f64{}
 	__global g_scroll_content_h = map[string]f64{}
@@ -111,6 +114,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_active_fields = map[string]bool{}
 	__global g_active_sliders = map[string]bool{}
 	__global g_active_switches = map[string]bool{}
+	__global g_active_toggles = map[string]bool{}
 	__global g_active_scrolls = map[string]bool{}
 	__global g_image_ids = map[string]int{}
 	__global g_font_metrics = FontMetrics{}
@@ -252,6 +256,17 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		g_switch_values[id] = active
+	}
+
+	pub fn toggle_button_pressed(id string) bool {
+		return g_toggle_values[id] or { false }
+	}
+
+	pub fn set_toggle_button_pressed(id string, pressed bool) {
+		if id !in g_active_toggles {
+			return
+		}
+		g_toggle_values[id] = pressed
 	}
 
 	pub fn focus(id string) {
@@ -432,6 +447,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			g_active_fields = map[string]bool{}
 			g_active_sliders = map[string]bool{}
 			g_active_switches = map[string]bool{}
+			g_active_toggles = map[string]bool{}
 			g_active_scrolls = map[string]bool{}
 			g_active_images = map[string]bool{}
 			root = apply_widget_animations(g_build_screen())
@@ -708,6 +724,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			open_dropdown(target)
 			return
 		}
+		if target.toggle_button {
+			commit_toggle_button(target)
+			return
+		}
 		fire_event(target.action_id)
 	}
 
@@ -774,6 +794,17 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if active != previous {
 			fire_event(target.action_id)
 		}
+	}
+
+	fn commit_toggle_button(target HitTarget) {
+		if !target.toggle_button {
+			return
+		}
+		previous := toggle_button_pressed(target.id)
+		if target.id.len > 0 {
+			g_toggle_values[target.id] = !previous
+		}
+		fire_event(target.action_id)
 	}
 
 	fn handle_files_dropped(e &gg.Event) {
@@ -1250,6 +1281,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			g_switch_values.delete(id)
 			g_switch_declared.delete(id)
 		}
+		mut stale_toggles := []string{}
+		for id, _ in g_toggle_values {
+			if id !in g_active_toggles {
+				stale_toggles << id
+			}
+		}
+		for id in stale_toggles {
+			g_toggle_values.delete(id)
+			g_toggle_declared.delete(id)
+		}
 		mut stale_scrolls := []string{}
 		for id, _ in g_scroll_offsets {
 			if id !in g_active_scrolls {
@@ -1401,6 +1442,43 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 						w: el.frame.width
 						h: el.frame.height
 						long_press: el.long_press
+					}, clip)
+				}
+			}
+			.toggle_button {
+				x := el.frame.x + off_x
+				y := el.frame.y + off_y
+				mut pressed := el.checked
+				if el.id.len > 0 {
+					previous_declared := g_toggle_declared[el.id] or { el.checked }
+					previous_value := g_toggle_values[el.id] or { el.checked }
+					if el.id !in g_toggle_values
+						|| (previous_declared != el.checked && previous_value != el.checked) {
+						g_toggle_values[el.id] = el.checked
+					}
+					pressed = g_toggle_values[el.id] or { el.checked }
+					g_toggle_declared[el.id] = el.checked
+					g_active_toggles[el.id] = true
+				}
+				box := if pressed { el.toggle_down_box } else { el.box }
+				style := if pressed { el.toggle_down_text_style } else { el.text_style }
+				if el.native_style && box.bg == unstyled_box_bg {
+					draw_button_bezel(ctx, x, y, el.frame.width, el.frame.height, box.radius,
+						el.enabled)
+				} else {
+					draw_rect(ctx, x, y, el.frame.width, el.frame.height, box.bg, box.radius)
+				}
+				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, box)
+				draw_text_centered(ctx, el.text, x, y, el.frame.width, el.frame.height, style)
+				if el.enabled {
+					add_hit_target(HitTarget{
+						id: el.id
+						action_id: element_action_id(el)
+						x: x
+						y: y
+						w: el.frame.width
+						h: el.frame.height
+						toggle_button: true
 					}, clip)
 				}
 			}

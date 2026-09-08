@@ -111,3 +111,26 @@ The V constructor is `spinner(SpinnerConfig{...})`. Set `text_autoupdate` to
 select the first value whenever a non-empty values list is supplied. Event
 handlers can read or replace the mounted selection through UI2's existing
 `text(id)` and `set_text(id, value)` APIs.
+
+## ToggleButton
+
+`ToggleButton` keeps a boolean pressed state after the pointer is released. It
+supports distinct released and pressed colors while retaining the ordinary
+button label, bounds, enabled state, and accessibility behavior.
+
+```qml
+ToggleButton {
+    id: bold
+    text: "Bold"
+    bind.pressed: app.bold
+    on_state: app.format_changed()
+    background: #E2E8F0
+    down_background: #1D4ED8
+    down_color: #FFFFFF
+}
+```
+
+The V constructor is `toggle_button(ToggleButtonConfig{...})`. During its event
+callback, `toggle_button_pressed(id)` reports the new live state;
+`set_toggle_button_pressed(id, pressed)` updates a mounted control. Mutually
+exclusive groups are intentionally handled in the next parity increment.

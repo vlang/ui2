@@ -805,6 +805,32 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 				}
 			)
 		}
+		'ToggleButton' {
+			action_id := if node.prop('on_state').len > 0 {
+				node.prop('on_state')
+			} else {
+				node.prop('on_tap')
+			}
+			normal_box := q_box(node)
+			return toggle_button(
+				id: node.id
+				action_id: action_id
+				title: node.prop('text')
+				frame: frame
+				pressed: node.prop_bool('pressed') || node.prop('state') == 'down'
+				box: normal_box
+				down_box: BoxStyle{
+					bg: q_color(node, 'down_background', 0x2563eb)
+					radius: node.prop_or('down_corner_radius', normal_box.radius.str()).f64()
+				}
+				text_style: q_text_style(node)
+				down_text_style: TextStyle{
+					...q_text_style(node)
+					color: q_color(node, 'down_color', 0xffffff)
+				}
+				native_style: node.prop_bool('native')
+			)
+		}
 		'Button' {
 			return Element{
 				...button(node.id, node.prop('text'), frame, q_box(node), q_text_style(node))
