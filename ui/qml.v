@@ -727,9 +727,15 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'Scroll' {
 			children := q_children(node, local)!
 			if node.prop_bool('persistent') {
-				return scroll_persistent(node.id, frame, q_color(node, 'background', 0xffffff), children)
+				return Element{
+					...scroll_persistent(node.id, frame, q_color(node, 'background', 0xffffff), children)
+					box: q_box(node)
+				}
 			}
-			return scroll(node.id, frame, q_color(node, 'background', 0xffffff), children)
+			return Element{
+				...scroll(node.id, frame, q_color(node, 'background', 0xffffff), children)
+				box: q_box(node)
+			}
 		}
 		'View', 'Rectangle' {
 			return view(node.id, frame, q_box(node), q_children(node, local)!)
@@ -907,9 +913,15 @@ fn q_dimension(node &QNode, key string, fallback f64) f64 {
 }
 
 fn q_box(node &QNode) BoxStyle {
+	border_width := node.prop_or('border_width', '0')
 	return BoxStyle{
 		bg: q_color(node, 'background', 0xffffff)
 		radius: node.prop_or('corner_radius', node.prop_or('radius', '0')).f64()
+		border_color: q_color(node, 'border_color', 0)
+		border_left: node.prop_or('border_left', border_width).f64()
+		border_top: node.prop_or('border_top', border_width).f64()
+		border_right: node.prop_or('border_right', border_width).f64()
+		border_bottom: node.prop_or('border_bottom', border_width).f64()
 	}
 }
 

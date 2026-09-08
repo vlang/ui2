@@ -165,6 +165,25 @@ button does not come out as a bare caption. A button the application gave its
 own background keeps it, since the platform styling stops where the
 application's own begins.
 
+Box-backed elements (`Rectangle`/`View`, `Button`, `Scroll`, `Dropdown`,
+`TextField`, and `TextArea`) can draw each border edge independently. Widths use
+the same logical units as frames and corner radii, so native and custom
+renderers scale them with the rest of the element:
+
+```qml
+Rectangle {
+    background: #10131F
+    border_color: #28314A
+    border_left: 1
+    border_top: 1
+    border_right: 1
+    border_bottom: 0
+}
+```
+
+`border_width` is shorthand for all four edges; an explicitly declared edge
+overrides it. The equivalent V API fields live directly on `BoxStyle`.
+
 Images load from `image_path` on every backend. The custom renderer caches
 decoded images. Scroll viewports clip both drawing and hit testing.
 

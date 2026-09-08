@@ -106,9 +106,24 @@ pub:
 
 pub struct BoxStyle {
 pub:
-	bg          u32 = 0xffffff
-	radius      f64
-	transparent bool
+	bg            u32 = 0xffffff
+	radius        f64
+	transparent   bool
+	border_color  u32
+	border_left   f64
+	border_top    f64
+	border_right  f64
+	border_bottom f64
+}
+
+// box_border_width keeps a declared border inside its element. Border widths
+// are logical units, just like Rect and corner radii; each backend is
+// responsible for mapping those units to its native device scale.
+fn box_border_width(width f64, extent f64) f64 {
+	if width <= 0 || extent <= 0 {
+		return 0
+	}
+	return if width < extent { width } else { extent }
 }
 
 pub struct Element {

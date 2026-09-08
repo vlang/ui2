@@ -49,6 +49,7 @@ extern int ui2_windows_control_key(void *hwnd, unsigned int virtual_key);
 extern int ui2_windows_context_menu(void *hwnd, int screen_x, int screen_y);
 extern int ui2_windows_cursor(void *hwnd);
 extern void ui2_windows_control_pointer(void *hwnd, unsigned int message, int x, int y);
+extern void ui2_windows_control_border(void *hwnd);
 
 static inline void ui2_win_refresh_text_font(HWND hwnd);
 
@@ -141,6 +142,7 @@ static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM
 	if (message == WM_PAINT) {
 		LRESULT result = DefSubclassProc(hwnd, message, wparam, lparam);
 		ui2_win_draw_placeholder(hwnd);
+		ui2_windows_control_border(hwnd);
 		return result;
 	}
 	if (message == WM_SETFOCUS || message == WM_KILLFOCUS || message == WM_SETTEXT) {
@@ -903,28 +905,106 @@ static inline intptr_t ui2_win_apply_control_colors(void *dc_ptr, unsigned int f
 	return (intptr_t)brush;
 }
 
+static inline int ui2_win_border_width(double width, int extent) {
+	if (width <= 0.0 || extent <= 0) return 0;
+	int pixels = (int)(width + 0.5);
+	if (pixels < 1) pixels = 1;
+	return pixels < extent ? pixels : extent;
+}
+
+static inline void ui2_win_draw_borders(HDC dc, const RECT *rect, unsigned int color,
+		double left_width, double top_width, double right_width, double bottom_width) {
+	if (dc == NULL || rect == NULL) return;
+	int width = rect->right - rect->left;
+	int height = rect->bottom - rect->top;
+	int left = ui2_win_border_width(left_width, width);
+	int top = ui2_win_border_width(top_width, height);
+	int right = ui2_win_border_width(right_width, width);
+	int bottom = ui2_win_border_width(bottom_width, height);
+	if (left == 0 && top == 0 && right == 0 && bottom == 0) return;
+	HBRUSH brush = CreateSolidBrush(ui2_win_color(color));
+	if (brush == NULL) return;
+	RECT edge;
+	if (left > 0) {
+		edge = (RECT){rect->left, rect->top, rect->left + left, rect->bottom};
+		FillRect(dc, &edge, brush);
+	}
+	if (top > 0) {
+		edge = (RECT){rect->left, rect->top, rect->right, rect->top + top};
+		FillRect(dc, &edge, brush);
+	}
+	if (right > 0) {
+		edge = (RECT){rect->right - right, rect->top, rect->right, rect->bottom};
+		FillRect(dc, &edge, brush);
+	}
+	if (bottom > 0) {
+		edge = (RECT){rect->left, rect->bottom - bottom, rect->right, rect->bottom};
+		FillRect(dc, &edge, brush);
+	}
+	DeleteObject(brush);
+}
+
+static inline void ui2_win_paint_control_border(void *hwnd_ptr, unsigned int color,
+		double radius, double left, double top, double right, double bottom) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	if (hwnd == NULL) return;
+	HDC dc = GetDC(hwnd);
+	if (dc == NULL) return;
+	RECT rect;
+	GetClientRect(hwnd, &rect);
+	HRGN clip = NULL;
+	if (radius > 0.5) {
+		int diameter = (int)(radius * 2.0 + 0.5);
+		clip = CreateRoundRectRgn(rect.left, rect.top, rect.right + 1, rect.bottom + 1,
+			diameter, diameter);
+		if (clip != NULL) SelectClipRgn(dc, clip);
+	}
+	ui2_win_draw_borders(dc, &rect, color, left, top, right, bottom);
+	if (clip != NULL) {
+		SelectClipRgn(dc, NULL);
+		DeleteObject(clip);
+	}
+	ReleaseDC(hwnd, dc);
+}
+
 static inline void ui2_win_paint_background(void *hwnd_ptr, unsigned int background,
-		double radius, int transparent) {
+		double radius, int transparent, unsigned int border_color, double border_left,
+		double border_top, double border_right, double border_bottom) {
 	HWND hwnd = (HWND)hwnd_ptr;
 	PAINTSTRUCT paint;
 	HDC dc = BeginPaint(hwnd, &paint);
-	if (dc != NULL && !transparent) {
+	if (dc != NULL) {
 		RECT rect;
 		GetClientRect(hwnd, &rect);
-		HBRUSH brush = CreateSolidBrush(ui2_win_color(background));
-		if (radius > 0.5) {
-			HPEN pen = CreatePen(PS_NULL, 0, ui2_win_color(background));
-			HGDIOBJ old_brush = SelectObject(dc, brush);
-			HGDIOBJ old_pen = SelectObject(dc, pen);
-			int diameter = (int)(radius * 2.0);
-			RoundRect(dc, rect.left, rect.top, rect.right, rect.bottom, diameter, diameter);
-			SelectObject(dc, old_pen);
-			SelectObject(dc, old_brush);
-			DeleteObject(pen);
-		} else {
-			FillRect(dc, &rect, brush);
+		if (!transparent) {
+			HBRUSH brush = CreateSolidBrush(ui2_win_color(background));
+			if (radius > 0.5) {
+				HPEN pen = CreatePen(PS_NULL, 0, ui2_win_color(background));
+				HGDIOBJ old_brush = SelectObject(dc, brush);
+				HGDIOBJ old_pen = SelectObject(dc, pen);
+				int diameter = (int)(radius * 2.0 + 0.5);
+				RoundRect(dc, rect.left, rect.top, rect.right, rect.bottom, diameter, diameter);
+				SelectObject(dc, old_pen);
+				SelectObject(dc, old_brush);
+				DeleteObject(pen);
+			} else {
+				FillRect(dc, &rect, brush);
+			}
+			DeleteObject(brush);
 		}
-		DeleteObject(brush);
+		HRGN clip = NULL;
+		if (radius > 0.5) {
+			int diameter = (int)(radius * 2.0 + 0.5);
+			clip = CreateRoundRectRgn(rect.left, rect.top, rect.right + 1, rect.bottom + 1,
+				diameter, diameter);
+			if (clip != NULL) SelectClipRgn(dc, clip);
+		}
+		ui2_win_draw_borders(dc, &rect, border_color, border_left, border_top,
+			border_right, border_bottom);
+		if (clip != NULL) {
+			SelectClipRgn(dc, NULL);
+			DeleteObject(clip);
+		}
 	}
 	EndPaint(hwnd, &paint);
 }

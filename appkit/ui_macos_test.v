@@ -54,6 +54,45 @@ fn test_macos_text_field_uses_native_bezel_without_layer_mask() {
 	assert !macos.msg_bool(field, 'wantsLayer')
 }
 
+fn test_macos_independent_borders_follow_the_view_bounds() {
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	ensure_runtime_classes()
+	view := native_new_view(native_rect(0, 0, 120, 80), BoxStyle{}, false)
+	defer {
+		macos.release(view)
+	}
+	box := BoxStyle{
+		border_color:  0x28314a
+		border_left:   1
+		border_top:    2
+		border_right:  3
+		border_bottom: 4
+	}
+	native_set_box_borders(view, box)
+
+	left := macos.get_associated_object(view, native_border_key('left'))
+	top := macos.get_associated_object(view, native_border_key('top'))
+	right := macos.get_associated_object(view, native_border_key('right'))
+	bottom := macos.get_associated_object(view, native_border_key('bottom'))
+	assert left != unsafe { nil }
+	assert top != unsafe { nil }
+	assert right != unsafe { nil }
+	assert bottom != unsafe { nil }
+	assert macos.msg_rect(left, 'frame') == macos.rect(0, 0, 1, 80)
+	assert macos.msg_rect(top, 'frame') == macos.rect(0, 0, 120, 2)
+	assert macos.msg_rect(right, 'frame') == macos.rect(117, 0, 3, 80)
+	assert macos.msg_rect(bottom, 'frame') == macos.rect(0, 76, 120, 4)
+
+	native_set_box_borders(view, BoxStyle{})
+	assert macos.msg_bool(left, 'isHidden')
+	assert macos.msg_bool(top, 'isHidden')
+	assert macos.msg_bool(right, 'isHidden')
+	assert macos.msg_bool(bottom, 'isHidden')
+}
+
 fn test_macos_text_commands_report_forward_and_reverse_tab() {
 	assert text_command_key(voidptr(macos.sel('insertTab:')), 0)? == 'tab'
 	assert text_command_key(voidptr(macos.sel('insertTab:')), 0x20000)? == 'shift+tab'

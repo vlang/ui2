@@ -209,6 +209,58 @@ fn set_corner_radius(view View, radius f64) {
 	macos.msg_void_bool(layer, 'setMasksToBounds:', true)
 }
 
+fn border_key(side string) voidptr {
+	return voidptr(macos.sel('ui2_border_${side}_assoc'))
+}
+
+fn set_border_layer(view View, side string, frame Rect, color u32, visible bool) {
+	key := border_key(side)
+	mut border := View(macos.get_associated_object(view, key))
+	if !visible {
+		if border != unsafe { nil } {
+			macos.msg_void_bool(border, 'setHidden:', true)
+		}
+		return
+	}
+	parent_layer := macos.msg_id(view, 'layer')
+	if border == unsafe { nil } {
+		border = macos.msg_id(macos.alloc('CALayer'), 'init')
+		macos.set_associated_object(view, key, border, macos.assoc_retain_nonatomic)
+		macos.release(border)
+	}
+	if macos.msg_id(border, 'superlayer') != parent_layer {
+		macos.msg_void1(parent_layer, 'addSublayer:', border)
+	}
+	macos.msg_void_rect(border, 'setFrame:', native_rect(frame))
+	macos.msg_void1(border, 'setBackgroundColor:', macos.msg_id(ios.color(color), 'CGColor'))
+	macos.msg_void_bool(border, 'setHidden:', false)
+}
+
+fn set_box_borders(view View, box BoxStyle) {
+	view_bounds := macos.msg_rect(view, 'bounds')
+	left := box_border_width(box.border_left, view_bounds.width)
+	top := box_border_width(box.border_top, view_bounds.height)
+	right := box_border_width(box.border_right, view_bounds.width)
+	bottom := box_border_width(box.border_bottom, view_bounds.height)
+	if left <= 0 && top <= 0 && right <= 0 && bottom <= 0 {
+		for side in ['left', 'top', 'right', 'bottom'] {
+			set_border_layer(view, side, Rect{}, box.border_color, false)
+		}
+		return
+	}
+	if box.radius > 0 {
+		set_corner_radius(view, box.radius)
+	}
+	transaction := macos.Id(macos.get_class('CATransaction'))
+	macos.msg_void(transaction, 'begin')
+	macos.msg_void_bool(transaction, 'setDisableActions:', true)
+	set_border_layer(view, 'left', rect(0, 0, left, view_bounds.height), box.border_color, left > 0)
+	set_border_layer(view, 'top', rect(0, 0, view_bounds.width, top), box.border_color, top > 0)
+	set_border_layer(view, 'right', rect(view_bounds.width - right, 0, right, view_bounds.height), box.border_color, right > 0)
+	set_border_layer(view, 'bottom', rect(0, view_bounds.height - bottom, view_bounds.width, bottom), box.border_color, bottom > 0)
+	macos.msg_void(transaction, 'commit')
+}
+
 fn add_button_target(btn View, target View) {
 	macos.msg_void3(btn, 'addTarget:action:forControlEvents:', target, macos.sel('handleTap:'), macos.Id(usize(64)))
 }
@@ -789,6 +841,7 @@ fn render_element(parent View, el Element, key string, mut active map[string]boo
 	} else {
 		native_update_element(native, el, declared_text_changed)
 	}
+	set_box_borders(native, el.box)
 
 	match el.kind {
 		.screen {}

@@ -877,6 +877,9 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			}
 		}
 	}
+	if el.kind != .screen {
+		native_set_box_borders(native, el.box)
+	}
 
 	match el.kind {
 		.screen {
@@ -1398,6 +1401,10 @@ fn assoc_handler_key() voidptr {
 	return voidptr(macos.sel('ui2_button_handler_assoc'))
 }
 
+fn native_border_key(side string) voidptr {
+	return voidptr(macos.sel('ui2_border_${side}_assoc'))
+}
+
 fn native_rect(x f64, y f64, width f64, height f64) NativeRect {
 	return NativeRect{
 		x: x
@@ -1889,6 +1896,66 @@ fn native_set_corner_radius(view NativeView, radius f64) {
 	layer := macos.msg_id(view, 'layer')
 	macos.msg_void_f64(layer, 'setCornerRadius:', radius)
 	macos.msg_void_bool(layer, 'setMasksToBounds:', radius > 0)
+}
+
+fn native_set_border_layer(view NativeView, side string, frame NativeRect, color u32, visible bool) {
+	key := native_border_key(side)
+	mut border := NativeView(macos.get_associated_object(view, key))
+	if !visible {
+		if !native_is_nil(border) {
+			macos.msg_void_bool(border, 'setHidden:', true)
+		}
+		return
+	}
+	parent_layer := macos.msg_id(view, 'layer')
+	if native_is_nil(border) {
+		border = macos.msg_id(macos.alloc('CALayer'), 'init')
+		native_set_associated_object(view, key, border)
+		macos.release(border)
+	}
+	// A native control can replace its backing layer while its style changes.
+	// Attach only when needed so routine refreshes do not reorder sublayers.
+	if macos.msg_id(border, 'superlayer') != parent_layer {
+		macos.msg_void1(parent_layer, 'addSublayer:', border)
+	}
+	macos.msg_void_rect(border, 'setFrame:', appkit_rect(frame))
+	macos.msg_void1(border, 'setBackgroundColor:', macos.msg_id(native_color(color), 'CGColor'))
+	macos.msg_void_bool(border, 'setHidden:', false)
+}
+
+fn native_set_box_borders(view NativeView, box BoxStyle) {
+	view_bounds := macos.msg_rect(view, 'bounds')
+	left := box_border_width(box.border_left, view_bounds.width)
+	top := box_border_width(box.border_top, view_bounds.height)
+	right := box_border_width(box.border_right, view_bounds.width)
+	bottom := box_border_width(box.border_bottom, view_bounds.height)
+	if left <= 0 && top <= 0 && right <= 0 && bottom <= 0 {
+		for side in ['left', 'top', 'right', 'bottom'] {
+			native_set_border_layer(view, side, NativeRect{}, box.border_color, false)
+		}
+		return
+	}
+	macos.msg_void_bool(view, 'setWantsLayer:', true)
+	if box.radius > 0 {
+		layer := macos.msg_id(view, 'layer')
+		macos.msg_void_f64(layer, 'setCornerRadius:', box.radius)
+		macos.msg_void_bool(layer, 'setMasksToBounds:', true)
+	}
+	transaction := macos.Id(macos.get_class('CATransaction'))
+	macos.msg_void(transaction, 'begin')
+	macos.msg_void_bool(transaction, 'setDisableActions:', true)
+	flipped := macos.msg_bool(view, 'isFlipped')
+	top_y := if flipped { 0.0 } else { view_bounds.height - top }
+	bottom_y := if flipped { view_bounds.height - bottom } else { 0.0 }
+	native_set_border_layer(view, 'left', native_rect(0, 0, left, view_bounds.height),
+		box.border_color, left > 0)
+	native_set_border_layer(view, 'top', native_rect(0, top_y, view_bounds.width, top),
+		box.border_color, top > 0)
+	native_set_border_layer(view, 'right', native_rect(view_bounds.width - right, 0, right,
+		view_bounds.height), box.border_color, right > 0)
+	native_set_border_layer(view, 'bottom', native_rect(0, bottom_y, view_bounds.width, bottom),
+		box.border_color, bottom > 0)
+	macos.msg_void(transaction, 'commit')
 }
 
 fn native_font(size f64, bold bool, italic bool) NativeView {

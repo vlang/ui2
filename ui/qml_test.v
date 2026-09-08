@@ -274,6 +274,50 @@ fn test_qml_applies_shared_control_state_properties() {
 	assert el.accessibility_label == 'Email'
 }
 
+fn test_qml_applies_independent_box_borders() {
+	node := parse_qml('Rectangle {
+		background: #10131F
+		border_color: #28314A
+		border_left: 1
+		border_top: 2.5
+		border_right: 3
+		border_bottom: 4
+	}') or { panic(err) }
+	el := element_from_qnode(node, rect(0, 0, 200, 100)) or { panic(err) }
+	assert el.box.border_color == 0x28314a
+	assert el.box.border_left == 1
+	assert el.box.border_top == 2.5
+	assert el.box.border_right == 3
+	assert el.box.border_bottom == 4
+}
+
+fn test_qml_border_width_is_an_all_sides_shorthand_with_edge_overrides() {
+	node := parse_qml('Button {
+		text: "Panel"
+		border_width: 2
+		border_left: 0
+		border_bottom: 5
+	}') or { panic(err) }
+	el := element_from_qnode(node, rect(0, 0, 120, 32)) or { panic(err) }
+	assert el.box.border_left == 0
+	assert el.box.border_top == 2
+	assert el.box.border_right == 2
+	assert el.box.border_bottom == 5
+}
+
+fn test_qml_scroll_preserves_box_borders() {
+	node := parse_qml('Scroll {
+		border_color: #334155
+		border_left: 1
+		border_right: 2
+	}') or { panic(err) }
+	el := element_from_qnode(node, rect(0, 0, 120, 80)) or { panic(err) }
+	assert el.kind == .scroll
+	assert el.box.border_color == 0x334155
+	assert el.box.border_left == 1
+	assert el.box.border_right == 2
+}
+
 fn test_qml_applies_pointer_and_transform_properties() {
 	node := parse_qml('Image {
 		id: movable_logo

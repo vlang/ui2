@@ -110,7 +110,9 @@ fn C.ui2_win_delete_object(object voidptr)
 
 fn C.ui2_win_apply_control_colors(dc voidptr, foreground u32, background u32, transparent int, brush voidptr) isize
 
-fn C.ui2_win_paint_background(hwnd voidptr, background u32, radius f64, transparent int)
+fn C.ui2_win_paint_background(hwnd voidptr, background u32, radius f64, transparent int, border_color u32, border_left f64, border_top f64, border_right f64, border_bottom f64)
+
+fn C.ui2_win_paint_control_border(hwnd voidptr, color u32, radius f64, left f64, top f64, right f64, bottom f64)
 
 fn C.ui2_win_invalidate(hwnd voidptr)
 
@@ -1193,7 +1195,9 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 		win_wm_paint {
 			if hwnd == st.root {
 				box := st.node_boxes[''] or { BoxStyle{} }
-				C.ui2_win_paint_background(hwnd, box.bg, box.radius, windows_bool(box.transparent))
+				C.ui2_win_paint_background(hwnd, box.bg, box.radius, windows_bool(box.transparent),
+					box.border_color, box.border_left, box.border_top, box.border_right,
+					box.border_bottom)
 				return 0
 			}
 			key := st.handle_keys[windows_handle_id(hwnd)] or {
@@ -1202,7 +1206,9 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 			kind := st.node_kinds[key] or { Kind.screen }
 			if kind == .view || kind == .scroll {
 				box := st.node_boxes[key] or { BoxStyle{} }
-				C.ui2_win_paint_background(hwnd, box.bg, box.radius, windows_bool(box.transparent))
+				C.ui2_win_paint_background(hwnd, box.bg, box.radius, windows_bool(box.transparent),
+					box.border_color, box.border_left, box.border_top, box.border_right,
+					box.border_bottom)
 				return 0
 			}
 		}
@@ -1264,6 +1270,15 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 		else {}
 	}
 	return C.ui2_win_default_proc(hwnd, message, wparam, lparam)
+}
+
+@[export: 'ui2_windows_control_border']
+fn ui2_windows_control_border(hwnd voidptr) {
+	st := windows_state()
+	key := st.handle_keys[windows_handle_id(hwnd)] or { return }
+	box := st.node_boxes[key] or { return }
+	C.ui2_win_paint_control_border(hwnd, box.border_color, box.radius, box.border_left,
+		box.border_top, box.border_right, box.border_bottom)
 }
 
 @[export: 'ui2_windows_edit_submit']

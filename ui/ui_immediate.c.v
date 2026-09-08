@@ -1163,6 +1163,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				if !el.box.transparent {
 					draw_rect(ctx, off_x, off_y, w - off_x, h - off_y, el.box.bg, 0)
 				}
+				draw_box_borders(ctx, off_x, off_y, w - off_x, h - off_y, el.box)
 				for child in el.children {
 					render_element(ctx, child, off_x, off_y, clip)
 				}
@@ -1173,6 +1174,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				if !el.box.transparent {
 					draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
 				}
+				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
 				if el.enabled && element_action_id(el).len > 0
 					&& (el.clickable || el.draggable || el.long_press || el.swipe_left) {
 					add_hit_target(HitTarget{
@@ -1197,6 +1199,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				y := el.frame.y + off_y
 				frame := rect(x, y, el.frame.width, el.frame.height)
 				draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, 0)
+				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
 				mut content_h := 0.0
 				for child in el.children {
 					if !child.hidden && child.frame.y + child.frame.height > content_h {
@@ -1257,6 +1260,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				} else {
 					draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
 				}
+				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
 				draw_text_centered(ctx, el.text, x, y, el.frame.width, el.frame.height, el.text_style)
 				if el.enabled {
 					add_hit_target(HitTarget{
@@ -1317,8 +1321,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				g_active_fields[el.id] = true
 				selected := g_text_values[el.id] or { el.text }
 				list_open := el.enabled && el.id.len > 0 && g_open_dropdown == el.id
-				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box.bg,
-					el.box.radius, list_open, el.enabled)
+				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box,
+					list_open, el.enabled)
 				padding := if el.padding_left > 0 { el.padding_left } else { 12.0 }
 				text_width := if el.frame.width > padding + 32 { el.frame.width - padding - 32 } else { 0.0 }
 				draw_text(ctx, selected, x + padding, y, text_width, el.frame.height, el.text_style)
@@ -1378,8 +1382,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				}
 				display_text := text_field_display_text(current_text, el.secure)
 				is_focused := g_focused_field == el.id
-				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box.bg,
-					el.box.radius, is_focused, el.enabled)
+				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box,
+					is_focused, el.enabled)
 				if current_text.len > 0 {
 					draw_editable_text(ctx, display_text, x + padding_left, y, content_width, el.frame.height, el.text_style)
 				} else if el.placeholder.len > 0 {
@@ -1425,8 +1429,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				g_text_kinds[el.id] = el.kind
 				g_active_fields[el.id] = true
 				current_text := g_text_values[el.id] or { el.text }
-				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box.bg,
-					el.box.radius, g_focused_field == el.id, el.enabled)
+				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box,
+					g_focused_field == el.id, el.enabled)
 				draw_text_area_content(ctx, el, current_text, x, y, clip)
 				if el.enabled && !el.readonly {
 					add_hit_target(HitTarget{
@@ -1549,8 +1553,27 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 	}
 
-	fn draw_control_surface(ctx &gg.Context, x f64, y f64, w f64, h f64, background u32, radius f64, focused bool, enabled bool) {
-		draw_rect(ctx, x, y, w, h, background, radius)
+	fn draw_box_borders(ctx &gg.Context, x f64, y f64, w f64, h f64, box BoxStyle) {
+		left := box_border_width(box.border_left, w)
+		top := box_border_width(box.border_top, h)
+		right := box_border_width(box.border_right, w)
+		bottom := box_border_width(box.border_bottom, h)
+		if left > 0 {
+			draw_rect(ctx, x, y, left, h, box.border_color, 0)
+		}
+		if top > 0 {
+			draw_rect(ctx, x, y, w, top, box.border_color, 0)
+		}
+		if right > 0 {
+			draw_rect(ctx, x + w - right, y, right, h, box.border_color, 0)
+		}
+		if bottom > 0 {
+			draw_rect(ctx, x, y + h - bottom, w, bottom, box.border_color, 0)
+		}
+	}
+
+	fn draw_control_surface(ctx &gg.Context, x f64, y f64, w f64, h f64, box BoxStyle, focused bool, enabled bool) {
+		draw_rect(ctx, x, y, w, h, box.bg, box.radius)
 		border := if focused {
 			u32(0x3478d4)
 		} else if enabled {
@@ -1558,11 +1581,12 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		} else {
 			u32(0xe2e8f0)
 		}
-		draw_outline(ctx, x, y, w, h, border, radius)
+		draw_outline(ctx, x, y, w, h, border, box.radius)
 		if focused && w > 2 && h > 2 {
-			inner_radius := if radius > 1 { radius - 1 } else { 0.0 }
+			inner_radius := if box.radius > 1 { box.radius - 1 } else { 0.0 }
 			draw_outline(ctx, x + 1, y + 1, w - 2, h - 2, border, inner_radius)
 		}
+		draw_box_borders(ctx, x, y, w, h, box)
 	}
 
 	// unstyled_box_bg is BoxStyle's default background: the button was left

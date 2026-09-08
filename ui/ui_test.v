@@ -1,5 +1,13 @@
 module ui2
 
+fn test_box_border_width_stays_inside_the_element() {
+	assert box_border_width(-1, 20) == 0
+	assert box_border_width(0, 20) == 0
+	assert box_border_width(1.5, 20) == 1.5
+	assert box_border_width(30, 20) == 20
+	assert box_border_width(1, 0) == 0
+}
+
 fn test_with_secure_entry_preserves_text_field_configuration() {
 	field := text_field_with_change_and_submit('password', 'sign-in', 'Password', 'secret', rect(1, 2, 200, 32), BoxStyle{
 		bg: 0xfafafa
