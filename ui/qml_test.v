@@ -575,6 +575,33 @@ fn test_qml_toggle_button_exposes_pressed_and_released_styles() {
 	assert el.accessibility_value == 'pressed'
 }
 
+fn test_qml_grid_layout_assigns_cells_in_the_requested_orientation() {
+	el := element_from_qml('GridLayout {
+		id: tools
+		columns: 2
+		orientation: rl-bt
+		padding: 10
+		spacing: 10
+		Button { id: one text: "One" }
+		Button { id: two text: "Two" }
+		Button { id: three text: "Three" }
+	}', rect(20, 30, 210, 110)) or { panic(err) }
+	assert el.kind == .view
+	assert el.frame == rect(20, 30, 210, 110)
+	assert el.children.len == 3
+	assert el.children[0].frame == rect(110, 60, 90, 40)
+	assert el.children[1].frame == rect(10, 60, 90, 40)
+	assert el.children[2].frame == rect(110, 10, 90, 40)
+}
+
+fn test_qml_grid_layout_requires_a_constraint() {
+	if _ := element_from_qml('GridLayout { Button { text: "Missing constraint" } }', rect(0, 0, 200, 100)) {
+		assert false, 'an unconstrained QML grid must fail'
+	} else {
+		assert err.msg().contains('requires columns or rows')
+	}
+}
+
 fn test_qml_widget_accessibility_defaults_survive_conversion() {
 	checkbox_el := element_from_qml('Checkbox { text: "Ready" checked: true }', rect(0, 0, 120, 24)) or {
 		panic(err)

@@ -137,3 +137,31 @@ to the same non-empty name on multiple controls to make their pressed states
 mutually exclusive. `allow_no_selection` defaults to `true`; set it to `false`
 when one member must remain selected. `toggle_button_group_members(id)` returns
 the mounted IDs belonging to the same group.
+
+## GridLayout
+
+`GridLayout` assigns children to matrix cells in declaration order. At least
+one of `columns`/`cols` or `rows` is required. With one constraint, the other
+dimension grows to fit the children; setting both places a fixed limit on the
+number of cells.
+
+```qml
+GridLayout {
+    columns: 3
+    padding: 8
+    spacing: 8
+    orientation: lr-tb
+    Button { text: "One" }
+    Button { text: "Two" }
+    Button { text: "Three" }
+}
+```
+
+The V API is `grid_layout(GridLayoutConfig{...})` and returns an error for an
+invalid constraint or capacity. It supports all eight two-axis orientations,
+per-edge `GridPadding`, horizontal/vertical `GridSpacing`, default or forced
+row and column sizes, and per-index minimum sizes. QML also accepts
+`padding_left`, `padding_top`, `padding_right`, `padding_bottom`, `spacing_x`,
+`spacing_y`, `col_default_width`, `row_default_height`,
+`col_force_default`, and `row_force_default`. Repeater output participates in
+the same cell calculation.

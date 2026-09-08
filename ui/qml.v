@@ -724,6 +724,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'Row' {
 			return q_row(node, frame)!
 		}
+		'GridLayout' {
+			return q_grid(node, frame)!
+		}
 		'Scroll' {
 			children := q_children(node, local)!
 			if node.prop_bool('persistent') {
@@ -1008,6 +1011,49 @@ fn q_row(node &QNode, frame Rect) !Element {
 		x += child_w + spacing
 	}
 	return view(node.id, container, q_box(node), children)
+}
+
+fn q_grid_config(node &QNode, frame Rect) !GridLayoutConfig {
+	padding := node.prop_or('padding', '0').f64()
+	spacing := node.prop_or('spacing', '0').f64()
+	return GridLayoutConfig{
+		id: node.id
+		frame: frame
+		box: q_box(node)
+		columns: node.prop_or('columns', node.prop_or('cols', '0')).int()
+		rows: node.prop_or('rows', '0').int()
+		orientation: grid_orientation(node.prop_or('orientation', 'lr-tb'))!
+		padding: GridPadding{
+			left: node.prop_or('padding_left', padding.str()).f64()
+			top: node.prop_or('padding_top', padding.str()).f64()
+			right: node.prop_or('padding_right', padding.str()).f64()
+			bottom: node.prop_or('padding_bottom', padding.str()).f64()
+		}
+		spacing: GridSpacing{
+			horizontal: node.prop_or('spacing_x', spacing.str()).f64()
+			vertical: node.prop_or('spacing_y', spacing.str()).f64()
+		}
+		column_default_width: node.prop_or('col_default_width', '0').f64()
+		row_default_height: node.prop_or('row_default_height', '0').f64()
+		force_column_width: node.prop_bool('col_force_default')
+		force_row_height: node.prop_bool('row_force_default')
+	}
+}
+
+fn q_grid(node &QNode, frame Rect) !Element {
+	mut visible := []&QNode{}
+	for child in node.children {
+		if child.tag !in ['MenuItem', 'Option'] {
+			visible << child
+		}
+	}
+	config := q_grid_config(node, rect(0, 0, frame.width, frame.height))!
+	frames := grid_layout_frames(config, visible.len)!
+	mut children := []Element{cap: visible.len}
+	for index, child in visible {
+		children << node_to_element(child, frames[index])!
+	}
+	return view(node.id, frame, q_box(node), children)
 }
 
 fn q_frame(node &QNode, fallback Rect) Rect {

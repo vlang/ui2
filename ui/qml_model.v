@@ -504,6 +504,7 @@ enum QChildLayoutKind {
 	overlay
 	column
 	row
+	grid
 }
 
 struct QChildLayout {
@@ -511,23 +512,32 @@ struct QChildLayout {
 	frame   Rect
 	padding f64
 	spacing f64
+	cells   []Rect
 mut:
 	cursor f64
+	index  int
 }
 
-fn q_child_layout(node &QNode, actual Rect) QChildLayout {
+fn q_child_layout(node &QNode, actual Rect, child_count int) !QChildLayout {
 	kind := match node.tag {
 		'Column' { QChildLayoutKind.column }
 		'Row' { QChildLayoutKind.row }
+		'GridLayout' { QChildLayoutKind.grid }
 		else { QChildLayoutKind.overlay }
 	}
 	padding := node.prop_or('padding', '0').f64()
+	local := rect(0, 0, actual.width, actual.height)
 	return QChildLayout{
 		kind: kind
-		frame: rect(0, 0, actual.width, actual.height)
+		frame: local
 		padding: padding
 		spacing: node.prop_or('spacing', '0').f64()
 		cursor: padding
+		cells: if kind == .grid {
+			grid_layout_frames(q_grid_config(node, local)!, child_count)!
+		} else {
+			[]Rect{}
+		}
 	}
 }
 
@@ -539,6 +549,9 @@ fn (layout &QChildLayout) fallback() Rect {
 		}
 		.row {
 			rect(layout.cursor, layout.padding, 80, layout.frame.height - layout.padding * 2)
+		}
+		.grid {
+			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
 		}
 	}
 }
@@ -554,8 +567,34 @@ fn (mut layout QChildLayout) advance(child &QNode) {
 		.row {
 			layout.cursor += q_dimension(child, 'width', 80) + layout.spacing
 		}
+		.grid {
+			layout.index++
+		}
 		.overlay {}
 	}
+}
+
+fn q_layout_child_count(node &QNode, scope map[string]QValue) !int {
+	mut count := 0
+	for child in node.children {
+		if child.tag in ['MenuItem', 'Option'] {
+			continue
+		}
+		if child.tag != 'Repeater' {
+			count++
+			continue
+		}
+		model_expr := child.expressions['model'] or {
+			return error('Repeater requires `model` at line ${child.line}')
+		}
+		items := q_eval(model_expr, scope)!
+		if items.kind != .list {
+			return error('Repeater model must be a collection at line ${model_expr.line}')
+		}
+		visible_children := child.children.filter(it.tag !in ['MenuItem', 'Option']).len
+		count += items.items.len * visible_children
+	}
+	return count
 }
 
 fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut evaluation QmlEvaluation) !&QNode {
@@ -683,7 +722,8 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		}
 	}
 
-	mut layout := q_child_layout(resolved, actual)
+	child_count := q_layout_child_count(node, scope)!
+	mut layout := q_child_layout(resolved, actual, child_count)!
 	for child in node.children {
 		if child.tag == 'Repeater' {
 			q_expand_repeater(child, scope, mut resolved.children, mut evaluation, mut layout)!

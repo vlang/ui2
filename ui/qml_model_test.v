@@ -223,6 +223,30 @@ fn test_qml_model_toggle_button_groups_update_all_bound_fields() {
 	assert app.state().enabled
 }
 
+fn test_qml_model_grid_layout_counts_repeater_children() {
+	source := 'GridLayout {
+		columns: 2
+		padding: 10
+		spacing: 10
+		Repeater {
+			model: app.users
+			key: item.id
+			Button { text: item.name }
+		}
+	}'
+	grid := element_from_qml_model(source, QmlTestApp{
+		users: [
+			QmlTestUser{ id: 1, name: 'One' },
+			QmlTestUser{ id: 2, name: 'Two' },
+			QmlTestUser{ id: 3, name: 'Three' },
+		]
+	}, rect(0, 0, 210, 110)) or { panic(err) }
+	assert grid.children.len == 3
+	assert grid.children[0].frame == rect(10, 10, 90, 40)
+	assert grid.children[1].frame == rect(110, 10, 90, 40)
+	assert grid.children[2].frame == rect(10, 60, 90, 40)
+}
+
 fn test_qml_model_rejects_non_numeric_slider_bindings() {
 	if _ := element_from_qml_model('Slider { bind.value: app.name }', QmlTestApp{}, rect(0, 0, 100, 30)) {
 		assert false, 'slider values must bind to numeric fields'
