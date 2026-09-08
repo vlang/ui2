@@ -751,6 +751,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'TreeView' {
 			return q_tree_view(node, frame)!
 		}
+		'ScreenManager' {
+			return q_screen_manager(node, frame)!
+		}
 		'Scroll' {
 			children := q_children(node, local)!
 			if node.prop_bool('persistent') {
@@ -1514,6 +1517,50 @@ fn q_tree_view(node &QNode, frame Rect) !Element {
 		}
 		nodes: nodes
 	)!
+}
+
+fn q_managed_screen_name(node &QNode) string {
+	return node.prop_or('name', node.id)
+}
+
+fn q_screen_manager_config(node &QNode, frame Rect, screens []ManagedScreen) ScreenManagerConfig {
+	return ScreenManagerConfig{
+		id: node.id
+		frame: frame
+		box: q_box(node)
+		current: node.prop('current')
+		screens: screens
+	}
+}
+
+fn q_screen_manager(node &QNode, frame Rect) !Element {
+	mut screen_nodes := []&QNode{}
+	mut dummy_screens := []ManagedScreen{}
+	for child in node.children {
+		if child.tag !in ['Screen', 'ManagedScreen', 'ScreenView'] {
+			continue
+		}
+		screen_nodes << child
+		dummy_screens << ManagedScreen{
+			name: q_managed_screen_name(child)
+		}
+	}
+	local := rect(0, 0, frame.width, frame.height)
+	dummy_config := q_screen_manager_config(node, local, dummy_screens)
+	current := screen_manager_index(dummy_config)!
+	mut screens := []ManagedScreen{cap: screen_nodes.len}
+	for index, child in screen_nodes {
+		content := if index == current {
+			view(child.id, local, q_box(child), q_children(child, local)!)
+		} else {
+			Element{}
+		}
+		screens << ManagedScreen{
+			name: q_managed_screen_name(child)
+			content: content
+		}
+	}
+	return screen_manager(q_screen_manager_config(node, frame, screens))!
 }
 
 fn q_frame(node &QNode, fallback Rect) Rect {

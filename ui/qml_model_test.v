@@ -22,17 +22,18 @@ pub struct QmlTestApp {
 pub:
 	max_users int = 3
 pub mut:
-	name      string
-	enabled   bool
-	secondary bool
-	level     f64
-	users     []QmlTestUser
-	groups    []QmlTestGroup
-	removed   int
-	saved     string
-	page      int
-	tree_open bool
-	selected  string
+	name        string
+	enabled     bool
+	secondary   bool
+	level       f64
+	users       []QmlTestUser
+	groups      []QmlTestGroup
+	removed     int
+	saved       string
+	page        int
+	tree_open   bool
+	selected    string
+	screen_name string
 }
 
 fn qml_test_control_value(_id string) f64 {
@@ -65,6 +66,10 @@ pub fn (mut app QmlTestApp) toggle_tree() {
 
 pub fn (mut app QmlTestApp) select_tree_leaf() {
 	app.selected = 'guide'
+}
+
+pub fn (mut app QmlTestApp) show_details_screen() {
+	app.screen_name = 'details'
 }
 
 fn qml_test_find(element Element, text string) ?Element {
@@ -440,6 +445,29 @@ fn test_qml_model_tree_view_expands_and_selects_through_actions() {
 
 	selected := app.build(rect(0, 0, 300, 200)) or { panic(err) }
 	assert selected.children[1].children[1].accessibility_value == 'selected'
+}
+
+fn test_qml_model_screen_manager_switches_active_screen_through_action() {
+	source := 'ScreenManager {
+		id: manager
+		current: app.screen_name
+		Screen {
+			id: home
+			Button { text: "Details" on_tap: app.show_details_screen() }
+		}
+		Screen { id: details Label { text: "Details content" } }
+	}'
+	mut app := new_qml_app(source, QmlTestApp{}) or { panic(err) }
+	initial := app.build(rect(0, 0, 320, 200)) or { panic(err) }
+	assert initial.children.len == 1
+	assert initial.children[0].id == 'home'
+	app.handle(initial.children[0].children[0].action_id) or { panic(err) }
+	assert app.state().screen_name == 'details'
+
+	rebuilt := app.build(rect(0, 0, 320, 200)) or { panic(err) }
+	assert rebuilt.children.len == 1
+	assert rebuilt.children[0].id == 'details'
+	assert rebuilt.children[0].children[0].text == 'Details content'
 }
 
 fn test_qml_model_anchor_layout_uses_resolved_child_sizes() {

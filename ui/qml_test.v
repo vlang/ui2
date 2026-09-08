@@ -915,3 +915,30 @@ fn test_qml_tree_view_validates_geometry() {
 		assert err.msg().contains('geometry')
 	}
 }
+
+fn test_qml_screen_manager_renders_only_named_active_screen() {
+	el := element_from_qml('ScreenManager {
+		id: navigation
+		current: details
+		Screen { id: home Label { text: "Home content" } }
+		Screen { id: details background: #EFF6FF Label { text: "Details content" } }
+		Screen { id: settings Label { text: "Settings content" } }
+	}', rect(10, 20, 320, 200)) or { panic(err) }
+	assert el.frame == rect(10, 20, 320, 200)
+	assert el.children.len == 1
+	assert el.children[0].id == 'details'
+	assert el.children[0].frame == rect(0, 0, 320, 200)
+	assert el.children[0].box.bg == u32(0xeff6ff)
+	assert el.children[0].children[0].text == 'Details content'
+}
+
+fn test_qml_screen_manager_validates_current_name() {
+	if _ := element_from_qml('ScreenManager {
+		current: missing
+		Screen { id: home }
+	}', rect(0, 0, 300, 200)) {
+		assert false, 'unknown current screens must fail'
+	} else {
+		assert err.msg().contains('missing')
+	}
+}

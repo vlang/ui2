@@ -408,6 +408,37 @@ The V constructor is `tree_view(TreeViewConfig{...})`, using recursive
 with depth and row frames; `tree_view_content_height` is useful when placing the
 tree inside a `Scroll` container.
 
+## ScreenManager
+
+`ScreenManager` owns named screens and adds only the active screen to the
+element tree. `current` may use a screen's `name` property or its `id`; an empty
+value selects the first declared screen.
+
+```qml
+ScreenManager {
+    current: app.current_screen
+    Screen {
+        id: home
+        Button { text: "Details" on_tap: app.show_details() }
+    }
+    Screen {
+        id: details
+        Label { text: "Details" }
+    }
+}
+```
+
+Each active screen receives the manager's full local bounds. Unknown current
+names, duplicate names, and empty names are rejected so navigation failures do
+not silently render the wrong content. `ManagedScreen` and `ScreenView` are
+accepted as declarative aliases when a nested `Screen` would be unclear.
+
+The V constructor is `screen_manager(ScreenManagerConfig{...})`, using
+`ManagedScreen` entries. `screen_manager_current` returns the resolved name,
+and `screen_manager_next`/`screen_manager_previous` provide wraparound
+navigation. Animated transitions are a separate future layer; current screen
+changes are immediate and deterministic on every backend.
+
 ## StackLayout
 
 `StackLayout` packs variable-size children along one axis and wraps them when
