@@ -31,6 +31,8 @@ pub mut:
 	removed   int
 	saved     string
 	page      int
+	tree_open bool
+	selected  string
 }
 
 fn qml_test_control_value(_id string) f64 {
@@ -55,6 +57,14 @@ pub fn (mut app QmlTestApp) save_name(name string) {
 
 pub fn (mut app QmlTestApp) select_second_tab() {
 	app.page = 1
+}
+
+pub fn (mut app QmlTestApp) toggle_tree() {
+	app.tree_open = !app.tree_open
+}
+
+pub fn (mut app QmlTestApp) select_tree_leaf() {
+	app.selected = 'guide'
 }
 
 fn qml_test_find(element Element, text string) ?Element {
@@ -398,6 +408,38 @@ fn test_qml_model_accordion_switches_content_through_item_action() {
 	rebuilt := app.build(rect(0, 0, 300, 180)) or { panic(err) }
 	assert rebuilt.children[0].children[0].text == 'Second content'
 	assert rebuilt.children[2].accessibility_value == 'expanded'
+}
+
+fn test_qml_model_tree_view_expands_and_selects_through_actions() {
+	source := 'TreeView {
+		id: navigation
+		TreeNode {
+			id: docs
+			text: "Documentation"
+			expanded: app.tree_open
+			on_toggle: app.toggle_tree()
+			TreeNode {
+				id: guide
+				text: "Guide"
+				selected: app.selected == "guide"
+				on_select: app.select_tree_leaf()
+			}
+		}
+		TreeNode { id: license text: "License" }
+	}'
+	mut app := new_qml_app(source, QmlTestApp{}) or { panic(err) }
+	initial := app.build(rect(0, 0, 300, 200)) or { panic(err) }
+	assert initial.children.len == 2
+	app.handle(initial.children[0].children[0].action_id) or { panic(err) }
+	assert app.state().tree_open
+
+	expanded := app.build(rect(0, 0, 300, 200)) or { panic(err) }
+	assert expanded.children.len == 3
+	app.handle(expanded.children[1].children[1].action_id) or { panic(err) }
+	assert app.state().selected == 'guide'
+
+	selected := app.build(rect(0, 0, 300, 200)) or { panic(err) }
+	assert selected.children[1].children[1].accessibility_value == 'selected'
 }
 
 fn test_qml_model_anchor_layout_uses_resolved_child_sizes() {

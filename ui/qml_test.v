@@ -877,3 +877,41 @@ fn test_qml_accordion_validates_available_title_space() {
 		assert err.msg().contains('enough space')
 	}
 }
+
+fn test_qml_tree_view_flattens_expanded_nodes_and_styles_selection() {
+	el := element_from_qml('TreeView {
+		id: navigation
+		row_height: 32
+		spacing: 4
+		indent: 20
+		disclosure_width: 24
+		selected_background: #DBEAFE
+		TreeNode {
+			id: docs
+			text: "Documentation"
+			expanded: true
+			on_toggle: toggle_docs
+			TreeNode { id: guide text: "Guide" TreeNode { id: install text: "Install" } }
+			TreeNode { id: api text: "API" selected: true on_select: select_api }
+		}
+		TreeNode { id: license text: "License" }
+	}', rect(10, 20, 300, 200)) or { panic(err) }
+	assert el.frame == rect(10, 20, 300, 200)
+	assert el.accessibility_role == 'tree'
+	assert el.children.len == 4
+	assert el.children[0].children[0].action_id == 'toggle_docs'
+	assert el.children[0].children[0].accessibility_value == 'expanded'
+	assert el.children[1].children[1].frame == rect(44, 0, 256, 32)
+	assert el.children[2].frame == rect(0, 72, 300, 32)
+	assert el.children[2].children[1].box.bg == u32(0xdbeafe)
+	assert el.children[2].children[1].action_id == 'select_api'
+	assert el.children[2].children[1].accessibility_value == 'selected'
+}
+
+fn test_qml_tree_view_validates_geometry() {
+	if _ := element_from_qml('TreeView { row_height: -1 }', rect(0, 0, 300, 200)) {
+		assert false, 'negative tree row height must fail'
+	} else {
+		assert err.msg().contains('geometry')
+	}
+}

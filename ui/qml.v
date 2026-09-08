@@ -748,6 +748,9 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 		'Accordion' {
 			return q_accordion(node, frame)!
 		}
+		'TreeView' {
+			return q_tree_view(node, frame)!
+		}
 		'Scroll' {
 			children := q_children(node, local)!
 			if node.prop_bool('persistent') {
@@ -1446,6 +1449,71 @@ fn q_accordion(node &QNode, frame Rect) !Element {
 		}
 	}
 	return accordion(q_accordion_config(node, frame, items)!)!
+}
+
+fn q_tree_view_node(node &QNode) TreeViewNode {
+	mut children := []TreeViewNode{}
+	for child in node.children {
+		if child.tag == 'TreeNode' {
+			children << q_tree_view_node(child)
+		}
+	}
+	return TreeViewNode{
+		id: node.id
+		text: node.prop_or('text', node.prop('title'))
+		action_id: node.prop('on_select')
+		toggle_action_id: node.prop('on_toggle')
+		expanded: node.prop_bool('expanded')
+		selected: node.prop_bool('selected')
+		enabled: node.prop('enabled') != 'false'
+		children: children
+	}
+}
+
+fn q_tree_view(node &QNode, frame Rect) !Element {
+	mut nodes := []TreeViewNode{}
+	for child in node.children {
+		if child.tag == 'TreeNode' {
+			nodes << q_tree_view_node(child)
+		}
+	}
+	row_radius := node.prop_or('row_corner_radius', '4').f64()
+	return tree_view(
+		id: node.id
+		frame: frame
+		box: q_box(node)
+		row_height: node.prop_or('row_height', '36').f64()
+		spacing: node.prop_or('spacing', '2').f64()
+		indent: node.prop_or('indent', '24').f64()
+		disclosure_width: node.prop_or('disclosure_width', '28').f64()
+		row_box: BoxStyle{
+			bg: q_color(node, 'row_background', 0xffffff)
+			radius: row_radius
+		}
+		selected_row_box: BoxStyle{
+			bg: q_color(node, 'selected_background', 0xdbeafe)
+			radius: row_radius
+		}
+		disclosure_box: BoxStyle{
+			bg: q_color(node, 'disclosure_background', 0xffffff)
+			radius: row_radius
+		}
+		text_style: TextStyle{
+			color: q_color(node, 'color', 0x334155)
+			size: node.prop_or('font_size', '14').f64()
+		}
+		selected_text_style: TextStyle{
+			color: q_color(node, 'selected_color', 0x1d4ed8)
+			size: node.prop_or('font_size', '14').f64()
+			bold: true
+		}
+		disclosure_text_style: TextStyle{
+			color: q_color(node, 'disclosure_color', 0x64748b)
+			size: node.prop_or('font_size', '14').f64()
+			align: .center
+		}
+		nodes: nodes
+	)!
 }
 
 fn q_frame(node &QNode, fallback Rect) Rect {

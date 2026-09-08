@@ -377,6 +377,37 @@ entries. `accordion_geometry` exposes item, title, and content frames, while
 `accordion_current` clamps model indexes. Only the active item's content is
 added to the element tree.
 
+## TreeView
+
+`TreeView` renders hierarchical `TreeNode` declarations as indented rows.
+Expanded state controls which descendants are visible; applications update
+that state with `on_toggle` and track the active leaf with `on_select`.
+
+```qml
+TreeView {
+    TreeNode {
+        text: "Documentation"
+        expanded: app.docs_open
+        on_toggle: app.toggle_docs()
+        TreeNode {
+            text: "Guide"
+            selected: app.selected == "guide"
+            on_select: app.select_guide()
+        }
+    }
+}
+```
+
+`row_height`, `spacing`, `indent`, and `disclosure_width` control geometry.
+Normal and selected rows have independent background/text colors. Branch
+disclosures announce expanded/collapsed state, selectable rows expose tree-item
+accessibility state, and disabled nodes remain visible without accepting input.
+
+The V constructor is `tree_view(TreeViewConfig{...})`, using recursive
+`TreeViewNode` entries. `tree_view_rows` returns the flattened visible hierarchy
+with depth and row frames; `tree_view_content_height` is useful when placing the
+tree inside a `Scroll` container.
+
 ## StackLayout
 
 `StackLayout` packs variable-size children along one axis and wraps them when
