@@ -338,6 +338,7 @@ pub fn run_window(title string, width int, height int, build_fn BuildFn, event_f
 	mut st := windows_state()
 	st.build_screen = build_fn
 	st.event_handler = event_fn
+	configure_animation_driver(request_refresh, true)
 	st.run_config = WindowsRunConfig{
 		title: title
 		width: width
@@ -371,7 +372,8 @@ pub fn refresh() {
 	if st.root == unsafe { nil } || st.rendering || voidptr(st.build_screen) == unsafe { nil } {
 		return
 	}
-	root := st.build_screen()
+	declared := st.build_screen()
+	root := apply_widget_animations(declared)
 	validate_element_tree(root) or {
 		eprintln('ui2: ${err}')
 		return

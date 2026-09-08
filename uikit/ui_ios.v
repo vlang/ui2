@@ -43,6 +43,8 @@ mut:
 
 fn C.objc_msgSend()
 
+fn C.vui_request_refresh(self voidptr, cmd voidptr, sender voidptr)
+
 type ObjcPointMsg1 = fn (voidptr, voidptr, voidptr) ObjcPoint
 
 type ObjcPointMsg0 = fn (voidptr, voidptr) ObjcPoint
@@ -88,6 +90,7 @@ pub fn bounds() Rect {
 pub fn run(build_screen BuildFn, event_handler EventFn) {
 	g_build_screen = build_screen
 	g_event_handler = event_handler
+	configure_animation_driver(request_refresh, true)
 	ensure_runtime_classes()
 	pool := macos.autorelease_pool_new()
 	defer {
@@ -105,6 +108,15 @@ pub fn refresh() {
 	}
 	root := g_build_screen()
 	render_root(root)
+}
+
+// request_refresh schedules a declarative rebuild on UIKit's main thread.
+// Animation drivers and background work use this instead of touching views.
+pub fn request_refresh() {
+	if g_button_handler == unsafe { nil } {
+		return
+	}
+	macos.msg_void_sel_id_bool(g_button_handler, 'performSelectorOnMainThread:withObject:waitUntilDone:', macos.sel('vuiRefresh:'), objc_nil(), false)
 }
 
 pub fn text(id string) string {
@@ -486,6 +498,7 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'handleTextSubmit:', voidptr(C.vui_text_field_submitted), 'v@:@')
 		macos.add_method(cls, 'textViewDidChange:', voidptr(C.vui_text_view_changed), 'v@:@')
 		macos.add_method(cls, 'vuiPresentScanner:', voidptr(C.vui_scanner_present), 'v@:@')
+		macos.add_method(cls, 'vuiRefresh:', voidptr(C.vui_request_refresh), 'v@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('VuiLongPressHandler') == unsafe { nil } {
@@ -544,7 +557,8 @@ fn remember_scroll_offsets() {
 	}
 }
 
-fn render_root(root Element) {
+fn render_root(declared Element) {
+	root := apply_widget_animations(declared)
 	validate_element_tree(root) or {
 		eprintln('ui2: ${err}')
 		return
@@ -880,6 +894,11 @@ fn vui_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
 	}
 	id := g_action_ids[u64(sender)] or { return }
 	g_event_handler(id)
+}
+
+@[export: 'vui_request_refresh']
+fn vui_request_refresh(_self voidptr, _cmd voidptr, _sender voidptr) {
+	refresh()
 }
 
 @[export: 'vui_text_field_changed']

@@ -152,6 +152,7 @@ pub fn run_window(title string, width int, height int, build_fn BuildFn, event_f
 	mut st := state()
 	st.build_screen = build_fn
 	st.event_handler = event_fn
+	configure_animation_driver(request_refresh, true)
 	st.run_config = RunConfig{
 		title: title
 		width: width
@@ -187,7 +188,8 @@ pub fn refresh_element(id string, element Element) {
 	if native_is_nil(parent) {
 		return
 	}
-	validate_refresh_element_identity(key, element) or {
+	animated := apply_widget_animations(element)
+	validate_refresh_element_identity(key, animated) or {
 		eprintln('ui2: ${err}')
 		return
 	}
@@ -198,7 +200,7 @@ pub fn refresh_element(id string, element Element) {
 	clear_subtree_registrations(key)
 	cleared := time.sys_mono_now()
 	mut active := map[string]bool{}
-	render_element(parent, element, key, mut active)
+	render_element(parent, animated, key, mut active)
 	rendered := time.sys_mono_now()
 	remove_stale_nodes_below(key, active)
 	finished := time.sys_mono_now()
@@ -720,7 +722,8 @@ fn element_rect(r Rect) NativeRect {
 	return native_rect(r.x, r.y, r.width, r.height)
 }
 
-fn render_root(root Element) {
+fn render_root(declared Element) {
+	root := apply_widget_animations(declared)
 	validate_element_tree(root) or {
 		eprintln('ui2: ${err}')
 		return

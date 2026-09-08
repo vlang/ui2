@@ -148,6 +148,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	pub fn run_window(title string, width int, height int, build_fn BuildFn, event_fn EventFn) {
 		g_build_screen = build_fn
 		g_event_handler = event_fn
+		configure_animation_driver(request_refresh, false)
 		publish_menu_context(event_fn, title, unsafe { nil })
 		// Choosing the font here rather than letting gg ask `fc-match` for one
 		// keeps the window legible and identical across distributions, and
@@ -391,7 +392,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			g_active_fields = map[string]bool{}
 			g_active_scrolls = map[string]bool{}
 			g_active_images = map[string]bool{}
-			root = g_build_screen()
+			root = apply_widget_animations(g_build_screen())
 			validate_element_tree(root) or {
 				eprintln('ui2: ${err}')
 				return

@@ -14,19 +14,13 @@ fn find_transitions_element(element ui2.Element, id string) ?ui2.Element {
 	return none
 }
 
-fn test_transition_uses_easing_and_reaches_each_target() {
+fn test_transition_selects_each_canvas_target() {
 	mut app := TransitionsDemo{}
-	app.begin_at(1_000, 500, 300)
+	app.select_target(500, 300)
 	assert app.target_label == 'Bottom right'
 	assert app.target_x == 394
 	assert app.target_y == 194
-	app.sync_at(1_375)
-	assert app.progress == 0.5
-	assert app.x > 24 && app.x < app.target_x
-	app.sync_at(1_750)
-	assert !app.moving
-	assert app.x == 394
-	assert app.y == 194
+	assert app.moving
 }
 
 fn test_transitions_qml_has_moving_logo_and_native_slide_button() {
@@ -36,5 +30,6 @@ fn test_transitions_qml_has_moving_logo_and_native_slide_button() {
 	stage := find_transitions_element(root, 'stage') or { panic('missing stage') }
 	assert stage.children.len == 2
 	assert stage.children[1].frame.x == 24
+	assert stage.children[1].id == 'moving_tile'
 	assert (find_transitions_element(root, 'slide') or { panic('missing slide') }).native_style
 }

@@ -45,6 +45,54 @@ applies that value, while a refresh with the same declaration preserves the
 current native/local edit, selection, focus, and (on native controls) input
 method composition. Use `set_text` for an explicit imperative replacement.
 
+## Widget animations
+
+Animations target a mounted element by `id` and are applied after each
+declarative build, so they work with both V-built and QML-built trees. The
+native backends schedule redraws for the duration; the custom renderer already
+builds every frame.
+
+```v
+move := ui2.animation(
+	duration: 0.75
+	transition: .in_out_cubic
+	x: 320
+	y: 180
+	rotation: 90
+)
+move.start('tile')
+```
+
+The interpolatable properties are `x`, `y`, `width`, `height`, `rotation`,
+`background`, `corner_radius`, `text_color`, `text_background`, `font_size`,
+and `padding_left`. `duration` and `step` use seconds. All of Kivy's named
+linear, sine, quadratic, cubic, quartic, quintic, exponential, circular, back,
+elastic, and bounce transitions are available; `transition_fn` accepts a
+custom `fn (f64) f64` curve.
+
+Use `+` or `sequence(...)` to run definitions in order and `parallel(...)` to
+run them together:
+
+```v
+there_and_back := ui2.animation(duration: 0.4, x: 320) +
+	ui2.animation(duration: 0.4, x: 20)
+pulse := ui2.parallel(
+	ui2.animation(duration: 0.25, width: 140, height: 140),
+	ui2.animation(duration: 0.25, background: u32(0x60a5fa)),
+)
+
+there_and_back.repeating().start('tile')
+pulse.start('badge')
+```
+
+`stop_animation` emits a `.complete` callback while `cancel_animation` does
+not; their property-specific and all-widget variants follow the same rule.
+Both retain the values currently on screen, as does natural completion.
+`clear_animation(id)` releases those retained values and returns the element to
+its declaration. Query `animation_info(id)` for status and progress, or attach
+one callback for `.start`, `.progress`, and `.complete` with `on_event` or
+`with_event_handler`.
+
 ## Typed QML models
 
 `run_qml[T]` parses the document once, owns a model for the window, and exposes

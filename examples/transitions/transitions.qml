@@ -25,7 +25,7 @@ Screen {
             corner_radius: 9
 
             Rectangle { x: 24 y: 24 width: stage.width - 48 height: stage.height - 48 background: #FFFFFF corner_radius: 8 }
-            Rectangle { x: app.x y: app.y width: 82 height: 82 background: #4F6FA8 corner_radius: 14
+            Rectangle { id: moving_tile x: 24 y: 24 width: 82 height: 82 background: #4F6FA8 corner_radius: 14
                 Label { text: "V" x: 0 y: 0 width: 82 height: 82 align: center color: #FFFFFF font_size: 34 bold: true }
             }
         }

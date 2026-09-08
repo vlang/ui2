@@ -1,7 +1,6 @@
 module main
 
 import math
-import time
 import ui2
 
 const transitions_width = 640
@@ -12,19 +11,13 @@ const transition_logo_size = 82.0
 @[heap]
 pub struct TransitionsDemo {
 pub mut:
-	x            f64 = 24
-	y            f64 = 24
 	progress     f64
 	moving       bool
 	target_label string = 'Top left'
 	status       string = 'Press Slide to move through the canvas.'
 mut:
-	start_x      f64
-	start_y      f64
 	target_x     f64 = 24
 	target_y     f64 = 24
-	started_at   i64
-	duration_ms  i64 = 750
 	target_index int
 }
 
@@ -42,45 +35,26 @@ fn transition_target(index int, width f64, height f64) (f64, f64, string) {
 	}
 }
 
-fn transition_ease(value f64) f64 {
-	t := math.max(0.0, math.min(1.0, value))
-	return if t < 0.5 { 4.0 * t * t * t } else { 1.0 - math.pow(-2.0 * t + 2.0, 3) / 2.0 }
-}
-
-fn (mut app TransitionsDemo) sync_at(now i64) {
-	if !app.moving {
-		return
-	}
-	raw := f64(now - app.started_at) / f64(app.duration_ms)
-	app.progress = math.max(0.0, math.min(1.0, raw))
-	eased := transition_ease(app.progress)
-	app.x = app.start_x + (app.target_x - app.start_x) * eased
-	app.y = app.start_y + (app.target_y - app.start_y) * eased
-	if raw >= 1 {
-		app.x = app.target_x
-		app.y = app.target_y
-		app.progress = 1
-		app.moving = false
-		app.status = 'Arrived at ${app.target_label.to_lower()}.'
-	}
-}
-
-fn (mut app TransitionsDemo) begin_at(now i64, stage_width f64, stage_height f64) {
-	app.sync_at(now)
-	app.start_x = app.x
-	app.start_y = app.y
+fn (mut app TransitionsDemo) select_target(stage_width f64, stage_height f64) {
 	app.target_index = (app.target_index + 1) % 5
 	app.target_x, app.target_y, app.target_label = transition_target(app.target_index, stage_width, stage_height)
-	app.started_at = now
 	app.progress = 0
 	app.moving = true
 	app.status = 'Moving to ${app.target_label.to_lower()}…'
 }
 
-fn refresh_transition() {
-	for _ in 0 .. 55 {
-		time.sleep(16 * time.millisecond)
-		ui2.request_refresh()
+fn transition_animation_event(event ui2.AnimationEvent) {
+	mut state := unsafe { transitions_state }
+	match event.kind {
+		.progress {
+			state.progress = event.progress
+		}
+		.complete {
+			state.progress = 1
+			state.moving = false
+			state.status = 'Arrived at ${state.target_label.to_lower()}.'
+		}
+		else {}
 	}
 }
 
@@ -90,7 +64,10 @@ fn transition_stage_size(frame ui2.Rect) (f64, f64) {
 
 fn build_transitions_screen() ui2.Element {
 	mut state := unsafe { transitions_state }
-	state.sync_at(time.ticks())
+	info := ui2.animation_info('moving_tile')
+	if info.status == .running {
+		state.progress = info.progress
+	}
 	return ui2.element_from_qml_model(transitions_qml_source, *state, ui2.bounds()) or {
 		eprintln('transitions QML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
@@ -104,8 +81,14 @@ fn handle_transitions_event(event string) {
 	frame := ui2.bounds()
 	stage_width, stage_height := transition_stage_size(frame)
 	mut state := unsafe { transitions_state }
-	state.begin_at(time.ticks(), stage_width, stage_height)
-	spawn refresh_transition()
+	state.select_target(stage_width, stage_height)
+	ui2.animation(
+		duration: 0.75
+		transition: .in_out_cubic
+		x: state.target_x
+		y: state.target_y
+		on_event: transition_animation_event
+	).start('moving_tile')
 	ui2.refresh()
 }
 
