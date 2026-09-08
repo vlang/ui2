@@ -60,6 +60,67 @@ fn test_macos_toggle_button_retains_pressed_state() {
 	assert macos.msg_i64(native, 'state') == 1
 }
 
+fn test_macos_toggle_button_groups_are_exclusive() {
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	left := native_new_toggle_button(toggle_button(
+		id: 'left'
+		title: 'Left'
+		pressed: true
+		group: 'alignment'
+		allow_no_selection: false
+	))
+	right := native_new_toggle_button(toggle_button(
+		id: 'right'
+		title: 'Right'
+		group: 'alignment'
+		allow_no_selection: false
+	))
+	defer {
+		macos.release(left)
+		macos.release(right)
+	}
+	mut st := state()
+	st.toggle_groups = map[u64]string{}
+	st.toggle_allow_no_selection = map[u64]bool{}
+	st.toggle_ids = map[u64]string{}
+	st.toggle_views = map[u64]NativeView{}
+	left_pointer := u64(voidptr(left))
+	right_pointer := u64(voidptr(right))
+	st.toggle_groups[left_pointer] = 'alignment'
+	st.toggle_groups[right_pointer] = 'alignment'
+	st.toggle_allow_no_selection[left_pointer] = false
+	st.toggle_allow_no_selection[right_pointer] = false
+	st.toggle_ids[left_pointer] = 'left'
+	st.toggle_ids[right_pointer] = 'right'
+	st.toggle_views[left_pointer] = left
+	st.toggle_views[right_pointer] = right
+	st.views['left'] = left
+	st.views['right'] = right
+	st.view_kinds['left'] = .toggle_button
+	st.view_kinds['right'] = .toggle_button
+	macos.msg_void_i64(right, 'setState:', i64(1))
+	release_macos_toggle_group(right_pointer)
+	assert macos.msg_i64(left, 'state') == 0
+	assert macos.msg_i64(right, 'state') == 1
+	macos.msg_void_i64(right, 'setState:', i64(0))
+	commit_macos_toggle_button(right_pointer, right)
+	assert macos.msg_i64(right, 'state') == 1
+	mut members := toggle_button_group_members('right')
+	members.sort()
+	assert members == ['left', 'right']
+	st.views.delete('left')
+	st.views.delete('right')
+	st.view_kinds.delete('left')
+	st.view_kinds.delete('right')
+	st.toggle_groups = map[u64]string{}
+	st.toggle_allow_no_selection = map[u64]bool{}
+	st.toggle_ids = map[u64]string{}
+	st.toggle_views = map[u64]NativeView{}
+}
+
 fn test_macos_slider_uses_native_range_and_snaps_live_values() {
 	pool := macos.autorelease_pool_new()
 	defer {

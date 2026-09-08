@@ -446,19 +446,23 @@ struct QmlInvocation {
 }
 
 struct QmlBinding {
-	property string
-	target   string
-	control  string
+	property           string
+	target             string
+	control            string
+	group              string
+	allow_no_selection bool = true
 }
 
 struct QmlEvent {
-	binding    ?QmlBinding
-	invocation ?QmlInvocation
+	binding        ?QmlBinding
+	group_bindings []QmlBinding
+	invocation     ?QmlInvocation
 }
 
 struct QmlEvaluation {
 mut:
-	events map[string]QmlEvent
+	events                map[string]QmlEvent
+	toggle_group_bindings map[string][]QmlBinding
 }
 
 fn q_action(expr &QExpression, scope map[string]QValue) !QmlInvocation {
@@ -611,9 +615,26 @@ fn q_eval_node(node &QNode, incoming_scope map[string]QValue, frame Rect, mut ev
 		if resolved.id.len == 0 {
 			resolved.id = q_control_id(node, scope)
 		}
-		binding = QmlBinding{ property: property, target: expr.value, control: resolved.id }
+		resolved_binding := QmlBinding{
+			property: property
+			target: expr.value
+			control: resolved.id
+			group: if node.tag == 'ToggleButton' && property == 'pressed' {
+				resolved.prop('group')
+			} else {
+				''
+			}
+			allow_no_selection: resolved.prop_or('allow_no_selection', 'true') == 'true'
+		}
+		binding = resolved_binding
+		if resolved_binding.group.len > 0 {
+			mut group_bindings := evaluation.toggle_group_bindings[resolved_binding.group] or {
+				[]QmlBinding{}
+			}
+			group_bindings << resolved_binding
+			evaluation.toggle_group_bindings[resolved_binding.group] = group_bindings
+		}
 	}
-
 	actual := q_frame(resolved, frame)
 	if node.id.len > 0 {
 		mut object := scope[node.id] or {
@@ -844,13 +865,61 @@ fn q_validate_template[T](root &QNode, model T) ! {
 	})!
 }
 
+fn q_normalize_toggle_groups(node &QNode, mut selected map[string]bool) &QNode {
+	mut props := node.props.clone()
+	if node.tag == 'ToggleButton' {
+		group := node.prop('group')
+		pressed := node.prop_bool('pressed') || node.prop('state') == 'down'
+		if group.len > 0 && pressed {
+			if selected[group] or { false } {
+				props['pressed'] = 'false'
+				props['state'] = 'normal'
+			} else {
+				selected[group] = true
+			}
+		}
+	}
+	mut children := []&QNode{cap: node.children.len}
+	for child in node.children {
+		children << q_normalize_toggle_groups(child, mut selected)
+	}
+	return &QNode{
+		tag: node.tag
+		id: node.id
+		props: props
+		children: children
+		expressions: node.expressions
+		property_types: node.property_types
+		property_order: node.property_order
+		line: node.line
+		path: node.path
+	}
+}
+
 fn q_evaluate_template[T](root &QNode, model T, frame Rect) !(&QNode, map[string]QmlEvent) {
-	mut evaluation := QmlEvaluation{ events: map[string]QmlEvent{} }
+	mut evaluation := QmlEvaluation{
+		events: map[string]QmlEvent{}
+		toggle_group_bindings: map[string][]QmlBinding{}
+	}
 	scope := {
 		'app': q_value_from(model)
 	}
 	resolved := q_eval_node(root, scope, frame, mut evaluation)!
-	return resolved, evaluation.events
+	mut selected := map[string]bool{}
+	normalized := q_normalize_toggle_groups(resolved, mut selected)
+	mut events := evaluation.events.clone()
+	for event_id, event in evaluation.events {
+		if binding := event.binding {
+			if binding.group.len > 0 {
+				events[event_id] = QmlEvent{
+					binding: event.binding
+					group_bindings: evaluation.toggle_group_bindings[binding.group].clone()
+					invocation: event.invocation
+				}
+			}
+		}
+	}
+	return normalized, events
 }
 
 // element_from_qml_model evaluates a QML document against a typed V model.
@@ -1046,6 +1115,17 @@ fn (mut controller QmlController[T]) handle(event_id string) {
 		qml_set_field[T](mut controller.model, field_name, value) or {
 			eprintln('ui2 QML binding failed: ${err}')
 			return
+		}
+		if binding.property == 'pressed' && value.truthy() {
+			for peer in event.group_bindings {
+				if peer.control == binding.control || peer.target == binding.target {
+					continue
+				}
+				qml_set_field[T](mut controller.model, peer.target.all_after('app.'), q_bool(false)) or {
+					eprintln('ui2 QML group binding failed: ${err}')
+					return
+				}
+			}
 		}
 	}
 	if invocation := event.invocation {

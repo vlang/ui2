@@ -557,12 +557,16 @@ fn test_qml_toggle_button_exposes_pressed_and_released_styles() {
 		color: #1E293B
 		down_background: #1D4ED8
 		down_color: #FFFFFF
+		group: formatting
+		allow_no_selection: false
 		corner_radius: 6
 	}', rect(0, 0, 100, 40)) or { panic(err) }
 
 	assert el.kind == .toggle_button
 	assert el.action_id == 'bold_changed'
 	assert el.checked
+	assert el.toggle_group == 'formatting'
+	assert !el.toggle_allow_no_selection
 	assert el.box.bg == u32(0xe2e8f0)
 	assert el.text_style.color == u32(0x1e293b)
 	assert el.toggle_down_box.bg == u32(0x1d4ed8)

@@ -180,6 +180,8 @@ pub:
 	switch_style          SwitchStyle
 	toggle_down_box        BoxStyle
 	toggle_down_text_style TextStyle
+	toggle_group           string
+	toggle_allow_no_selection bool = true
 }
 
 pub enum BackendSupport {

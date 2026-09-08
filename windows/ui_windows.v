@@ -241,6 +241,10 @@ mut:
 	cursors            map[u64]int
 	scroll_ids         map[u64]string
 	slider_specs       map[u64]SliderSpec
+	toggle_groups      map[u64]string
+	toggle_allow_no_selection map[u64]bool
+	toggle_ids         map[u64]string
+	toggle_views       map[u64]voidptr
 	scroll_positions   map[string]int
 	run_config         WindowsRunConfig
 	rendering          bool
@@ -284,6 +288,10 @@ const windows_state_singleton = &WindowsState{
 	cursors: map[u64]int{}
 	scroll_ids: map[u64]string{}
 	slider_specs: map[u64]SliderSpec{}
+	toggle_groups: map[u64]string{}
+	toggle_allow_no_selection: map[u64]bool{}
+	toggle_ids: map[u64]string{}
+	toggle_views: map[u64]voidptr{}
 	scroll_positions: map[string]int{}
 	suppress_click: map[u64]bool{}
 }
@@ -402,6 +410,10 @@ pub fn refresh() {
 	st.cursors = map[u64]int{}
 	st.scroll_ids = map[u64]string{}
 	st.slider_specs = map[u64]SliderSpec{}
+	st.toggle_groups = map[u64]string{}
+	st.toggle_allow_no_selection = map[u64]bool{}
+	st.toggle_ids = map[u64]string{}
+	st.toggle_views = map[u64]voidptr{}
 	mut active := map[string]bool{}
 	if root.kind == .screen {
 		st.node_boxes[''] = root.box
@@ -524,7 +536,58 @@ pub fn set_toggle_button_pressed(id string, pressed bool) {
 	if (st.view_kinds[id] or { Kind.view }) != .toggle_button {
 		return
 	}
+	if pressed {
+		release_windows_toggle_group(windows_handle_id(hwnd))
+	}
 	C.ui2_win_set_checked(hwnd, windows_bool(pressed))
+}
+
+pub fn toggle_button_group_members(id string) []string {
+	st := windows_state()
+	hwnd := st.views[id] or { return [] }
+	handle := windows_handle_id(hwnd)
+	group := st.toggle_groups[handle] or { return [id] }
+	if group.len == 0 {
+		return [id]
+	}
+	mut members := []string{}
+	for member_handle, member_group in st.toggle_groups {
+		if member_group == group {
+			member_id := st.toggle_ids[member_handle] or { continue }
+			if member_id.len > 0 {
+				members << member_id
+			}
+		}
+	}
+	return members
+}
+
+fn release_windows_toggle_group(handle u64) {
+	st := windows_state()
+	group := st.toggle_groups[handle] or { return }
+	if group.len == 0 {
+		return
+	}
+	for member_handle, member_group in st.toggle_groups {
+		if member_handle == handle || member_group != group {
+			continue
+		}
+		native := st.toggle_views[member_handle] or { continue }
+		C.ui2_win_set_checked(native, 0)
+	}
+}
+
+fn commit_windows_toggle_button(handle u64, hwnd voidptr) {
+	st := windows_state()
+	group := st.toggle_groups[handle] or { return }
+	if group.len == 0 {
+		return
+	}
+	if C.ui2_win_get_checked(hwnd) != 0 {
+		release_windows_toggle_group(handle)
+	} else if !(st.toggle_allow_no_selection[handle] or { true }) {
+		C.ui2_win_set_checked(hwnd, 1)
+	}
 }
 
 pub fn focus(id string) {
@@ -950,6 +1013,15 @@ fn windows_register_bindings(hwnd voidptr, el Element) {
 	if el.kind == .slider {
 		st.slider_specs[handle] = slider_spec(el)
 	}
+	if el.kind == .toggle_button {
+		st.toggle_groups[handle] = el.toggle_group
+		st.toggle_allow_no_selection[handle] = el.toggle_allow_no_selection
+		st.toggle_ids[handle] = el.id
+		st.toggle_views[handle] = hwnd
+		if C.ui2_win_get_checked(hwnd) != 0 {
+			release_windows_toggle_group(handle)
+		}
+	}
 	if action_id.len > 0 && ((el.kind == .text_field && el.emit_change) || el.kind == .text_area) {
 		st.change_ids[handle] = action_id
 	}
@@ -1276,6 +1348,7 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 					st.suppress_click.delete(handle)
 					return 0
 				}
+				commit_windows_toggle_button(handle, child)
 				windows_emit_action(st.action_ids[handle] or { '' })
 				return 0
 			}

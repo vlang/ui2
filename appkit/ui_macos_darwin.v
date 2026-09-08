@@ -89,6 +89,10 @@ mut:
 	cursor_ids          map[u64]string // NSView pointer -> cursor name
 	control_ids         map[u64]string // NSControl pointer -> action event id
 	checkbox_controls   map[u64]bool // NSButton pointers whose state is persistent
+	toggle_groups       map[u64]string
+	toggle_allow_no_selection map[u64]bool
+	toggle_ids          map[u64]string
+	toggle_views        map[u64]NativeView
 	slider_specs        map[u64]SliderSpec // NSSlider pointer -> range behavior
 	control_change_ids  map[u64]string // NSTextField pointer -> change event id
 	observed            map[u64]bool // clip views we already observe for scroll changes
@@ -121,6 +125,10 @@ const runtime_state_singleton = &RuntimeState{
 	cursor_ids: map[u64]string{}
 	control_ids: map[u64]string{}
 	checkbox_controls: map[u64]bool{}
+	toggle_groups: map[u64]string{}
+	toggle_allow_no_selection: map[u64]bool{}
+	toggle_ids: map[u64]string{}
+	toggle_views: map[u64]NativeView{}
 	slider_specs: map[u64]SliderSpec{}
 	control_change_ids: map[u64]string{}
 	observed: map[u64]bool{}
@@ -386,7 +394,30 @@ pub fn set_toggle_button_pressed(id string, pressed bool) {
 	if (st.view_kinds[id] or { Kind.view }) != .toggle_button {
 		return
 	}
+	if pressed {
+		release_macos_toggle_group(u64(voidptr(native)))
+	}
 	macos.msg_void_i64(native, 'setState:', if pressed { i64(1) } else { i64(0) })
+}
+
+pub fn toggle_button_group_members(id string) []string {
+	st := state()
+	native := st.views[id] or { return [] }
+	pointer := u64(voidptr(native))
+	group := st.toggle_groups[pointer] or { return [id] }
+	if group.len == 0 {
+		return [id]
+	}
+	mut members := []string{}
+	for member_pointer, member_group in st.toggle_groups {
+		if member_group == group {
+			member_id := st.toggle_ids[member_pointer] or { continue }
+			if member_id.len > 0 {
+				members << member_id
+			}
+		}
+	}
+	return members
 }
 
 pub fn focus(id string) {
@@ -798,6 +829,10 @@ fn render_root(declared Element) {
 	st.cursor_ids = map[u64]string{}
 	st.control_ids = map[u64]string{}
 	st.checkbox_controls = map[u64]bool{}
+	st.toggle_groups = map[u64]string{}
+	st.toggle_allow_no_selection = map[u64]bool{}
+	st.toggle_ids = map[u64]string{}
+	st.toggle_views = map[u64]NativeView{}
 	st.slider_specs = map[u64]SliderSpec{}
 	st.control_change_ids = map[u64]string{}
 	st.textview_ids = map[u64]string{}
@@ -939,7 +974,12 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		}
 	}
 	if el.kind != .screen {
-		native_set_box_borders(native, el.box)
+		border_box := if el.kind == .toggle_button && el.checked {
+			el.toggle_down_box
+		} else {
+			el.box
+		}
+		native_set_box_borders(native, border_box)
 	}
 
 	match el.kind {
@@ -988,7 +1028,7 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			register_checkbox(native, element_action_id(el))
 		}
 		.toggle_button {
-			register_checkbox(native, element_action_id(el))
+			register_toggle_button(native, el)
 		}
 		.dropdown {
 			register_action_control(native, element_action_id(el))
@@ -1239,6 +1279,47 @@ fn register_checkbox(native NativeView, id string) {
 	native_set_associated_object(native, assoc_handler_key(), st.button_handler)
 }
 
+fn register_toggle_button(native NativeView, el Element) {
+	register_checkbox(native, element_action_id(el))
+	mut st := state()
+	pointer := u64(voidptr(native))
+	st.toggle_groups[pointer] = el.toggle_group
+	st.toggle_allow_no_selection[pointer] = el.toggle_allow_no_selection
+	st.toggle_ids[pointer] = el.id
+	st.toggle_views[pointer] = native
+	if macos.msg_i64(native, 'state') != 0 {
+		release_macos_toggle_group(pointer)
+	}
+}
+
+fn release_macos_toggle_group(pointer u64) {
+	st := state()
+	group := st.toggle_groups[pointer] or { return }
+	if group.len == 0 {
+		return
+	}
+	for member_pointer, member_group in st.toggle_groups {
+		if member_pointer == pointer || member_group != group {
+			continue
+		}
+		native := st.toggle_views[member_pointer] or { continue }
+		macos.msg_void_i64(native, 'setState:', i64(0))
+	}
+}
+
+fn commit_macos_toggle_button(pointer u64, native NativeView) {
+	st := state()
+	group := st.toggle_groups[pointer] or { return }
+	if group.len == 0 {
+		return
+	}
+	if macos.msg_i64(native, 'state') != 0 {
+		release_macos_toggle_group(pointer)
+	} else if !(st.toggle_allow_no_selection[pointer] or { true }) {
+		macos.msg_void_i64(native, 'setState:', i64(1))
+	}
+}
+
 fn register_action_control(native NativeView, id string) {
 	mut st := state()
 	pointer := u64(voidptr(native))
@@ -1292,6 +1373,10 @@ fn unregister_node(key string, native NativeView, kind Kind, text_direct bool) {
 	st.cursor_ids.delete(pointer)
 	st.control_ids.delete(pointer)
 	st.checkbox_controls.delete(pointer)
+	st.toggle_groups.delete(pointer)
+	st.toggle_allow_no_selection.delete(pointer)
+	st.toggle_ids.delete(pointer)
+	st.toggle_views.delete(pointer)
 	st.slider_specs.delete(pointer)
 	st.control_change_ids.delete(pointer)
 	if kind == .text_field {
@@ -2240,11 +2325,12 @@ fn ui2_perform_drag_operation(self voidptr, _cmd voidptr, dragging_info voidptr)
 @[export: 'ui2_button_tap']
 fn ui2_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
 	st := state()
+	native := NativeView(sender)
+	pointer := u64(voidptr(native))
+	commit_macos_toggle_button(pointer, native)
 	if voidptr(st.event_handler) == unsafe { nil } {
 		return
 	}
-	native := NativeView(sender)
-	pointer := u64(voidptr(native))
 	id := st.control_ids[pointer] or { '' }
 	if id.len > 0 {
 		if spec := st.slider_specs[pointer] {

@@ -132,5 +132,8 @@ ToggleButton {
 
 The V constructor is `toggle_button(ToggleButtonConfig{...})`. During its event
 callback, `toggle_button_pressed(id)` reports the new live state;
-`set_toggle_button_pressed(id, pressed)` updates a mounted control. Mutually
-exclusive groups are intentionally handled in the next parity increment.
+`set_toggle_button_pressed(id, pressed)` updates a mounted control. Set `group`
+to the same non-empty name on multiple controls to make their pressed states
+mutually exclusive. `allow_no_selection` defaults to `true`; set it to `false`
+when one member must remain selected. `toggle_button_group_members(id)` returns
+the mounted IDs belonging to the same group.

@@ -130,6 +130,12 @@ $if ui2_custom_rendering ? {
 		g_active_toggles = map[string]bool{
 			'bold': true
 		}
+		g_toggle_groups = map[string]string{
+			'bold': ''
+		}
+		g_toggle_allow_no_selection = map[string]bool{
+			'bold': true
+		}
 		g_hit_targets = [HitTarget{
 			id: 'bold'
 			action_id: 'bold_changed'
@@ -148,9 +154,64 @@ $if ui2_custom_rendering ? {
 		assert !toggle_button_pressed('missing')
 		g_toggle_values = map[string]bool{}
 		g_toggle_declared = map[string]bool{}
+		g_toggle_groups = map[string]string{}
+		g_toggle_allow_no_selection = map[string]bool{}
 		g_active_toggles = map[string]bool{}
 		g_hit_targets = []HitTarget{}
 		g_touch = TouchState{}
+	}
+
+	fn test_custom_toggle_button_groups_are_exclusive() {
+		g_toggle_values = map[string]bool{
+			'left':  true
+			'right': false
+		}
+		g_toggle_groups = map[string]string{
+			'left':  'alignment'
+			'right': 'alignment'
+		}
+		g_toggle_allow_no_selection = map[string]bool{
+			'left':  false
+			'right': false
+		}
+		g_active_toggles = map[string]bool{
+			'left':  true
+			'right': true
+		}
+		commit_toggle_button(HitTarget{
+			id: 'right'
+			toggle_button: true
+			toggle_group: 'alignment'
+			toggle_allow_no_selection: false
+		})
+		assert !toggle_button_pressed('left')
+		assert toggle_button_pressed('right')
+		commit_toggle_button(HitTarget{
+			id: 'right'
+			toggle_button: true
+			toggle_group: 'alignment'
+			toggle_allow_no_selection: false
+		})
+		assert toggle_button_pressed('right')
+		commit_toggle_button(HitTarget{
+			id: 'right'
+			toggle_button: true
+			toggle_group: 'alignment'
+			toggle_allow_no_selection: true
+		})
+		assert !toggle_button_pressed('left')
+		assert !toggle_button_pressed('right')
+		set_toggle_button_pressed('left', true)
+		assert toggle_button_pressed('left')
+		assert !toggle_button_pressed('right')
+		mut members := toggle_button_group_members('left')
+		members.sort()
+		assert members == ['left', 'right']
+		g_toggle_values = map[string]bool{}
+		g_toggle_declared = map[string]bool{}
+		g_toggle_groups = map[string]string{}
+		g_toggle_allow_no_selection = map[string]bool{}
+		g_active_toggles = map[string]bool{}
 	}
 
 	fn test_custom_dropdown_popup_opens_below_its_control() {

@@ -8,7 +8,8 @@ const toggle_qml_source = $embed_file('toggle_button.qml').to_string()
 
 pub struct ToggleButtonDemo {
 pub mut:
-	bold bool
+	bold   bool = true
+	italic bool
 }
 
 fn main() {

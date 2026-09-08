@@ -75,11 +75,21 @@ pub fn (mut app QmlApp[T]) handle(event_id string) ! {
 	if binding := event.binding {
 		field_name := binding.target.all_after('app.')
 		value := match binding.property {
-			'checked', 'active', 'pressed' {
+			'checked', 'active' {
 				current := q_lookup({
 					'app': q_value_from(app.model)
 				}, binding.target, 0)!
 				q_bool(!current.truthy())
+			}
+			'pressed' {
+				current := q_lookup({
+					'app': q_value_from(app.model)
+				}, binding.target, 0)!
+				if binding.group.len > 0 && current.truthy() && !binding.allow_no_selection {
+					q_bool(true)
+				} else {
+					q_bool(!current.truthy())
+				}
 			}
 			'value' {
 				live := app.value_of(binding.control)
@@ -90,6 +100,19 @@ pub fn (mut app QmlApp[T]) handle(event_id string) ! {
 			}
 		}
 		qml_set_field[T](mut app.model, field_name, value)!
+		if binding.property == 'pressed' && value.truthy() {
+			for peer in event.group_bindings {
+				if peer.control == binding.control || peer.target == binding.target {
+					continue
+				}
+				target := peer.target.all_after('app.')
+				type_name := qml_writable_field_type[T](target)!
+				if type_name != 'bool' {
+					return error('bind.pressed requires a bool field, got `${target}` (${type_name})')
+				}
+				qml_set_field[T](mut app.model, target, q_bool(false))!
+			}
+		}
 	}
 	if invocation := event.invocation {
 		qml_dispatch[T](mut app.model, invocation)!

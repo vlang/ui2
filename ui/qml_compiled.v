@@ -3,16 +3,50 @@ module ui2
 const compiled_qml_event_prefix = '__ui2_compiled_qml:'
 const compiled_qml_app_path_argument = 'app-path'
 
+struct CompiledQmlBinding {
+	property string
+	target   string
+}
+
+@[heap]
+struct CompiledQmlBindingRegistry {
+mut:
+	bindings map[string]CompiledQmlBinding
+}
+
+const compiled_qml_binding_registry_singleton = &CompiledQmlBindingRegistry{
+	bindings: map[string]CompiledQmlBinding{}
+}
+
+fn compiled_qml_binding_registry() &CompiledQmlBindingRegistry {
+	return unsafe { compiled_qml_binding_registry_singleton }
+}
+
+fn register_compiled_qml_binding(control string, property string, target string) {
+	if control.len == 0 || property.len == 0 || target.len == 0 {
+		return
+	}
+	mut registry := compiled_qml_binding_registry()
+	registry.bindings[control] = CompiledQmlBinding{ property: property, target: target }
+}
+
+fn reset_compiled_qml_bindings() {
+	mut registry := compiled_qml_binding_registry()
+	registry.bindings = map[string]CompiledQmlBinding{}
+}
+
 // compiled_qml_event packages a no-argument compile-time QML action and optional binding into an
 // Element action id. It is emitted by `$qml()`; applications normally only need
 // handle_compiled_qml_event or run_compiled_qml.
 pub fn compiled_qml_event(control string, binding_property string, binding_target string, action_name string) string {
+	register_compiled_qml_binding(control, binding_property, binding_target)
 	parts := [control, binding_property, binding_target, action_name]
 	return compiled_qml_event_prefix + parts.map(it.bytes().hex()).join(':')
 }
 
 // compiled_qml_event_arg is the one-argument form emitted for a typed QML action.
 pub fn compiled_qml_event_arg(control string, binding_property string, binding_target string, action_name string, argument string) string {
+	register_compiled_qml_binding(control, binding_property, binding_target)
 	parts := [control, binding_property, binding_target, action_name, argument]
 	return compiled_qml_event_prefix + parts.map(it.bytes().hex()).join(':')
 }
@@ -20,6 +54,7 @@ pub fn compiled_qml_event_arg(control string, binding_property string, binding_t
 // compiled_qml_event_arg_path is emitted when an action argument reads the app model. The path is
 // resolved after a two-way binding is applied, matching runtime QML event ordering.
 pub fn compiled_qml_event_arg_path(control string, binding_property string, binding_target string, action_name string, path string) string {
+	register_compiled_qml_binding(control, binding_property, binding_target)
 	parts := [control, binding_property, binding_target, action_name, compiled_qml_app_path_argument,
 		path]
 	return compiled_qml_event_prefix + parts.map(it.bytes().hex()).join(':')
@@ -112,6 +147,24 @@ pub fn handle_compiled_qml_event[T](mut model T, event_id string) !bool {
 			return error('unsupported compiled QML binding `${binding_property}`')
 		}
 		qml_set_field[T](mut model, field_name, value)!
+		if binding_property == 'pressed' && value.truthy() {
+			registry := compiled_qml_binding_registry()
+			for member in toggle_button_group_members(control) {
+				if member == control {
+					continue
+				}
+				peer := registry.bindings[member] or { continue }
+				if peer.property != 'pressed' || peer.target == binding_target {
+					continue
+				}
+				target := peer.target.all_after('app.')
+				type_name := qml_writable_field_type[T](target)!
+				if type_name != 'bool' {
+					return error('bind.pressed requires a bool field, got `${target}` (${type_name})')
+				}
+				qml_set_field[T](mut model, target, q_bool(false))!
+			}
+		}
 	}
 	mut arguments := parts[4..]
 	if arguments.len == 2 && arguments[0] == compiled_qml_app_path_argument {
@@ -158,6 +211,7 @@ fn compiled_qml_runtime() &CompiledQmlRuntime {
 fn compiled_qml_controller_build[T]() Element {
 	runtime := compiled_qml_runtime()
 	controller := unsafe { &CompiledQmlController[T](runtime.controller) }
+	reset_compiled_qml_bindings()
 	return controller.build(&controller.model)
 }
 
@@ -183,6 +237,7 @@ pub fn run_compiled_qml[T](config CompiledQmlRunConfig[T]) ! {
 		build: config.build
 		model: config.model
 	}
+	reset_compiled_qml_bindings()
 	validate_element_tree(controller.build(&controller.model))!
 	mut runtime := compiled_qml_runtime()
 	runtime.controller = voidptr(controller)

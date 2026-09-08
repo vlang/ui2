@@ -2,10 +2,11 @@ module ui2
 
 pub struct CompiledQmlTestModel {
 pub mut:
-	checked  bool
-	level    f64
-	selected string
-	source   string
+	checked   bool
+	secondary bool
+	level     f64
+	selected  string
+	source    string
 }
 
 fn test_compiled_qml_event_resolves_app_argument_when_dispatched() {
@@ -57,4 +58,35 @@ fn test_compiled_qml_event_applies_pressed_toggle_binding() {
 	handled := handle_compiled_qml_event[CompiledQmlTestModel](mut model, event) or { panic(err) }
 	assert handled
 	assert !model.checked
+}
+
+fn test_compiled_qml_event_clears_pressed_group_peers() {
+	$if ui2_custom_rendering ? {
+		reset_compiled_qml_bindings()
+		_ = compiled_qml_event('left', 'pressed', 'app.checked', '')
+		event := compiled_qml_event('right', 'pressed', 'app.secondary', '')
+		g_toggle_values = map[string]bool{
+			'left':  false
+			'right': true
+		}
+		g_toggle_groups = map[string]string{
+			'left':  'choice'
+			'right': 'choice'
+		}
+		g_active_toggles = map[string]bool{
+			'left':  true
+			'right': true
+		}
+		mut model := CompiledQmlTestModel{ checked: true }
+		handled := handle_compiled_qml_event[CompiledQmlTestModel](mut model, event) or {
+			panic(err)
+		}
+		assert handled
+		assert !model.checked
+		assert model.secondary
+		g_toggle_values = map[string]bool{}
+		g_toggle_groups = map[string]string{}
+		g_active_toggles = map[string]bool{}
+		reset_compiled_qml_bindings()
+	}
 }

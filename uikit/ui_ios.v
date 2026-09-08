@@ -73,6 +73,10 @@ __global g_text_submit_ids = map[u64]string{}
 __global g_text_area_ids = map[u64]string{}
 __global g_slider_specs = map[u64]SliderSpec{}
 __global g_toggle_controls = map[u64]bool{}
+__global g_toggle_groups = map[u64]string{}
+__global g_toggle_allow_no_selection = map[u64]bool{}
+__global g_toggle_ids = map[u64]string{}
+__global g_toggle_views = map[u64]View{}
 __global g_scroll_ids = map[string]bool{}
 __global g_scroll_offsets = map[string]f64{}
 __global g_view_translation_x = map[voidptr]f64{}
@@ -191,7 +195,58 @@ pub fn set_toggle_button_pressed(id string, pressed bool) {
 	if (g_view_kinds[id] or { Kind.view }) != .toggle_button {
 		return
 	}
+	if pressed {
+		release_ios_toggle_group(u64(view))
+	}
 	macos.msg_void_bool(view, 'setSelected:', pressed)
+}
+
+pub fn toggle_button_group_members(id string) []string {
+	view := g_views[id] or { return [] }
+	pointer := u64(view)
+	group := g_toggle_groups[pointer] or { return [id] }
+	if group.len == 0 {
+		return [id]
+	}
+	mut members := []string{}
+	for member_pointer, member_group in g_toggle_groups {
+		if member_group == group {
+			member_id := g_toggle_ids[member_pointer] or { continue }
+			if member_id.len > 0 {
+				members << member_id
+			}
+		}
+	}
+	return members
+}
+
+fn release_ios_toggle_group(pointer u64) {
+	group := g_toggle_groups[pointer] or { return }
+	if group.len == 0 {
+		return
+	}
+	for member_pointer, member_group in g_toggle_groups {
+		if member_pointer == pointer || member_group != group {
+			continue
+		}
+		native := g_toggle_views[member_pointer] or { continue }
+		macos.msg_void_bool(native, 'setSelected:', false)
+	}
+}
+
+fn commit_ios_toggle_button(pointer u64, control View) {
+	current := macos.msg_bool(control, 'isSelected')
+	group := g_toggle_groups[pointer] or { '' }
+	pressed := if group.len > 0 && current
+		&& !(g_toggle_allow_no_selection[pointer] or { true }) {
+		true
+	} else {
+		!current
+	}
+	macos.msg_void_bool(control, 'setSelected:', pressed)
+	if pressed {
+		release_ios_toggle_group(pointer)
+	}
 }
 
 pub fn focus(id string) {
@@ -760,6 +815,10 @@ fn render_root(declared Element) {
 	g_text_area_ids = map[u64]string{}
 	g_slider_specs = map[u64]SliderSpec{}
 	g_toggle_controls = map[u64]bool{}
+	g_toggle_groups = map[u64]string{}
+	g_toggle_allow_no_selection = map[u64]bool{}
+	g_toggle_ids = map[u64]string{}
+	g_toggle_views = map[u64]View{}
 	g_scroll_ids = map[string]bool{}
 	set_background(g_root_view, root.box.bg)
 	mut active := map[string]bool{}
@@ -889,6 +948,10 @@ fn forget_descendant_nodes(key string) {
 		g_text_area_ids.delete(u64(child))
 		g_slider_specs.delete(u64(child))
 		g_toggle_controls.delete(u64(child))
+		g_toggle_groups.delete(u64(child))
+		g_toggle_allow_no_selection.delete(u64(child))
+		g_toggle_ids.delete(u64(child))
+		g_toggle_views.delete(u64(child))
 		g_view_translation_x.delete(voidptr(child))
 		g_nodes.delete(child_key_)
 		g_node_kinds.delete(child_key_)
@@ -926,6 +989,13 @@ fn register_native_handlers(native View, el Element) {
 		remove_control_target_action(native, g_button_handler, 'handleTap:', 64)
 		if el.kind == .toggle_button {
 			g_toggle_controls[pointer] = true
+			g_toggle_groups[pointer] = el.toggle_group
+			g_toggle_allow_no_selection[pointer] = el.toggle_allow_no_selection
+			g_toggle_ids[pointer] = el.id
+			g_toggle_views[pointer] = native
+			if macos.msg_bool(native, 'isSelected') {
+				release_ios_toggle_group(pointer)
+			}
 		}
 		if action_id.len > 0 || el.kind == .toggle_button {
 			if action_id.len > 0 {
@@ -1011,7 +1081,12 @@ fn render_element(parent View, el Element, key string, mut active map[string]boo
 	} else {
 		native_update_element(native, el, declared_text_changed)
 	}
-	set_box_borders(native, el.box)
+	border_box := if el.kind == .toggle_button && el.checked {
+		el.toggle_down_box
+	} else {
+		el.box
+	}
+	set_box_borders(native, border_box)
 
 	match el.kind {
 		.screen {}
@@ -1066,6 +1141,10 @@ fn remove_stale_nodes(active map[string]bool) {
 		g_text_area_ids.delete(u64(native))
 		g_slider_specs.delete(u64(native))
 		g_toggle_controls.delete(u64(native))
+		g_toggle_groups.delete(u64(native))
+		g_toggle_allow_no_selection.delete(u64(native))
+		g_toggle_ids.delete(u64(native))
+		g_toggle_views.delete(u64(native))
 		g_view_translation_x.delete(voidptr(native))
 		g_nodes.delete(key)
 		g_node_kinds.delete(key)
@@ -1115,12 +1194,11 @@ fn vui_app_did_finish_launching(self voidptr, _cmd voidptr, _application voidptr
 @[export: 'vui_button_tap']
 fn vui_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
 	pointer := u64(sender)
+	if g_toggle_controls[pointer] or { false } {
+		commit_ios_toggle_button(pointer, View(sender))
+	}
 	if spec := g_slider_specs[pointer] {
 		native_snap_slider_value(View(sender), spec)
-	}
-	if g_toggle_controls[pointer] or { false } {
-		control := View(sender)
-		macos.msg_void_bool(control, 'setSelected:', !macos.msg_bool(control, 'isSelected'))
 	}
 	if voidptr(g_event_handler) == unsafe { nil } {
 		return

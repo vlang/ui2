@@ -22,13 +22,14 @@ pub struct QmlTestApp {
 pub:
 	max_users int = 3
 pub mut:
-	name    string
-	enabled bool
-	level   f64
-	users   []QmlTestUser
-	groups  []QmlTestGroup
-	removed int
-	saved   string
+	name      string
+	enabled   bool
+	secondary bool
+	level     f64
+	users     []QmlTestUser
+	groups    []QmlTestGroup
+	removed   int
+	saved     string
 }
 
 fn qml_test_control_value(_id string) f64 {
@@ -179,6 +180,46 @@ fn test_qml_model_supports_toggle_button_pressed_bindings() {
 	mut app := new_qml_app(source, QmlTestApp{ enabled: false }) or { panic(err) }
 	built := app.build(rect(0, 0, 100, 40)) or { panic(err) }
 	app.handle(built.action_id) or { panic(err) }
+	assert app.state().enabled
+}
+
+fn test_qml_model_toggle_button_groups_update_all_bound_fields() {
+	source := 'Screen {
+		ToggleButton {
+			id: primary
+			text: "Primary"
+			group: choice
+			allow_no_selection: false
+			bind.pressed: app.enabled
+		}
+		ToggleButton {
+			id: secondary
+			text: "Secondary"
+			group: choice
+			allow_no_selection: false
+			bind.pressed: app.secondary
+		}
+	}'
+	normalized := element_from_qml_model(source, QmlTestApp{
+		enabled: true
+		secondary: true
+	}, rect(0, 0, 240, 80)) or { panic(err) }
+	assert (qml_test_find(normalized, 'Primary') or { panic('missing primary toggle') }).checked
+	assert !(qml_test_find(normalized, 'Secondary') or { panic('missing secondary toggle') }).checked
+
+	mut app := new_qml_app(source, QmlTestApp{ enabled: true }) or { panic(err) }
+	built := app.build(rect(0, 0, 240, 80)) or { panic(err) }
+	secondary := qml_test_find(built, 'Secondary') or { panic('missing secondary toggle') }
+	app.handle(secondary.action_id) or { panic(err) }
+	assert !app.state().enabled
+	assert app.state().secondary
+
+	rebuilt := app.build(rect(0, 0, 240, 80)) or { panic(err) }
+	primary := qml_test_find(rebuilt, 'Primary') or { panic('missing primary toggle') }
+	app.handle(primary.action_id) or { panic(err) }
+	assert app.state().enabled
+	assert !app.state().secondary
+	app.handle(primary.action_id) or { panic(err) }
 	assert app.state().enabled
 }
 

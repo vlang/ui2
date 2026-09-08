@@ -28,6 +28,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		switch_control bool
 		switch_state   bool
 		toggle_button  bool
+		toggle_group   string
+		toggle_allow_no_selection bool
 		slider_frame   Rect
 		slider_padding f64
 		slider_spec    SliderSpec
@@ -105,6 +107,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_switch_declared = map[string]bool{}
 	__global g_toggle_values = map[string]bool{}
 	__global g_toggle_declared = map[string]bool{}
+	__global g_toggle_groups = map[string]string{}
+	__global g_toggle_allow_no_selection = map[string]bool{}
 	__global g_focused_field = ''
 	__global g_scroll_offsets = map[string]f64{}
 	__global g_scroll_content_h = map[string]f64{}
@@ -266,7 +270,36 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if id !in g_active_toggles {
 			return
 		}
+		if pressed {
+			release_custom_toggle_group(id)
+		}
 		g_toggle_values[id] = pressed
+	}
+
+	pub fn toggle_button_group_members(id string) []string {
+		group := g_toggle_groups[id] or { return [] }
+		if group.len == 0 {
+			return [id]
+		}
+		mut members := []string{}
+		for member, member_group in g_toggle_groups {
+			if member_group == group && member in g_active_toggles {
+				members << member
+			}
+		}
+		return members
+	}
+
+	fn release_custom_toggle_group(id string) {
+		group := g_toggle_groups[id] or { return }
+		if group.len == 0 {
+			return
+		}
+		for member, member_group in g_toggle_groups {
+			if member != id && member_group == group {
+				g_toggle_values[member] = false
+			}
+		}
 	}
 
 	pub fn focus(id string) {
@@ -801,8 +834,15 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		previous := toggle_button_pressed(target.id)
+		mut pressed := !previous
+		if target.toggle_group.len > 0 && previous && !target.toggle_allow_no_selection {
+			pressed = true
+		}
 		if target.id.len > 0 {
-			g_toggle_values[target.id] = !previous
+			if pressed {
+				release_custom_toggle_group(target.id)
+			}
+			g_toggle_values[target.id] = pressed
 		}
 		fire_event(target.action_id)
 	}
@@ -1290,6 +1330,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		for id in stale_toggles {
 			g_toggle_values.delete(id)
 			g_toggle_declared.delete(id)
+			g_toggle_groups.delete(id)
+			g_toggle_allow_no_selection.delete(id)
 		}
 		mut stale_scrolls := []string{}
 		for id, _ in g_scroll_offsets {
@@ -1450,6 +1492,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				y := el.frame.y + off_y
 				mut pressed := el.checked
 				if el.id.len > 0 {
+					g_toggle_groups[el.id] = el.toggle_group
+					g_toggle_allow_no_selection[el.id] = el.toggle_allow_no_selection
 					previous_declared := g_toggle_declared[el.id] or { el.checked }
 					previous_value := g_toggle_values[el.id] or { el.checked }
 					if el.id !in g_toggle_values
@@ -1457,6 +1501,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 						g_toggle_values[el.id] = el.checked
 					}
 					pressed = g_toggle_values[el.id] or { el.checked }
+					if pressed {
+						release_custom_toggle_group(el.id)
+					}
 					g_toggle_declared[el.id] = el.checked
 					g_active_toggles[el.id] = true
 				}
@@ -1479,6 +1526,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 						w: el.frame.width
 						h: el.frame.height
 						toggle_button: true
+						toggle_group: el.toggle_group
+						toggle_allow_no_selection: el.toggle_allow_no_selection
 					}, clip)
 				}
 			}

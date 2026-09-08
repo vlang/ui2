@@ -6,7 +6,7 @@ Screen {
         x: (root.width - 308) / 2
         y: 16
         width: 308
-        height: 148
+        height: 164
         background: #FFFFFF
         corner_radius: 10
 
@@ -25,9 +25,28 @@ Screen {
             id: bold
             text: "Bold"
             bind.pressed: app.bold
+            group: formatting
+            allow_no_selection: false
             x: 16
             y: 54
-            width: 112
+            width: 80
+            height: 40
+            background: #E2E8F0
+            color: #1E293B
+            down_background: #1D4ED8
+            down_color: #FFFFFF
+            corner_radius: 7
+        }
+
+        ToggleButton {
+            id: italic
+            text: "Italic"
+            bind.pressed: app.italic
+            group: formatting
+            allow_no_selection: false
+            x: 104
+            y: 54
+            width: 80
             height: 40
             background: #E2E8F0
             color: #1E293B
@@ -38,12 +57,12 @@ Screen {
 
         Label {
             id: state
-            text: app.bold ? "Pressed" : "Released"
-            x: 144
+            text: app.bold ? "Bold" : "Italic"
+            x: 200
             y: 54
-            width: 148
+            width: 92
             height: 40
-            color: app.bold ? #1D4ED8 : #64748B
+            color: #1D4ED8
             align: center
         }
     }

@@ -818,6 +818,8 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 				title: node.prop('text')
 				frame: frame
 				pressed: node.prop_bool('pressed') || node.prop('state') == 'down'
+				group: node.prop('group')
+				allow_no_selection: node.prop_or('allow_no_selection', 'true') == 'true'
 				box: normal_box
 				down_box: BoxStyle{
 					bg: q_color(node, 'down_background', 0x2563eb)

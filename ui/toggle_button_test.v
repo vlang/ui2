@@ -7,6 +7,8 @@ fn test_toggle_button_constructor_keeps_both_visual_states() {
 		title: 'Bold'
 		frame: rect(10, 20, 100, 40)
 		pressed: true
+		group: 'format'
+		allow_no_selection: false
 		box: BoxStyle{ bg: 0xe2e8f0, radius: 6 }
 		down_box: BoxStyle{ bg: 0x1d4ed8, radius: 6 }
 		text_style: TextStyle{ color: 0x1e293b }
@@ -14,6 +16,8 @@ fn test_toggle_button_constructor_keeps_both_visual_states() {
 	)
 	assert el.kind == .toggle_button
 	assert el.checked
+	assert el.toggle_group == 'format'
+	assert !el.toggle_allow_no_selection
 	assert el.box.bg == u32(0xe2e8f0)
 	assert el.toggle_down_box.bg == u32(0x1d4ed8)
 	assert el.toggle_down_text_style.bold
