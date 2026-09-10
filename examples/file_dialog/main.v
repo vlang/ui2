@@ -50,7 +50,7 @@ pub fn (mut app FileDialogDemo) choose_folder() {
 }
 
 fn main() {
-	ui2.run_qml[FileDialogDemo](
+	ui2.run_vml[FileDialogDemo](
 		source: file_dialog_qml_source
 		model: FileDialogDemo{}
 		title: 'Native file dialog'
