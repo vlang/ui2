@@ -30,12 +30,14 @@ static inline HWND ui2_win_file_dialog_owner(void) {
 	return owner == NULL ? GetForegroundWindow() : owner;
 }
 
-static inline size_t ui2_win_file_dialog_append(wchar_t *output, size_t capacity,
-		size_t used, const wchar_t *value) {
-	if (value == NULL || capacity == 0 || used >= capacity) return used;
-	while (*value != 0 && used + 1 < capacity) output[used++] = *value++;
-	output[used] = 0;
-	return used;
+static inline int ui2_win_file_dialog_append(wchar_t *output, size_t capacity,
+		size_t *used, const wchar_t *value) {
+	size_t value_length = value == NULL ? 0 : wcslen(value);
+	if (capacity == 0 || *used + value_length >= capacity) return 0;
+	if (value_length > 0) wmemcpy(output + *used, value, value_length);
+	*used += value_length;
+	output[*used] = 0;
+	return 1;
 }
 
 static inline void ui2_win_file_dialog_filter(wchar_t *output, size_t capacity,
@@ -56,29 +58,43 @@ static inline void ui2_win_file_dialog_filter(wchar_t *output, size_t capacity,
 	output[index] = 0;
 }
 
+static int CALLBACK ui2_win_file_dialog_folder_callback(HWND window, UINT message,
+		LPARAM lparam, LPARAM data) {
+	if (message == BFFM_INITIALIZED && data != 0) {
+		SendMessageW(window, BFFM_SETSELECTIONW, TRUE, data);
+	}
+	return 0;
+}
+
 static inline int ui2_win_file_dialog_folder(wchar_t *output, unsigned int capacity,
-		const wchar_t *title) {
+		const wchar_t *title, const wchar_t *directory) {
+	HRESULT com_result = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 	BROWSEINFOW info;
 	ZeroMemory(&info, sizeof(info));
 	info.hwndOwner = ui2_win_file_dialog_owner();
 	info.lpszTitle = title == NULL ? L"" : title;
-	info.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
+	info.ulFlags = BIF_RETURNONLYFSDIRS;
+	if (SUCCEEDED(com_result)) info.ulFlags |= BIF_NEWDIALOGSTYLE;
+	if (directory != NULL && directory[0] != 0) {
+		info.lpfn = ui2_win_file_dialog_folder_callback;
+		info.lParam = (LPARAM)directory;
+	}
 	PIDLIST_ABSOLUTE item = SHBrowseForFolderW(&info);
-	if (item == NULL) return 0;
-	BOOL ok = SHGetPathFromIDListW(item, output);
-	CoTaskMemFree(item);
+	BOOL ok = item != NULL && SHGetPathFromIDListW(item, output);
+	if (item != NULL) CoTaskMemFree(item);
+	if (SUCCEEDED(com_result)) CoUninitialize();
 	return ok && output[0] != 0;
 }
 
 // ui2_win_file_dialog writes selected paths as newline-separated UTF-16. A
-// newline is not legal in Windows path components, so it is an unambiguous
-// bridge representation for V while keeping all native selection parsing here.
+// multi-select result keeps Windows' compact folder-plus-filenames form; the
+// V bridge expands that form without risking a truncated final path.
 static inline int ui2_win_file_dialog(wchar_t *output, unsigned int output_capacity,
 		const wchar_t *title, const wchar_t *directory, const wchar_t *filename,
 		const wchar_t *filter_spec, int kind, int multiple) {
 	if (output == NULL || output_capacity < 2) return 0;
 	output[0] = 0;
-	if (kind == UI2_FILE_DIALOG_FOLDER) return ui2_win_file_dialog_folder(output, output_capacity, title);
+	if (kind == UI2_FILE_DIALOG_FOLDER) return ui2_win_file_dialog_folder(output, output_capacity, title, directory);
 
 	wchar_t selected[32768];
 	wchar_t filter[8192];
@@ -98,21 +114,22 @@ static inline int ui2_win_file_dialog(wchar_t *output, unsigned int output_capac
 	info.lpstrTitle = title != NULL && title[0] != 0 ? title : NULL;
 	info.Flags = OFN_EXPLORER | OFN_NOCHANGEDIR | OFN_PATHMUSTEXIST;
 	if (kind == UI2_FILE_DIALOG_OPEN) info.Flags |= OFN_FILEMUSTEXIST;
+	if (kind == UI2_FILE_DIALOG_SAVE) info.Flags |= OFN_OVERWRITEPROMPT;
 	if (kind == UI2_FILE_DIALOG_OPEN && multiple) info.Flags |= OFN_ALLOWMULTISELECT;
 	if (!(kind == UI2_FILE_DIALOG_SAVE ? GetSaveFileNameW(&info) : GetOpenFileNameW(&info))) return 0;
 
 	wchar_t *next = selected + wcslen(selected) + 1;
 	if (*next == 0) {
-		ui2_win_file_dialog_append(output, output_capacity, 0, selected);
-		return output[0] != 0;
+		size_t used = 0;
+		return ui2_win_file_dialog_append(output, output_capacity, &used, selected) && output[0] != 0;
 	}
 	size_t used = 0;
-	const size_t folder_length = wcslen(selected);
+	if (!ui2_win_file_dialog_append(output, output_capacity, &used, selected)) return 0;
 	while (*next != 0) {
-		if (used > 0 && used + 1 < output_capacity) output[used++] = L'\n';
-		used = ui2_win_file_dialog_append(output, output_capacity, used, selected);
-		if (folder_length > 0 && selected[folder_length - 1] != L'\\' && used + 1 < output_capacity) output[used++] = L'\\';
-		used = ui2_win_file_dialog_append(output, output_capacity, used, next);
+		if (used + 1 >= output_capacity) return 0;
+		output[used++] = L'\n';
+		output[used] = 0;
+		if (!ui2_win_file_dialog_append(output, output_capacity, &used, next)) return 0;
 		next += wcslen(next) + 1;
 	}
 	return output[0] != 0;
