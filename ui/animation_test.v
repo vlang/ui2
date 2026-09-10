@@ -114,6 +114,52 @@ fn test_animation_easing_step_and_custom_transition() {
 	assert eased.frame.x == 35
 }
 
+fn test_animation_generic_properties_cover_widget_and_style_values() {
+	reset_widget_animations()
+	definition := animation(AnimationConfig{
+		duration: 1
+		properties: [
+			animation_number_property('value', 80),
+			animation_number_property('box.border_left', 10),
+			animation_number_property('slider_style.thumb_size', 32),
+			animation_color_property('slider_style.thumb_color', 0xff0000),
+			animation_color_property('switch_style.active_track_color', 0x0000ff),
+		]
+	})
+	assert definition.animated_properties() == ['value', 'box.border_left', 'slider_style.thumb_size',
+		'slider_style.thumb_color', 'switch_style.active_track_color']
+	start_widget_animation_at('tile', definition, 1_000, false)
+	half := animation_test_find(apply_widget_animations_at(animation_test_root(animation_test_element()), 1_500), 'tile')
+	assert half.value == 40
+	assert half.box.border_left == 5
+	assert half.slider_style.thumb_size == 26
+	assert half.slider_style.thumb_color == 0x923276
+	assert half.switch_style.active_track_color == 0x1163af
+}
+
+fn test_animation_generic_properties_normalize_names_and_ignore_invalid_targets() {
+	reset_widget_animations()
+	assert is_animatable_property('frame.x', .number)
+	assert is_animatable_property('box.bg', .color)
+	assert !is_animatable_property('text', .number)
+	assert !is_animatable_property('value', .color)
+	definition := animation(AnimationConfig{
+		duration: 1
+		x: 110
+		properties: [
+			animation_number_property('frame.x', 210),
+			animation_color_property('value', 0xffffff),
+			animation_number_property('text', 5),
+		]
+	})
+	assert definition.animated_properties() == ['x']
+	start_widget_animation_at('tile', definition, 1_000, false)
+	half := animation_test_find(apply_widget_animations_at(animation_test_root(animation_test_element()), 1_500), 'tile')
+	assert half.frame.x == 110
+	cancel_animation_property('tile', 'frame.x')
+	assert animation_info('tile').status == .cancelled
+}
+
 fn test_repeating_sequence_restarts_from_previous_end() {
 	reset_widget_animations()
 	forward := animation(AnimationConfig{

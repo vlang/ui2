@@ -335,13 +335,15 @@ fn test_mono_fallback_reports_nothing_when_no_mono_face_exists() {
 // around the dingbats, and the text-weight glyph is the one to draw.
 fn test_the_bundled_faces_lead_the_fallback_chain() {
 	paths := font_symbol_paths()
-	assert paths.len >= 2
-	assert os.file_name(paths[0]) == 'NotoSansSymbols2-Regular.ttf'
-	assert os.file_name(paths[1]) == 'NotoEmoji-Regular.ttf'
-	for path in paths[..2] {
+	assert paths.len >= 3
+	assert os.file_name(paths[0]) == 'MaterialIcons-Regular.ttf'
+	assert os.file_name(paths[1]) == 'NotoSansSymbols2-Regular.ttf'
+	assert os.file_name(paths[2]) == 'NotoEmoji-Regular.ttf'
+	for path in paths[..3] {
 		font_file_metrics(path)!
 	}
 	dir := os.dir(paths[0])
+	assert os.is_file(os.join_path(dir, 'MaterialIcons-LICENSE.txt'))
 	assert os.is_file(os.join_path(dir, 'NotoSansSymbols2-OFL.txt'))
 	assert os.is_file(os.join_path(dir, 'NotoEmoji-OFL.txt'))
 }
@@ -382,11 +384,11 @@ fn test_ui2_font_symbols_is_searched_before_the_bundled_face() {
 	}
 	paths := font_symbol_paths()
 	assert paths[0] == regular
-	assert os.file_name(paths[1]) == 'NotoSansSymbols2-Regular.ttf'
+	assert os.file_name(paths[1]) == 'MaterialIcons-Regular.ttf'
 
 	// A path that names no file is ignored rather than searched.
 	os.setenv('UI2_FONT_SYMBOLS', os.join_path(os.temp_dir(), 'ui2_no_such_font.ttf'), true)
-	assert os.file_name(font_symbol_paths()[0]) == 'NotoSansSymbols2-Regular.ttf'
+	assert os.file_name(font_symbol_paths()[0]) == 'MaterialIcons-Regular.ttf'
 }
 
 // A face made of symbols or emoji has no letters in it, so a window that settled
@@ -394,17 +396,17 @@ fn test_ui2_font_symbols_is_searched_before_the_bundled_face() {
 // emoji faces are named for that reason alone: they are never searched for a
 // missing glyph, since stb_truetype cannot read a bitmap or a layered one.
 fn test_a_symbol_face_is_never_settled_on_for_text() {
-	for family in ['Noto Sans Symbols 2', 'NotoSansSymbols2-Regular', 'Noto Sans Symbols',
-		'Segoe UI Symbol', 'Apple Symbols', 'Symbola', 'Noto Emoji', 'NotoEmoji-Regular',
-		'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji'] {
+	for family in ['Material Icons', 'MaterialIcons-Regular', 'Noto Sans Symbols 2',
+		'NotoSansSymbols2-Regular', 'Noto Sans Symbols', 'Segoe UI Symbol', 'Apple Symbols', 'Symbola',
+		'Noto Emoji', 'NotoEmoji-Regular', 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji'] {
 		assert font_is_symbol_family(family), '${family} should read as a symbol face'
 	}
 	for family in ['Roboto', 'Noto Sans', 'DejaVu Sans', 'Inter', 'Arial', ''] {
 		assert !font_is_symbol_family(family), '${family} should read as a text face'
 	}
 
-	dir := font_test_dir('symbols', ['NotoSansSymbols2-Regular.ttf', 'NotoEmoji-Regular.ttf',
-		'Roboto-Regular.ttf'])
+	dir := font_test_dir('symbols', ['MaterialIcons-Regular.ttf', 'NotoSansSymbols2-Regular.ttf',
+		'NotoEmoji-Regular.ttf', 'Roboto-Regular.ttf'])
 	defer {
 		os.rmdir_all(dir) or {}
 	}
@@ -412,8 +414,8 @@ fn test_a_symbol_face_is_never_settled_on_for_text() {
 	// check keeps the search from settling on it.
 	assert font_fallback(font_index([dir])) == os.join_path(dir, 'Roboto-Regular.ttf')
 
-	only_symbols := font_test_dir('symbols_only', ['NotoSansSymbols2-Regular.ttf',
-		'NotoEmoji-Regular.ttf'])
+	only_symbols := font_test_dir('symbols_only', ['MaterialIcons-Regular.ttf',
+		'NotoSansSymbols2-Regular.ttf', 'NotoEmoji-Regular.ttf'])
 	defer {
 		os.rmdir_all(only_symbols) or {}
 	}

@@ -7,6 +7,7 @@ module ui2
 $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
 	import fontstash
 	import gg
+	import math
 	import os
 	import sokol.sapp
 	import time
@@ -1520,7 +1521,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.image {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
-				if !draw_cached_image(ctx, el.image_path, x, y, el.frame.width, el.frame.height, el.rotation) {
+				if el.image_path.trim_space().len > 0
+					&& !draw_cached_image(ctx, el.image_path, x, y, el.frame.width, el.frame.height,
+					el.rotation) {
 					draw_rect(ctx, x, y, el.frame.width, el.frame.height, 0xe8ecef, 0)
 				}
 				if el.enabled && element_action_id(el).len > 0 && (el.clickable || el.draggable) {
@@ -1546,7 +1549,17 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 					draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
 				}
 				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
-				draw_text_centered(ctx, el.text, x, y, el.frame.width, el.frame.height, el.text_style)
+				image_layout := button_image_layout(el.frame.width, el.frame.height, el.text,
+					el.image_path)
+				if image_layout.visible {
+					draw_button_image(ctx, el.image_path, x + image_layout.image.x,
+						y + image_layout.image.y, image_layout.image.width, image_layout.image.height,
+						el.text_style)
+				}
+				if el.text.len > 0 && image_layout.has_title_area() {
+					draw_text_centered(ctx, el.text, x + image_layout.text.x, y + image_layout.text.y,
+						image_layout.text.width, image_layout.text.height, el.text_style)
+				}
 				if el.enabled {
 					add_hit_target(HitTarget{
 						id: el.id
@@ -1959,11 +1972,173 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return true
 	}
 
+	struct ButtonImageLayout {
+		visible bool
+		image   Rect
+		text    Rect
+	}
+
+	fn (layout ButtonImageLayout) has_title_area() bool {
+		return layout.text.width > 0 && layout.text.height > 0
+	}
+
+	// button_image_layout mirrors the native desktop button arrangements: compact
+	// buttons put a 13-point image beside their title, while tall ribbon buttons
+	// put a larger image above it. Image-only title-bar buttons stay centered.
+	fn button_image_layout(width f64, height f64, title string, image_path string) ButtonImageLayout {
+		if image_path.trim_space().len == 0 {
+			return ButtonImageLayout{
+				text: rect(0, 0, width, height)
+			}
+		}
+		if title.len == 0 {
+			// Image-only ribbon controls still use the large-button treatment when
+			// they are tall. Compact controls need only a two-point inset on each
+			// side; the previous four-point inset made 17px toolbar symbols nearly
+			// illegible on Windows.
+			size := if height >= 42 {
+				math.min(32.0, math.max(math.min(width - 8.0, height - 12.0), 1.0))
+			} else {
+				math.min(18.0, math.max(math.min(width, height) - 4.0, 1.0))
+			}
+			return ButtonImageLayout{
+				visible: true
+				image: rect((width - size) / 2, (height - size) / 2, size, size)
+				text: rect(0, 0, 0, 0)
+			}
+		}
+		if height >= 42 {
+			size := math.min(32.0, math.max(math.min(width, height - 22.0) - 8.0, 1.0))
+			return ButtonImageLayout{
+				visible: true
+				image: rect((width - size) / 2, 4, size, size)
+				text: rect(2, height - 23, math.max(width - 4.0, 0.0), 20)
+			}
+		}
+		size := math.min(13.0, math.max(height - 8.0, 1.0))
+		return ButtonImageLayout{
+			visible: true
+			image: rect(5, (height - size) / 2, size, size)
+			text: rect(size + 9, 0, math.max(width - size - 13.0, 0.0), height)
+		}
+	}
+
+	fn draw_button_image(ctx &gg.Context, image_path string, x f64, y f64, width f64, height f64, style TextStyle) {
+		if image_path.starts_with('symbol:') {
+			symbol := system_symbol_fallback(image_path['symbol:'.len..])
+			draw_text_centered(ctx, symbol, x, y, width, height, TextStyle{
+				...style
+				font_family: 'Material Icons'
+				size:        math.max(math.min(width, height) * 0.75, 8.0)
+			})
+			return
+		}
+		if !draw_cached_image(ctx, image_path, x, y, width, height, 0) {
+			draw_outline(ctx, x, y, width, height, 0x94a3b8, 2)
+		}
+	}
+
+	// SF Symbols are used as native AppKit button images. Other custom-rendered
+	// desktops use equivalent glyphs from the bundled Material Icons face, which
+	// keeps the controls recognizable without depending on a host symbol font.
+	fn system_symbol_fallback(name string) string {
+		return match name {
+			'align.horizontal.center' { '\ue00f' }
+			'line.3.horizontal' { '\ue5d2' }
+			'text.justify' { '\ue235' }
+			'align.vertical.center' { '\ue011' }
+			'arrow.up.and.down', 'arrow.up.arrow.down' { '\ue8d5' }
+			'arrow.up.and.down.text.horizontal' { '\ue25b' }
+			'arrow.2.squarepath', 'arrow.triangle.2.circlepath' { '\ue627' }
+			'arrow.left.and.right' { '\ue8d4' }
+			'arrow.left.and.right.square' { '\ue933' }
+			'arrow.clockwise', 'arrow.clockwise.circle' { '\ue5d5' }
+			'clock.arrow.circlepath' { '\ue889' }
+			'arrow.down.right.and.arrow.up.left', 'arrow.up.and.down.and.arrow.left.and.right',
+			'move.3d' { '\uf1ce' }
+			'arrow.down.to.line' { '\ue258' }
+			'icloud.and.arrow.down' { '\ue2c0' }
+			'arrow.right.to.line', 'increase.indent' { '\ue23e' }
+			'arrow.uturn.backward' { '\ue166' }
+			'arrow.uturn.forward' { '\ue15a' }
+			'icloud.and.arrow.up' { '\ue2c3' }
+			'square.and.arrow.up' { '\ue2c6' }
+			'square.and.arrow.down' { '\ue161' }
+			'asterisk' { '\ue83a' }
+			'character.book.closed' { '\uea19' }
+			'textformat', 'textformat.abc' { '\ue262' }
+			'chart.bar', 'chart.bar.doc.horizontal', 'chart.bar.xaxis' { '\ue26b' }
+			'crop' { '\ue3be' }
+			'cube.transparent' { '\ue9fe' }
+			'square.on.circle' { '\ue574' }
+			'curlybraces' { '\ue86f' }
+			'cursorarrow' { '\ue323' }
+			'doc.badge.arrow.up' { '\ue9fc' }
+			'doc.badge.plus', 'text.badge.plus' { '\ue89c' }
+			'plus.rectangle' { '\ue146' }
+			'plus.rectangle.on.rectangle', 'plus.square.on.square' { '\ue02e' }
+			'doc.on.doc' { '\ue14d' }
+			'list.bullet.clipboard' { '\ue85d' }
+			'ellipsis' { '\ue5d3' }
+			'eye' { '\ue8f4' }
+			'eye.slash' { '\ue8f5' }
+			'folder' { '\ue2c7' }
+			'function' { '\ue24a' }
+			'gearshape' { '\ue8b8' }
+			'grid', 'rectangle.grid.2x2', 'rectangle.split.3x3', 'tablecells' { '\ue3ec' }
+			'info.circle' { '\ue88e' }
+			'line.vertical' { '\ue5d4' }
+			'list.number' { '\ue242' }
+			'number' { '\ue9ef' }
+			'lock', 'lock.doc' { '\ue897' }
+			'magnifyingglass', 'rectangle.and.text.magnifyingglass' { '\ue8b6' }
+			'minus' { '\ue15b' }
+			'minus.rectangle' { '\ue909' }
+			'number.circle' { '\ue400' }
+			'paintbrush' { '\ue3ae' }
+			'paintpalette' { '\ue40a' }
+			'pencil', 'pencil.line' { '\ue3c9' }
+			'person.2' { '\ue7ef' }
+			'person.crop.circle' { '\ue853' }
+			'person.crop.circle.badge.plus' { '\ue7fe' }
+			'photo' { '\ue410' }
+			'textbox' { '\ue262' }
+			'plus' { '\ue145' }
+			'printer' { '\ue8ad' }
+			'rectangle.3.group' { '\ue8f0' }
+			'rectangle.split.1x2' { '\uf114' }
+			'rectangle.split.2x1' { '\ue8f2' }
+			'rectangle.split.3x1' { '\ue8ec' }
+			'rectangle.bottomthird.inset.filled', 'rectangle.portrait.and.arrow.right',
+			'rectangle.righthalf.inset.filled.arrow.right',
+			'rectangle.topthird.inset.filled', 'sidebar.right' { '\uf114' }
+			'scissors' { '\ue14e' }
+			'seal' { '\uef76' }
+			'slider.horizontal.3' { '\ue429' }
+			'square.2.layers.3d.bottom.filled', 'square.2.layers.3d.top.filled',
+			'square.stack.3d.up' { '\ue53b' }
+			'star' { '\ue838' }
+			'star.circle' { '\ue8d0' }
+			'tag' { '\ue892' }
+			'text.alignleft' { '\ue236' }
+			'text.alignright' { '\ue237' }
+			'text.bubble' { '\ue0cb' }
+			'textformat.123' { '\ueb8d' }
+			'textformat.size' { '\ue245' }
+			'textformat.size.larger' { '\ueae2' }
+			'trash' { '\ue872' }
+			'xmark' { '\ue5cd' }
+			else { '\ue8fd' }
+		}
+	}
+
 	fn preload_images(el Element) {
 		if el.hidden {
 			return
 		}
-		if el.kind == .image {
+		if el.kind == .image
+			|| (el.kind == .button && el.image_path.trim_space().len > 0
+			&& !el.image_path.starts_with('symbol:')) {
 			cache_image(el.image_path)
 		}
 		for child in el.children {
@@ -2275,15 +2450,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return t
 		}
 		ctx.set_text_cfg(cfg)
-		return fit_text_to_width(t, w, fn [ctx] (line string) f64 {
-			return f64(ctx.text_width_f(line))
-		})
-	}
-
-	// fit_text_to_width is the search fit_text runs. It takes the measurement
-	// as an argument so it can be tested without a window to measure in.
-	fn fit_text_to_width(t string, w f64, text_width fn (string) f64) string {
-		if text_width(t) <= w {
+		if f64(ctx.text_width_f(t)) <= w {
 			return t
 		}
 		runes := t.runes()
@@ -2294,7 +2461,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		mut high := runes.len
 		for kept < high {
 			mid := (kept + high + 1) / 2
-			if text_width(runes[..mid].string() + text_ellipsis) <= w {
+			if f64(ctx.text_width_f(runes[..mid].string() + text_ellipsis)) <= w {
 				kept = mid
 			} else {
 				high = mid - 1

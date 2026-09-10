@@ -3,8 +3,9 @@
 Roboto 3.016, the `web/static` build from
 [googlefonts/roboto-classic](https://github.com/googlefonts/roboto-classic/releases/tag/v3.016),
 covering Latin, Greek, Cyrillic, and Vietnamese, Roboto Mono 3.001 from
-[googlefonts/RobotoMono](https://github.com/googlefonts/RobotoMono), Noto Sans
-Symbols 2 v2.008, the `unhinted` build from
+[googlefonts/RobotoMono](https://github.com/googlefonts/RobotoMono), Material
+Icons from [google/material-design-icons](https://github.com/google/material-design-icons),
+Noto Sans Symbols 2 v2.008, the `unhinted` build from
 [notofonts/symbols](https://github.com/notofonts/symbols/releases/tag/NotoSansSymbols2-v2.008),
 and Noto Emoji 3.002 from
 [google/fonts](https://github.com/google/fonts/tree/main/ofl/notoemoji).
@@ -18,7 +19,13 @@ finds its mono face by rewriting `-Regular` to `Mono-Regular` in the path it was
 given. It is also what an element asking for an unavailable fixed-pitch family,
 such as `Consolas` or the generic `monospace`, falls back to.
 
-`NotoSansSymbols2-Regular.ttf` is not drawn with directly; it is the first face
+`MaterialIcons-Regular.ttf` supplies portable equivalents for platform icon
+names such as SF Symbols on a custom-rendered desktop. It is also at the front
+of the fallback chain so its private-use glyphs can be drawn without depending
+on a machine-installed icon font.
+
+`NotoSansSymbols2-Regular.ttf` is not drawn with directly; it follows Material
+Icons in the fallback chain and is the first general-purpose symbol face
 the renderer searches when the text font has no outline for a code point. Roboto
 covers 927 of them, which is every letter an interface is written in and almost
 none of the marks it labels rows with, so a ▸ or a ✓ would otherwise come
@@ -55,6 +62,9 @@ instructions, so the `hinted` build would only add bytes. For the same reason
 Noto Sans Symbols 2 is the `unhinted` build rather than the `googlefonts` one,
 which is the same outlines and twice the file.
 
-All four families are licensed under the SIL Open Font License 1.1. They carry
+Roboto, Roboto Mono, Noto Sans Symbols 2, and Noto Emoji are licensed under the
+SIL Open Font License 1.1. They carry
 different copyright notices, so each keeps its own copy: `Roboto-OFL.txt`,
 `RobotoMono-OFL.txt`, `NotoSansSymbols2-OFL.txt` and `NotoEmoji-OFL.txt`.
+Material Icons is licensed under Apache License 2.0, kept as
+`MaterialIcons-LICENSE.txt`.

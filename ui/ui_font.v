@@ -269,8 +269,8 @@ fn font_mono_preferences() []string {
 // two overlap around the dingbats, and a ✔ beside a line of text should be the
 // text-weight one rather than the emoji.
 fn font_symbol_families() []string {
-	return ['Noto Sans Symbols 2', 'Noto Sans Symbols', 'Segoe UI Symbol', 'Apple Symbols',
-		'Symbola', 'Noto Emoji']
+	return ['Material Icons', 'Noto Sans Symbols 2', 'Noto Sans Symbols', 'Segoe UI Symbol',
+		'Apple Symbols', 'Symbola', 'Noto Emoji']
 }
 
 // font_color_emoji_families lists the faces that keep their emoji as bitmaps or
@@ -279,8 +279,7 @@ fn font_symbol_families() []string {
 // empty, so searching one would trade the empty box for an empty space. They
 // are named only so the renderer does not settle on one for its text.
 fn font_color_emoji_families() []string {
-	return ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Twemoji Mozilla',
-		'JoyPixels']
+	return ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Twemoji Mozilla', 'JoyPixels']
 }
 
 // font_symbol_fallback_families ranks every face worth looking in for a glyph
