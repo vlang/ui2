@@ -195,6 +195,16 @@ fn test_parse_escaped_string() {
 	assert node.prop('text') == 'Hello "World"'
 }
 
+fn test_parse_single_quoted_strings() {
+	source := 'Label {
+		text: \'It\\\'s "fine"\'
+		tooltip: \'line one\\nline two\'
+	}'
+	node := parse_vml(source) or { panic(err) }
+	assert node.prop('text') == 'It\'s "fine"'
+	assert node.prop('tooltip') == 'line one\nline two'
+}
+
 fn test_parse_row() {
 	source := 'Row {
 		spacing: 10
