@@ -35,14 +35,14 @@ $if ui2_custom_rendering ? {
 	}
 
 	fn test_custom_text_editor_replaces_owned_state_after_caret_moves() {
-		g_text_values = map[string]string{}
-		g_text_props = map[string]string{}
-		g_text_editors = map[string]TextEditor{}
-		g_text_kinds = map[string]Kind{}
-		g_active_fields = map[string]bool{
+		g_gg_app.text_values = map[string]string{}
+		g_gg_app.text_props = map[string]string{}
+		g_gg_app.text_editors = map[string]TextEditor{}
+		g_gg_app.text_kinds = map[string]Kind{}
+		g_gg_app.active_fields = map[string]bool{
 			'field': true
 		}
-		g_focused_field = 'field'
+		g_gg_app.focused_field = 'field'
 		replace_text_value('field', 'abc')
 		replace_text_editor('field', text_editor('abc'.clone()))
 		handle_key_down(.left)
@@ -50,8 +50,8 @@ $if ui2_custom_rendering ? {
 		handle_char_input(`x`)
 		assert text('field') == 'axc'
 		forget_text_state('field')
-		g_active_fields = map[string]bool{}
-		g_focused_field = ''
+		g_gg_app.active_fields = map[string]bool{}
+		g_gg_app.focused_field = ''
 	}
 
 	fn test_custom_pointer_event_ids_are_normalized() {
@@ -124,30 +124,30 @@ $if ui2_custom_rendering ? {
 	}
 
 	fn test_custom_slider_value_api_only_updates_mounted_controls() {
-		g_slider_values = map[string]f64{}
-		g_slider_specs = map[string]SliderSpec{
+		g_gg_app.slider_values = map[string]f64{}
+		g_gg_app.slider_specs = map[string]SliderSpec{
 			'volume': SliderSpec{
 				min: -20
 				max: 80
 			}
 		}
-		g_active_sliders = map[string]bool{
+		g_gg_app.active_sliders = map[string]bool{
 			'volume': true
 		}
 		set_slider_value('volume', 120)
 		set_slider_value('missing', 40)
 		assert slider_value('volume') == 80
 		assert slider_value('missing') == 0
-		g_slider_values = map[string]f64{}
-		g_slider_specs = map[string]SliderSpec{}
-		g_active_sliders = map[string]bool{}
+		g_gg_app.slider_values = map[string]f64{}
+		g_gg_app.slider_specs = map[string]SliderSpec{}
+		g_gg_app.active_sliders = map[string]bool{}
 	}
 
 	fn test_custom_switch_tap_and_drag_update_live_state() {
-		g_switch_values = map[string]bool{
+		g_gg_app.switch_values = map[string]bool{
 			'network': false
 		}
-		g_active_switches = map[string]bool{
+		g_gg_app.active_switches = map[string]bool{
 			'network': true
 		}
 		target := HitTarget{
@@ -159,7 +159,7 @@ $if ui2_custom_rendering ? {
 			h: 32
 			switch_control: true
 		}
-		g_hit_targets = [target]
+		g_gg_app.hit_targets = [target]
 		handle_touch_down(20, 30)
 		handle_touch_up(20, 30)
 		assert switch_active('network')
@@ -174,27 +174,27 @@ $if ui2_custom_rendering ? {
 		set_switch_active('missing', true)
 		assert switch_active('network')
 		assert !switch_active('missing')
-		g_switch_values = map[string]bool{}
-		g_switch_declared = map[string]bool{}
-		g_active_switches = map[string]bool{}
-		g_hit_targets = []HitTarget{}
-		g_touch = TouchState{}
+		g_gg_app.switch_values = map[string]bool{}
+		g_gg_app.switch_declared = map[string]bool{}
+		g_gg_app.active_switches = map[string]bool{}
+		g_gg_app.hit_targets = []HitTarget{}
+		g_gg_app.touch = TouchState{}
 	}
 
 	fn test_custom_toggle_button_updates_live_pressed_state() {
-		g_toggle_values = map[string]bool{
+		g_gg_app.toggle_values = map[string]bool{
 			'bold': false
 		}
-		g_active_toggles = map[string]bool{
+		g_gg_app.active_toggles = map[string]bool{
 			'bold': true
 		}
-		g_toggle_groups = map[string]string{
+		g_gg_app.toggle_groups = map[string]string{
 			'bold': ''
 		}
-		g_toggle_allow_no_selection = map[string]bool{
+		g_gg_app.toggle_allow_no_selection = map[string]bool{
 			'bold': true
 		}
-		g_hit_targets = [HitTarget{
+		g_gg_app.hit_targets = [HitTarget{
 			id: 'bold'
 			action_id: 'bold_changed'
 			x: 10
@@ -210,29 +210,29 @@ $if ui2_custom_rendering ? {
 		set_toggle_button_pressed('missing', true)
 		assert !toggle_button_pressed('bold')
 		assert !toggle_button_pressed('missing')
-		g_toggle_values = map[string]bool{}
-		g_toggle_declared = map[string]bool{}
-		g_toggle_groups = map[string]string{}
-		g_toggle_allow_no_selection = map[string]bool{}
-		g_active_toggles = map[string]bool{}
-		g_hit_targets = []HitTarget{}
-		g_touch = TouchState{}
+		g_gg_app.toggle_values = map[string]bool{}
+		g_gg_app.toggle_declared = map[string]bool{}
+		g_gg_app.toggle_groups = map[string]string{}
+		g_gg_app.toggle_allow_no_selection = map[string]bool{}
+		g_gg_app.active_toggles = map[string]bool{}
+		g_gg_app.hit_targets = []HitTarget{}
+		g_gg_app.touch = TouchState{}
 	}
 
 	fn test_custom_toggle_button_groups_are_exclusive() {
-		g_toggle_values = map[string]bool{
+		g_gg_app.toggle_values = map[string]bool{
 			'left':  true
 			'right': false
 		}
-		g_toggle_groups = map[string]string{
+		g_gg_app.toggle_groups = map[string]string{
 			'left':  'alignment'
 			'right': 'alignment'
 		}
-		g_toggle_allow_no_selection = map[string]bool{
+		g_gg_app.toggle_allow_no_selection = map[string]bool{
 			'left':  false
 			'right': false
 		}
-		g_active_toggles = map[string]bool{
+		g_gg_app.active_toggles = map[string]bool{
 			'left':  true
 			'right': true
 		}
@@ -265,11 +265,11 @@ $if ui2_custom_rendering ? {
 		mut members := toggle_button_group_members('left')
 		members.sort()
 		assert members == ['left', 'right']
-		g_toggle_values = map[string]bool{}
-		g_toggle_declared = map[string]bool{}
-		g_toggle_groups = map[string]string{}
-		g_toggle_allow_no_selection = map[string]bool{}
-		g_active_toggles = map[string]bool{}
+		g_gg_app.toggle_values = map[string]bool{}
+		g_gg_app.toggle_declared = map[string]bool{}
+		g_gg_app.toggle_groups = map[string]string{}
+		g_gg_app.toggle_allow_no_selection = map[string]bool{}
+		g_gg_app.active_toggles = map[string]bool{}
 	}
 
 	fn test_custom_dropdown_popup_opens_below_its_control() {
@@ -296,7 +296,7 @@ $if ui2_custom_rendering ? {
 	}
 
 	fn test_custom_dropdown_scroll_reveals_the_selected_row() {
-		g_dropdown_popup = DropdownPopup{
+		g_gg_app.dropdown_popup = DropdownPopup{
 			id: 'menu'
 			options: ['a', 'b', 'c', 'd', 'e', 'f']
 			row_height: 28
@@ -304,16 +304,16 @@ $if ui2_custom_rendering ? {
 			max_scroll: 4 * 28
 			selected: 5
 		}
-		g_dropdown_scroll = 0
+		g_gg_app.dropdown_scroll = 0
 		reveal_dropdown_row(5)
-		assert g_dropdown_scroll == 4 * 28
+		assert g_gg_app.dropdown_scroll == 4 * 28
 		reveal_dropdown_row(0)
-		assert g_dropdown_scroll == 0
+		assert g_gg_app.dropdown_scroll == 0
 		assert clamped_dropdown_scroll(1000) == 4 * 28
 		assert clamped_dropdown_scroll(-10) == 0
 		close_dropdown()
-		assert g_dropdown_scroll == 0
-		assert g_dropdown_popup.options.len == 0
+		assert g_gg_app.dropdown_scroll == 0
+		assert g_gg_app.dropdown_popup.options.len == 0
 	}
 
 	fn test_custom_dropdown_click_opens_a_list_instead_of_cycling() {
@@ -325,14 +325,14 @@ $if ui2_custom_rendering ? {
 			options: ['One', 'Two', 'Three']
 		}
 		open_dropdown(target)
-		assert g_open_dropdown == 'menu-click'
+		assert g_gg_app.open_dropdown == 'menu-click'
 		assert text('menu-click') == ''
 		select_dropdown_option(HitTarget{
 			...target
 			dropdown_option: true
 			option_index: 2
 		})
-		assert g_open_dropdown == ''
+		assert g_gg_app.open_dropdown == ''
 		assert text('menu-click') == 'Three'
 	}
 
@@ -343,13 +343,13 @@ $if ui2_custom_rendering ? {
 			dropdown: true
 			options: ['One']
 		})
-		assert g_open_dropdown == ''
+		assert g_gg_app.open_dropdown == ''
 	}
 
 	fn test_custom_dropdown_keys_move_the_highlight_and_commit() {
 		close_dropdown()
-		g_open_dropdown = 'menu-keys'
-		g_dropdown_popup = DropdownPopup{
+		g_gg_app.open_dropdown = 'menu-keys'
+		g_gg_app.dropdown_popup = DropdownPopup{
 			id: 'menu-keys'
 			action_id: 'menu-change'
 			options: ['One', 'Two', 'Three']
@@ -358,12 +358,12 @@ $if ui2_custom_rendering ? {
 			mounted: true
 		}
 		assert handle_dropdown_key(.down)
-		assert g_dropdown_hover == 0
+		assert g_gg_app.dropdown_hover == 0
 		assert handle_dropdown_key(.up)
-		assert g_dropdown_hover == 2
+		assert g_gg_app.dropdown_hover == 2
 		assert handle_dropdown_key(.tab) == false
 		assert handle_dropdown_key(.enter)
-		assert g_open_dropdown == ''
+		assert g_gg_app.open_dropdown == ''
 		assert text('menu-keys') == 'Three'
 	}
 
@@ -402,48 +402,48 @@ $if ui2_custom_rendering ? {
 	fn test_custom_dropdown_pointer_flow_picks_a_row_from_the_list() {
 		close_dropdown()
 		targets := custom_test_dropdown_targets('menu-pick')
-		g_hit_targets = [targets[0]]
+		g_gg_app.hit_targets = [targets[0]]
 		handle_touch_down(100, 90)
 		handle_touch_up(100, 90)
-		assert g_open_dropdown == 'menu-pick'
+		assert g_gg_app.open_dropdown == 'menu-pick'
 		assert text('menu-pick') == ''
-		g_hit_targets = targets.clone()
+		g_gg_app.hit_targets = targets.clone()
 		handle_touch_down(100, 160)
-		assert g_dropdown_hover == 1
+		assert g_gg_app.dropdown_hover == 1
 		handle_touch_up(100, 160)
-		assert g_open_dropdown == ''
+		assert g_gg_app.open_dropdown == ''
 		assert text('menu-pick') == 'Two'
-		g_hit_targets = []HitTarget{}
+		g_gg_app.hit_targets = []HitTarget{}
 	}
 
 	fn test_custom_dropdown_pointer_flow_dismisses_on_an_outside_click() {
 		close_dropdown()
 		targets := custom_test_dropdown_targets('menu-dismiss')
-		g_hit_targets = [targets[0]]
+		g_gg_app.hit_targets = [targets[0]]
 		handle_touch_down(100, 90)
 		handle_touch_up(100, 90)
-		assert g_open_dropdown == 'menu-dismiss'
-		g_hit_targets = targets.clone()
+		assert g_gg_app.open_dropdown == 'menu-dismiss'
+		g_gg_app.hit_targets = targets.clone()
 		handle_touch_down(100, 300)
-		assert g_dropdown_hover == -1
+		assert g_gg_app.dropdown_hover == -1
 		handle_touch_up(100, 300)
-		assert g_open_dropdown == ''
+		assert g_gg_app.open_dropdown == ''
 		assert text('menu-dismiss') == ''
-		g_hit_targets = [targets[0]]
+		g_gg_app.hit_targets = [targets[0]]
 		handle_touch_down(100, 90)
 		handle_touch_up(100, 90)
-		assert g_open_dropdown == 'menu-dismiss'
+		assert g_gg_app.open_dropdown == 'menu-dismiss'
 		handle_touch_down(100, 90)
 		handle_touch_up(100, 90)
-		assert g_open_dropdown == ''
+		assert g_gg_app.open_dropdown == ''
 		assert text('menu-dismiss') == ''
-		g_hit_targets = []HitTarget{}
+		g_gg_app.hit_targets = []HitTarget{}
 	}
 
 	fn test_custom_dropdown_escape_closes_the_list() {
 		close_dropdown()
-		g_open_dropdown = 'menu-escape'
-		g_dropdown_popup = DropdownPopup{
+		g_gg_app.open_dropdown = 'menu-escape'
+		g_gg_app.dropdown_popup = DropdownPopup{
 			id: 'menu-escape'
 			options: ['One', 'Two']
 			row_height: 28
@@ -451,14 +451,14 @@ $if ui2_custom_rendering ? {
 			mounted: true
 		}
 		assert handle_dropdown_key(.escape)
-		assert g_open_dropdown == ''
+		assert g_gg_app.open_dropdown == ''
 		assert text('menu-escape') == ''
 	}
 
 	fn test_custom_button_press_state_follows_the_pointer() {
-		g_touch = TouchState{}
+		g_gg_app.touch = TouchState{}
 		assert !touch_is_held_inside(10, 10, 100, 30)
-		g_touch = TouchState{
+		g_gg_app.touch = TouchState{
 			down: true
 			start_x: 20
 			start_y: 20
@@ -467,10 +467,10 @@ $if ui2_custom_rendering ? {
 		}
 		assert touch_is_held_inside(10, 10, 100, 30)
 		// Held down, but dragged off the button.
-		g_touch.current_x = 300
+		g_gg_app.touch.current_x = 300
 		assert !touch_is_held_inside(10, 10, 100, 30)
 		// A press that began elsewhere does not light up what it passes over.
-		g_touch = TouchState{
+		g_gg_app.touch = TouchState{
 			down: true
 			start_x: 300
 			start_y: 20
@@ -478,6 +478,6 @@ $if ui2_custom_rendering ? {
 			current_y: 20
 		}
 		assert !touch_is_held_inside(10, 10, 100, 30)
-		g_touch = TouchState{}
+		g_gg_app.touch = TouchState{}
 	}
 }

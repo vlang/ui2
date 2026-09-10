@@ -60,9 +60,60 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		scrollbar_grab_y   f64
 	}
 
+	// GgApp owns one immediate renderer instance. Keeping its mutable state here
+	// makes independent windows possible once gg can pass app instances through
+	// helpers, while g_gg_app remains the single callback bridge required today.
 	struct GgApp {
 	mut:
-		ctx &gg.Context = unsafe { nil }
+		ctx                       &gg.Context = unsafe { nil }
+		build_screen              BuildFn = unsafe { nil }
+		event_handler             EventFn = unsafe { nil }
+		key_handler               KeyFn = unsafe { nil }
+		scroll_handler            ScrollFn = unsafe { nil }
+		drop_handler              DropFn = unsafe { nil }
+		key_consumed              bool
+		text_values               map[string]string = map[string]string{}
+		text_props                map[string]string = map[string]string{}
+		text_editors              map[string]TextEditor = map[string]TextEditor{}
+		text_kinds                map[string]Kind = map[string]Kind{}
+		slider_values             map[string]f64 = map[string]f64{}
+		slider_declared           map[string]f64 = map[string]f64{}
+		slider_specs              map[string]SliderSpec = map[string]SliderSpec{}
+		switch_values             map[string]bool = map[string]bool{}
+		switch_declared           map[string]bool = map[string]bool{}
+		toggle_values             map[string]bool = map[string]bool{}
+		toggle_declared           map[string]bool = map[string]bool{}
+		toggle_groups             map[string]string = map[string]string{}
+		toggle_allow_no_selection map[string]bool = map[string]bool{}
+		focused_field             string
+		scroll_offsets            map[string]f64 = map[string]f64{}
+		scroll_content_h          map[string]f64 = map[string]f64{}
+		hit_targets               []HitTarget = []HitTarget{}
+		touch                     TouchState
+		scroll_areas              map[string]Rect = map[string]Rect{}
+		scroll_viewports          map[string]Rect = map[string]Rect{}
+		scroll_order              []string = []string{}
+		scrollbar_geometries      map[string]ScrollbarGeometry = map[string]ScrollbarGeometry{}
+		active_fields             map[string]bool = map[string]bool{}
+		active_sliders            map[string]bool = map[string]bool{}
+		active_switches           map[string]bool = map[string]bool{}
+		active_toggles            map[string]bool = map[string]bool{}
+		active_scrolls            map[string]bool = map[string]bool{}
+		image_ids                 map[string]int = map[string]int{}
+		font_metrics              FontMetrics
+		font_files                map[string]string = map[string]string{}
+		font_indexed              bool
+		font_family_files         map[string]string = map[string]string{}
+		font_family_metrics       map[string]FontMetrics = map[string]FontMetrics{}
+		font_symbol_ids           []int = []int{}
+		font_symbol_bases         map[int]bool = map[int]bool{}
+		font_symbol_fons          voidptr = unsafe { nil }
+		active_images             map[string]bool = map[string]bool{}
+		open_dropdown             string
+		dropdown_popup            DropdownPopup
+		dropdown_hover            int = -1
+		dropdown_scroll           f64
+		text_area_layouts         map[string]TextAreaLayout = map[string]TextAreaLayout{}
 	}
 
 	// DropdownPopup caches the geometry of the open dropdown list. The list is
@@ -90,51 +141,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	const dropdown_popup_margin = 4.0
 	const dropdown_popup_min_row_height = 24.0
 
-	__global g_build_screen = BuildFn(unsafe { nil })
-	__global g_event_handler = EventFn(unsafe { nil })
-	__global g_key_handler = KeyFn(unsafe { nil })
-	__global g_scroll_handler = ScrollFn(unsafe { nil })
-	__global g_drop_handler = DropFn(unsafe { nil })
-	__global g_key_consumed = false
 	__global g_gg_app = &GgApp{}
-	__global g_text_values = map[string]string{}
-	__global g_text_props = map[string]string{}
-	__global g_text_editors = map[string]TextEditor{}
-	__global g_text_kinds = map[string]Kind{}
-	__global g_slider_values = map[string]f64{}
-	__global g_slider_declared = map[string]f64{}
-	__global g_slider_specs = map[string]SliderSpec{}
-	__global g_switch_values = map[string]bool{}
-	__global g_switch_declared = map[string]bool{}
-	__global g_toggle_values = map[string]bool{}
-	__global g_toggle_declared = map[string]bool{}
-	__global g_toggle_groups = map[string]string{}
-	__global g_toggle_allow_no_selection = map[string]bool{}
-	__global g_focused_field = ''
-	__global g_scroll_offsets = map[string]f64{}
-	__global g_scroll_content_h = map[string]f64{}
-	__global g_hit_targets = []HitTarget{}
-	__global g_touch = TouchState{}
-	__global g_scroll_areas = map[string]Rect{}
-	__global g_active_fields = map[string]bool{}
-	__global g_active_sliders = map[string]bool{}
-	__global g_active_switches = map[string]bool{}
-	__global g_active_toggles = map[string]bool{}
-	__global g_active_scrolls = map[string]bool{}
-	__global g_image_ids = map[string]int{}
-	__global g_font_metrics = FontMetrics{}
-	__global g_font_files = map[string]string{}
-	__global g_font_indexed = false
-	__global g_font_family_files = map[string]string{}
-	__global g_font_family_metrics = map[string]FontMetrics{}
-	__global g_font_symbol_ids = []int{}
-	__global g_font_symbol_bases = map[int]bool{}
-	__global g_font_symbol_fons = voidptr(unsafe { nil })
-	__global g_active_images = map[string]bool{}
-	__global g_open_dropdown = ''
-	__global g_dropdown_popup = DropdownPopup{}
-	__global g_dropdown_hover = -1
-	__global g_dropdown_scroll = 0.0
 
 	// Map values are copied byte-for-byte when an existing key is replaced.
 	// Unlike keys, their nested strings are not released by map.set. The text
@@ -148,24 +155,24 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	@[manualfree]
 	fn replace_text_value(id string, value string) {
 		owned := value.clone()
-		if previous := g_text_values[id] {
+		if previous := g_gg_app.text_values[id] {
 			free_owned_string(previous)
 		}
-		g_text_values[id] = owned
+		g_gg_app.text_values[id] = owned
 	}
 
 	@[manualfree]
 	fn replace_text_prop(id string, value string) {
 		owned := value.clone()
-		if previous := g_text_props[id] {
+		if previous := g_gg_app.text_props[id] {
 			free_owned_string(previous)
 		}
-		g_text_props[id] = owned
+		g_gg_app.text_props[id] = owned
 	}
 
 	@[manualfree]
 	fn replace_text_editor(id string, editor TextEditor) {
-		if previous := g_text_editors[id] {
+		if previous := g_gg_app.text_editors[id] {
 			// Caret-only updates retain the editor's text allocation. Releasing
 			// it in that case would leave the replacement editor pointing at
 			// freed memory.
@@ -173,24 +180,24 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				free_owned_string(previous.text)
 			}
 		}
-		g_text_editors[id] = editor
+		g_gg_app.text_editors[id] = editor
 	}
 
 	@[manualfree]
 	fn forget_text_state(id string) {
-		if value := g_text_values[id] {
+		if value := g_gg_app.text_values[id] {
 			free_owned_string(value)
 		}
-		if prop := g_text_props[id] {
+		if prop := g_gg_app.text_props[id] {
 			free_owned_string(prop)
 		}
-		if editor := g_text_editors[id] {
+		if editor := g_gg_app.text_editors[id] {
 			free_owned_string(editor.text)
 		}
-		g_text_values.delete(id)
-		g_text_props.delete(id)
-		g_text_editors.delete(id)
-		g_text_kinds.delete(id)
+		g_gg_app.text_values.delete(id)
+		g_gg_app.text_props.delete(id)
+		g_gg_app.text_editors.delete(id)
+		g_gg_app.text_kinds.delete(id)
 	}
 
 	// ── Public API ─────────────────────────────────────────────────────
@@ -225,8 +232,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	pub fn run_window(title string, width int, height int, build_fn BuildFn, event_fn EventFn) {
-		g_build_screen = build_fn
-		g_event_handler = event_fn
+		g_gg_app.build_screen = build_fn
+		g_gg_app.event_handler = event_fn
 		configure_animation_driver(request_refresh, false)
 		publish_menu_context(event_fn, title, unsafe { nil })
 		// Choosing the font here rather than letting gg ask `fc-match` for one
@@ -234,7 +241,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		// gives draw_text the metrics it needs to size text in points.
 		font_regular, font_bold := font_paths()
 		if font_regular.len > 0 {
-			g_font_metrics = font_file_metrics(font_regular) or { FontMetrics{} }
+			g_gg_app.font_metrics = font_file_metrics(font_regular) or { FontMetrics{} }
 		}
 		g_gg_app.ctx = gg.new_context(
 			bg_color: hex_color(0xf4f6f8)
@@ -268,15 +275,15 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	pub fn on_key(handler KeyFn) {
-		g_key_handler = handler
+		g_gg_app.key_handler = handler
 	}
 
 	pub fn on_scroll(handler ScrollFn) {
-		g_scroll_handler = handler
+		g_gg_app.scroll_handler = handler
 	}
 
 	pub fn on_drop(handler DropFn) {
-		g_drop_handler = handler
+		g_gg_app.drop_handler = handler
 	}
 
 	pub fn text(id string) string {
@@ -284,15 +291,15 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		// release the previous allocation. Callers, in particular QML bindings,
 		// may retain the returned value after the next edit, so give them their
 		// own copy rather than exposing the map's storage.
-		return (g_text_values[id] or { '' }).clone()
+		return (g_gg_app.text_values[id] or { '' }).clone()
 	}
 
 	pub fn set_text(id string, t string) {
-		if id !in g_active_fields {
+		if id !in g_gg_app.active_fields {
 			return
 		}
 		replace_text_value(id, t)
-		mut editor := g_text_editors[id] or { text_editor(t.clone()) }
+		mut editor := g_gg_app.text_editors[id] or { text_editor(t.clone()) }
 		editor.set_text(t.clone())
 		replace_text_editor(id, editor)
 	}
@@ -300,52 +307,52 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// slider_value returns the live value currently displayed by a mounted
 	// slider, including a value changed by pointer input before the next build.
 	pub fn slider_value(id string) f64 {
-		return g_slider_values[id] or { 0 }
+		return g_gg_app.slider_values[id] or { 0 }
 	}
 
 	pub fn set_slider_value(id string, value f64) {
-		if id !in g_active_sliders {
+		if id !in g_gg_app.active_sliders {
 			return
 		}
-		spec := g_slider_specs[id] or { return }
-		g_slider_values[id] = slider_clamped_value(value, spec.min, spec.max)
+		spec := g_gg_app.slider_specs[id] or { return }
+		g_gg_app.slider_values[id] = slider_clamped_value(value, spec.min, spec.max)
 	}
 
 	// switch_active returns the live value, including a pointer change made
 	// before the declarative tree is rebuilt.
 	pub fn switch_active(id string) bool {
-		return g_switch_values[id] or { false }
+		return g_gg_app.switch_values[id] or { false }
 	}
 
 	pub fn set_switch_active(id string, active bool) {
-		if id !in g_active_switches {
+		if id !in g_gg_app.active_switches {
 			return
 		}
-		g_switch_values[id] = active
+		g_gg_app.switch_values[id] = active
 	}
 
 	pub fn toggle_button_pressed(id string) bool {
-		return g_toggle_values[id] or { false }
+		return g_gg_app.toggle_values[id] or { false }
 	}
 
 	pub fn set_toggle_button_pressed(id string, pressed bool) {
-		if id !in g_active_toggles {
+		if id !in g_gg_app.active_toggles {
 			return
 		}
 		if pressed {
 			release_custom_toggle_group(id)
 		}
-		g_toggle_values[id] = pressed
+		g_gg_app.toggle_values[id] = pressed
 	}
 
 	pub fn toggle_button_group_members(id string) []string {
-		group := g_toggle_groups[id] or { return [] }
+		group := g_gg_app.toggle_groups[id] or { return [] }
 		if group.len == 0 {
 			return [id]
 		}
 		mut members := []string{}
-		for member, member_group in g_toggle_groups {
-			if member_group == group && member in g_active_toggles {
+		for member, member_group in g_gg_app.toggle_groups {
+			if member_group == group && member in g_gg_app.active_toggles {
 				members << member
 			}
 		}
@@ -353,20 +360,20 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn release_custom_toggle_group(id string) {
-		group := g_toggle_groups[id] or { return }
+		group := g_gg_app.toggle_groups[id] or { return }
 		if group.len == 0 {
 			return
 		}
-		for member, member_group in g_toggle_groups {
+		for member, member_group in g_gg_app.toggle_groups {
 			if member != id && member_group == group {
-				g_toggle_values[member] = false
+				g_gg_app.toggle_values[member] = false
 			}
 		}
 	}
 
 	pub fn focus(id string) {
 		mut focusable := false
-		for target in g_hit_targets {
+		for target in g_gg_app.hit_targets {
 			if target.id == id && (target.text_field || target.text_area) {
 				focusable = true
 				break
@@ -375,27 +382,27 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if !focusable {
 			return
 		}
-		g_focused_field = id
-		mut editor := g_text_editors[id] or { text_editor((g_text_values[id] or { '' }).clone()) }
+		g_gg_app.focused_field = id
+		mut editor := g_gg_app.text_editors[id] or { text_editor((g_gg_app.text_values[id] or { '' }).clone()) }
 		editor.set_caret(rune_len(editor.text))
 		replace_text_editor(id, editor)
 	}
 
 	pub fn focused_id() string {
-		return g_focused_field
+		return g_gg_app.focused_field
 	}
 
 	pub fn focused_text_area_id() string {
-		for target in g_hit_targets {
-			if target.id == g_focused_field && target.text_area {
-				return g_focused_field
+		for target in g_gg_app.hit_targets {
+			if target.id == g_gg_app.focused_field && target.text_area {
+				return g_gg_app.focused_field
 			}
 		}
 		return ''
 	}
 
 	pub fn dismiss_keyboard() {
-		g_focused_field = ''
+		g_gg_app.focused_field = ''
 	}
 
 	pub fn quit() {
@@ -405,7 +412,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	pub fn consume_key() {
-		g_key_consumed = true
+		g_gg_app.key_consumed = true
 	}
 
 	pub fn consume_text_key() {
@@ -417,16 +424,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	pub fn start_barcode_scan() {
-		if voidptr(g_event_handler) != unsafe { nil } {
-			g_event_handler('scan_error:barcode scanner unavailable')
+		if voidptr(g_gg_app.event_handler) != unsafe { nil } {
+			g_gg_app.event_handler('scan_error:barcode scanner unavailable')
 		}
 	}
 
 	pub fn insert_text_area_text(id string, value string) {
-		if id !in g_active_fields || (g_text_kinds[id] or { Kind.screen }) != .text_area {
+		if id !in g_gg_app.active_fields || (g_gg_app.text_kinds[id] or { Kind.screen }) != .text_area {
 			return
 		}
-		mut editor := g_text_editors[id] or { text_editor((g_text_values[id] or { '' }).clone()) }
+		mut editor := g_gg_app.text_editors[id] or { text_editor((g_gg_app.text_values[id] or { '' }).clone()) }
 		editor.insert_text(value)
 		replace_text_value(id, editor.text)
 		replace_text_editor(id, editor)
@@ -434,11 +441,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	pub fn scroll_offset(id string) f64 {
-		return g_scroll_offsets[id] or { 0.0 }
+		return g_gg_app.scroll_offsets[id] or { 0.0 }
 	}
 
 	pub fn scroll_to_rect(id string, _x f64, y f64, _width f64, height f64) {
-		area := g_scroll_viewports[id] or { return }
+		area := g_gg_app.scroll_viewports[id] or { return }
 		current := scroll_offset(id)
 		mut next := current
 		if y < current {
@@ -505,12 +512,12 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// ── Frame & event loop ─────────────────────────────────────────────
 
 	fn on_init(_ &GgApp) {
-		if voidptr(g_build_screen) == unsafe { nil } {
+		if voidptr(g_gg_app.build_screen) == unsafe { nil } {
 			return
 		}
 		// gg/Sokol must receive images during initialization to make their GPU
 		// textures available for the first rendered frame.
-		preload_images(g_build_screen())
+		preload_images(g_gg_app.build_screen())
 	}
 
 	fn on_frame(app &GgApp) {
@@ -536,16 +543,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		ensure_symbol_fallbacks(ctx)
 		mut root := Element{}
 		mut has_root := false
-		if voidptr(g_build_screen) != unsafe { nil } {
-			g_hit_targets = []HitTarget{}
+		if voidptr(g_gg_app.build_screen) != unsafe { nil } {
+			g_gg_app.hit_targets = []HitTarget{}
 			reset_scroll_frame()
-			g_active_fields = map[string]bool{}
-			g_active_sliders = map[string]bool{}
-			g_active_switches = map[string]bool{}
-			g_active_toggles = map[string]bool{}
-			g_active_scrolls = map[string]bool{}
-			g_active_images = map[string]bool{}
-			root = apply_widget_animations(g_build_screen())
+			g_gg_app.active_fields = map[string]bool{}
+			g_gg_app.active_sliders = map[string]bool{}
+			g_gg_app.active_switches = map[string]bool{}
+			g_gg_app.active_toggles = map[string]bool{}
+			g_gg_app.active_scrolls = map[string]bool{}
+			g_gg_app.active_images = map[string]bool{}
+			root = apply_widget_animations(g_gg_app.build_screen())
 			validate_element_tree(root) or {
 				eprintln('ui2: ${err}')
 				return
@@ -558,11 +565,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		ctx.begin()
 		if has_root {
-			g_dropdown_popup.mounted = false
+			g_gg_app.dropdown_popup.mounted = false
 			top := menu_bar_height()
 			render_element(ctx, root, 0, top, rect(0, top, f64(ctx.width), f64(ctx.height) - top))
-			if g_open_dropdown.len > 0 {
-				if g_dropdown_popup.mounted {
+			if g_gg_app.open_dropdown.len > 0 {
+				if g_gg_app.dropdown_popup.mounted {
 					draw_dropdown_popup(ctx)
 				} else {
 					close_dropdown()
@@ -588,10 +595,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				if menu_bar_handle_move(f64(e.mouse_x), f64(e.mouse_y)) {
 					return
 				}
-				if g_open_dropdown.len > 0 {
+				if g_gg_app.open_dropdown.len > 0 {
 					update_dropdown_hover(f64(e.mouse_x), f64(e.mouse_y))
 				}
-				if g_touch.down {
+				if g_gg_app.touch.down {
 					handle_touch_move(f64(e.mouse_x), f64(e.mouse_y))
 				}
 			}
@@ -621,7 +628,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				if e.num_touches > 0 {
 					handle_touch_up(f64(e.touches[0].pos_x), f64(e.touches[0].pos_y))
 				} else {
-					handle_touch_up(g_touch.current_x, g_touch.current_y)
+					handle_touch_up(g_gg_app.touch.current_x, g_gg_app.touch.current_y)
 				}
 			}
 			.char {
@@ -631,7 +638,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				if menu_bar_handle_key(e) {
 					return
 				}
-				if g_open_dropdown.len > 0 {
+				if g_gg_app.open_dropdown.len > 0 {
 					if handle_dropdown_key(e.key_code) {
 						return
 					}
@@ -654,7 +661,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn handle_touch_down(x f64, y f64) {
-		g_touch = TouchState{
+		g_gg_app.touch = TouchState{
 			down: true
 			start_x: x
 			start_y: y
@@ -664,7 +671,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			moved: false
 			long_press_fired: false
 		}
-		if g_open_dropdown.len > 0 {
+		if g_gg_app.open_dropdown.len > 0 {
 			update_dropdown_hover(x, y)
 			return
 		}
@@ -676,8 +683,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if target.switch_control {
 			return
 		}
-		g_touch.scroll_id = scroll_hit_test(x, y)
-		g_touch.scroll_start_off_y = scroll_offset(g_touch.scroll_id)
+		g_gg_app.touch.scroll_id = scroll_hit_test(x, y)
+		g_gg_app.touch.scroll_start_off_y = scroll_offset(g_gg_app.touch.scroll_id)
 		if begin_scrollbar_drag(x, y) {
 			return
 		}
@@ -687,17 +694,17 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn handle_touch_move(x f64, y f64) {
-		if !g_touch.down {
+		if !g_gg_app.touch.down {
 			return
 		}
-		dx := x - g_touch.start_x
-		dy := y - g_touch.start_y
+		dx := x - g_gg_app.touch.start_x
+		dy := y - g_gg_app.touch.start_y
 		if dx * dx + dy * dy > 100 {
-			g_touch.moved = true
+			g_gg_app.touch.moved = true
 		}
-		g_touch.current_x = x
-		g_touch.current_y = y
-		target := hit_test(g_touch.start_x, g_touch.start_y)
+		g_gg_app.touch.current_x = x
+		g_gg_app.touch.current_y = y
+		target := hit_test(g_gg_app.touch.start_x, g_gg_app.touch.start_y)
 		if target.slider {
 			commit_slider(target, x, y)
 			return
@@ -706,14 +713,14 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			commit_switch(target, x >= target.x + target.w / 2)
 			return
 		}
-		if g_touch.scrollbar_drag {
+		if g_gg_app.touch.scrollbar_drag {
 			drag_scrollbar(y)
 			return
 		}
-		if g_touch.scroll_id.len > 0 {
-			delta := g_touch.start_y - y
-			new_offset := g_touch.scroll_start_off_y + delta
-			set_scroll_offset(g_touch.scroll_id, new_offset, scroll_maximum(g_touch.scroll_id))
+		if g_gg_app.touch.scroll_id.len > 0 {
+			delta := g_gg_app.touch.start_y - y
+			new_offset := g_gg_app.touch.scroll_start_off_y + delta
+			set_scroll_offset(g_gg_app.touch.scroll_id, new_offset, scroll_maximum(g_gg_app.touch.scroll_id))
 		}
 		if target.action_id.len > 0 && target.draggable {
 			fire_event(pointer_event_id('drag', target.action_id, x, y))
@@ -721,8 +728,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn handle_mouse_scroll(x f64, y f64, delta_y f64) {
-		if g_open_dropdown.len > 0 {
-			g_dropdown_scroll = clamped_dropdown_scroll(g_dropdown_scroll - delta_y * 24)
+		if g_gg_app.open_dropdown.len > 0 {
+			g_gg_app.dropdown_scroll = clamped_dropdown_scroll(g_gg_app.dropdown_scroll - delta_y * 24)
 			update_dropdown_hover(x, y)
 			return
 		}
@@ -742,25 +749,25 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		} else {
 			requested
 		}
-		previous := g_scroll_offsets[id] or { 0.0 }
-		g_scroll_offsets[id] = next
-		if next != previous && voidptr(g_scroll_handler) != unsafe { nil } {
-			g_scroll_handler(id)
+		previous := g_gg_app.scroll_offsets[id] or { 0.0 }
+		g_gg_app.scroll_offsets[id] = next
+		if next != previous && voidptr(g_gg_app.scroll_handler) != unsafe { nil } {
+			g_gg_app.scroll_handler(id)
 		}
 	}
 
 	fn handle_touch_up(x f64, y f64) {
-		if !g_touch.down {
+		if !g_gg_app.touch.down {
 			return
 		}
-		g_touch.down = false
-		slider_target := hit_test(g_touch.start_x, g_touch.start_y)
+		g_gg_app.touch.down = false
+		slider_target := hit_test(g_gg_app.touch.start_x, g_gg_app.touch.start_y)
 		if slider_target.slider {
 			commit_slider(slider_target, x, y)
 			return
 		}
 		if slider_target.switch_control {
-			if g_touch.moved {
+			if g_gg_app.touch.moved {
 				commit_switch(slider_target, x >= slider_target.x + slider_target.w / 2)
 			} else {
 				current := if slider_target.id.len > 0 {
@@ -772,16 +779,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			}
 			return
 		}
-		if g_touch.long_press_fired || g_touch.scrollbar_drag {
+		if g_gg_app.touch.long_press_fired || g_gg_app.touch.scrollbar_drag {
 			return
 		}
-		if g_open_dropdown.len > 0 {
+		if g_gg_app.open_dropdown.len > 0 {
 			handle_dropdown_release(x, y)
 			return
 		}
-		mut target := hit_test(g_touch.start_x, g_touch.start_y)
-		dx := x - g_touch.start_x
-		if g_touch.moved && dx < -72 {
+		mut target := hit_test(g_gg_app.touch.start_x, g_gg_app.touch.start_y)
+		dx := x - g_gg_app.touch.start_x
+		if g_gg_app.touch.moved && dx < -72 {
 			if target.action_id.len > 0 && target.swipe_left {
 				fire_event('swipe_left:' + target.action_id)
 				return
@@ -791,29 +798,29 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			fire_event(pointer_event_id('up', target.action_id, x, y))
 			return
 		}
-		if g_touch.moved {
+		if g_gg_app.touch.moved {
 			return
 		}
 		target = hit_test(x, y)
 		if target.id.len == 0 && target.action_id.len == 0 {
-			if g_focused_field.len > 0 {
-				g_focused_field = ''
+			if g_gg_app.focused_field.len > 0 {
+				g_gg_app.focused_field = ''
 			}
 			return
 		}
 		if target.text_field {
-			g_focused_field = target.id
-			mut editor := g_text_editors[target.id] or {
-				text_editor((g_text_values[target.id] or { '' }).clone())
+			g_gg_app.focused_field = target.id
+			mut editor := g_gg_app.text_editors[target.id] or {
+				text_editor((g_gg_app.text_values[target.id] or { '' }).clone())
 			}
 			editor.set_caret(rune_len(editor.text))
 			replace_text_editor(target.id, editor)
 			return
 		}
 		if target.text_area {
-			g_focused_field = target.id
-			mut editor := g_text_editors[target.id] or {
-				text_editor((g_text_values[target.id] or { '' }).clone())
+			g_gg_app.focused_field = target.id
+			mut editor := g_gg_app.text_editors[target.id] or {
+				text_editor((g_gg_app.text_values[target.id] or { '' }).clone())
 			}
 			editor.set_caret(rune_len(editor.text))
 			replace_text_editor(target.id, editor)
@@ -831,23 +838,23 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn check_long_press() {
-		if !g_touch.down || g_touch.moved || g_touch.long_press_fired || g_touch.scrollbar_drag {
+		if !g_gg_app.touch.down || g_gg_app.touch.moved || g_gg_app.touch.long_press_fired || g_gg_app.touch.scrollbar_drag {
 			return
 		}
-		elapsed := time.ticks() - g_touch.start_time
+		elapsed := time.ticks() - g_gg_app.touch.start_time
 		if elapsed < 450 {
 			return
 		}
-		target := hit_test(g_touch.start_x, g_touch.start_y)
+		target := hit_test(g_gg_app.touch.start_x, g_gg_app.touch.start_y)
 		if target.action_id.len > 0 && target.long_press {
-			g_touch.long_press_fired = true
+			g_gg_app.touch.long_press_fired = true
 			fire_event('long:' + target.action_id)
 		}
 	}
 
 	fn hit_test(x f64, y f64) HitTarget {
-		for i := g_hit_targets.len - 1; i >= 0; i-- {
-			t := g_hit_targets[i]
+		for i := g_gg_app.hit_targets.len - 1; i >= 0; i-- {
+			t := g_gg_app.hit_targets[i]
 			if x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h {
 				return t
 			}
@@ -856,8 +863,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn fire_event(id string) {
-		if id.len > 0 && voidptr(g_event_handler) != unsafe { nil } {
-			g_event_handler(id)
+		if id.len > 0 && voidptr(g_gg_app.event_handler) != unsafe { nil } {
+			g_gg_app.event_handler(id)
 		}
 	}
 
@@ -873,9 +880,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		next := slider_target_value(target, x, y)
-		previous := g_slider_values[target.id] or { target.slider_spec.min }
+		previous := g_gg_app.slider_values[target.id] or { target.slider_spec.min }
 		if target.id.len > 0 {
-			g_slider_values[target.id] = next
+			g_gg_app.slider_values[target.id] = next
 		}
 		if next != previous {
 			fire_event(target.action_id)
@@ -888,7 +895,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		previous := if target.id.len > 0 { switch_active(target.id) } else { target.switch_state }
 		if target.id.len > 0 {
-			g_switch_values[target.id] = active
+			g_gg_app.switch_values[target.id] = active
 		}
 		if active != previous {
 			fire_event(target.action_id)
@@ -908,13 +915,13 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			if pressed {
 				release_custom_toggle_group(target.id)
 			}
-			g_toggle_values[target.id] = pressed
+			g_gg_app.toggle_values[target.id] = pressed
 		}
 		fire_event(target.action_id)
 	}
 
 	fn handle_files_dropped(e &gg.Event) {
-		if voidptr(g_drop_handler) == unsafe { nil } {
+		if voidptr(g_gg_app.drop_handler) == unsafe { nil } {
 			return
 		}
 		mut paths := []string{cap: sapp.get_num_dropped_files()}
@@ -924,7 +931,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				paths << path
 			}
 		}
-		g_drop_handler(DropEvent{
+		g_gg_app.drop_handler(DropEvent{
 			paths: paths
 			x: f64(e.mouse_x)
 			y: f64(e.mouse_y)
@@ -934,7 +941,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// ── Keyboard input ─────────────────────────────────────────────────
 
 	fn dispatch_key_event(e &gg.Event) bool {
-		if voidptr(g_key_handler) == unsafe { nil } {
+		if voidptr(g_gg_app.key_handler) == unsafe { nil } {
 			return false
 		}
 		key := immediate_normalized_key(e)
@@ -942,16 +949,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return false
 		}
 		mut event_key := key
-		for target in g_hit_targets {
-			if target.id == g_focused_field && target.text_area {
+		for target in g_gg_app.hit_targets {
+			if target.id == g_gg_app.focused_field && target.text_area {
 				event_key = 'text:${target.id}:${key}'
 				break
 			}
 		}
-		g_key_consumed = false
-		g_key_handler(event_key)
-		consumed := g_key_consumed
-		g_key_consumed = false
+		g_gg_app.key_consumed = false
+		g_gg_app.key_handler(event_key)
+		consumed := g_gg_app.key_consumed
+		g_gg_app.key_consumed = false
 		return consumed
 	}
 
@@ -1004,40 +1011,40 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn handle_char_input(ch u32) {
-		if g_focused_field.len == 0 {
+		if g_gg_app.focused_field.len == 0 {
 			return
 		}
 		if ch < 32 {
 			return
 		}
-		mut editor := g_text_editors[g_focused_field] or {
-			text_editor((g_text_values[g_focused_field] or { '' }).clone())
+		mut editor := g_gg_app.text_editors[g_gg_app.focused_field] or {
+			text_editor((g_gg_app.text_values[g_gg_app.focused_field] or { '' }).clone())
 		}
 		editor.insert_text(rune(ch).str())
-		replace_text_value(g_focused_field, editor.text)
-		replace_text_editor(g_focused_field, editor)
-		fire_field_change(g_focused_field)
+		replace_text_value(g_gg_app.focused_field, editor.text)
+		replace_text_editor(g_gg_app.focused_field, editor)
+		fire_field_change(g_gg_app.focused_field)
 	}
 
 	fn handle_key_down(key gg.KeyCode) {
-		if g_focused_field.len == 0 {
+		if g_gg_app.focused_field.len == 0 {
 			return
 		}
-		mut editor := g_text_editors[g_focused_field] or {
-			text_editor((g_text_values[g_focused_field] or { '' }).clone())
+		mut editor := g_gg_app.text_editors[g_gg_app.focused_field] or {
+			text_editor((g_gg_app.text_values[g_gg_app.focused_field] or { '' }).clone())
 		}
 		if key == .backspace {
 			if editor.backspace() {
-				replace_text_value(g_focused_field, editor.text)
-				replace_text_editor(g_focused_field, editor)
-				fire_field_change(g_focused_field)
+				replace_text_value(g_gg_app.focused_field, editor.text)
+				replace_text_editor(g_gg_app.focused_field, editor)
+				fire_field_change(g_gg_app.focused_field)
 			}
 		}
 		if key == .delete {
 			if editor.delete_forward() {
-				replace_text_value(g_focused_field, editor.text)
-				replace_text_editor(g_focused_field, editor)
-				fire_field_change(g_focused_field)
+				replace_text_value(g_gg_app.focused_field, editor.text)
+				replace_text_editor(g_gg_app.focused_field, editor)
+				fire_field_change(g_gg_app.focused_field)
 			}
 		}
 		if key == .left || key == .right || key == .home || key == .end {
@@ -1050,21 +1057,21 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			} else {
 				editor.set_caret(rune_len(editor.text))
 			}
-			replace_text_editor(g_focused_field, editor)
+			replace_text_editor(g_gg_app.focused_field, editor)
 		}
 		if key == .enter || key == .kp_enter {
-			for target in g_hit_targets {
-				if target.id == g_focused_field && target.text_area {
+			for target in g_gg_app.hit_targets {
+				if target.id == g_gg_app.focused_field && target.text_area {
 					editor.insert_text('\n')
-					replace_text_value(g_focused_field, editor.text)
-					replace_text_editor(g_focused_field, editor)
-					fire_field_change(g_focused_field)
+					replace_text_value(g_gg_app.focused_field, editor.text)
+					replace_text_editor(g_gg_app.focused_field, editor)
+					fire_field_change(g_gg_app.focused_field)
 					return
 				}
 			}
-			id := g_focused_field
-			g_focused_field = ''
-			for target in g_hit_targets {
+			id := g_gg_app.focused_field
+			g_gg_app.focused_field = ''
+			for target in g_gg_app.hit_targets {
 				if target.id == id && target.text_field && target.submit_id.len > 0 {
 					fire_event(target.submit_id)
 					break
@@ -1074,7 +1081,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn fire_field_change(id string) {
-		for target in g_hit_targets {
+		for target in g_gg_app.hit_targets {
 			if target.id == id && (target.text_field || target.text_area) && target.emit_change {
 				fire_event(target.action_id)
 				return
@@ -1092,22 +1099,22 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		close_dropdown()
-		g_open_dropdown = target.id
-		g_focused_field = ''
+		g_gg_app.open_dropdown = target.id
+		g_gg_app.focused_field = ''
 	}
 
 	fn close_dropdown() {
-		g_open_dropdown = ''
-		g_dropdown_hover = -1
-		g_dropdown_scroll = 0.0
-		g_dropdown_popup = DropdownPopup{}
+		g_gg_app.open_dropdown = ''
+		g_gg_app.dropdown_hover = -1
+		g_gg_app.dropdown_scroll = 0.0
+		g_gg_app.dropdown_popup = DropdownPopup{}
 	}
 
 	// While the list is open it owns every release: pick the row under the
 	// pointer, or dismiss on any release outside it (including the control).
 	fn handle_dropdown_release(x f64, y f64) {
 		release := hit_test(x, y)
-		if release.dropdown_option && release.id == g_open_dropdown {
+		if release.dropdown_option && release.id == g_gg_app.open_dropdown {
 			select_dropdown_option(release)
 			return
 		}
@@ -1129,11 +1136,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn handle_dropdown_key(key gg.KeyCode) bool {
-		dropdown_state := g_dropdown_popup
+		dropdown_state := g_gg_app.dropdown_popup
 		if dropdown_state.options.len == 0 {
 			return false
 		}
-		highlighted := if g_dropdown_hover >= 0 { g_dropdown_hover } else { dropdown_state.selected }
+		highlighted := if g_gg_app.dropdown_hover >= 0 { g_gg_app.dropdown_hover } else { dropdown_state.selected }
 		match key {
 			.escape {
 				close_dropdown()
@@ -1147,7 +1154,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				} else if next >= dropdown_state.options.len {
 					next = 0
 				}
-				g_dropdown_hover = next
+				g_gg_app.dropdown_hover = next
 				reveal_dropdown_row(next)
 				return true
 			}
@@ -1168,41 +1175,41 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	fn update_dropdown_hover(x f64, y f64) {
 		mut hover := -1
-		for target in g_hit_targets {
-			if !target.dropdown_option || target.id != g_open_dropdown {
+		for target in g_gg_app.hit_targets {
+			if !target.dropdown_option || target.id != g_gg_app.open_dropdown {
 				continue
 			}
 			if x >= target.x && x <= target.x + target.w && y >= target.y && y <= target.y + target.h {
 				hover = target.option_index
 			}
 		}
-		g_dropdown_hover = hover
+		g_gg_app.dropdown_hover = hover
 	}
 
 	fn clamped_dropdown_scroll(offset f64) f64 {
 		if offset < 0 {
 			return 0.0
 		}
-		max_scroll := g_dropdown_popup.max_scroll
+		max_scroll := g_gg_app.dropdown_popup.max_scroll
 		return if offset > max_scroll { max_scroll } else { offset }
 	}
 
 	fn reveal_dropdown_row(index int) {
-		dropdown_state := g_dropdown_popup
+		dropdown_state := g_gg_app.dropdown_popup
 		if index < 0 || dropdown_state.max_scroll <= 0 {
-			g_dropdown_scroll = clamped_dropdown_scroll(g_dropdown_scroll)
+			g_gg_app.dropdown_scroll = clamped_dropdown_scroll(g_gg_app.dropdown_scroll)
 			return
 		}
 		view_height := dropdown_state.height - dropdown_popup_padding * 2
 		row_top := f64(index) * dropdown_state.row_height
 		row_bottom := row_top + dropdown_state.row_height
-		mut offset := g_dropdown_scroll
+		mut offset := g_gg_app.dropdown_scroll
 		if row_top < offset {
 			offset = row_top
 		} else if row_bottom > offset + view_height {
 			offset = row_bottom - view_height
 		}
-		g_dropdown_scroll = clamped_dropdown_scroll(offset)
+		g_gg_app.dropdown_scroll = clamped_dropdown_scroll(offset)
 	}
 
 	fn dropdown_row_height(style TextStyle) f64 {
@@ -1271,8 +1278,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		frame := dropdown_popup_frame(anchor, options.len, row_height, window)
 		content_height := f64(options.len) * row_height
 		view_height := frame.height - dropdown_popup_padding * 2
-		opening := g_dropdown_popup.id != el.id
-		g_dropdown_popup = DropdownPopup{
+		opening := g_gg_app.dropdown_popup.id != el.id
+		g_gg_app.dropdown_popup = DropdownPopup{
 			id: el.id
 			action_id: element_action_id(el)
 			x: frame.x
@@ -1288,16 +1295,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			mounted: true
 		}
 		if opening {
-			g_dropdown_scroll = 0.0
-			g_dropdown_hover = -1
+			g_gg_app.dropdown_scroll = 0.0
+			g_gg_app.dropdown_hover = -1
 			reveal_dropdown_row(selected_index)
 		} else {
-			g_dropdown_scroll = clamped_dropdown_scroll(g_dropdown_scroll)
+			g_gg_app.dropdown_scroll = clamped_dropdown_scroll(g_gg_app.dropdown_scroll)
 		}
 	}
 
 	fn draw_dropdown_popup(ctx &gg.Context) {
-		dropdown_state := g_dropdown_popup
+		dropdown_state := g_gg_app.dropdown_popup
 		if dropdown_state.options.len == 0 || dropdown_state.width <= 0
 			|| dropdown_state.height <= 0 {
 			return
@@ -1323,11 +1330,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		for index, option in dropdown_state.options {
 			row_y := dropdown_state.y + dropdown_popup_padding + f64(index) * dropdown_state.row_height -
-				g_dropdown_scroll
+				g_gg_app.dropdown_scroll
 			if row_y + dropdown_state.row_height <= list.y || row_y >= list.y + list.height {
 				continue
 			}
-			if index == g_dropdown_hover {
+			if index == g_gg_app.dropdown_hover {
 				draw_rect(ctx, dropdown_state.x + 2, row_y, dropdown_state.width - 4,
 					dropdown_state.row_height, 0xdbeafe, 4)
 			} else if index == dropdown_state.selected {
@@ -1355,83 +1362,83 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		draw_scrollbar(ctx, dropdown_state.x, dropdown_state.y, dropdown_state.width,
 			dropdown_state.height, f64(dropdown_state.options.len) * dropdown_state.row_height +
-			dropdown_popup_padding * 2, g_dropdown_scroll, false)
+			dropdown_popup_padding * 2, g_gg_app.dropdown_scroll, false)
 		apply_clip(ctx, window)
 	}
 
 	fn prune_unmounted_state() {
 		mut stale_fields := []string{}
-		for id, _ in g_text_values {
-			if id !in g_active_fields {
+		for id, _ in g_gg_app.text_values {
+			if id !in g_gg_app.active_fields {
 				stale_fields << id
 			}
 		}
 		for id in stale_fields {
 			forget_text_state(id)
 			forget_portable_text_area_selection(id)
-			if g_focused_field == id {
-				g_focused_field = ''
+			if g_gg_app.focused_field == id {
+				g_gg_app.focused_field = ''
 			}
 		}
 		mut stale_sliders := []string{}
-		for id, _ in g_slider_values {
-			if id !in g_active_sliders {
+		for id, _ in g_gg_app.slider_values {
+			if id !in g_gg_app.active_sliders {
 				stale_sliders << id
 			}
 		}
 		for id in stale_sliders {
-			g_slider_values.delete(id)
-			g_slider_declared.delete(id)
-			g_slider_specs.delete(id)
+			g_gg_app.slider_values.delete(id)
+			g_gg_app.slider_declared.delete(id)
+			g_gg_app.slider_specs.delete(id)
 		}
 		mut stale_switches := []string{}
-		for id, _ in g_switch_values {
-			if id !in g_active_switches {
+		for id, _ in g_gg_app.switch_values {
+			if id !in g_gg_app.active_switches {
 				stale_switches << id
 			}
 		}
 		for id in stale_switches {
-			g_switch_values.delete(id)
-			g_switch_declared.delete(id)
+			g_gg_app.switch_values.delete(id)
+			g_gg_app.switch_declared.delete(id)
 		}
 		mut stale_toggles := []string{}
-		for id, _ in g_toggle_values {
-			if id !in g_active_toggles {
+		for id, _ in g_gg_app.toggle_values {
+			if id !in g_gg_app.active_toggles {
 				stale_toggles << id
 			}
 		}
 		for id in stale_toggles {
-			g_toggle_values.delete(id)
-			g_toggle_declared.delete(id)
-			g_toggle_groups.delete(id)
-			g_toggle_allow_no_selection.delete(id)
+			g_gg_app.toggle_values.delete(id)
+			g_gg_app.toggle_declared.delete(id)
+			g_gg_app.toggle_groups.delete(id)
+			g_gg_app.toggle_allow_no_selection.delete(id)
 		}
 		mut stale_scrolls := []string{}
-		for id, _ in g_scroll_offsets {
-			if id !in g_active_scrolls {
+		for id, _ in g_gg_app.scroll_offsets {
+			if id !in g_gg_app.active_scrolls {
 				stale_scrolls << id
 			}
 		}
 		for id in stale_scrolls {
-			g_scroll_offsets.delete(id)
-			g_scroll_content_h.delete(id)
+			g_gg_app.scroll_offsets.delete(id)
+			g_gg_app.scroll_content_h.delete(id)
 		}
-		for id in g_text_area_layouts.keys() {
-			if id !in g_active_fields || (g_text_kinds[id] or { Kind.screen }) != .text_area {
-				g_text_area_layouts.delete(id)
+		for id in g_gg_app.text_area_layouts.keys() {
+			if id !in g_gg_app.active_fields || (g_gg_app.text_kinds[id] or { Kind.screen }) != .text_area {
+				g_gg_app.text_area_layouts.delete(id)
 			}
 		}
 		mut stale_images := []string{}
-		for path, _ in g_image_ids {
-			if path !in g_active_images {
+		for path, _ in g_gg_app.image_ids {
+			if path !in g_gg_app.active_images {
 				stale_images << path
 			}
 		}
 		mut image_ctx := g_gg_app.ctx
 		for path in stale_images {
-			image_id := g_image_ids[path] or { continue }
+			image_id := g_gg_app.image_ids[path] or { continue }
 			image_ctx.remove_cached_image_by_idx(image_id)
-			g_image_ids.delete(path)
+			g_gg_app.image_ids.delete(path)
 		}
 	}
 
@@ -1577,20 +1584,20 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				y := el.frame.y + off_y
 				mut pressed := el.checked
 				if el.id.len > 0 {
-					g_toggle_groups[el.id] = el.toggle_group
-					g_toggle_allow_no_selection[el.id] = el.toggle_allow_no_selection
-					previous_declared := g_toggle_declared[el.id] or { el.checked }
-					previous_value := g_toggle_values[el.id] or { el.checked }
-					if el.id !in g_toggle_values
+					g_gg_app.toggle_groups[el.id] = el.toggle_group
+					g_gg_app.toggle_allow_no_selection[el.id] = el.toggle_allow_no_selection
+					previous_declared := g_gg_app.toggle_declared[el.id] or { el.checked }
+					previous_value := g_gg_app.toggle_values[el.id] or { el.checked }
+					if el.id !in g_gg_app.toggle_values
 						|| (previous_declared != el.checked && previous_value != el.checked) {
-						g_toggle_values[el.id] = el.checked
+						g_gg_app.toggle_values[el.id] = el.checked
 					}
-					pressed = g_toggle_values[el.id] or { el.checked }
+					pressed = g_gg_app.toggle_values[el.id] or { el.checked }
 					if pressed {
 						release_custom_toggle_group(el.id)
 					}
-					g_toggle_declared[el.id] = el.checked
-					g_active_toggles[el.id] = true
+					g_gg_app.toggle_declared[el.id] = el.checked
+					g_gg_app.active_toggles[el.id] = true
 				}
 				box := if pressed { el.toggle_down_box } else { el.box }
 				style := if pressed { el.toggle_down_text_style } else { el.text_style }
@@ -1653,18 +1660,18 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.dropdown {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
-				previous_prop := g_text_props[el.id] or { el.text }
-				kind_changed := el.id in g_text_kinds && (g_text_kinds[el.id] or { el.kind }) != el.kind
-				if kind_changed || el.id !in g_text_values || (el.text != previous_prop && (g_text_values[el.id] or { '' }) != el.text) {
+				previous_prop := g_gg_app.text_props[el.id] or { el.text }
+				kind_changed := el.id in g_gg_app.text_kinds && (g_gg_app.text_kinds[el.id] or { el.kind }) != el.kind
+				if kind_changed || el.id !in g_gg_app.text_values || (el.text != previous_prop && (g_gg_app.text_values[el.id] or { '' }) != el.text) {
 					replace_text_value(el.id, el.text)
 				}
-				if el.id !in g_text_props || el.text != previous_prop {
+				if el.id !in g_gg_app.text_props || el.text != previous_prop {
 					replace_text_prop(el.id, el.text)
 				}
-				g_text_kinds[el.id] = el.kind
-				g_active_fields[el.id] = true
-				selected := g_text_values[el.id] or { el.text }
-				list_open := el.enabled && el.id.len > 0 && g_open_dropdown == el.id
+				g_gg_app.text_kinds[el.id] = el.kind
+				g_gg_app.active_fields[el.id] = true
+				selected := g_gg_app.text_values[el.id] or { el.text }
+				list_open := el.enabled && el.id.len > 0 && g_gg_app.open_dropdown == el.id
 				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box,
 					list_open, el.enabled)
 				padding := if el.padding_left > 0 { el.padding_left } else { 12.0 }
@@ -1696,7 +1703,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 							close_dropdown()
 						}
 					}
-				} else if el.id.len > 0 && g_open_dropdown == el.id {
+				} else if el.id.len > 0 && g_gg_app.open_dropdown == el.id {
 					close_dropdown()
 				}
 			}
@@ -1709,25 +1716,25 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				} else {
 					f64(0)
 				}
-				previous_prop := g_text_props[el.id] or { el.text }
-				kind_changed := el.id in g_text_kinds && (g_text_kinds[el.id] or { el.kind }) != el.kind
-				if kind_changed || el.id !in g_text_values || (el.text != previous_prop && (g_text_values[el.id] or { '' }) != el.text) {
+				previous_prop := g_gg_app.text_props[el.id] or { el.text }
+				kind_changed := el.id in g_gg_app.text_kinds && (g_gg_app.text_kinds[el.id] or { el.kind }) != el.kind
+				if kind_changed || el.id !in g_gg_app.text_values || (el.text != previous_prop && (g_gg_app.text_values[el.id] or { '' }) != el.text) {
 					replace_text_value(el.id, el.text)
 					replace_text_editor(el.id, text_editor(el.text.clone()))
 				}
-				if el.id !in g_text_props || el.text != previous_prop {
+				if el.id !in g_gg_app.text_props || el.text != previous_prop {
 					replace_text_prop(el.id, el.text)
 				}
-				g_text_kinds[el.id] = el.kind
-				g_active_fields[el.id] = true
-				current_text := g_text_values[el.id] or { el.text }
-				mut editor := g_text_editors[el.id] or { text_editor(current_text.clone()) }
+				g_gg_app.text_kinds[el.id] = el.kind
+				g_gg_app.active_fields[el.id] = true
+				current_text := g_gg_app.text_values[el.id] or { el.text }
+				mut editor := g_gg_app.text_editors[el.id] or { text_editor(current_text.clone()) }
 				if editor.text != current_text {
 					editor.set_text(current_text.clone())
 					replace_text_editor(el.id, editor)
 				}
 				display_text := text_field_display_text(current_text, el.secure)
-				is_focused := g_focused_field == el.id
+				is_focused := g_gg_app.focused_field == el.id
 				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box,
 					is_focused, el.enabled)
 				if current_text.len > 0 {
@@ -1765,20 +1772,20 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.text_area {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
-				previous_prop := g_text_props[el.id] or { el.text }
-				kind_changed := el.id in g_text_kinds && (g_text_kinds[el.id] or { el.kind }) != el.kind
-				if kind_changed || el.id !in g_text_values || (el.text != previous_prop && (g_text_values[el.id] or { '' }) != el.text) {
+				previous_prop := g_gg_app.text_props[el.id] or { el.text }
+				kind_changed := el.id in g_gg_app.text_kinds && (g_gg_app.text_kinds[el.id] or { el.kind }) != el.kind
+				if kind_changed || el.id !in g_gg_app.text_values || (el.text != previous_prop && (g_gg_app.text_values[el.id] or { '' }) != el.text) {
 					replace_text_value(el.id, el.text)
 					replace_text_editor(el.id, text_editor(el.text.clone()))
 				}
-				if el.id !in g_text_props || el.text != previous_prop {
+				if el.id !in g_gg_app.text_props || el.text != previous_prop {
 					replace_text_prop(el.id, el.text)
 				}
-				g_text_kinds[el.id] = el.kind
-				g_active_fields[el.id] = true
-				current_text := g_text_values[el.id] or { el.text }
+				g_gg_app.text_kinds[el.id] = el.kind
+				g_gg_app.active_fields[el.id] = true
+				current_text := g_gg_app.text_values[el.id] or { el.text }
 				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box,
-					g_focused_field == el.id, el.enabled)
+					g_gg_app.focused_field == el.id, el.enabled)
 				draw_text_area_content(ctx, el, current_text, x, y, clip)
 				if el.enabled && !el.readonly {
 					add_hit_target(HitTarget{
@@ -1800,18 +1807,18 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				spec := slider_spec(el)
 				mut current := el.value
 				if el.id.len > 0 {
-					previous_declared := g_slider_declared[el.id] or { el.value }
-					previous_value := g_slider_values[el.id] or { el.value }
-					if el.id !in g_slider_values
+					previous_declared := g_gg_app.slider_declared[el.id] or { el.value }
+					previous_value := g_gg_app.slider_values[el.id] or { el.value }
+					if el.id !in g_gg_app.slider_values
 						|| (previous_declared != el.value && previous_value != el.value) {
-						g_slider_values[el.id] = el.value
+						g_gg_app.slider_values[el.id] = el.value
 					}
-					current = slider_clamped_value(g_slider_values[el.id] or { el.value },
+					current = slider_clamped_value(g_gg_app.slider_values[el.id] or { el.value },
 						spec.min, spec.max)
-					g_slider_values[el.id] = current
-					g_slider_declared[el.id] = el.value
-					g_slider_specs[el.id] = spec
-					g_active_sliders[el.id] = true
+					g_gg_app.slider_values[el.id] = current
+					g_gg_app.slider_declared[el.id] = el.value
+					g_gg_app.slider_specs[el.id] = spec
+					g_gg_app.active_sliders[el.id] = true
 				}
 				normalized := slider_value_normalized(current, spec.min, spec.max)
 				track_width := if el.slider_style.track_width > 0 {
@@ -1882,15 +1889,15 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 					el.frame.height)
 				mut active := el.checked
 				if el.id.len > 0 {
-					previous_declared := g_switch_declared[el.id] or { el.checked }
-					previous_value := g_switch_values[el.id] or { el.checked }
-					if el.id !in g_switch_values
+					previous_declared := g_gg_app.switch_declared[el.id] or { el.checked }
+					previous_value := g_gg_app.switch_values[el.id] or { el.checked }
+					if el.id !in g_gg_app.switch_values
 						|| (previous_declared != el.checked && previous_value != el.checked) {
-						g_switch_values[el.id] = el.checked
+						g_gg_app.switch_values[el.id] = el.checked
 					}
-					active = g_switch_values[el.id] or { el.checked }
-					g_switch_declared[el.id] = el.checked
-					g_active_switches[el.id] = true
+					active = g_gg_app.switch_values[el.id] or { el.checked }
+					g_gg_app.switch_declared[el.id] = el.checked
+					g_gg_app.active_switches[el.id] = true
 				}
 				track := switch_track_frame(frame)
 				thumb := switch_thumb_frame(track, active)
@@ -1942,7 +1949,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if visible.width <= 0 || visible.height <= 0 {
 			return
 		}
-		g_hit_targets << HitTarget{
+		g_gg_app.hit_targets << HitTarget{
 			...target
 			x: visible.x
 			y: visible.y
@@ -1953,7 +1960,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	fn draw_cached_image(ctx &gg.Context, path string, x f64, y f64, width f64, height f64, rotation f64) bool {
 		if !cache_image(path) { return false }
-		image_id := g_image_ids[path] or { return false }
+		image_id := g_gg_app.image_ids[path] or { return false }
 		mut image_ctx := g_gg_app.ctx
 		cached_image := image_ctx.get_cached_image_by_idx(image_id)
 		if !cached_image.ok {
@@ -2150,8 +2157,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if path.trim_space() == '' {
 			return false
 		}
-		g_active_images[path] = true
-		if path in g_image_ids {
+		g_gg_app.active_images[path] = true
+		if path in g_gg_app.image_ids {
 			return true
 		}
 		mut image_ctx := g_gg_app.ctx
@@ -2159,7 +2166,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			eprintln('ui2: could not load image `${path}`: ${err}')
 			return false
 		}
-		g_image_ids[path] = loaded_image.id
+		g_gg_app.image_ids[path] = loaded_image.id
 		return true
 	}
 
@@ -2262,13 +2269,13 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// too, so dragging across the window does not light up everything it
 	// passes over.
 	fn touch_is_held_inside(x f64, y f64, w f64, h f64) bool {
-		if !g_touch.down {
+		if !g_gg_app.touch.down {
 			return false
 		}
-		inside_start := g_touch.start_x >= x && g_touch.start_x <= x + w && g_touch.start_y >= y
-			&& g_touch.start_y <= y + h
-		inside_now := g_touch.current_x >= x && g_touch.current_x <= x + w
-			&& g_touch.current_y >= y && g_touch.current_y <= y + h
+		inside_start := g_gg_app.touch.start_x >= x && g_gg_app.touch.start_x <= x + w && g_gg_app.touch.start_y >= y
+			&& g_gg_app.touch.start_y <= y + h
+		inside_now := g_gg_app.touch.current_x >= x && g_gg_app.touch.current_x <= x + w
+			&& g_gg_app.touch.current_y >= y && g_gg_app.touch.current_y <= y + h
 		return inside_start && inside_now
 	}
 
@@ -2313,32 +2320,32 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return ''
 		}
 		key := '${family}:${bold}:${italic}'
-		if path := g_font_family_files[key] {
+		if path := g_gg_app.font_family_files[key] {
 			return path
 		}
 		mut path := ''
 		if os.is_file(family) {
 			path = family
 		} else {
-			if !g_font_indexed {
+			if !g_gg_app.font_indexed {
 				mut dirs := font_bundle_dirs()
 				dirs << font_system_dirs()
-				g_font_files = font_index(dirs)
-				g_font_indexed = true
+				g_gg_app.font_files = font_index(dirs)
+				g_gg_app.font_indexed = true
 			}
-			path = font_lookup(g_font_files, family, bold, italic)
+			path = font_lookup(g_gg_app.font_files, family, bold, italic)
 			if path.len == 0 && (bold || italic) {
 				// A family with no bold or italic file of its own still reads
 				// better in its regular weight than in the default font.
-				path = font_lookup(g_font_files, family, false, false)
+				path = font_lookup(g_gg_app.font_files, family, false, false)
 			}
 			if path.len == 0 && font_is_mono_family(family) {
 				// Falling back to the proportional default would break the
 				// column alignment the element asked for in the first place.
-				path = font_mono_path(g_font_files, family, bold, italic)
+				path = font_mono_path(g_gg_app.font_files, family, bold, italic)
 			}
 		}
-		g_font_family_files[key] = path
+		g_gg_app.font_family_files[key] = path
 		return path
 	}
 
@@ -2358,16 +2365,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		fons := ctx.ft.fons
-		if g_font_symbol_fons != voidptr(fons) {
-			g_font_symbol_fons = voidptr(fons)
-			g_text_area_layouts = map[string]TextAreaLayout{}
-			g_font_symbol_ids = []int{}
-			g_font_symbol_bases = map[int]bool{}
+		if g_gg_app.font_symbol_fons != voidptr(fons) {
+			g_gg_app.font_symbol_fons = voidptr(fons)
+			g_gg_app.text_area_layouts = map[string]TextAreaLayout{}
+			g_gg_app.font_symbol_ids = []int{}
+			g_gg_app.font_symbol_bases = map[int]bool{}
 			for path in font_symbol_paths() {
 				bytes := os.read_bytes(path) or { continue }
 				id := fons.add_font_mem(path, bytes, true)
 				if id != fontstash.invalid {
-					g_font_symbol_ids << id
+					g_gg_app.font_symbol_ids << id
 				}
 			}
 		}
@@ -2380,11 +2387,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// a font a fixed number of fallback slots and appends to them blindly, so
 	// registering the same face twice would spend them for nothing.
 	fn add_symbol_fallbacks(fons &fontstash.Context, base int) {
-		if base == fontstash.invalid || g_font_symbol_ids.len == 0 || base in g_font_symbol_bases {
+		if base == fontstash.invalid || g_gg_app.font_symbol_ids.len == 0 || base in g_gg_app.font_symbol_bases {
 			return
 		}
-		g_font_symbol_bases[base] = true
-		for id in g_font_symbol_ids {
+		g_gg_app.font_symbol_bases[base] = true
+		for id in g_gg_app.font_symbol_ids {
 			if id != base {
 				fons.add_fallback_font(base, id)
 			}
@@ -2397,7 +2404,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// id in that map before any glyph is rasterized from it, which is the only
 	// moment the fallbacks can still be attached.
 	fn ensure_family_fallbacks(ctx &gg.Context, path string) {
-		if path.len == 0 || g_font_symbol_ids.len == 0 || !ctx.font_inited {
+		if path.len == 0 || g_gg_app.font_symbol_ids.len == 0 || !ctx.font_inited {
 			return
 		}
 		mut id := ctx.ft.fonts_map[path]
@@ -2418,13 +2425,13 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// family's own, or the window font's when the element declared none.
 	fn text_font_metrics(path string) FontMetrics {
 		if path.len == 0 {
-			return g_font_metrics
+			return g_gg_app.font_metrics
 		}
-		if metrics := g_font_family_metrics[path] {
+		if metrics := g_gg_app.font_family_metrics[path] {
 			return metrics
 		}
-		metrics := font_file_metrics(path) or { g_font_metrics }
-		g_font_family_metrics[path] = metrics
+		metrics := font_file_metrics(path) or { g_gg_app.font_metrics }
+		g_gg_app.font_family_metrics[path] = metrics
 		return metrics
 	}
 

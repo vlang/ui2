@@ -11,18 +11,18 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	const anonymous_text_area_scroll_prefix = '@text-area-key:'
 
 	fn reset_scroll_frame() {
-		g_scroll_areas = map[string]Rect{}
-		g_scroll_viewports = map[string]Rect{}
-		g_scroll_order = []string{}
-		g_scrollbar_geometries = map[string]ScrollbarGeometry{}
+		g_gg_app.scroll_areas = map[string]Rect{}
+		g_gg_app.scroll_viewports = map[string]Rect{}
+		g_gg_app.scroll_order = []string{}
+		g_gg_app.scrollbar_geometries = map[string]ScrollbarGeometry{}
 	}
 
 	fn scroll_maximum(id string) f64 {
-		frame := g_scroll_viewports[id] or { return 0.0 }
+		frame := g_gg_app.scroll_viewports[id] or { return 0.0 }
 		if frame.width <= 0 || frame.height <= 0 {
 			return 0.0
 		}
-		content_height := g_scroll_content_h[id] or { 0.0 }
+		content_height := g_gg_app.scroll_content_h[id] or { 0.0 }
 		return if content_height > frame.height { content_height - frame.height } else { 0.0 }
 	}
 
@@ -30,19 +30,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if id.len == 0 {
 			return 0.0
 		}
-		g_active_scrolls[id] = true
-		g_scroll_viewports[id] = frame
-		g_scroll_content_h[id] = content_height
+		g_gg_app.active_scrolls[id] = true
+		g_gg_app.scroll_viewports[id] = frame
+		g_gg_app.scroll_content_h[id] = content_height
 		// Preserve the position across rebuilds and resizes, only clamping when
 		// the content or viewport changes the available range.
 		set_scroll_offset(id, scroll_offset(id), scroll_maximum(id))
 		offset := scroll_offset(id)
 		area := intersect_rect(frame, clip)
 		if enabled && area.width > 0 && area.height > 0 {
-			g_scroll_areas[id] = area
-			g_scroll_order << id
+			g_gg_app.scroll_areas[id] = area
+			g_gg_app.scroll_order << id
 			if show_scrollbar {
-				g_scrollbar_geometries[id] = scrollbar_geometry(frame, content_height, offset,
+				g_gg_app.scrollbar_geometries[id] = scrollbar_geometry(frame, content_height, offset,
 					persistent)
 			}
 		}
@@ -56,9 +56,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	fn scroll_hit_test(x f64, y f64) string {
 		// Children and later-painted panes get the event before their parents.
-		for index := g_scroll_order.len - 1; index >= 0; index-- {
-			id := g_scroll_order[index]
-			area := g_scroll_areas[id] or { continue }
+		for index := g_gg_app.scroll_order.len - 1; index >= 0; index-- {
+			id := g_gg_app.scroll_order[index]
+			area := g_gg_app.scroll_areas[id] or { continue }
 			if scroll_rect_contains(area, x, y) {
 				return id
 			}
@@ -86,33 +86,33 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn begin_scrollbar_drag(x f64, y f64) bool {
-		id := g_touch.scroll_id
-		bar := g_scrollbar_geometries[id] or { return false }
+		id := g_gg_app.touch.scroll_id
+		bar := g_gg_app.scrollbar_geometries[id] or { return false }
 		// Give the narrow drawn track a slightly wider pointer target.
 		target := rect(bar.track.x - 3, bar.track.y, 12, bar.track.height)
 		if !scroll_rect_contains(target, x, y) || scroll_maximum(id) <= 0
 			|| bar.track.height <= bar.thumb.height {
 			return false
 		}
-		g_touch.scrollbar_drag = true
+		g_gg_app.touch.scrollbar_drag = true
 		if y >= bar.thumb.y && y < bar.thumb.y + bar.thumb.height {
-			g_touch.scrollbar_grab_y = y - bar.thumb.y
+			g_gg_app.touch.scrollbar_grab_y = y - bar.thumb.y
 		} else {
-			g_touch.scrollbar_grab_y = bar.thumb.height / 2
+			g_gg_app.touch.scrollbar_grab_y = bar.thumb.height / 2
 			drag_scrollbar(y)
 		}
 		return true
 	}
 
 	fn drag_scrollbar(y f64) {
-		id := g_touch.scroll_id
-		bar := g_scrollbar_geometries[id] or { return }
+		id := g_gg_app.touch.scroll_id
+		bar := g_gg_app.scrollbar_geometries[id] or { return }
 		travel := bar.track.height - bar.thumb.height
 		if travel <= 0 {
 			return
 		}
 		maximum := scroll_maximum(id)
-		set_scroll_offset(id, (y - bar.track.y - g_touch.scrollbar_grab_y) / travel * maximum,
+		set_scroll_offset(id, (y - bar.track.y - g_gg_app.touch.scrollbar_grab_y) / travel * maximum,
 			maximum)
 	}
 
@@ -195,7 +195,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	fn text_area_lines(id string, value string, width f64, style TextStyle, rendered_size int, measure fn (string) f64) []string {
 		if id.len > 0 {
-			if cached := g_text_area_layouts[id] {
+			if cached := g_gg_app.text_area_layouts[id] {
 				if cached.text == value && cached.width == width && cached.style == style
 					&& cached.rendered_size == rendered_size {
 					return cached.lines
@@ -204,7 +204,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		lines := wrap_text_area_lines(value, width, measure)
 		if id.len > 0 {
-			g_text_area_layouts[id] = TextAreaLayout{
+			g_gg_app.text_area_layouts[id] = TextAreaLayout{
 				text: value
 				width: width
 				style: style
