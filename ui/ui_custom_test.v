@@ -105,11 +105,13 @@ $if ui2_custom_rendering ? {
 			assert text_navigation_primary_modifier(false, false, true)
 			assert text_navigation_word_modifier(false, true)
 			assert !text_navigation_word_modifier(true, false)
+			assert text_navigation_boundary_modifier(true)
 		} $else {
-			assert text_navigation_primary_modifier(true, false, false)
+		assert text_navigation_primary_modifier(true, false, false)
 		assert !text_navigation_primary_modifier(true, true, false)
 		assert text_navigation_word_modifier(true, false)
 		assert !text_navigation_word_modifier(true, true)
+		assert !text_navigation_boundary_modifier(true)
 	}
 	}
 

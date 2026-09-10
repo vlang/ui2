@@ -1070,9 +1070,12 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			modifiers & u32(gg.Modifier.ctrl) != 0,
 			modifiers & u32(gg.Modifier.alt) != 0,
 		)
-		if primary_modifier && navigation_key == 'left' {
+		boundary_modifier := text_navigation_boundary_modifier(
+			modifiers & u32(gg.Modifier.super) != 0,
+		)
+		if boundary_modifier && navigation_key == 'left' {
 			navigation_key = 'home'
-		} else if primary_modifier && navigation_key == 'right' {
+		} else if boundary_modifier && navigation_key == 'right' {
 			navigation_key = 'end'
 		}
 		navigation_modifier := if navigation_key == 'a' { primary_modifier } else { word_modifier }
@@ -1115,15 +1118,25 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// text_navigation_word_modifier follows native word movement: Option on
 	// macOS, and Control everywhere else. Excluding Alt on non-macOS systems
 	// keeps AltGr from being interpreted as a Control shortcut.
-	fn text_navigation_word_modifier(ctrl bool, alt bool) bool {
+fn text_navigation_word_modifier(ctrl bool, alt bool) bool {
 		$if macos {
 			return alt
 		} $else {
 			return ctrl && !alt
 		}
-	}
+}
 
-	fn page_focused_text_area(direction int) {
+// text_navigation_boundary_modifier maps Command+Arrow to line boundaries on
+// macOS. On other platforms Ctrl+Arrow must remain word navigation.
+fn text_navigation_boundary_modifier(super_ bool) bool {
+	$if macos {
+		return super_
+	} $else {
+		return false
+	}
+}
+
+fn page_focused_text_area(direction int) {
 		viewport := g_scroll_viewports[g_focused_field] or { return }
 		set_scroll_offset(g_focused_field, scroll_offset(g_focused_field) + f64(direction) * viewport.height,
 			scroll_maximum(g_focused_field))
