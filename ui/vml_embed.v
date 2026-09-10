@@ -36,6 +36,17 @@ pub mut:
 // than on the first frame the embedder tries to draw.
 pub fn new_vml_app[T](source string, model T) !&VmlApp[T] {
 	template := parse_vml(source)!
+	return new_vml_app_from_template[T](template, model)
+}
+
+// new_vml_app_file creates an embeddable VML application from a file. Unlike
+// new_vml_app, it can resolve imports declared by that document.
+pub fn new_vml_app_file[T](path string, model T) !&VmlApp[T] {
+	template := parse_vml_file(path)!
+	return new_vml_app_from_template[T](template, model)
+}
+
+fn new_vml_app_from_template[T](template &VNode, model T) !&VmlApp[T] {
 	v_validate_template[T](template, model)!
 	// Evaluate once against a representative nominal frame. Responsive layouts
 	// commonly subtract margins from the root size, so a 1x1 probe can turn

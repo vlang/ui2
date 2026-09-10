@@ -1,5 +1,7 @@
 module ui2
 
+import os
+
 pub struct VNode {
 pub mut:
 	tag      string
@@ -382,6 +384,12 @@ mut:
 	pos int
 }
 
+struct VmlDocument {
+	module_name string
+	imports     []string
+	root        &VNode = unsafe { nil }
+}
+
 fn (p &Parser) at() Token {
 	if p.pos >= p.tokens.len {
 		return Token{.eof, '', 0}
@@ -443,6 +451,37 @@ fn (mut p Parser) parse_node() !&VNode {
 	}
 	p.eat(.rbrace)!
 	return node
+}
+
+// parse_document recognizes the optional module declaration and imports that
+// precede a VML document's single root node. Imports are resolved by
+// parse_vml_file, because a source string has no directory against which to
+// resolve another VML file.
+fn (mut p Parser) parse_document() !VmlDocument {
+	mut module_name := ''
+	mut imports := []string{}
+	for p.at().kind == .ident && (p.at().val == 'module' || p.at().val == 'import') {
+		directive := p.eat(.ident)!
+		name := p.eat(.ident)!
+		if directive.val == 'module' {
+			if module_name.len > 0 {
+				return error('duplicate module declaration at line ${directive.line}')
+			}
+			module_name = name.val
+		} else {
+			if name.val in imports {
+				return error('duplicate VML import `${name.val}` at line ${directive.line}')
+			}
+			imports << name.val
+		}
+	}
+	root := p.parse_node()!
+	p.eat(.eof)!
+	return VmlDocument{
+		module_name: module_name
+		imports: imports
+		root: root
+	}
 }
 
 fn expression_text(expr &VExpression) string {
@@ -646,10 +685,136 @@ pub fn parse_vml(source string) !&VNode {
 	mut p := Parser{
 		tokens: tokens
 	}
-	mut node := p.parse_node()!
-	p.eat(.eof)!
+	document := p.parse_document()!
+	if document.imports.len > 0 {
+		return error('VML imports require parse_vml_file so they can be resolved relative to a file')
+	}
+	mut node := document.root
 	assign_vml_paths(mut node, '0')
 	return node
+}
+
+// parse_vml_file parses a VML document and expands its imports. An import maps
+// a module name to a sibling .vml file; CamelCase names use snake_case file
+// names, so `import PrimaryScreen` loads `primary_screen.vml`. A module file
+// must start with the matching `module PrimaryScreen` declaration.
+pub fn parse_vml_file(path string) !&VNode {
+	mut stack := []string{}
+	mut node := parse_vml_file_with_stack(path, '', mut stack)!
+	assign_vml_paths(mut node, '0')
+	return node
+}
+
+fn parse_vml_file_with_stack(path string, expected_module string, mut stack []string) !&VNode {
+	file_path := os.abs_path(path)
+	if file_path in stack {
+		mut cycle := stack.clone()
+		cycle << file_path
+		return error('cyclic VML import: ${cycle.join(' -> ')}')
+	}
+	source := os.read_file(file_path) or {
+		return error('could not read VML file `${file_path}`: ${err}')
+	}
+	tokens := tokenize(source) or {
+		return error('could not parse VML file `${file_path}`: ${err}')
+	}
+	mut parser := Parser{
+		tokens: tokens
+	}
+	document := parser.parse_document() or {
+		return error('could not parse VML file `${file_path}`: ${err}')
+	}
+	if expected_module.len > 0 && document.module_name != expected_module {
+		return error('VML import `${expected_module}` requires `${file_path}` to declare `module ${expected_module}`')
+	}
+	mut next_stack := stack.clone()
+	next_stack << file_path
+	mut components := map[string]&VNode{}
+	for import_name in document.imports {
+		import_path := vml_import_path(os.dir(file_path), import_name)!
+		components[import_name] = parse_vml_file_with_stack(import_path, import_name, mut next_stack)!
+	}
+	mut root := document.root
+	expand_vml_imports(mut root, components)!
+	return root
+}
+
+fn vml_import_path(directory string, module_name string) !string {
+	mut candidates := [os.join_path(directory, '${module_name}.vml')]
+	snake_name := vml_module_file_name(module_name)
+	if snake_name != module_name {
+		candidates << os.join_path(directory, '${snake_name}.vml')
+	}
+	for candidate in candidates {
+		if os.is_file(candidate) {
+			return candidate
+		}
+	}
+	return error('could not find VML import `${module_name}` (looked for ${candidates.join(', ')})')
+}
+
+fn vml_module_file_name(module_name string) string {
+	mut out := ''
+	for index, character in module_name {
+		character_text := [u8(character)].bytestr()
+		if character >= `A` && character <= `Z` {
+			if index > 0 {
+				out += '_'
+			}
+			out += character_text.to_lower()
+		} else if character == `.` {
+			out += os.path_separator
+		} else {
+			out += character_text
+		}
+	}
+	return out
+}
+
+fn expand_vml_imports(mut node VNode, components map[string]&VNode) ! {
+	mut children := []&VNode{cap: node.children.len}
+	for child in node.children {
+		if component := components[child.tag] {
+			mut replacement := clone_vnode(component)
+			for key, value in child.props {
+				replacement.props[key] = value
+				if expression := child.expressions[key] {
+					replacement.expressions[key] = expression
+				}
+			}
+			if child.id.len > 0 {
+				replacement.id = child.id
+			}
+			for passed_child in child.children {
+				replacement.children << clone_vnode(passed_child)
+			}
+			expand_vml_imports(mut replacement, components)!
+			children << replacement
+		} else {
+			mut expanded := clone_vnode(child)
+			expand_vml_imports(mut expanded, components)!
+			children << expanded
+		}
+	}
+	node.children = children
+}
+
+fn clone_vnode(node &VNode) &VNode {
+	mut children := []&VNode{cap: node.children.len}
+	for child in node.children {
+		children << clone_vnode(child)
+	}
+	return &VNode{
+		tag: node.tag
+		id: node.id
+		props: node.props.clone()
+		children: children
+		expressions: node.expressions.clone()
+		property_types: node.property_types.clone()
+		property_order: node.property_order.clone()
+		line: node.line
+		path: node.path
+	}
 }
 
 fn assign_vml_paths(mut node VNode, path string) {
@@ -661,6 +826,13 @@ fn assign_vml_paths(mut node VNode, path string) {
 
 pub fn element_from_vml(source string, frame Rect) !Element {
 	node := parse_vml(source)!
+	return node_to_element(node, frame)!
+}
+
+// element_from_vml_file is the file-backed counterpart to element_from_vml.
+// Use it when the document declares VML imports.
+pub fn element_from_vml_file(path string, frame Rect) !Element {
+	node := parse_vml_file(path)!
 	return node_to_element(node, frame)!
 }
 

@@ -1175,6 +1175,17 @@ fn v_evaluate_template[T](root &VNode, model T, frame Rect) !(&VNode, map[string
 // and additionally wires two-way bindings and actions to the live model.
 pub fn element_from_vml_model[T](source string, model T, frame Rect) !Element {
 	template := parse_vml(source)!
+	return element_from_vml_model_template[T](template, model, frame)
+}
+
+// element_from_vml_model_file evaluates a file-backed VML document, including
+// any modules imported relative to that file.
+pub fn element_from_vml_model_file[T](path string, model T, frame Rect) !Element {
+	template := parse_vml_file(path)!
+	return element_from_vml_model_template[T](template, model, frame)
+}
+
+fn element_from_vml_model_template[T](template &VNode, model T, frame Rect) !Element {
 	v_validate_template[T](template, model)!
 	resolved, _ := v_evaluate_template(template, model, frame)!
 	element := element_from_vnode(resolved, frame)!
@@ -1283,11 +1294,14 @@ fn vml_dispatch[T](mut model T, invocation VmlInvocation) ! {
 
 pub struct VmlRunConfig[T] {
 pub:
-	source string
-	model  T
-	title  string = 'App'
-	width  int = 400
-	height int = 800
+	source      string
+	// source_path selects a VML document on disk instead of source. It enables
+	// imports, which are resolved relative to the document's directory.
+	source_path string
+	model       T
+	title       string = 'App'
+	width       int = 400
+	height      int = 800
 }
 
 @[heap]
@@ -1388,7 +1402,11 @@ fn (mut controller VmlController[T]) handle(event_id string) {
 // run_vml owns one typed model for the window, exposes it to VML as `app`, and
 // reconciles the cached document after each binding write or app action.
 pub fn run_vml[T](config VmlRunConfig[T]) ! {
-	template := parse_vml(config.source)!
+	template := if config.source_path.len > 0 {
+		parse_vml_file(config.source_path)!
+	} else {
+		parse_vml(config.source)!
+	}
 	v_validate_template[T](template, config.model)!
 	initial_frame := rect(0, 0, f64(config.width), f64(config.height))
 	resolved, events := v_evaluate_template(template, config.model, initial_frame)!

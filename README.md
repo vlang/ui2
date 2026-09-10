@@ -128,6 +128,44 @@ ui2.run_vml[App](
 )!
 ```
 
+### VML imports
+
+File-backed VML can split reusable screens into modules. Declare an import in
+the parent document, use the module name as an element, and declare the same
+name in the imported file. CamelCase module names resolve to snake_case file
+names relative to the importing document, so `PrimaryScreen` resolves to
+`primary_screen.vml`.
+
+```vml
+// main.vml
+import PrimaryScreen
+
+Screen {
+    ScreenManager { PrimaryScreen {} }
+}
+```
+
+```vml
+// primary_screen.vml
+module PrimaryScreen
+
+Screen { Label { text: "Home" } }
+```
+
+Use a file-backed API so the importer has a base directory:
+
+```v
+ui2.run_vml[App](
+    source_path: 'main.vml'
+    model: App{}
+)!
+```
+
+`parse_vml_file`, `element_from_vml_file`, `new_vml_app_file`, and
+`element_from_vml_model_file` provide the corresponding parser, renderer, and
+embedded-app entry points. Imports are expanded recursively, require a matching
+`module` declaration, and reject cycles.
+
 For VML that ships with the application, the v3 compiler can lower the document
 straight to V expressions that construct `ui2.Element` values. Name the model
 parameter `app`, use `$vml` in a build function, and pass it to
