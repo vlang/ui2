@@ -1050,8 +1050,13 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.a { 'a' }
 			else { '' }
 		}
+		primary_modifier := text_navigation_primary_modifier(
+			modifiers & u32(gg.Modifier.ctrl) != 0,
+			modifiers & u32(gg.Modifier.alt) != 0,
+			modifiers & u32(gg.Modifier.super) != 0,
+		)
 		if navigation_key.len > 0 && apply_text_editor_navigation(mut editor, navigation_key,
-			modifiers & u32(gg.Modifier.shift) != 0, modifiers & u32(gg.Modifier.ctrl) != 0) {
+			modifiers & u32(gg.Modifier.shift) != 0, primary_modifier) {
 			g_text_editors[g_focused_field] = editor
 		}
 		if key == .enter || key == .kp_enter {
@@ -1072,6 +1077,17 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 					break
 				}
 			}
+		}
+	}
+
+	// text_navigation_primary_modifier keeps the native text-editing shortcuts
+	// available without treating AltGr (reported as Ctrl+Alt on Windows) as
+	// Control. Command is the primary modifier on macOS.
+	fn text_navigation_primary_modifier(ctrl bool, alt bool, super_ bool) bool {
+		$if macos {
+			return super_
+		} $else {
+			return ctrl && !alt
 		}
 	}
 

@@ -98,6 +98,17 @@ $if ui2_custom_rendering ? {
 		assert system_symbol_fallback('future.symbol') == ''
 	}
 
+	fn test_custom_text_navigation_uses_the_platform_primary_modifier() {
+		assert !text_navigation_primary_modifier(false, false, false)
+		$if macos {
+			assert !text_navigation_primary_modifier(true, false, false)
+			assert text_navigation_primary_modifier(false, false, true)
+		} $else {
+			assert text_navigation_primary_modifier(true, false, false)
+			assert !text_navigation_primary_modifier(true, true, false)
+	}
+	}
+
 	fn test_custom_slider_pointer_value_uses_range_step_and_orientation() {
 		horizontal := HitTarget{
 			slider: true
