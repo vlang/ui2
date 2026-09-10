@@ -331,11 +331,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	// checkbox_checked returns the live value currently displayed by a mounted
 	// checkbox, including a value changed by pointer input before the next build.
-	pub fn checkbox_checked(id string) bool {
+	fn checkbox_checked(id string) bool {
 		return g_checkbox_values[id] or { false }
 	}
 
-	pub fn set_checkbox_checked(id string, checked bool) {
+	fn set_checkbox_checked(id string, checked bool) {
 		if id !in g_active_checkboxes {
 			return
 		}
