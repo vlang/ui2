@@ -211,6 +211,47 @@ $if ui2_custom_rendering ? {
 		g_touch = TouchState{}
 	}
 
+	fn test_custom_checkbox_drag_preserves_scrolling_without_toggling() {
+		g_checkbox_values = map[string]bool{
+			'newsletter': false
+		}
+		g_active_checkboxes = map[string]bool{
+			'newsletter': true
+		}
+		g_hit_targets = [HitTarget{
+			id: 'newsletter'
+			x: 10
+			y: 60
+			w: 120
+			h: 28
+			checkbox: true
+		}]
+		g_scroll_areas = map[string]Rect{
+			'form': rect(0, 0, 160, 160)
+		}
+		g_scroll_viewports = map[string]Rect{
+			'form': rect(0, 0, 160, 160)
+		}
+		g_scroll_order = ['form']
+		g_scroll_content_h = map[string]f64{
+			'form': 320
+		}
+		g_scroll_offsets = map[string]f64{}
+		handle_touch_down(20, 70)
+		handle_touch_move(20, 20)
+		handle_touch_up(20, 20)
+		assert scroll_offset('form') == 50
+		assert !checkbox_checked('newsletter')
+		g_checkbox_values = map[string]bool{}
+		g_checkbox_declared = map[string]bool{}
+		g_active_checkboxes = map[string]bool{}
+		g_hit_targets = []HitTarget{}
+		reset_scroll_frame()
+		g_scroll_content_h = map[string]f64{}
+		g_scroll_offsets = map[string]f64{}
+		g_touch = TouchState{}
+	}
+
 	fn test_custom_toggle_button_updates_live_pressed_state() {
 		g_toggle_values = map[string]bool{
 			'bold': false

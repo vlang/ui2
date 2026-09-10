@@ -695,9 +695,6 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if target.switch_control {
 			return
 		}
-		if target.checkbox {
-			return
-		}
 		g_touch.scroll_id = scroll_hit_test(x, y)
 		g_touch.scroll_start_off_y = scroll_offset(g_touch.scroll_id)
 		if begin_scrollbar_drag(x, y) {
@@ -726,9 +723,6 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		if target.switch_control {
 			commit_switch(target, x >= target.x + target.w / 2)
-			return
-		}
-		if target.checkbox {
 			return
 		}
 		if g_touch.scrollbar_drag {
@@ -797,10 +791,6 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			}
 			return
 		}
-		if slider_target.checkbox {
-			commit_checkbox(slider_target)
-			return
-		}
 		if g_touch.long_press_fired || g_touch.scrollbar_drag {
 			return
 		}
@@ -824,6 +814,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		target = hit_test(x, y)
+		if target.checkbox {
+			commit_checkbox(target)
+			return
+		}
 		if target.id.len == 0 && target.action_id.len == 0 {
 			if g_focused_field.len > 0 {
 				g_focused_field = ''
