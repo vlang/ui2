@@ -63,12 +63,32 @@ move := ui2.animation(
 move.start('tile')
 ```
 
-The interpolatable properties are `x`, `y`, `width`, `height`, `rotation`,
+The original shorthand targets are `x`, `y`, `width`, `height`, `rotation`,
 `background`, `corner_radius`, `text_color`, `text_background`, `font_size`,
-and `padding_left`. `duration` and `step` use seconds. All of Kivy's named
-linear, sine, quadratic, cubic, quartic, quintic, exponential, circular, back,
-elastic, and bounce transitions are available; `transition_fn` accepts a
-custom `fn (f64) f64` curve.
+and `padding_left`. For any other numeric or color property on `Element` or
+its visual styles, use typed property targets. They accept concise names where
+unambiguous and dotted paths for nested styles:
+
+```v
+ui2.animation(
+	duration: 0.3
+	properties: [
+		ui2.animation_number_property('value', 75),
+		ui2.animation_number_property('slider_style.thumb_size', 28),
+		ui2.animation_color_property('slider_style.thumb_color', 0xf97316),
+		ui2.animation_color_property('box.border_color', 0x0ea5e9),
+	]
+).start('volume')
+```
+
+This covers numeric geometry, text metrics, slider state and chrome, switch
+colors, borders, and toggle-button selected styles. Use
+`is_animatable_property(name, kind)` to validate a property name before
+constructing an animation. Strings, booleans, enums, child lists, and callback
+fields are deliberately not interpolated. `duration` and `step` use seconds.
+All of Kivy's named linear, sine, quadratic, cubic, quartic, quintic,
+exponential, circular, back, elastic, and bounce transitions are available;
+`transition_fn` accepts a custom `fn (f64) f64` curve.
 
 Use `+` or `sequence(...)` to run definitions in order and `parallel(...)` to
 run them together:
@@ -165,13 +185,26 @@ On macOS, set `native: true` on a `Button` (or wrap a V-built button with
 `with_native_style`) to let AppKit own its bezel, font, hover, and pressed
 appearance. Its declared colors remain the fallback for the custom renderer.
 
-Action arguments are evaluated when the event is dispatched, after any two-way
-binding on that event has written the control value into the model.
+Runtime VML event handlers (`run_vml` and `VmlApp`) can also assign an ordinary
+VML expression to a public mutable top-level model field, which is useful for
+simple state transitions that do not need a dedicated model method:
+
+```vml
+Button { text: "Home" on_tap: app.screen_name = "home" }
+```
+
+Action arguments and assignment values are evaluated when the event is
+dispatched, after any two-way binding on that event has written the control
+value into the model.
 
 Expressions support property paths, arithmetic, comparisons, boolean operators,
-conditionals, parentheses, and string interpolation. They are side-effect-free;
-calls are restricted to event handlers. Unknown model paths, non-writable
-binding targets, and invalid action signatures fail document loading.
+conditionals, parentheses, and string interpolation. They are side-effect-free
+outside event handlers; calls and assignments are restricted to event handlers.
+Unknown model paths, non-writable binding targets, and invalid action signatures
+fail document loading.
+
+Compile-time `$vml` supports typed method actions and two-way bindings, but not
+event assignments; use a public model method for those transitions.
 Validation traverses every expression branch and repeater item schema without
 executing expressions against the model's initial values.
 
@@ -297,6 +330,43 @@ MessageBox {
     Button { id: close_message text: "OK" on_tap: app.close_message() }
 }
 ```
+
+## File and folder dialogs
+
+`open_file_dialog`, `save_file_dialog`, and `open_folder_dialog` show the
+operating system picker and return the selected absolute paths. They block while
+the picker is open; cancellation is an empty array. `open_file_dialog` can
+return several paths when `multiple: true`.
+
+```v
+paths := ui2.open_file_dialog(
+	title: 'Open a V source file'
+	directory: '/work/project'
+	filters: [ui2.FileDialogFilter{
+		name: 'V source'
+		extensions: ['v', 'vv']
+	}]
+)
+if paths.len > 0 {
+	println('Opening ${paths[0]}')
+}
+
+destination := ui2.save_file_dialog(
+	title: 'Save report'
+	filename: 'report.txt'
+	filters: [ui2.FileDialogFilter{
+		name: 'Text'
+		extensions: ['txt']
+	}]
+)
+```
+
+The API uses `NSOpenPanel`/`NSSavePanel` on macOS, standard Win32 open/save
+and folder dialogs on Windows, and the desktop's `zenity` or `kdialog` picker
+on Linux. Linux requires a graphical session and one of those helpers;
+`file_dialog_supported()` reports that availability. The synchronous API is not
+available on iOS or Android, where a document picker needs an app-specific
+asynchronous presentation callback.
 
 ## Menus and the tray
 

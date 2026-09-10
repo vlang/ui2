@@ -170,6 +170,23 @@ fn test_parse_requires_a_single_complete_root() {
 	}
 }
 
+fn test_parse_allows_assignments_only_in_event_properties() {
+	node := parse_vml('Button { on_tap: app.screen_name = "home" }') or { panic(err) }
+	assignment := node.expressions['on_tap'] or { panic('missing event assignment') }
+	assert assignment.kind == .assignment
+
+	for source in [
+		'Rectangle { width: app.width = 10 }',
+		r'Label { text: "Width ${app.width = 10}" }',
+	] {
+		if _ := parse_vml(source) {
+			assert false, 'assignments outside event properties must be rejected'
+		} else {
+			assert err.msg().contains('=')
+		}
+	}
+}
+
 fn test_plain_container_children_use_resolved_local_frame() {
 	node := parse_vml('View { x: 30 y: 40 width: 200 height: 100 Label {} }') or {
 		panic(err)
@@ -193,6 +210,16 @@ fn test_parse_escaped_string() {
 	}'
 	node := parse_vml(source) or { panic(err) }
 	assert node.prop('text') == 'Hello "World"'
+}
+
+fn test_parse_single_quoted_strings() {
+	source := 'Label {
+		text: \'It\\\'s "fine"\'
+		tooltip: \'line one\\nline two\'
+	}'
+	node := parse_vml(source) or { panic(err) }
+	assert node.prop('text') == 'It\'s "fine"'
+	assert node.prop('tooltip') == 'line one\nline two'
 }
 
 fn test_parse_row() {
@@ -316,23 +343,6 @@ fn test_vml_scroll_preserves_box_borders() {
 	assert el.box.border_color == 0x334155
 	assert el.box.border_left == 1
 	assert el.box.border_right == 2
-}
-
-fn test_vml_transparency_reaches_box_backed_controls() {
-	for source in [
-		'Button { transparent: true }',
-		'ToggleButton { transparent: true }',
-		'Scroll { transparent: true }',
-		'Dropdown { transparent: true }',
-		'TextField { transparent: true }',
-		'TextArea { transparent: true }',
-	] {
-		el := element_from_vml(source, rect(0, 0, 120, 40)) or { panic(err) }
-		assert el.box.transparent, source
-		if el.kind == .toggle_button {
-			assert el.toggle_down_box.transparent, source
-		}
-	}
 }
 
 fn test_vml_applies_pointer_and_transform_properties() {

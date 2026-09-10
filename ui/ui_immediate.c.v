@@ -7,6 +7,7 @@ module ui2
 $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
 	import fontstash
 	import gg
+	import math
 	import os
 	import sokol.sapp
 	import time
@@ -23,6 +24,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		swipe_left     bool
 		text_field     bool
 		text_area      bool
+		checkbox       bool
+		checkbox_state bool
 		dropdown       bool
 		slider         bool
 		switch_control bool
@@ -105,6 +108,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_slider_specs = map[string]SliderSpec{}
 	__global g_switch_values = map[string]bool{}
 	__global g_switch_declared = map[string]bool{}
+	__global g_checkbox_values = map[string]bool{}
+	__global g_checkbox_declared = map[string]bool{}
 	__global g_toggle_values = map[string]bool{}
 	__global g_toggle_declared = map[string]bool{}
 	__global g_toggle_groups = map[string]string{}
@@ -118,6 +123,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_active_fields = map[string]bool{}
 	__global g_active_sliders = map[string]bool{}
 	__global g_active_switches = map[string]bool{}
+	__global g_active_checkboxes = map[string]bool{}
 	__global g_active_toggles = map[string]bool{}
 	__global g_active_scrolls = map[string]bool{}
 	__global g_image_ids = map[string]int{}
@@ -134,6 +140,63 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_dropdown_popup = DropdownPopup{}
 	__global g_dropdown_hover = -1
 	__global g_dropdown_scroll = 0.0
+
+	// Map values are copied byte-for-byte when an existing key is replaced.
+	// Unlike keys, their nested strings are not released by map.set. The text
+	// state below changes on every keystroke, so it owns clones explicitly and
+	// disposes the previous value before overwriting it.
+	@[manualfree]
+	fn free_owned_string(value string) {
+		unsafe { value.free() }
+	}
+
+	@[manualfree]
+	fn replace_text_value(id string, value string) {
+		owned := value.clone()
+		if previous := g_text_values[id] {
+			free_owned_string(previous)
+		}
+		g_text_values[id] = owned
+	}
+
+	@[manualfree]
+	fn replace_text_prop(id string, value string) {
+		owned := value.clone()
+		if previous := g_text_props[id] {
+			free_owned_string(previous)
+		}
+		g_text_props[id] = owned
+	}
+
+	@[manualfree]
+	fn replace_text_editor(id string, editor TextEditor) {
+		if previous := g_text_editors[id] {
+			// Caret-only updates retain the editor's text allocation. Releasing
+			// it in that case would leave the replacement editor pointing at
+			// freed memory.
+			if previous.text.str != editor.text.str {
+				free_owned_string(previous.text)
+			}
+		}
+		g_text_editors[id] = editor
+	}
+
+	@[manualfree]
+	fn forget_text_state(id string) {
+		if value := g_text_values[id] {
+			free_owned_string(value)
+		}
+		if prop := g_text_props[id] {
+			free_owned_string(prop)
+		}
+		if editor := g_text_editors[id] {
+			free_owned_string(editor.text)
+		}
+		g_text_values.delete(id)
+		g_text_props.delete(id)
+		g_text_editors.delete(id)
+		g_text_kinds.delete(id)
+	}
 
 	// ── Public API ─────────────────────────────────────────────────────
 
@@ -222,17 +285,21 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	pub fn text(id string) string {
-		return g_text_values[id] or { '' }
+		// State maps store owned strings so that replacing their values can
+		// release the previous allocation. Callers, in particular QML bindings,
+		// may retain the returned value after the next edit, so give them their
+		// own copy rather than exposing the map's storage.
+		return (g_text_values[id] or { '' }).clone()
 	}
 
 	pub fn set_text(id string, t string) {
 		if id !in g_active_fields {
 			return
 		}
-		g_text_values[id] = t
-		mut editor := g_text_editors[id] or { text_editor(t) }
-		editor.set_text(t)
-		g_text_editors[id] = editor
+		replace_text_value(id, t)
+		mut editor := g_text_editors[id] or { text_editor(t.clone()) }
+		editor.set_text(t.clone())
+		replace_text_editor(id, editor)
 	}
 
 	// slider_value returns the live value currently displayed by a mounted
@@ -260,6 +327,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		g_switch_values[id] = active
+	}
+
+	// checkbox_checked returns the live value currently displayed by a mounted
+	// checkbox, including a value changed by pointer input before the next build.
+	fn checkbox_checked(id string) bool {
+		return g_checkbox_values[id] or { false }
+	}
+
+	fn set_checkbox_checked(id string, checked bool) {
+		if id !in g_active_checkboxes {
+			return
+		}
+		g_checkbox_values[id] = checked
 	}
 
 	pub fn toggle_button_pressed(id string) bool {
@@ -314,9 +394,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		g_focused_field = id
-		mut editor := g_text_editors[id] or { text_editor(g_text_values[id] or { '' }) }
+		mut editor := g_text_editors[id] or { text_editor((g_text_values[id] or { '' }).clone()) }
 		editor.set_caret(rune_len(editor.text))
-		g_text_editors[id] = editor
+		replace_text_editor(id, editor)
 	}
 
 	pub fn focused_id() string {
@@ -364,10 +444,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if id !in g_active_fields || (g_text_kinds[id] or { Kind.screen }) != .text_area {
 			return
 		}
-		mut editor := g_text_editors[id] or { text_editor(g_text_values[id] or { '' }) }
+		mut editor := g_text_editors[id] or { text_editor((g_text_values[id] or { '' }).clone()) }
 		editor.insert_text(value)
-		g_text_editors[id] = editor
-		g_text_values[id] = editor.text
+		replace_text_value(id, editor.text)
+		replace_text_editor(id, editor)
 		fire_field_change(id)
 	}
 
@@ -480,6 +560,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			g_active_fields = map[string]bool{}
 			g_active_sliders = map[string]bool{}
 			g_active_switches = map[string]bool{}
+			g_active_checkboxes = map[string]bool{}
 			g_active_toggles = map[string]bool{}
 			g_active_scrolls = map[string]bool{}
 			g_active_images = map[string]bool{}
@@ -733,6 +814,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		target = hit_test(x, y)
+		if target.checkbox {
+			commit_checkbox(target)
+			return
+		}
 		if target.id.len == 0 && target.action_id.len == 0 {
 			if g_focused_field.len > 0 {
 				g_focused_field = ''
@@ -741,16 +826,20 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		if target.text_field {
 			g_focused_field = target.id
-			mut editor := g_text_editors[target.id] or { text_editor(g_text_values[target.id] or { '' }) }
+			mut editor := g_text_editors[target.id] or {
+				text_editor((g_text_values[target.id] or { '' }).clone())
+			}
 			editor.set_caret(rune_len(editor.text))
-			g_text_editors[target.id] = editor
+			replace_text_editor(target.id, editor)
 			return
 		}
 		if target.text_area {
 			g_focused_field = target.id
-			mut editor := g_text_editors[target.id] or { text_editor(g_text_values[target.id] or { '' }) }
+			mut editor := g_text_editors[target.id] or {
+				text_editor((g_text_values[target.id] or { '' }).clone())
+			}
 			editor.set_caret(rune_len(editor.text))
-			g_text_editors[target.id] = editor
+			replace_text_editor(target.id, editor)
 			return
 		}
 		if target.dropdown {
@@ -827,6 +916,17 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if active != previous {
 			fire_event(target.action_id)
 		}
+	}
+
+	fn commit_checkbox(target HitTarget) {
+		if !target.checkbox {
+			return
+		}
+		previous := if target.id.len > 0 { checkbox_checked(target.id) } else { target.checkbox_state }
+		if target.id.len > 0 {
+			g_checkbox_values[target.id] = !previous
+		}
+		fire_event(target.action_id)
 	}
 
 	fn commit_toggle_button(target HitTarget) {
@@ -945,11 +1045,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		mut editor := g_text_editors[g_focused_field] or {
-			text_editor(g_text_values[g_focused_field] or { '' })
+			text_editor((g_text_values[g_focused_field] or { '' }).clone())
 		}
 		editor.insert_text(rune(ch).str())
-		g_text_editors[g_focused_field] = editor
-		g_text_values[g_focused_field] = editor.text
+		replace_text_value(g_focused_field, editor.text)
+		replace_text_editor(g_focused_field, editor)
 		fire_field_change(g_focused_field)
 	}
 
@@ -958,19 +1058,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		mut editor := g_text_editors[g_focused_field] or {
-			text_editor(g_text_values[g_focused_field] or { '' })
+			text_editor((g_text_values[g_focused_field] or { '' }).clone())
 		}
 		if key == .backspace {
 			if editor.backspace() {
-				g_text_editors[g_focused_field] = editor
-				g_text_values[g_focused_field] = editor.text
+				replace_text_value(g_focused_field, editor.text)
+				replace_text_editor(g_focused_field, editor)
 				fire_field_change(g_focused_field)
 			}
 		}
 		if key == .delete {
 			if editor.delete_forward() {
-				g_text_editors[g_focused_field] = editor
-				g_text_values[g_focused_field] = editor.text
+				replace_text_value(g_focused_field, editor.text)
+				replace_text_editor(g_focused_field, editor)
 				fire_field_change(g_focused_field)
 			}
 		}
@@ -984,14 +1084,14 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			} else {
 				editor.set_caret(rune_len(editor.text))
 			}
-			g_text_editors[g_focused_field] = editor
+			replace_text_editor(g_focused_field, editor)
 		}
 		if key == .enter || key == .kp_enter {
 			for target in g_hit_targets {
 				if target.id == g_focused_field && target.text_area {
 					editor.insert_text('\n')
-					g_text_editors[g_focused_field] = editor
-					g_text_values[g_focused_field] = editor.text
+					replace_text_value(g_focused_field, editor.text)
+					replace_text_editor(g_focused_field, editor)
 					fire_field_change(g_focused_field)
 					return
 				}
@@ -1058,7 +1158,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	fn commit_dropdown(id string, action_id string, value string) {
 		close_dropdown()
-		g_text_values[id] = value
+		replace_text_value(id, value)
 		fire_event(action_id)
 	}
 
@@ -1301,10 +1401,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			}
 		}
 		for id in stale_fields {
-			g_text_values.delete(id)
-			g_text_props.delete(id)
-			g_text_editors.delete(id)
-			g_text_kinds.delete(id)
+			forget_text_state(id)
 			forget_portable_text_area_selection(id)
 			if g_focused_field == id {
 				g_focused_field = ''
@@ -1330,6 +1427,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		for id in stale_switches {
 			g_switch_values.delete(id)
 			g_switch_declared.delete(id)
+		}
+		mut stale_checkboxes := []string{}
+		for id, _ in g_checkbox_values {
+			if id !in g_active_checkboxes {
+				stale_checkboxes << id
+			}
+		}
+		for id in stale_checkboxes {
+			g_checkbox_values.delete(id)
+			g_checkbox_declared.delete(id)
 		}
 		mut stale_toggles := []string{}
 		for id, _ in g_toggle_values {
@@ -1383,7 +1490,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.screen {
 				w := f64(ctx.width)
 				h := f64(ctx.height)
-				if box_draws_fill(el.box) {
+				if !el.box.transparent {
 					draw_rect(ctx, off_x, off_y, w - off_x, h - off_y, el.box.bg, 0)
 				}
 				draw_box_borders(ctx, off_x, off_y, w - off_x, h - off_y, el.box)
@@ -1394,7 +1501,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.view {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
-				if box_draws_fill(el.box) {
+				if !el.box.transparent {
 					draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
 				}
 				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
@@ -1421,9 +1528,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
 				frame := rect(x, y, el.frame.width, el.frame.height)
-				if box_draws_fill(el.box) {
-					draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, 0)
-				}
+				draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, 0)
 				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
 				mut content_h := 0.0
 				for child in el.children {
@@ -1460,7 +1565,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.image {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
-				if !draw_cached_image(ctx, el.image_path, x, y, el.frame.width, el.frame.height, el.rotation) {
+				if el.image_path.trim_space().len > 0
+					&& !draw_cached_image(ctx, el.image_path, x, y, el.frame.width, el.frame.height,
+					el.rotation) {
 					draw_rect(ctx, x, y, el.frame.width, el.frame.height, 0xe8ecef, 0)
 				}
 				if el.enabled && element_action_id(el).len > 0 && (el.clickable || el.draggable) {
@@ -1479,17 +1586,24 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.button {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
-				if box_draws_fill(el.box) {
-					if el.native_style && el.box.bg == unstyled_box_bg {
-						draw_button_bezel(ctx, x, y, el.frame.width, el.frame.height, el.box.radius,
-							el.enabled)
-					} else {
-						draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg,
-							el.box.radius)
-					}
+				if el.native_style && el.box.bg == unstyled_box_bg {
+					draw_button_bezel(ctx, x, y, el.frame.width, el.frame.height, el.box.radius,
+						el.enabled)
+				} else {
+					draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
 				}
 				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
-				draw_text_centered(ctx, el.text, x, y, el.frame.width, el.frame.height, el.text_style)
+				image_layout := button_image_layout(el.frame.width, el.frame.height, el.text,
+					el.image_path)
+				if image_layout.visible {
+					draw_button_image(ctx, el.image_path, x + image_layout.image.x,
+						y + image_layout.image.y, image_layout.image.width, image_layout.image.height,
+						el.text_style)
+				}
+				if el.text.len > 0 && image_layout.has_title_area() {
+					draw_text_centered(ctx, el.text, x + image_layout.text.x, y + image_layout.text.y,
+						image_layout.text.width, image_layout.text.height, el.text_style)
+				}
 				if el.enabled {
 					add_hit_target(HitTarget{
 						id: el.id
@@ -1524,13 +1638,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				}
 				box := if pressed { el.toggle_down_box } else { el.box }
 				style := if pressed { el.toggle_down_text_style } else { el.text_style }
-				if box_draws_fill(box) {
-					if el.native_style && box.bg == unstyled_box_bg {
-						draw_button_bezel(ctx, x, y, el.frame.width, el.frame.height, box.radius,
-							el.enabled)
-					} else {
-						draw_rect(ctx, x, y, el.frame.width, el.frame.height, box.bg, box.radius)
-					}
+				if el.native_style && box.bg == unstyled_box_bg {
+					draw_button_bezel(ctx, x, y, el.frame.width, el.frame.height, box.radius,
+						el.enabled)
+				} else {
+					draw_rect(ctx, x, y, el.frame.width, el.frame.height, box.bg, box.radius)
 				}
 				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, box)
 				draw_text_centered(ctx, el.text, x, y, el.frame.width, el.frame.height, style)
@@ -1551,14 +1663,26 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.checkbox {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
+				mut checked := el.checked
+				if el.id.len > 0 {
+					previous_declared := g_checkbox_declared[el.id] or { el.checked }
+					previous_value := g_checkbox_values[el.id] or { el.checked }
+					if el.id !in g_checkbox_values
+						|| (previous_declared != el.checked && previous_value != el.checked) {
+						g_checkbox_values[el.id] = el.checked
+					}
+					checked = g_checkbox_values[el.id] or { el.checked }
+					g_checkbox_declared[el.id] = el.checked
+					g_active_checkboxes[el.id] = true
+				}
 				box_size := if el.frame.height < 18 { el.frame.height } else { 18.0 }
 				box_y := y + (el.frame.height - box_size) / 2
-				fill := if el.checked {
+				fill := if checked {
 					if el.enabled { u32(0x3478d4) } else { u32(0x94a3b8) }
 				} else {
 					u32(0xffffff)
 				}
-				border := if el.checked {
+				border := if checked {
 					if el.enabled { u32(0x2f6fc4) } else { u32(0x94a3b8) }
 				} else if el.enabled {
 					u32(0x64748b)
@@ -1567,7 +1691,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				}
 				draw_rect(ctx, x, box_y, box_size, box_size, fill, 4)
 				draw_outline(ctx, x, box_y, box_size, box_size, border, 4)
-				if el.checked {
+				if checked {
 					draw_check_mark(ctx, x, box_y, box_size, if el.enabled { u32(0xffffff) } else { u32(0xf8fafc) })
 				}
 				draw_text(ctx, el.text, x + box_size + 8, y, el.frame.width - box_size - 8, el.frame.height, el.text_style)
@@ -1579,6 +1703,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 						y: y
 						w: el.frame.width
 						h: el.frame.height
+						checkbox: true
+						checkbox_state: checked
 					}, clip)
 				}
 			}
@@ -1588,9 +1714,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				previous_prop := g_text_props[el.id] or { el.text }
 				kind_changed := el.id in g_text_kinds && (g_text_kinds[el.id] or { el.kind }) != el.kind
 				if kind_changed || el.id !in g_text_values || (el.text != previous_prop && (g_text_values[el.id] or { '' }) != el.text) {
-					g_text_values[el.id] = el.text
+					replace_text_value(el.id, el.text)
 				}
-				g_text_props[el.id] = el.text
+				if el.id !in g_text_props || el.text != previous_prop {
+					replace_text_prop(el.id, el.text)
+				}
 				g_text_kinds[el.id] = el.kind
 				g_active_fields[el.id] = true
 				selected := g_text_values[el.id] or { el.text }
@@ -1642,17 +1770,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				previous_prop := g_text_props[el.id] or { el.text }
 				kind_changed := el.id in g_text_kinds && (g_text_kinds[el.id] or { el.kind }) != el.kind
 				if kind_changed || el.id !in g_text_values || (el.text != previous_prop && (g_text_values[el.id] or { '' }) != el.text) {
-					g_text_values[el.id] = el.text
-					g_text_editors[el.id] = text_editor(el.text)
+					replace_text_value(el.id, el.text)
+					replace_text_editor(el.id, text_editor(el.text.clone()))
 				}
-				g_text_props[el.id] = el.text
+				if el.id !in g_text_props || el.text != previous_prop {
+					replace_text_prop(el.id, el.text)
+				}
 				g_text_kinds[el.id] = el.kind
 				g_active_fields[el.id] = true
 				current_text := g_text_values[el.id] or { el.text }
-				mut editor := g_text_editors[el.id] or { text_editor(current_text) }
+				mut editor := g_text_editors[el.id] or { text_editor(current_text.clone()) }
 				if editor.text != current_text {
-					editor.set_text(current_text)
-					g_text_editors[el.id] = editor
+					editor.set_text(current_text.clone())
+					replace_text_editor(el.id, editor)
 				}
 				display_text := text_field_display_text(current_text, el.secure)
 				is_focused := g_focused_field == el.id
@@ -1696,10 +1826,12 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				previous_prop := g_text_props[el.id] or { el.text }
 				kind_changed := el.id in g_text_kinds && (g_text_kinds[el.id] or { el.kind }) != el.kind
 				if kind_changed || el.id !in g_text_values || (el.text != previous_prop && (g_text_values[el.id] or { '' }) != el.text) {
-					g_text_values[el.id] = el.text
-					g_text_editors[el.id] = text_editor(el.text)
+					replace_text_value(el.id, el.text)
+					replace_text_editor(el.id, text_editor(el.text.clone()))
 				}
-				g_text_props[el.id] = el.text
+				if el.id !in g_text_props || el.text != previous_prop {
+					replace_text_prop(el.id, el.text)
+				}
 				g_text_kinds[el.id] = el.kind
 				g_active_fields[el.id] = true
 				current_text := g_text_values[el.id] or { el.text }
@@ -1898,11 +2030,173 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return true
 	}
 
+	struct ButtonImageLayout {
+		visible bool
+		image   Rect
+		text    Rect
+	}
+
+	fn (layout ButtonImageLayout) has_title_area() bool {
+		return layout.text.width > 0 && layout.text.height > 0
+	}
+
+	// button_image_layout mirrors the native desktop button arrangements: compact
+	// buttons put a 13-point image beside their title, while tall ribbon buttons
+	// put a larger image above it. Image-only title-bar buttons stay centered.
+	fn button_image_layout(width f64, height f64, title string, image_path string) ButtonImageLayout {
+		if image_path.trim_space().len == 0 {
+			return ButtonImageLayout{
+				text: rect(0, 0, width, height)
+			}
+		}
+		if title.len == 0 {
+			// Image-only ribbon controls still use the large-button treatment when
+			// they are tall. Compact controls need only a two-point inset on each
+			// side; the previous four-point inset made 17px toolbar symbols nearly
+			// illegible on Windows.
+			size := if height >= 42 {
+				math.min(32.0, math.max(math.min(width - 8.0, height - 12.0), 1.0))
+			} else {
+				math.min(18.0, math.max(math.min(width, height) - 4.0, 1.0))
+			}
+			return ButtonImageLayout{
+				visible: true
+				image: rect((width - size) / 2, (height - size) / 2, size, size)
+				text: rect(0, 0, 0, 0)
+			}
+		}
+		if height >= 42 {
+			size := math.min(32.0, math.max(math.min(width, height - 22.0) - 8.0, 1.0))
+			return ButtonImageLayout{
+				visible: true
+				image: rect((width - size) / 2, 4, size, size)
+				text: rect(2, height - 23, math.max(width - 4.0, 0.0), 20)
+			}
+		}
+		size := math.min(13.0, math.max(height - 8.0, 1.0))
+		return ButtonImageLayout{
+			visible: true
+			image: rect(5, (height - size) / 2, size, size)
+			text: rect(size + 9, 0, math.max(width - size - 13.0, 0.0), height)
+		}
+	}
+
+	fn draw_button_image(ctx &gg.Context, image_path string, x f64, y f64, width f64, height f64, style TextStyle) {
+		if image_path.starts_with('symbol:') {
+			symbol := system_symbol_fallback(image_path['symbol:'.len..])
+			draw_text_centered(ctx, symbol, x, y, width, height, TextStyle{
+				...style
+				font_family: 'Material Icons'
+				size:        math.max(math.min(width, height) * 0.75, 8.0)
+			})
+			return
+		}
+		if !draw_cached_image(ctx, image_path, x, y, width, height, 0) {
+			draw_outline(ctx, x, y, width, height, 0x94a3b8, 2)
+		}
+	}
+
+	// SF Symbols are used as native AppKit button images. Other custom-rendered
+	// desktops use equivalent glyphs from the bundled Material Icons face, which
+	// keeps the controls recognizable without depending on a host symbol font.
+	fn system_symbol_fallback(name string) string {
+		return match name {
+			'align.horizontal.center' { '\ue00f' }
+			'line.3.horizontal' { '\ue5d2' }
+			'text.justify' { '\ue235' }
+			'align.vertical.center' { '\ue011' }
+			'arrow.up.and.down', 'arrow.up.arrow.down' { '\ue8d5' }
+			'arrow.up.and.down.text.horizontal' { '\ue25b' }
+			'arrow.2.squarepath', 'arrow.triangle.2.circlepath' { '\ue627' }
+			'arrow.left.and.right' { '\ue8d4' }
+			'arrow.left.and.right.square' { '\ue933' }
+			'arrow.clockwise', 'arrow.clockwise.circle' { '\ue5d5' }
+			'clock.arrow.circlepath' { '\ue889' }
+			'arrow.down.right.and.arrow.up.left', 'arrow.up.and.down.and.arrow.left.and.right',
+			'move.3d' { '\uf1ce' }
+			'arrow.down.to.line' { '\ue258' }
+			'icloud.and.arrow.down' { '\ue2c0' }
+			'arrow.right.to.line', 'increase.indent' { '\ue23e' }
+			'arrow.uturn.backward' { '\ue166' }
+			'arrow.uturn.forward' { '\ue15a' }
+			'icloud.and.arrow.up' { '\ue2c3' }
+			'square.and.arrow.up' { '\ue2c6' }
+			'square.and.arrow.down' { '\ue161' }
+			'asterisk' { '\ue83a' }
+			'character.book.closed' { '\uea19' }
+			'textformat', 'textformat.abc' { '\ue262' }
+			'chart.bar', 'chart.bar.doc.horizontal', 'chart.bar.xaxis' { '\ue26b' }
+			'crop' { '\ue3be' }
+			'cube.transparent' { '\ue9fe' }
+			'square.on.circle' { '\ue574' }
+			'curlybraces' { '\ue86f' }
+			'cursorarrow' { '\ue323' }
+			'doc.badge.arrow.up' { '\ue9fc' }
+			'doc.badge.plus', 'text.badge.plus' { '\ue89c' }
+			'plus.rectangle' { '\ue146' }
+			'plus.rectangle.on.rectangle', 'plus.square.on.square' { '\ue02e' }
+			'doc.on.doc' { '\ue14d' }
+			'list.bullet.clipboard' { '\ue85d' }
+			'ellipsis' { '\ue5d3' }
+			'eye' { '\ue8f4' }
+			'eye.slash' { '\ue8f5' }
+			'folder' { '\ue2c7' }
+			'function' { '\ue24a' }
+			'gearshape' { '\ue8b8' }
+			'grid', 'rectangle.grid.2x2', 'rectangle.split.3x3', 'tablecells' { '\ue3ec' }
+			'info.circle' { '\ue88e' }
+			'line.vertical' { '\ue5d4' }
+			'list.number' { '\ue242' }
+			'number' { '\ue9ef' }
+			'lock', 'lock.doc' { '\ue897' }
+			'magnifyingglass', 'rectangle.and.text.magnifyingglass' { '\ue8b6' }
+			'minus' { '\ue15b' }
+			'minus.rectangle' { '\ue909' }
+			'number.circle' { '\ue400' }
+			'paintbrush' { '\ue3ae' }
+			'paintpalette' { '\ue40a' }
+			'pencil', 'pencil.line' { '\ue3c9' }
+			'person.2' { '\ue7ef' }
+			'person.crop.circle' { '\ue853' }
+			'person.crop.circle.badge.plus' { '\ue7fe' }
+			'photo' { '\ue410' }
+			'textbox' { '\ue262' }
+			'plus' { '\ue145' }
+			'printer' { '\ue8ad' }
+			'rectangle.3.group' { '\ue8f0' }
+			'rectangle.split.1x2' { '\uf114' }
+			'rectangle.split.2x1' { '\ue8f2' }
+			'rectangle.split.3x1' { '\ue8ec' }
+			'rectangle.bottomthird.inset.filled', 'rectangle.portrait.and.arrow.right',
+			'rectangle.righthalf.inset.filled.arrow.right',
+			'rectangle.topthird.inset.filled', 'sidebar.right' { '\uf114' }
+			'scissors' { '\ue14e' }
+			'seal' { '\uef76' }
+			'slider.horizontal.3' { '\ue429' }
+			'square.2.layers.3d.bottom.filled', 'square.2.layers.3d.top.filled',
+			'square.stack.3d.up' { '\ue53b' }
+			'star' { '\ue838' }
+			'star.circle' { '\ue8d0' }
+			'tag' { '\ue892' }
+			'text.alignleft' { '\ue236' }
+			'text.alignright' { '\ue237' }
+			'text.bubble' { '\ue0cb' }
+			'textformat.123' { '\ueb8d' }
+			'textformat.size' { '\ue245' }
+			'textformat.size.larger' { '\ueae2' }
+			'trash' { '\ue872' }
+			'xmark' { '\ue5cd' }
+			else { '\ue8fd' }
+		}
+	}
+
 	fn preload_images(el Element) {
 		if el.hidden {
 			return
 		}
-		if el.kind == .image {
+		if el.kind == .image
+			|| (el.kind == .button && el.image_path.trim_space().len > 0
+			&& !el.image_path.starts_with('symbol:')) {
 			cache_image(el.image_path)
 		}
 		for child in el.children {
@@ -1979,9 +2273,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn draw_control_surface(ctx &gg.Context, x f64, y f64, w f64, h f64, box BoxStyle, focused bool, enabled bool) {
-		if box_draws_fill(box) {
-			draw_rect(ctx, x, y, w, h, box.bg, box.radius)
-		}
+		draw_rect(ctx, x, y, w, h, box.bg, box.radius)
 		border := if focused {
 			u32(0x3478d4)
 		} else if enabled {
@@ -2216,15 +2508,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return t
 		}
 		ctx.set_text_cfg(cfg)
-		return fit_text_to_width(t, w, fn [ctx] (line string) f64 {
-			return f64(ctx.text_width_f(line))
-		})
-	}
-
-	// fit_text_to_width is the search fit_text runs. It takes the measurement
-	// as an argument so it can be tested without a window to measure in.
-	fn fit_text_to_width(t string, w f64, text_width fn (string) f64) string {
-		if text_width(t) <= w {
+		if f64(ctx.text_width_f(t)) <= w {
 			return t
 		}
 		runes := t.runes()
@@ -2235,7 +2519,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		mut high := runes.len
 		for kept < high {
 			mid := (kept + high + 1) / 2
-			if text_width(runes[..mid].string() + text_ellipsis) <= w {
+			if f64(ctx.text_width_f(runes[..mid].string() + text_ellipsis)) <= w {
 				kept = mid
 			} else {
 				high = mid - 1

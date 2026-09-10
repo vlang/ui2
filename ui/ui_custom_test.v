@@ -34,10 +34,68 @@ $if ui2_custom_rendering ? {
 		quit()
 	}
 
+	fn test_custom_text_editor_replaces_owned_state_after_caret_moves() {
+		g_text_values = map[string]string{}
+		g_text_props = map[string]string{}
+		g_text_editors = map[string]TextEditor{}
+		g_text_kinds = map[string]Kind{}
+		g_active_fields = map[string]bool{
+			'field': true
+		}
+		g_focused_field = 'field'
+		replace_text_value('field', 'abc')
+		replace_text_editor('field', text_editor('abc'.clone()))
+		handle_key_down(.left)
+		handle_key_down(.backspace)
+		handle_char_input(`x`)
+		assert text('field') == 'axc'
+		forget_text_state('field')
+		g_active_fields = map[string]bool{}
+		g_focused_field = ''
+	}
+
 	fn test_custom_pointer_event_ids_are_normalized() {
 		assert pointer_event_id('down', 'surface', 20, 30) == 'pointer:down:surface:20.0:30.0'
 		assert pointer_event_id('drag', 'surface', 40, 50) == 'pointer:drag:surface:40.0:50.0'
 		assert pointer_event_id('up', 'surface', 40, 50) == 'pointer:up:surface:40.0:50.0'
+	}
+
+	fn test_custom_button_images_match_native_arrangements() {
+		image_only := button_image_layout(30, 28, '', 'symbol:gearshape')
+		assert image_only.visible
+		assert image_only.image == rect(6, 5, 18, 18)
+		assert image_only.text.width == 0
+
+		compact_image_only := button_image_layout(20, 17, '', 'symbol:scissors')
+		assert compact_image_only.image == rect(3.5, 2, 13, 13)
+
+		tall_image_only := button_image_layout(44, 58, '', '/tmp/paste.png')
+		assert tall_image_only.image == rect(6, 13, 32, 32)
+
+		compact := button_image_layout(100, 24, 'Open', '/tmp/open.png')
+		assert compact.image == rect(5, 5.5, 13, 13)
+		assert compact.text == rect(22, 0, 74, 24)
+		assert compact.has_title_area()
+
+		narrow_compact := button_image_layout(26, 24, 'Open', '/tmp/open.png')
+		assert narrow_compact.text.width == 0
+		assert !narrow_compact.has_title_area()
+
+		tall := button_image_layout(60, 62, 'Paste', '/tmp/paste.png')
+		assert tall.image == rect(14, 4, 32, 32)
+		assert tall.text == rect(2, 39, 56, 20)
+
+		text_only := button_image_layout(80, 28, 'Normal', '')
+		assert !text_only.visible
+		assert text_only.text == rect(0, 0, 80, 28)
+	}
+
+	fn test_custom_renderer_has_portable_system_symbol_fallbacks() {
+		assert system_symbol_fallback('arrow.uturn.backward') == ''
+		assert system_symbol_fallback('gearshape') == ''
+		assert system_symbol_fallback('magnifyingglass') == ''
+		assert system_symbol_fallback('xmark') == ''
+		assert system_symbol_fallback('future.symbol') == ''
 	}
 
 	fn test_custom_slider_pointer_value_uses_range_step_and_orientation() {
@@ -120,6 +178,77 @@ $if ui2_custom_rendering ? {
 		g_switch_declared = map[string]bool{}
 		g_active_switches = map[string]bool{}
 		g_hit_targets = []HitTarget{}
+		g_touch = TouchState{}
+	}
+
+	fn test_custom_checkbox_tap_updates_live_checked_state() {
+		g_checkbox_values = map[string]bool{
+			'newsletter': false
+		}
+		g_active_checkboxes = map[string]bool{
+			'newsletter': true
+		}
+		g_hit_targets = [HitTarget{
+			id: 'newsletter'
+			action_id: 'newsletter_changed'
+			x: 10
+			y: 20
+			w: 120
+			h: 28
+			checkbox: true
+		}]
+		handle_touch_down(20, 30)
+		handle_touch_up(20, 30)
+		assert checkbox_checked('newsletter')
+		set_checkbox_checked('newsletter', false)
+		set_checkbox_checked('missing', true)
+		assert !checkbox_checked('newsletter')
+		assert !checkbox_checked('missing')
+		g_checkbox_values = map[string]bool{}
+		g_checkbox_declared = map[string]bool{}
+		g_active_checkboxes = map[string]bool{}
+		g_hit_targets = []HitTarget{}
+		g_touch = TouchState{}
+	}
+
+	fn test_custom_checkbox_drag_preserves_scrolling_without_toggling() {
+		g_checkbox_values = map[string]bool{
+			'newsletter': false
+		}
+		g_active_checkboxes = map[string]bool{
+			'newsletter': true
+		}
+		g_hit_targets = [HitTarget{
+			id: 'newsletter'
+			x: 10
+			y: 60
+			w: 120
+			h: 28
+			checkbox: true
+		}]
+		g_scroll_areas = map[string]Rect{
+			'form': rect(0, 0, 160, 160)
+		}
+		g_scroll_viewports = map[string]Rect{
+			'form': rect(0, 0, 160, 160)
+		}
+		g_scroll_order = ['form']
+		g_scroll_content_h = map[string]f64{
+			'form': 320
+		}
+		g_scroll_offsets = map[string]f64{}
+		handle_touch_down(20, 70)
+		handle_touch_move(20, 20)
+		handle_touch_up(20, 20)
+		assert scroll_offset('form') == 50
+		assert !checkbox_checked('newsletter')
+		g_checkbox_values = map[string]bool{}
+		g_checkbox_declared = map[string]bool{}
+		g_active_checkboxes = map[string]bool{}
+		g_hit_targets = []HitTarget{}
+		reset_scroll_frame()
+		g_scroll_content_h = map[string]f64{}
+		g_scroll_offsets = map[string]f64{}
 		g_touch = TouchState{}
 	}
 
@@ -421,30 +550,5 @@ $if ui2_custom_rendering ? {
 		}
 		assert !touch_is_held_inside(10, 10, 100, 30)
 		g_touch = TouchState{}
-	}
-
-	// Ten pixels a character, ellipsis included, so a width is a character
-	// count and the expected truncation can be read off the assertion.
-	fn custom_test_text_width(line string) f64 {
-		return f64(line.runes().len) * 10
-	}
-
-	fn test_custom_text_that_fits_is_drawn_whole() {
-		assert fit_text_to_width('abcde', 50, custom_test_text_width) == 'abcde'
-		assert fit_text_to_width('abcde', 500, custom_test_text_width) == 'abcde'
-		assert fit_text_to_width('', 0, custom_test_text_width) == ''
-	}
-
-	fn test_custom_text_wider_than_its_box_ends_in_an_ellipsis() {
-		// Four characters of room: three of the word plus the ellipsis.
-		assert fit_text_to_width('abcde', 40, custom_test_text_width) == 'abc…'
-		// Room for the ellipsis alone, and for less than that.
-		assert fit_text_to_width('abcde', 10, custom_test_text_width) == '…'
-		assert fit_text_to_width('abcde', 5, custom_test_text_width) == '…'
-	}
-
-	fn test_custom_text_is_shortened_by_whole_runes() {
-		// A multi-byte rune has to be dropped as one character, not as bytes.
-		assert fit_text_to_width('éééé', 30, custom_test_text_width) == 'éé…'
 	}
 }

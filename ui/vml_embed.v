@@ -45,7 +45,7 @@ pub fn new_vml_app[T](source string, model T) !&VmlApp[T] {
 	validate_element_tree(element_from_vnode(resolved, probe)!)!
 	return &VmlApp[T]{
 		template: template
-		model: model
+		model:    model
 	}
 }
 
@@ -99,6 +99,7 @@ pub fn (mut app VmlApp[T]) handle(event_id string) ! {
 				v_string(app.text_of(binding.control))
 			}
 		}
+
 		vml_set_field[T](mut app.model, field_name, value)!
 		if binding.property == 'pressed' && value.truthy() {
 			for peer in event.group_bindings {
@@ -116,6 +117,9 @@ pub fn (mut app VmlApp[T]) handle(event_id string) ! {
 	}
 	if invocation := event.invocation {
 		vml_dispatch[T](mut app.model, invocation)!
+	}
+	if assignment := event.assignment {
+		vml_apply_assignment[T](mut app.model, assignment)!
 	}
 }
 
