@@ -656,7 +656,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 					}
 				}
 				if !dispatch_key_event(e) {
-					handle_key_down(e.key_code)
+					handle_key_down(e.key_code, e.modifiers)
 				}
 			}
 			.files_dropped {
@@ -1053,7 +1053,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		fire_field_change(g_focused_field)
 	}
 
-	fn handle_key_down(key gg.KeyCode) {
+	fn handle_key_down(key gg.KeyCode, modifiers u32) {
 		if g_focused_field.len == 0 {
 			return
 		}
@@ -1074,17 +1074,65 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				fire_field_change(g_focused_field)
 			}
 		}
-		if key == .left || key == .right || key == .home || key == .end {
-			if key == .left {
-				editor.move_caret(-1, false)
-			} else if key == .right {
-				editor.move_caret(1, false)
-			} else if key == .home {
-				editor.set_caret(0)
-			} else {
-				editor.set_caret(rune_len(editor.text))
+		mut navigation_key := match key {
+			.left { 'left' }
+			.right { 'right' }
+			.up { 'up' }
+			.down { 'down' }
+			.home { 'home' }
+			.end { 'end' }
+			.page_up { 'page_up' }
+			.page_down { 'page_down' }
+			.a { 'a' }
+			else { '' }
+		}
+		mut focused_text_area := false
+		for target in g_hit_targets {
+			if target.id == g_focused_field {
+				focused_text_area = target.text_area
+				break
 			}
-			replace_text_editor(g_focused_field, editor)
+		}
+		if focused_text_area && (navigation_key == 'page_up' || navigation_key == 'page_down') {
+			page_focused_text_area(if navigation_key == 'page_up' { -1 } else { 1 })
+			return
+		}
+		primary_modifier := text_navigation_primary_modifier(
+			modifiers & u32(gg.Modifier.ctrl) != 0,
+			modifiers & u32(gg.Modifier.alt) != 0,
+			modifiers & u32(gg.Modifier.super) != 0,
+		)
+		word_modifier := text_navigation_word_modifier(
+			modifiers & u32(gg.Modifier.ctrl) != 0,
+			modifiers & u32(gg.Modifier.alt) != 0,
+		)
+		boundary_modifier := text_navigation_boundary_modifier(
+			modifiers & u32(gg.Modifier.super) != 0,
+		)
+		if focused_text_area && (navigation_key == 'up' || navigation_key == 'down') {
+			if move_focused_text_area_caret(mut editor, if navigation_key == 'up' { -1 } else { 1 },
+				modifiers & u32(gg.Modifier.shift) != 0) {
+				g_text_editors[g_focused_field] = editor
+			}
+			return
+		}
+		if focused_text_area && (navigation_key == 'home' || navigation_key == 'end')
+			&& !primary_modifier {
+			if move_focused_text_area_line_boundary(mut editor, navigation_key == 'end',
+				modifiers & u32(gg.Modifier.shift) != 0) {
+				g_text_editors[g_focused_field] = editor
+			}
+			return
+		}
+		if boundary_modifier && navigation_key == 'left' {
+			navigation_key = 'home'
+		} else if boundary_modifier && navigation_key == 'right' {
+			navigation_key = 'end'
+		}
+		navigation_modifier := if navigation_key == 'a' { primary_modifier } else { word_modifier }
+		if navigation_key.len > 0 && apply_text_editor_navigation(mut editor, navigation_key,
+			modifiers & u32(gg.Modifier.shift) != 0, navigation_modifier) {
+			g_text_editors[g_focused_field] = editor
 		}
 		if key == .enter || key == .kp_enter {
 			for target in g_hit_targets {
@@ -1105,6 +1153,44 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				}
 			}
 		}
+	}
+
+	// text_navigation_primary_modifier keeps the native text-editing shortcuts
+	// available without treating AltGr (reported as Ctrl+Alt on Windows) as
+	// Control. Command is the primary modifier on macOS.
+	fn text_navigation_primary_modifier(ctrl bool, alt bool, super_ bool) bool {
+		$if macos {
+			return super_
+		} $else {
+			return ctrl && !alt
+		}
+	}
+
+	// text_navigation_word_modifier follows native word movement: Option on
+	// macOS, and Control everywhere else. Excluding Alt on non-macOS systems
+	// keeps AltGr from being interpreted as a Control shortcut.
+fn text_navigation_word_modifier(ctrl bool, alt bool) bool {
+		$if macos {
+			return alt
+		} $else {
+			return ctrl && !alt
+		}
+}
+
+// text_navigation_boundary_modifier maps Command+Arrow to line boundaries on
+// macOS. On other platforms Ctrl+Arrow must remain word navigation.
+fn text_navigation_boundary_modifier(super_ bool) bool {
+	$if macos {
+		return super_
+	} $else {
+		return false
+	}
+}
+
+fn page_focused_text_area(direction int) {
+		viewport := g_scroll_viewports[g_focused_field] or { return }
+		set_scroll_offset(g_focused_field, scroll_offset(g_focused_field) + f64(direction) * viewport.height,
+			scroll_maximum(g_focused_field))
 	}
 
 	fn fire_field_change(id string) {
@@ -1788,6 +1874,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				is_focused := g_focused_field == el.id
 				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box,
 					is_focused, el.enabled)
+				if is_focused && !editor.selection.collapsed() {
+					draw_text_field_selection(ctx, display_text, editor.selection, x + padding_left,
+						y, content_width, el.frame.height, el.text_style)
+				}
 				if current_text.len > 0 {
 					draw_editable_text(ctx, display_text, x + padding_left, y, content_width, el.frame.height, el.text_style)
 				} else if el.placeholder.len > 0 {
@@ -1801,7 +1891,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 					before := editor.text.runes()[..editor.selection.caret].string()
 					caret_text := text_field_display_text(before, el.secure)
 					text_w := f64(ctx.text_width(caret_text))
-					cursor_x := x + padding_left + text_w
+					text_origin := text_field_aligned_text_origin(x + padding_left, content_width,
+						f64(ctx.text_width(display_text)), el.text_style.align)
+					cursor_x := text_origin + text_w
 					cursor_y := y + el.frame.height * 0.2
 					cursor_h := el.frame.height * 0.6
 					draw_rect(ctx, cursor_x, cursor_y, 2, cursor_h, el.text_style.color, 0)
@@ -2539,6 +2631,56 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// shortened line would leave the caret sitting past the end of it.
 	fn draw_editable_text(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle) {
 		draw_text_in_box(ctx, t, x, y, w, h, style, false)
+	}
+
+	// draw_text_field_selection paints the selected rune range before its text.
+	// The range is derived from the rendered string so secure fields highlight
+	// their bullet characters instead of leaking the underlying value.
+	fn draw_text_field_selection(ctx &gg.Context, display_text string, selection TextSelection, x f64, y f64, w f64, h f64, style TextStyle) {
+		before, selected := text_field_selection_text(display_text, selection)
+		if selected.len == 0 || w <= 0 {
+			return
+		}
+		family := text_font_file(style.font_family, style.bold, style.italic)
+		ensure_family_fallbacks(ctx, family)
+		ctx.set_text_cfg(gg.TextCfg{
+			color: hex_color(style.color)
+			size: int(font_render_size(style.size, text_font_metrics(family)) + 0.5)
+			bold: style.bold
+			italic: style.italic
+			family: family
+			align: text_align(style.align)
+			vertical_align: .middle
+		})
+		text_width := f64(ctx.text_width(display_text))
+		text_origin := text_field_aligned_text_origin(x, w, text_width, style.align)
+		mut left := text_origin + f64(ctx.text_width(before))
+		mut right := left + f64(ctx.text_width(selected))
+		if left < x {
+			left = x
+		}
+		if right > x + w {
+			right = x + w
+		}
+		if right > left {
+			draw_rect(ctx, left, y + h * 0.2, right - left, h * 0.6, 0xb8d7ff, 0)
+		}
+	}
+
+	fn text_field_aligned_text_origin(x f64, w f64, text_width f64, align Align) f64 {
+		return match align {
+			.left { x }
+			.center { x + (w - text_width) / 2 }
+			.right { x + w - text_width }
+		}
+	}
+
+	fn text_field_selection_text(display_text string, selection TextSelection) (string, string) {
+		runes := display_text.runes()
+		start, end := selection.ordered()
+		from := clamp_int(start, 0, runes.len)
+		to := clamp_int(end, from, runes.len)
+		return runes[..from].string(), runes[from..to].string()
 	}
 
 	fn draw_text_in_box(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle, fit bool) {

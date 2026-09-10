@@ -36,12 +36,25 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		scroll_test_events << id
 	}
 
-	fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
+fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		reset_scroll_test_state()
 		assert wrap_text_area_lines('one two three', 70, scroll_test_width) == ['one two', 'three']
 		assert wrap_text_area_lines('one\r\n\r\ntwo\n', 100, scroll_test_width) == ['one', '', 'two', '']
 		assert wrap_text_area_lines('', 100, scroll_test_width) == ['']
 		assert wrap_text_area_lines('one\ttwo', 30, scroll_test_width) == ['one', 'two']
+	}
+
+	fn test_page_navigation_scrolls_the_focused_text_area() {
+		reset_scroll_test_state()
+		frame := rect(0, 0, 100, 80)
+		register_scroll_view('notes', frame, frame, 400, true, true, false)
+		g_focused_field = 'notes'
+		page_focused_text_area(1)
+		assert scroll_offset('notes') == 80
+		page_focused_text_area(10)
+		assert scroll_offset('notes') == 320
+		page_focused_text_area(-1)
+		assert scroll_offset('notes') == 240
 	}
 
 	fn test_text_area_wraps_long_words_without_splitting_utf8_bytes() {
@@ -269,5 +282,57 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		assert 'text' !in g_scroll_content_h
 		assert 'text' !in g_text_area_layouts
 		assert scroll_hit_test(150, 50) == ''
+	}
+}
+
+fn test_text_area_line_ranges_follow_wrapped_source_runes() {
+	lines := ['one two', 'three']
+	assert text_area_line_rune_ranges('one two three', lines) == [
+		TextAreaLineRange{
+			start: 0
+			end: 7
+		},
+		TextAreaLineRange{
+			start: 8
+			end: 13
+		},
+	]
+}
+
+fn test_text_area_line_ranges_keep_original_crlf_offsets() {
+	assert text_area_line_rune_ranges('a\r\nbc', ['a', 'bc']) == [
+		TextAreaLineRange{
+			start: 0
+			end: 1
+		},
+		TextAreaLineRange{
+			start: 3
+			end: 5
+		},
+	]
+}
+
+fn test_text_area_vertical_and_line_boundary_navigation() {
+	reset_scroll_test_state()
+	g_focused_field = 'notes'
+	g_text_area_layouts['notes'] = TextAreaLayout{
+		text: 'one\ntwo\nthree'
+		lines: ['one', 'two', 'three']
+	}
+	mut editor := text_editor('one\ntwo\nthree')
+	editor.set_caret(6)
+	assert move_focused_text_area_caret(mut editor, 1, false)
+	assert editor.selection.caret == 10
+	assert move_focused_text_area_caret(mut editor, -1, true)
+	assert editor.selection == TextSelection{
+		anchor: 10
+		caret: 6
+	}
+	assert move_focused_text_area_line_boundary(mut editor, false, false)
+	assert editor.selection.caret == 4
+	assert move_focused_text_area_line_boundary(mut editor, true, true)
+	assert editor.selection == TextSelection{
+		anchor: 4
+		caret: 7
 	}
 }

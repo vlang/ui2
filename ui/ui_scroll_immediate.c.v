@@ -10,6 +10,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	const text_area_vertical_padding = 8.0
 	const anonymous_text_area_scroll_prefix = '@text-area-key:'
 
+	struct TextAreaLineRange {
+		start int
+		end   int
+	}
+
 	fn reset_scroll_frame() {
 		g_scroll_areas = map[string]Rect{}
 		g_scroll_viewports = map[string]Rect{}
@@ -215,6 +220,118 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return lines
 	}
 
+	// normalized_text_area_runes returns the renderer's newline-normalized runes
+	// and the corresponding original source offset for every rune boundary.
+	// Keeping this map makes selection offsets correct for CRLF input.
+	fn normalized_text_area_runes(value string) ([]rune, []int) {
+		source := value.runes()
+		mut normalized := []rune{cap: source.len}
+		mut source_offsets := []int{cap: source.len + 1}
+		mut source_index := 0
+		for source_index < source.len {
+			source_offsets << source_index
+			if source[source_index] == `\r` {
+				normalized << `\n`
+				if source_index + 1 < source.len && source[source_index + 1] == `\n` {
+					source_index += 2
+				} else {
+					source_index++
+				}
+			} else {
+				normalized << source[source_index]
+				source_index++
+			}
+		}
+		source_offsets << source.len
+		return normalized, source_offsets
+	}
+
+	// text_area_line_rune_ranges maps rendered wrapped lines back to their
+	// original source rune offsets. Whitespace discarded at wrap points is
+	// intentionally outside every line range.
+	fn text_area_line_rune_ranges(value string, lines []string) []TextAreaLineRange {
+		runes, source_offsets := normalized_text_area_runes(value)
+		mut ranges := []TextAreaLineRange{cap: lines.len}
+		mut cursor := 0
+		for line in lines {
+			line_runes := line.runes()
+			if line_runes.len == 0 {
+				ranges << TextAreaLineRange{
+					start: source_offsets[cursor]
+					end: source_offsets[cursor]
+				}
+				continue
+			}
+			mut start := cursor
+			for candidate := cursor; candidate + line_runes.len <= runes.len; candidate++ {
+				mut matches := true
+				for index in 0 .. line_runes.len {
+					if runes[candidate + index] != line_runes[index] {
+						matches = false
+						break
+					}
+				}
+				if matches {
+					start = candidate
+					break
+				}
+			}
+			end := start + line_runes.len
+			ranges << TextAreaLineRange{
+				start: source_offsets[start]
+				end: source_offsets[end]
+			}
+			cursor = end
+		}
+		return ranges
+	}
+
+	fn focused_text_area_line_index(ranges []TextAreaLineRange, caret int) int {
+		for index, line in ranges {
+			if caret <= line.end {
+				return index
+			}
+		}
+		return ranges.len - 1
+	}
+
+	fn move_focused_text_area_caret(mut editor TextEditor, direction int, extend bool) bool {
+		layout := g_text_area_layouts[g_focused_field] or { return false }
+		if layout.text != editor.text || layout.lines.len == 0 {
+			return false
+		}
+		if !extend && !editor.selection.collapsed() {
+			start, end := editor.selection.ordered()
+			editor.set_caret(if direction < 0 { start } else { end })
+			return true
+		}
+		ranges := text_area_line_rune_ranges(editor.text, layout.lines)
+		if ranges.len == 0 {
+			return false
+		}
+		current := focused_text_area_line_index(ranges, editor.selection.caret)
+		next := clamp_int(current + direction, 0, ranges.len - 1)
+		column := clamp_int(editor.selection.caret - ranges[current].start, 0,
+			ranges[current].end - ranges[current].start)
+		editor.move_caret_to(ranges[next].start + clamp_int(column, 0,
+			ranges[next].end - ranges[next].start), extend)
+		return true
+	}
+
+	fn move_focused_text_area_line_boundary(mut editor TextEditor, end bool, extend bool) bool {
+		layout := g_text_area_layouts[g_focused_field] or { return false }
+		if layout.text != editor.text || layout.lines.len == 0 {
+			return false
+		}
+		ranges := text_area_line_rune_ranges(editor.text, layout.lines)
+		if ranges.len == 0 {
+			return false
+		}
+		line := ranges[focused_text_area_line_index(ranges, editor.selection.caret)]
+		editor.move_caret_to(if end { line.end } else { line.start }, extend)
+		return true
+	}
+
 	fn visible_text_area_rows(count int, top f64, line_height f64, offset f64, clip Rect) (int, int) {
 		if count <= 0 || line_height <= 0 || clip.width <= 0 || clip.height <= 0 {
 			return 0, 0
@@ -243,6 +360,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		lines := text_area_lines(el.id, value, content.width, style, cfg.size, fn [ctx] (line string) f64 {
 			return f64(ctx.text_width_f(line))
 		})
+		line_ranges := text_area_line_rune_ranges(value, lines)
+		editor := g_text_editors[el.id] or { text_editor(value.clone()) }
+		selection_start, selection_end := editor.selection.ordered()
+		show_selection := g_focused_field == el.id && selection_start != selection_end
 		line_height := math.max(1.0, font_line_height(style.size))
 		content_height := f64(lines.len) * line_height + text_area_vertical_padding * 2
 		// Read-only means not editable, not unscrollable. disable_scroll only
@@ -261,6 +382,21 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			first, last := visible_text_area_rows(lines.len, content.y, line_height, offset, text_clip)
 			for index in first .. last {
 				text_y := content.y + (f64(index) + 0.5) * line_height - offset
+				if show_selection && index < line_ranges.len {
+					line_range := line_ranges[index]
+					from := if selection_start > line_range.start { selection_start } else { line_range.start }
+					to := if selection_end < line_range.end { selection_end } else { line_range.end }
+					if to > from {
+						line_runes := lines[index].runes()
+						prefix := line_runes[..from - line_range.start].string()
+						selected := line_runes[from - line_range.start..to - line_range.start].string()
+						line_width := f64(ctx.text_width_f(lines[index]))
+						line_origin := text_field_aligned_text_origin(content.x, content.width, line_width,
+							style.align)
+						draw_rect(ctx, line_origin + f64(ctx.text_width_f(prefix)), text_y - line_height / 2,
+							f64(ctx.text_width_f(selected)), line_height, 0xb8d7ff, 0)
+					}
+				}
 				ctx.draw_text(int(text_x), int(text_y), lines[index], cfg)
 			}
 		}

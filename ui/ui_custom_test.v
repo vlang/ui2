@@ -98,6 +98,23 @@ $if ui2_custom_rendering ? {
 		assert system_symbol_fallback('future.symbol') == ''
 	}
 
+	fn test_custom_text_navigation_uses_the_platform_primary_modifier() {
+		assert !text_navigation_primary_modifier(false, false, false)
+		$if macos {
+			assert !text_navigation_primary_modifier(true, false, false)
+			assert text_navigation_primary_modifier(false, false, true)
+			assert text_navigation_word_modifier(false, true)
+			assert !text_navigation_word_modifier(true, false)
+			assert text_navigation_boundary_modifier(true)
+		} $else {
+			assert text_navigation_primary_modifier(true, false, false)
+			assert !text_navigation_primary_modifier(true, true, false)
+			assert text_navigation_word_modifier(true, false)
+			assert !text_navigation_word_modifier(true, true)
+			assert !text_navigation_boundary_modifier(true)
+		}
+	}
+
 	fn test_custom_slider_pointer_value_uses_range_step_and_orientation() {
 		horizontal := HitTarget{
 			slider: true
@@ -551,4 +568,19 @@ $if ui2_custom_rendering ? {
 		assert !touch_is_held_inside(10, 10, 100, 30)
 		g_touch = TouchState{}
 	}
+}
+
+fn test_text_field_selection_text_uses_rune_offsets() {
+	before, selected := text_field_selection_text('a🙂bc', TextSelection{
+		anchor: 4
+		caret: 1
+	})
+	assert before == 'a'
+	assert selected == '🙂bc'
+}
+
+fn test_text_field_selection_origin_respects_text_alignment() {
+	assert text_field_aligned_text_origin(10, 100, 40, .left) == 10
+	assert text_field_aligned_text_origin(10, 100, 40, .center) == 40
+	assert text_field_aligned_text_origin(10, 100, 40, .right) == 70
 }
