@@ -126,11 +126,17 @@ fn test_vml_model_expressions_bindings_and_repeaters() {
 		}
 	}'
 	app := VmlTestApp{
-		name: 'Ada'
+		name:    'Ada'
 		enabled: true
-		users: [
-			VmlTestUser{ id: 7, name: 'Ada' },
-			VmlTestUser{ id: 9, name: 'Lin' },
+		users:   [
+			VmlTestUser{
+				id:   7
+				name: 'Ada'
+			},
+			VmlTestUser{
+				id:   9
+				name: 'Lin'
+			},
 		]
 	}
 	root := element_from_vml_model(source, app, rect(0, 0, 640, 400)) or { panic(err) }
@@ -175,7 +181,9 @@ fn test_vml_model_supports_active_switch_bindings() {
 }
 
 fn test_vml_model_rejects_non_boolean_switch_bindings() {
-	if _ := element_from_vml_model('Switch { bind.active: app.name }', VmlTestApp{}, rect(0, 0, 83, 32)) {
+	if _ := element_from_vml_model('Switch { bind.active: app.name }', VmlTestApp{}, rect(0, 0, 83,
+		32))
+	{
 		assert false, 'switch active state must bind to a bool field'
 	} else {
 		assert err.msg().contains('bind.active requires a bool field')
@@ -248,7 +256,7 @@ fn test_vml_model_toggle_button_groups_update_all_bound_fields() {
 		}
 	}'
 	normalized := element_from_vml_model(source, VmlTestApp{
-		enabled: true
+		enabled:   true
 		secondary: true
 	}, rect(0, 0, 240, 80)) or { panic(err) }
 	assert (vml_test_find(normalized, 'Primary') or { panic('missing primary toggle') }).checked
@@ -283,9 +291,18 @@ fn test_vml_model_grid_layout_counts_repeater_children() {
 	}'
 	grid := element_from_vml_model(source, VmlTestApp{
 		users: [
-			VmlTestUser{ id: 1, name: 'One' },
-			VmlTestUser{ id: 2, name: 'Two' },
-			VmlTestUser{ id: 3, name: 'Three' },
+			VmlTestUser{
+				id:   1
+				name: 'One'
+			},
+			VmlTestUser{
+				id:   2
+				name: 'Two'
+			},
+			VmlTestUser{
+				id:   3
+				name: 'Three'
+			},
 		]
 	}, rect(0, 0, 210, 110)) or { panic(err) }
 	assert grid.children.len == 3
@@ -307,8 +324,16 @@ fn test_vml_model_box_layout_uses_repeater_size_hints() {
 	}'
 	box := element_from_vml_model(source, VmlTestApp{
 		users: [
-			VmlTestUser{ id: 1, name: 'Wide', weight: 2 },
-			VmlTestUser{ id: 2, name: 'Narrow', weight: 1 },
+			VmlTestUser{
+				id:     1
+				name:   'Wide'
+				weight: 2
+			},
+			VmlTestUser{
+				id:     2
+				name:   'Narrow'
+				weight: 1
+			},
 		]
 	}, rect(0, 0, 330, 80)) or { panic(err) }
 	assert box.children.len == 3
@@ -334,8 +359,16 @@ fn test_vml_model_float_layout_uses_repeater_hints() {
 	}'
 	canvas := element_from_vml_model(source, VmlTestApp{
 		users: [
-			VmlTestUser{ id: 1, name: 'Small', weight: 0.25 },
-			VmlTestUser{ id: 2, name: 'Large', weight: 0.5 },
+			VmlTestUser{
+				id:     1
+				name:   'Small'
+				weight: 0.25
+			},
+			VmlTestUser{
+				id:     2
+				name:   'Large'
+				weight: 0.5
+			},
 		]
 	}, rect(0, 0, 200, 100)) or { panic(err) }
 	assert canvas.children[0].frame == rect(25, 0, 50, 24)
@@ -358,7 +391,8 @@ fn test_vml_model_relative_layout_resolves_local_child_geometry() {
 			pos_hint_center_y: 0.5
 		}
 	}'
-	panel := element_from_vml_model(source, VmlTestApp{ name: 'Action', level: 80 }, rect(0, 0, 400, 240)) or { panic(err) }
+	panel := element_from_vml_model(source, VmlTestApp{ name: 'Action', level: 80 }, rect(0, 0,
+		400, 240)) or { panic(err) }
 	assert panel.frame == rect(40, 50, 200, 100)
 	assert panel.children[0].frame == rect(60, 35, 80, 30)
 }
@@ -371,7 +405,9 @@ fn test_vml_model_page_layout_resolves_current_page() {
 		Rectangle { id: second }
 		Rectangle { id: third }
 	}'
-	pager := element_from_vml_model(source, VmlTestApp{ page: 1 }, rect(0, 0, 300, 160)) or { panic(err) }
+	pager := element_from_vml_model(source, VmlTestApp{ page: 1 }, rect(0, 0, 300, 160)) or {
+		panic(err)
+	}
 	assert pager.children[0].frame == rect(0, 0, 260, 160)
 	assert pager.children[1].frame == rect(20, 0, 260, 160)
 	assert pager.children[2].frame == rect(280, 0, 260, 160)
@@ -568,7 +604,9 @@ fn test_vml_model_anchor_layout_uses_resolved_child_sizes() {
 			Label { text: "Centered" x: card.x }
 		}
 	}'
-	anchored := element_from_vml_model(source, VmlTestApp{ level: 120 }, rect(0, 0, 200, 100)) or { panic(err) }
+	anchored := element_from_vml_model(source, VmlTestApp{ level: 120 }, rect(0, 0, 200, 100)) or {
+		panic(err)
+	}
 	assert anchored.children.len == 1
 	assert anchored.children[0].frame == rect(40, 35, 120, 30)
 	assert anchored.children[0].children[0].frame.width == 120
@@ -588,9 +626,21 @@ fn test_vml_model_stack_layout_wraps_repeater_children_by_resolved_size() {
 	}'
 	stack := element_from_vml_model(source, VmlTestApp{
 		users: [
-			VmlTestUser{ id: 1, name: 'One', weight: 70 },
-			VmlTestUser{ id: 2, name: 'Two', weight: 80 },
-			VmlTestUser{ id: 3, name: 'Three', weight: 90 },
+			VmlTestUser{
+				id:     1
+				name:   'One'
+				weight: 70
+			},
+			VmlTestUser{
+				id:     2
+				name:   'Two'
+				weight: 80
+			},
+			VmlTestUser{
+				id:     3
+				name:   'Three'
+				weight: 90
+			},
 		]
 	}, rect(0, 0, 180, 100)) or { panic(err) }
 	assert stack.children.len == 3
@@ -600,7 +650,9 @@ fn test_vml_model_stack_layout_wraps_repeater_children_by_resolved_size() {
 }
 
 fn test_vml_model_rejects_non_numeric_slider_bindings() {
-	if _ := element_from_vml_model('Slider { bind.value: app.name }', VmlTestApp{}, rect(0, 0, 100, 30)) {
+	if _ := element_from_vml_model('Slider { bind.value: app.name }', VmlTestApp{}, rect(0, 0, 100,
+		30))
+	{
 		assert false, 'slider values must bind to numeric fields'
 	} else {
 		assert err.msg().contains('bind.value requires a numeric field')
@@ -608,7 +660,9 @@ fn test_vml_model_rejects_non_numeric_slider_bindings() {
 }
 
 fn test_vml_model_reports_unknown_paths_with_a_source_line() {
-	if _ := element_from_vml_model('Label { text: app.frist_name }', VmlTestApp{}, rect(0, 0, 100, 30)) {
+	if _ := element_from_vml_model('Label { text: app.frist_name }', VmlTestApp{}, rect(0, 0, 100,
+		30))
+	{
 		assert false, 'unknown fields must not silently become empty strings'
 	} else {
 		assert err.msg().contains('app.frist_name')
@@ -617,12 +671,16 @@ fn test_vml_model_reports_unknown_paths_with_a_source_line() {
 }
 
 fn test_vml_model_rejects_readonly_bindings_and_unknown_actions() {
-	if _ := element_from_vml_model('TextField { bind.text: app.max_users }', VmlTestApp{}, rect(0, 0, 100, 30)) {
+	if _ := element_from_vml_model('TextField { bind.text: app.max_users }', VmlTestApp{}, rect(0,
+		0, 100, 30))
+	{
 		assert false, 'readonly fields must not be binding targets'
 	} else {
 		assert err.msg().contains('not mutable')
 	}
-	if _ := element_from_vml_model('Button { on_tap: app.typo() }', VmlTestApp{}, rect(0, 0, 100, 30)) {
+	if _ := element_from_vml_model('Button { on_tap: app.typo() }', VmlTestApp{}, rect(0, 0, 100,
+		30))
+	{
 		assert false, 'unknown actions must fail document loading'
 	} else {
 		assert err.msg().contains('unknown app action `typo`')
@@ -641,9 +699,7 @@ fn test_vml_model_validates_an_initially_empty_repeater() {
 
 fn test_vml_model_does_not_evaluate_an_empty_repeater_schema() {
 	source := 'Screen { Repeater { model: app.users key: item.id Label { width: 100 / item.weight } } }'
-	root := element_from_vml_model(source, VmlTestApp{}, rect(0, 0, 100, 30)) or {
-		panic(err)
-	}
+	root := element_from_vml_model(source, VmlTestApp{}, rect(0, 0, 100, 30)) or { panic(err) }
 	assert root.children.len == 0
 }
 
@@ -658,9 +714,7 @@ fn test_vml_model_validates_inactive_expression_branches() {
 
 fn test_vml_model_resolves_named_node_geometry_before_children() {
 	source := 'Screen { Rectangle { id: panel width: 200 Label { text: "Hello" width: panel.width } } }'
-	root := element_from_vml_model(source, VmlTestApp{}, rect(0, 0, 780, 300)) or {
-		panic(err)
-	}
+	root := element_from_vml_model(source, VmlTestApp{}, rect(0, 0, 780, 300)) or { panic(err) }
 	text_label := vml_test_find(root, 'Hello') or { panic('missing label') }
 	assert text_label.frame.width == 200
 }
@@ -668,11 +722,11 @@ fn test_vml_model_resolves_named_node_geometry_before_children() {
 fn test_vml_model_evaluates_action_arguments_after_binding_writes() {
 	source := 'TextField { bind.text: app.name on_change: app.save_name(app.name) }'
 	template := parse_vml(source) or { panic(err) }
-	mut app := VmlTestApp{ name: 'Ada' }
-	v_validate_template[VmlTestApp](template, app) or { panic(err) }
-	resolved, events := v_evaluate_template(template, app, rect(0, 0, 200, 30)) or {
-		panic(err)
+	mut app := VmlTestApp{
+		name: 'Ada'
 	}
+	v_validate_template[VmlTestApp](template, app) or { panic(err) }
+	resolved, events := v_evaluate_template(template, app, rect(0, 0, 200, 30)) or { panic(err) }
 	field := element_from_vnode(resolved, rect(0, 0, 200, 30)) or { panic(err) }
 	event := events[field.action_id] or { panic('missing field event') }
 	invocation := event.invocation or { panic('missing field action') }
@@ -682,6 +736,55 @@ fn test_vml_model_evaluates_action_arguments_after_binding_writes() {
 	vml_dispatch[VmlTestApp](mut app, invocation) or { panic(err) }
 	assert app.name == 'Adam'
 	assert app.saved == 'Adam'
+}
+
+fn test_vml_model_event_assignment_updates_a_mutable_field() {
+	source := 'Button { id: home on_tap: app.screen_name = app.enabled ? "details" : "home" }'
+	mut app := new_vml_app(source, VmlTestApp{ enabled: false }) or { panic(err) }
+	built := app.build(rect(0, 0, 100, 30)) or { panic(err) }
+	app.handle(built.action_id) or { panic(err) }
+	assert app.state().screen_name == 'home'
+
+	mut details_app := new_vml_app(source, VmlTestApp{ enabled: true }) or { panic(err) }
+	details := details_app.build(rect(0, 0, 100, 30)) or { panic(err) }
+	details_app.handle(details.action_id) or { panic(err) }
+	assert details_app.state().screen_name == 'details'
+}
+
+fn test_vml_model_event_assignment_runs_after_a_binding_write() {
+	source := 'TextField { bind.text: app.name on_change: app.saved = app.name }'
+	mut app := new_vml_app(source, VmlTestApp{ name: 'Ada' }) or { panic(err) }
+	app.control_text = fn (_ string) string {
+		return 'Adam'
+	}
+	built := app.build(rect(0, 0, 200, 30)) or { panic(err) }
+	app.handle(built.action_id) or { panic(err) }
+	assert app.state().name == 'Adam'
+	assert app.state().saved == 'Adam'
+}
+
+fn test_vml_model_rejects_invalid_event_assignment_targets_and_values() {
+	if _ := element_from_vml_model('Button { on_tap: app.max_users = 4 }', VmlTestApp{}, rect(0, 0,
+		100, 30))
+	{
+		assert false, 'event assignments must require a mutable app field'
+	} else {
+		assert err.msg().contains('not mutable')
+	}
+	if _ := element_from_vml_model('Button { on_tap: app.screen_name = 4 }', VmlTestApp{}, rect(0,
+		0, 100, 30))
+	{
+		assert false, 'event assignment values must match their target type'
+	} else {
+		assert err.msg().contains('expects `string`')
+	}
+	if _ := element_from_vml_model('Button { on_tap: app.screen_name.value = "home" }', VmlTestApp{}, rect(0,
+		0, 100, 30))
+	{
+		assert false, 'event assignments must be limited to top-level app fields'
+	} else {
+		assert err.msg().contains('top-level app field')
+	}
 }
 
 fn test_vml_model_nested_repeater_event_identities_do_not_collide() {
@@ -700,15 +803,19 @@ fn test_vml_model_nested_repeater_event_identities_do_not_collide() {
 	}'
 	mut app := VmlTestApp{
 		groups: [
-			VmlTestGroup{ id: 'a/b', items: [VmlTestNestedItem{ id: 'c' }] },
-			VmlTestGroup{ id: 'a', items: [VmlTestNestedItem{ id: 'b/c' }] },
+			VmlTestGroup{
+				id:    'a/b'
+				items: [VmlTestNestedItem{ id: 'c' }]
+			},
+			VmlTestGroup{
+				id:    'a'
+				items: [VmlTestNestedItem{ id: 'b/c' }]
+			},
 		]
 	}
 	template := parse_vml(source) or { panic(err) }
 	v_validate_template[VmlTestApp](template, app) or { panic(err) }
-	resolved, events := v_evaluate_template(template, app, rect(0, 0, 200, 100)) or {
-		panic(err)
-	}
+	resolved, events := v_evaluate_template(template, app, rect(0, 0, 200, 100)) or { panic(err) }
 	root := element_from_vnode(resolved, rect(0, 0, 200, 100)) or { panic(err) }
 	first := vml_test_find(root, 'c') or { panic('missing first nested item') }
 	second := vml_test_find(root, 'b/c') or { panic('missing second nested item') }
@@ -718,9 +825,11 @@ fn test_vml_model_nested_repeater_event_identities_do_not_collide() {
 	first_invocation := (events[first.action_id] or { panic('missing first event') }).invocation or {
 		panic('missing first invocation')
 	}
+
 	second_invocation := (events[second.action_id] or { panic('missing second event') }).invocation or {
 		panic('missing second invocation')
 	}
+
 	vml_dispatch[VmlTestApp](mut app, first_invocation) or { panic(err) }
 	assert app.saved == 'c'
 	vml_dispatch[VmlTestApp](mut app, second_invocation) or { panic(err) }
@@ -728,12 +837,18 @@ fn test_vml_model_nested_repeater_event_identities_do_not_collide() {
 }
 
 fn test_vml_model_adapter_writes_fields_and_dispatches_typed_actions() {
-	mut app := VmlTestApp{ name: 'before' }
+	mut app := VmlTestApp{
+		name: 'before'
+	}
 	vml_set_field[VmlTestApp](mut app, 'name', v_string('after')) or { panic(err) }
 	assert app.name == 'after'
 	vml_dispatch[VmlTestApp](mut app, VmlInvocation{ name: 'clear' }) or { panic(err) }
 	assert app.name == ''
-	argument := &VExpression{ kind: .literal, value: '42', line: 1 }
+	argument := &VExpression{
+		kind:  .literal
+		value: '42'
+		line:  1
+	}
 	vml_dispatch[VmlTestApp](mut app, VmlInvocation{
 		name: 'remove_user'
 		args: [argument]

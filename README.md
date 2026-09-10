@@ -185,13 +185,23 @@ On macOS, set `native: true` on a `Button` (or wrap a V-built button with
 `with_native_style`) to let AppKit own its bezel, font, hover, and pressed
 appearance. Its declared colors remain the fallback for the custom renderer.
 
-Action arguments are evaluated when the event is dispatched, after any two-way
-binding on that event has written the control value into the model.
+Event handlers can also assign an ordinary VML expression to a public mutable
+top-level model field, which is useful for simple state transitions that do not
+need a dedicated model method:
+
+```vml
+Button { text: "Home" on_tap: app.screen_name = "home" }
+```
+
+Action arguments and assignment values are evaluated when the event is
+dispatched, after any two-way binding on that event has written the control
+value into the model.
 
 Expressions support property paths, arithmetic, comparisons, boolean operators,
-conditionals, parentheses, and string interpolation. They are side-effect-free;
-calls are restricted to event handlers. Unknown model paths, non-writable
-binding targets, and invalid action signatures fail document loading.
+conditionals, parentheses, and string interpolation. They are side-effect-free
+outside event handlers; calls and assignments are restricted to event handlers.
+Unknown model paths, non-writable binding targets, and invalid action signatures
+fail document loading.
 Validation traverses every expression branch and repeater item schema without
 executing expressions against the model's initial values.
 
