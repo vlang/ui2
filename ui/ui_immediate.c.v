@@ -1494,7 +1494,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 						y + image_layout.image.y, image_layout.image.width, image_layout.image.height,
 						el.text_style)
 				}
-				if el.text.len > 0 {
+				if el.text.len > 0 && image_layout.has_title_area() {
 					draw_text_centered(ctx, el.text, x + image_layout.text.x, y + image_layout.text.y,
 						image_layout.text.width, image_layout.text.height, el.text_style)
 				}
@@ -1908,6 +1908,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		visible bool
 		image   Rect
 		text    Rect
+	}
+
+	fn (layout ButtonImageLayout) has_title_area() bool {
+		return layout.text.width > 0 && layout.text.height > 0
 	}
 
 	// button_image_layout mirrors the native desktop button arrangements: compact

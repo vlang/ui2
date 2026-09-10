@@ -55,6 +55,11 @@ $if ui2_custom_rendering ? {
 		compact := button_image_layout(100, 24, 'Open', '/tmp/open.png')
 		assert compact.image == rect(5, 5.5, 13, 13)
 		assert compact.text == rect(22, 0, 74, 24)
+		assert compact.has_title_area()
+
+		narrow_compact := button_image_layout(26, 24, 'Open', '/tmp/open.png')
+		assert narrow_compact.text.width == 0
+		assert !narrow_compact.has_title_area()
 
 		tall := button_image_layout(60, 62, 'Paste', '/tmp/paste.png')
 		assert tall.image == rect(14, 4, 32, 32)
