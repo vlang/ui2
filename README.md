@@ -63,12 +63,32 @@ move := ui2.animation(
 move.start('tile')
 ```
 
-The interpolatable properties are `x`, `y`, `width`, `height`, `rotation`,
+The original shorthand targets are `x`, `y`, `width`, `height`, `rotation`,
 `background`, `corner_radius`, `text_color`, `text_background`, `font_size`,
-and `padding_left`. `duration` and `step` use seconds. All of Kivy's named
-linear, sine, quadratic, cubic, quartic, quintic, exponential, circular, back,
-elastic, and bounce transitions are available; `transition_fn` accepts a
-custom `fn (f64) f64` curve.
+and `padding_left`. For any other numeric or color property on `Element` or
+its visual styles, use typed property targets. They accept concise names where
+unambiguous and dotted paths for nested styles:
+
+```v
+ui2.animation(
+	duration: 0.3
+	properties: [
+		ui2.animation_number_property('value', 75),
+		ui2.animation_number_property('slider_style.thumb_size', 28),
+		ui2.animation_color_property('slider_style.thumb_color', 0xf97316),
+		ui2.animation_color_property('box.border_color', 0x0ea5e9),
+	]
+).start('volume')
+```
+
+This covers numeric geometry, text metrics, slider state and chrome, switch
+colors, borders, and toggle-button selected styles. Use
+`is_animatable_property(name, kind)` to validate a property name before
+constructing an animation. Strings, booleans, enums, child lists, and callback
+fields are deliberately not interpolated. `duration` and `step` use seconds.
+All of Kivy's named linear, sine, quadratic, cubic, quartic, quintic,
+exponential, circular, back, elastic, and bounce transitions are available;
+`transition_fn` accepts a custom `fn (f64) f64` curve.
 
 Use `+` or `sequence(...)` to run definitions in order and `parallel(...)` to
 run them together:

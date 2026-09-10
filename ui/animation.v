@@ -44,6 +44,47 @@ pub enum AnimationTransition {
 
 pub type AnimationTransitionFn = fn (f64) f64
 
+// AnimationPropertyKind identifies the value representation used by a generic
+// animation property. Numeric values interpolate linearly; colors interpolate
+// each RGB channel.
+pub enum AnimationPropertyKind {
+	number
+	color
+}
+
+// AnimationProperty targets an interpolatable Element property by name. Use
+// animation_number_property or animation_color_property to construct one.
+//
+// This is the extensible counterpart to AnimationConfig's legacy named fields:
+// it covers every numeric and color property exposed by Element and its styles.
+pub struct AnimationProperty {
+pub:
+	name   string
+	kind   AnimationPropertyKind
+	number f64
+	color  u32
+}
+
+// animation_number_property creates a target for a numeric Element property.
+// Both concise names (for example, "value") and dotted Element paths (for
+// example, "slider_style.thumb_size") are accepted.
+pub fn animation_number_property(name string, target f64) AnimationProperty {
+	return AnimationProperty{
+		name: name
+		kind: .number
+		number: target
+	}
+}
+
+// animation_color_property creates a target for a color Element property.
+pub fn animation_color_property(name string, target u32) AnimationProperty {
+	return AnimationProperty{
+		name: name
+		kind: .color
+		color: target
+	}
+}
+
 pub enum AnimationEventKind {
 	start
 	progress
@@ -83,6 +124,9 @@ pub:
 	text_background ?u32
 	font_size       ?f64
 	padding_left    ?f64
+	// properties accepts arbitrary supported numeric and color Element paths.
+	// Generic targets take precedence over a duplicate legacy named field.
+	properties []AnimationProperty
 }
 
 struct AnimationTargets {
@@ -97,6 +141,7 @@ struct AnimationTargets {
 	text_background ?u32
 	font_size       ?f64
 	padding_left    ?f64
+	properties      []AnimationProperty
 }
 
 enum AnimationKind {
@@ -198,6 +243,7 @@ pub fn animation(config AnimationConfig) Animation {
 			text_background: config.text_background
 			font_size: config.font_size
 			padding_left: config.padding_left
+			properties: normalized_animation_properties(config.properties)
 		}
 	}
 }
@@ -380,7 +426,110 @@ fn animation_config_properties(config AnimationConfig) []string {
 	if _ := config.text_background { properties << 'text_background' }
 	if _ := config.font_size { properties << 'font_size' }
 	if _ := config.padding_left { properties << 'padding_left' }
+	for property in normalized_animation_properties(config.properties) {
+		if property.name !in properties {
+			properties << property.name
+		}
+	}
 	return properties
+}
+
+fn normalized_animation_properties(properties []AnimationProperty) []AnimationProperty {
+	mut normalized := []AnimationProperty{}
+	for property in properties {
+		name := canonical_animation_property_name(property.name)
+		if name.len == 0 || !animation_property_kind_matches(name, property.kind) {
+			continue
+		}
+		normalized_property := AnimationProperty{
+			...property
+			name: name
+		}
+		mut replaced := false
+		for index, current in normalized {
+			if current.name == name {
+				normalized[index] = normalized_property
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			normalized << normalized_property
+		}
+	}
+	return normalized
+}
+
+// is_animatable_property reports whether name denotes a numeric or color
+// property currently supported by the generic animation API.
+pub fn is_animatable_property(name string, kind AnimationPropertyKind) bool {
+	canonical := canonical_animation_property_name(name)
+	return canonical.len > 0 && animation_property_kind_matches(canonical, kind)
+}
+
+fn canonical_animation_property_name(name string) string {
+	return match name {
+		'x', 'frame.x' { 'x' }
+		'y', 'frame.y' { 'y' }
+		'width', 'frame.width' { 'width' }
+		'height', 'frame.height' { 'height' }
+		'rotation' { 'rotation' }
+		'background', 'box.bg' { 'background' }
+		'corner_radius', 'box.radius' { 'corner_radius' }
+		'box.border_color' { 'box.border_color' }
+		'box.border_left' { 'box.border_left' }
+		'box.border_top' { 'box.border_top' }
+		'box.border_right' { 'box.border_right' }
+		'box.border_bottom' { 'box.border_bottom' }
+		'text_color', 'text_style.color' { 'text_color' }
+		'text_background', 'text_style.background_color' { 'text_background' }
+		'font_size', 'text_style.size' { 'font_size' }
+		'text_style.head_indent' { 'text_style.head_indent' }
+		'text_style.first_line_indent' { 'text_style.first_line_indent' }
+		'text_style.hyphenation_factor' { 'text_style.hyphenation_factor' }
+		'text_style.lines' { 'text_style.lines' }
+		'padding_left' { 'padding_left' }
+		'keyboard' { 'keyboard' }
+		'value' { 'value' }
+		'min_value' { 'min_value' }
+		'max_value' { 'max_value' }
+		'step' { 'step' }
+		'padding' { 'padding' }
+		'slider_style.track_color' { 'slider_style.track_color' }
+		'slider_style.value_track_color' { 'slider_style.value_track_color' }
+		'slider_style.thumb_color' { 'slider_style.thumb_color' }
+		'slider_style.track_width' { 'slider_style.track_width' }
+		'slider_style.thumb_size' { 'slider_style.thumb_size' }
+		'switch_style.inactive_track_color' { 'switch_style.inactive_track_color' }
+		'switch_style.active_track_color' { 'switch_style.active_track_color' }
+		'switch_style.thumb_color' { 'switch_style.thumb_color' }
+		'switch_style.disabled_track_color' { 'switch_style.disabled_track_color' }
+		'switch_style.disabled_thumb_color' { 'switch_style.disabled_thumb_color' }
+		'toggle_down_box.bg' { 'toggle_down_box.bg' }
+		'toggle_down_box.radius' { 'toggle_down_box.radius' }
+		'toggle_down_box.border_color' { 'toggle_down_box.border_color' }
+		'toggle_down_box.border_left' { 'toggle_down_box.border_left' }
+		'toggle_down_box.border_top' { 'toggle_down_box.border_top' }
+		'toggle_down_box.border_right' { 'toggle_down_box.border_right' }
+		'toggle_down_box.border_bottom' { 'toggle_down_box.border_bottom' }
+		'toggle_down_text_style.color' { 'toggle_down_text_style.color' }
+		'toggle_down_text_style.background_color' { 'toggle_down_text_style.background_color' }
+		'toggle_down_text_style.size' { 'toggle_down_text_style.size' }
+		'toggle_down_text_style.head_indent' { 'toggle_down_text_style.head_indent' }
+		'toggle_down_text_style.first_line_indent' { 'toggle_down_text_style.first_line_indent' }
+		'toggle_down_text_style.hyphenation_factor' { 'toggle_down_text_style.hyphenation_factor' }
+		'toggle_down_text_style.lines' { 'toggle_down_text_style.lines' }
+		else { '' }
+	}
+}
+
+fn animation_property_kind_matches(name string, kind AnimationPropertyKind) bool {
+	return match name {
+		'background', 'box.border_color', 'text_color', 'text_background', 'slider_style.track_color', 'slider_style.value_track_color', 'slider_style.thumb_color', 'switch_style.inactive_track_color', 'switch_style.active_track_color', 'switch_style.thumb_color', 'switch_style.disabled_track_color', 'switch_style.disabled_thumb_color', 'toggle_down_box.bg', 'toggle_down_box.border_color', 'toggle_down_text_style.color', 'toggle_down_text_style.background_color' {
+			kind == .color
+		}
+		else { kind == .number }
+	}
 }
 
 fn merge_property_names(left []string, right []string) []string {
@@ -437,17 +586,23 @@ fn start_widget_animation_at(id string, definition Animation, now i64, schedule 
 fn finish_animation(id string, property string, completing bool) {
 	mut runtime := g_animation_runtime
 	mut pending := []PendingAnimationEvent{}
+	target_property := if property.len > 0 {
+		canonical := canonical_animation_property_name(property)
+		if canonical.len > 0 { canonical } else { property }
+	} else {
+		''
+	}
 	runtime.mutex.lock()
 	mut animation_run := runtime.runs[id] or {
 		runtime.mutex.unlock()
 		return
 	}
-	if property.len > 0 {
-		if property !in animation_run.definition.properties {
+	if target_property.len > 0 {
+		if target_property !in animation_run.definition.properties {
 			runtime.mutex.unlock()
 			return
 		}
-		animation_run.suppressed[property] = true
+		animation_run.suppressed[target_property] = true
 		if active_animation_properties(animation_run).len > 0 {
 			runtime.runs[id] = animation_run
 			runtime.mutex.unlock()
@@ -822,7 +977,7 @@ fn apply_animation_targets(start Element, targets AnimationTargets, progress f64
 	if target := targets.padding_left {
 		padding_left = interpolate(padding_left, target, progress)
 	}
-	return Element{
+	mut result := Element{
 		...start
 		frame: Rect{
 			...start.frame
@@ -845,10 +1000,223 @@ fn apply_animation_targets(start Element, targets AnimationTargets, progress f64
 		rotation: rotation
 		padding_left: padding_left
 	}
+	for property in targets.properties {
+		result = match property.kind {
+			.number {
+				set_number_animation_property(result, property.name, interpolate(animation_number_property_value(start, property.name), property.number, progress))
+			}
+			.color {
+				set_color_animation_property(result, property.name, interpolate_color(animation_color_property_value(start, property.name), property.color, progress))
+			}
+		}
+	}
+	return result
+}
+
+fn animation_number_property_value(element Element, property string) f64 {
+	return match property {
+		'x' { element.frame.x }
+		'y' { element.frame.y }
+		'width' { element.frame.width }
+		'height' { element.frame.height }
+		'rotation' { element.rotation }
+		'corner_radius' { element.box.radius }
+		'box.border_left' { element.box.border_left }
+		'box.border_top' { element.box.border_top }
+		'box.border_right' { element.box.border_right }
+		'box.border_bottom' { element.box.border_bottom }
+		'font_size' { element.text_style.size }
+		'text_style.head_indent' { element.text_style.head_indent }
+		'text_style.first_line_indent' { element.text_style.first_line_indent }
+		'text_style.hyphenation_factor' { element.text_style.hyphenation_factor }
+		'text_style.lines' { f64(element.text_style.lines) }
+		'padding_left' { element.padding_left }
+		'keyboard' { f64(element.keyboard) }
+		'value' { element.value }
+		'min_value' { element.min_value }
+		'max_value' { element.max_value }
+		'step' { element.step }
+		'padding' { element.padding }
+		'slider_style.track_width' { element.slider_style.track_width }
+		'slider_style.thumb_size' { element.slider_style.thumb_size }
+		'toggle_down_box.radius' { element.toggle_down_box.radius }
+		'toggle_down_box.border_left' { element.toggle_down_box.border_left }
+		'toggle_down_box.border_top' { element.toggle_down_box.border_top }
+		'toggle_down_box.border_right' { element.toggle_down_box.border_right }
+		'toggle_down_box.border_bottom' { element.toggle_down_box.border_bottom }
+		'toggle_down_text_style.size' { element.toggle_down_text_style.size }
+		'toggle_down_text_style.head_indent' { element.toggle_down_text_style.head_indent }
+		'toggle_down_text_style.first_line_indent' {
+			element.toggle_down_text_style.first_line_indent
+		}
+		'toggle_down_text_style.hyphenation_factor' {
+			element.toggle_down_text_style.hyphenation_factor
+		}
+		'toggle_down_text_style.lines' { f64(element.toggle_down_text_style.lines) }
+		else { 0.0 }
+	}
+}
+
+fn animation_color_property_value(element Element, property string) u32 {
+	return match property {
+		'background' { element.box.bg }
+		'box.border_color' { element.box.border_color }
+		'text_color' { element.text_style.color }
+		'text_background' { element.text_style.background_color }
+		'slider_style.track_color' { element.slider_style.track_color }
+		'slider_style.value_track_color' { element.slider_style.value_track_color }
+		'slider_style.thumb_color' { element.slider_style.thumb_color }
+		'switch_style.inactive_track_color' { element.switch_style.inactive_track_color }
+		'switch_style.active_track_color' { element.switch_style.active_track_color }
+		'switch_style.thumb_color' { element.switch_style.thumb_color }
+		'switch_style.disabled_track_color' { element.switch_style.disabled_track_color }
+		'switch_style.disabled_thumb_color' { element.switch_style.disabled_thumb_color }
+		'toggle_down_box.bg' { element.toggle_down_box.bg }
+		'toggle_down_box.border_color' { element.toggle_down_box.border_color }
+		'toggle_down_text_style.color' { element.toggle_down_text_style.color }
+		'toggle_down_text_style.background_color' {
+			element.toggle_down_text_style.background_color
+		}
+		else { u32(0) }
+	}
+}
+
+fn set_number_animation_property(element Element, property string, value f64) Element {
+	return match property {
+		'x' { Element{ ...element, frame: Rect{ ...element.frame, x: value } } }
+		'y' { Element{ ...element, frame: Rect{ ...element.frame, y: value } } }
+		'width' { Element{ ...element, frame: Rect{ ...element.frame, width: value } } }
+		'height' { Element{ ...element, frame: Rect{ ...element.frame, height: value } } }
+		'rotation' { Element{ ...element, rotation: value } }
+		'corner_radius' { Element{ ...element, box: BoxStyle{ ...element.box, radius: value } } }
+		'box.border_left' {
+			Element{ ...element, box: BoxStyle{ ...element.box, border_left: value } }
+		}
+		'box.border_top' {
+			Element{ ...element, box: BoxStyle{ ...element.box, border_top: value } }
+		}
+		'box.border_right' {
+			Element{ ...element, box: BoxStyle{ ...element.box, border_right: value } }
+		}
+		'box.border_bottom' {
+			Element{ ...element, box: BoxStyle{ ...element.box, border_bottom: value } }
+		}
+		'font_size' {
+			Element{ ...element, text_style: TextStyle{ ...element.text_style, size: value } }
+		}
+		'text_style.head_indent' {
+			Element{ ...element, text_style: TextStyle{ ...element.text_style, head_indent: value } }
+		}
+		'text_style.first_line_indent' {
+			Element{ ...element, text_style: TextStyle{ ...element.text_style, first_line_indent: value } }
+		}
+		'text_style.hyphenation_factor' {
+			Element{ ...element, text_style: TextStyle{ ...element.text_style, hyphenation_factor: value } }
+		}
+		'text_style.lines' {
+			Element{ ...element, text_style: TextStyle{ ...element.text_style, lines: int(math.round(value)) } }
+		}
+		'padding_left' { Element{ ...element, padding_left: value } }
+		'keyboard' { Element{ ...element, keyboard: int(math.round(value)) } }
+		'value' { Element{ ...element, value: value } }
+		'min_value' { Element{ ...element, min_value: value } }
+		'max_value' { Element{ ...element, max_value: value } }
+		'step' { Element{ ...element, step: value } }
+		'padding' { Element{ ...element, padding: value } }
+		'slider_style.track_width' {
+			Element{ ...element, slider_style: SliderStyle{ ...element.slider_style, track_width: value } }
+		}
+		'slider_style.thumb_size' {
+			Element{ ...element, slider_style: SliderStyle{ ...element.slider_style, thumb_size: value } }
+		}
+		'toggle_down_box.radius' {
+			Element{ ...element, toggle_down_box: BoxStyle{ ...element.toggle_down_box, radius: value } }
+		}
+		'toggle_down_box.border_left' {
+			Element{ ...element, toggle_down_box: BoxStyle{ ...element.toggle_down_box, border_left: value } }
+		}
+		'toggle_down_box.border_top' {
+			Element{ ...element, toggle_down_box: BoxStyle{ ...element.toggle_down_box, border_top: value } }
+		}
+		'toggle_down_box.border_right' {
+			Element{ ...element, toggle_down_box: BoxStyle{ ...element.toggle_down_box, border_right: value } }
+		}
+		'toggle_down_box.border_bottom' {
+			Element{ ...element, toggle_down_box: BoxStyle{ ...element.toggle_down_box, border_bottom: value } }
+		}
+		'toggle_down_text_style.size' {
+			Element{ ...element, toggle_down_text_style: TextStyle{ ...element.toggle_down_text_style, size: value } }
+		}
+		'toggle_down_text_style.head_indent' {
+			Element{ ...element, toggle_down_text_style: TextStyle{ ...element.toggle_down_text_style, head_indent: value } }
+		}
+		'toggle_down_text_style.first_line_indent' {
+			Element{ ...element, toggle_down_text_style: TextStyle{ ...element.toggle_down_text_style, first_line_indent: value } }
+		}
+		'toggle_down_text_style.hyphenation_factor' {
+			Element{ ...element, toggle_down_text_style: TextStyle{ ...element.toggle_down_text_style, hyphenation_factor: value } }
+		}
+		'toggle_down_text_style.lines' {
+			Element{ ...element, toggle_down_text_style: TextStyle{ ...element.toggle_down_text_style, lines: int(math.round(value)) } }
+		}
+		else { element }
+	}
+}
+
+fn set_color_animation_property(element Element, property string, value u32) Element {
+	return match property {
+		'background' { Element{ ...element, box: BoxStyle{ ...element.box, bg: value } } }
+		'box.border_color' {
+			Element{ ...element, box: BoxStyle{ ...element.box, border_color: value } }
+		}
+		'text_color' {
+			Element{ ...element, text_style: TextStyle{ ...element.text_style, color: value } }
+		}
+		'text_background' {
+			Element{ ...element, text_style: TextStyle{ ...element.text_style, background_color: value } }
+		}
+		'slider_style.track_color' {
+			Element{ ...element, slider_style: SliderStyle{ ...element.slider_style, track_color: value } }
+		}
+		'slider_style.value_track_color' {
+			Element{ ...element, slider_style: SliderStyle{ ...element.slider_style, value_track_color: value } }
+		}
+		'slider_style.thumb_color' {
+			Element{ ...element, slider_style: SliderStyle{ ...element.slider_style, thumb_color: value } }
+		}
+		'switch_style.inactive_track_color' {
+			Element{ ...element, switch_style: SwitchStyle{ ...element.switch_style, inactive_track_color: value } }
+		}
+		'switch_style.active_track_color' {
+			Element{ ...element, switch_style: SwitchStyle{ ...element.switch_style, active_track_color: value } }
+		}
+		'switch_style.thumb_color' {
+			Element{ ...element, switch_style: SwitchStyle{ ...element.switch_style, thumb_color: value } }
+		}
+		'switch_style.disabled_track_color' {
+			Element{ ...element, switch_style: SwitchStyle{ ...element.switch_style, disabled_track_color: value } }
+		}
+		'switch_style.disabled_thumb_color' {
+			Element{ ...element, switch_style: SwitchStyle{ ...element.switch_style, disabled_thumb_color: value } }
+		}
+		'toggle_down_box.bg' {
+			Element{ ...element, toggle_down_box: BoxStyle{ ...element.toggle_down_box, bg: value } }
+		}
+		'toggle_down_box.border_color' {
+			Element{ ...element, toggle_down_box: BoxStyle{ ...element.toggle_down_box, border_color: value } }
+		}
+		'toggle_down_text_style.color' {
+			Element{ ...element, toggle_down_text_style: TextStyle{ ...element.toggle_down_text_style, color: value } }
+		}
+		'toggle_down_text_style.background_color' {
+			Element{ ...element, toggle_down_text_style: TextStyle{ ...element.toggle_down_text_style, background_color: value } }
+		}
+		else { element }
+	}
 }
 
 fn merge_animation_properties(base Element, values Element, properties []string) Element {
-	return Element{
+	mut result := Element{
 		...base
 		frame: Rect{
 			...base.frame
@@ -887,6 +1255,14 @@ fn merge_animation_properties(base Element, values Element, properties []string)
 			base.padding_left
 		}
 	}
+	for property in properties {
+		if animation_property_kind_matches(property, .number) {
+			result = set_number_animation_property(result, property, animation_number_property_value(values, property))
+		} else if animation_property_kind_matches(property, .color) {
+			result = set_color_animation_property(result, property, animation_color_property_value(values, property))
+		}
+	}
+	return result
 }
 
 fn merge_suppressed_animation_properties(base Element, values Element, suppressed map[string]bool) Element {
