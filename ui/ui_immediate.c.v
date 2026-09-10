@@ -2378,15 +2378,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return t
 		}
 		ctx.set_text_cfg(cfg)
-		return fit_text_to_width(t, w, fn [ctx] (line string) f64 {
-			return f64(ctx.text_width_f(line))
-		})
-	}
-
-	// fit_text_to_width is the search fit_text runs. It takes the measurement
-	// as an argument so it can be tested without a window to measure in.
-	fn fit_text_to_width(t string, w f64, text_width fn (string) f64) string {
-		if text_width(t) <= w {
+		if f64(ctx.text_width_f(t)) <= w {
 			return t
 		}
 		runes := t.runes()
@@ -2397,7 +2389,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		mut high := runes.len
 		for kept < high {
 			mid := (kept + high + 1) / 2
-			if text_width(runes[..mid].string() + text_ellipsis) <= w {
+			if f64(ctx.text_width_f(runes[..mid].string() + text_ellipsis)) <= w {
 				kept = mid
 			} else {
 				high = mid - 1
