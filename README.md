@@ -185,9 +185,9 @@ On macOS, set `native: true` on a `Button` (or wrap a V-built button with
 `with_native_style`) to let AppKit own its bezel, font, hover, and pressed
 appearance. Its declared colors remain the fallback for the custom renderer.
 
-Event handlers can also assign an ordinary VML expression to a public mutable
-top-level model field, which is useful for simple state transitions that do not
-need a dedicated model method:
+Runtime VML event handlers (`run_vml` and `VmlApp`) can also assign an ordinary
+VML expression to a public mutable top-level model field, which is useful for
+simple state transitions that do not need a dedicated model method:
 
 ```vml
 Button { text: "Home" on_tap: app.screen_name = "home" }
@@ -202,6 +202,9 @@ conditionals, parentheses, and string interpolation. They are side-effect-free
 outside event handlers; calls and assignments are restricted to event handlers.
 Unknown model paths, non-writable binding targets, and invalid action signatures
 fail document loading.
+
+Compile-time `$vml` supports typed method actions and two-way bindings, but not
+event assignments; use a public model method for those transitions.
 Validation traverses every expression branch and repeater item schema without
 executing expressions against the model's initial values.
 
