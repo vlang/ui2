@@ -294,6 +294,43 @@ MessageBox {
 }
 ```
 
+## File and folder dialogs
+
+`open_file_dialog`, `save_file_dialog`, and `open_folder_dialog` show the
+operating system picker and return the selected absolute paths. They block while
+the picker is open; cancellation is an empty array. `open_file_dialog` can
+return several paths when `multiple: true`.
+
+```v
+paths := ui2.open_file_dialog(
+	title: 'Open a V source file'
+	directory: '/work/project'
+	filters: [ui2.FileDialogFilter{
+		name: 'V source'
+		extensions: ['v', 'vv']
+	}]
+)
+if paths.len > 0 {
+	println('Opening ${paths[0]}')
+}
+
+destination := ui2.save_file_dialog(
+	title: 'Save report'
+	filename: 'report.txt'
+	filters: [ui2.FileDialogFilter{
+		name: 'Text'
+		extensions: ['txt']
+	}]
+)
+```
+
+The API uses `NSOpenPanel`/`NSSavePanel` on macOS, standard Win32 open/save
+and folder dialogs on Windows, and the desktop's `zenity` or `kdialog` picker
+on Linux. Linux requires a graphical session and one of those helpers;
+`file_dialog_supported()` reports that availability. The synchronous API is not
+available on iOS or Android, where a document picker needs an app-specific
+asynchronous presentation callback.
+
 ## Menus and the tray
 
 `set_menu_bar(...)` installs the application's top level menu bar and
