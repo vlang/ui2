@@ -177,7 +177,7 @@ fn (mut l Lexer) skip_whitespace_and_comments() {
 
 fn (mut l Lexer) read_string() !Token {
 	line := l.line
-	l.advance() // skip opening quote
+	quote := l.advance()
 	mut val := []u8{}
 	for l.pos < l.src.len {
 		c := l.advance()
@@ -188,9 +188,10 @@ fn (mut l Lexer) read_string() !Token {
 				`t` { val << `\t` }
 				`\\` { val << `\\` }
 				`"` { val << `"` }
+				`'` { val << `'` }
 				else { val << next }
 			}
-		} else if c == `"` {
+		} else if c == quote {
 			return Token{.string_lit, val.bytestr(), line}
 		} else {
 			val << c
@@ -362,7 +363,7 @@ fn tokenize(source string) ![]Token {
 				l.advance()
 				tokens << Token{.or_or, '||', line}
 			}
-			`"` {
+			`"`, `'` {
 				tokens << l.read_string()!
 			}
 			else {
