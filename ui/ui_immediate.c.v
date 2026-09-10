@@ -24,6 +24,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		swipe_left     bool
 		text_field     bool
 		text_area      bool
+		checkbox       bool
+		checkbox_state bool
 		dropdown       bool
 		slider         bool
 		switch_control bool
@@ -106,6 +108,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_slider_specs = map[string]SliderSpec{}
 	__global g_switch_values = map[string]bool{}
 	__global g_switch_declared = map[string]bool{}
+	__global g_checkbox_values = map[string]bool{}
+	__global g_checkbox_declared = map[string]bool{}
 	__global g_toggle_values = map[string]bool{}
 	__global g_toggle_declared = map[string]bool{}
 	__global g_toggle_groups = map[string]string{}
@@ -119,6 +123,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_active_fields = map[string]bool{}
 	__global g_active_sliders = map[string]bool{}
 	__global g_active_switches = map[string]bool{}
+	__global g_active_checkboxes = map[string]bool{}
 	__global g_active_toggles = map[string]bool{}
 	__global g_active_scrolls = map[string]bool{}
 	__global g_image_ids = map[string]int{}
@@ -322,6 +327,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		g_switch_values[id] = active
+	}
+
+	// checkbox_checked returns the live value currently displayed by a mounted
+	// checkbox, including a value changed by pointer input before the next build.
+	pub fn checkbox_checked(id string) bool {
+		return g_checkbox_values[id] or { false }
+	}
+
+	pub fn set_checkbox_checked(id string, checked bool) {
+		if id !in g_active_checkboxes {
+			return
+		}
+		g_checkbox_values[id] = checked
 	}
 
 	pub fn toggle_button_pressed(id string) bool {
@@ -542,6 +560,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			g_active_fields = map[string]bool{}
 			g_active_sliders = map[string]bool{}
 			g_active_switches = map[string]bool{}
+			g_active_checkboxes = map[string]bool{}
 			g_active_toggles = map[string]bool{}
 			g_active_scrolls = map[string]bool{}
 			g_active_images = map[string]bool{}
@@ -676,6 +695,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if target.switch_control {
 			return
 		}
+		if target.checkbox {
+			return
+		}
 		g_touch.scroll_id = scroll_hit_test(x, y)
 		g_touch.scroll_start_off_y = scroll_offset(g_touch.scroll_id)
 		if begin_scrollbar_drag(x, y) {
@@ -704,6 +726,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		if target.switch_control {
 			commit_switch(target, x >= target.x + target.w / 2)
+			return
+		}
+		if target.checkbox {
 			return
 		}
 		if g_touch.scrollbar_drag {
@@ -770,6 +795,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				}
 				commit_switch(slider_target, !current)
 			}
+			return
+		}
+		if slider_target.checkbox {
+			commit_checkbox(slider_target)
 			return
 		}
 		if g_touch.long_press_fired || g_touch.scrollbar_drag {
@@ -893,6 +922,17 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if active != previous {
 			fire_event(target.action_id)
 		}
+	}
+
+	fn commit_checkbox(target HitTarget) {
+		if !target.checkbox {
+			return
+		}
+		previous := if target.id.len > 0 { checkbox_checked(target.id) } else { target.checkbox_state }
+		if target.id.len > 0 {
+			g_checkbox_values[target.id] = !previous
+		}
+		fire_event(target.action_id)
 	}
 
 	fn commit_toggle_button(target HitTarget) {
@@ -1394,6 +1434,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			g_switch_values.delete(id)
 			g_switch_declared.delete(id)
 		}
+		mut stale_checkboxes := []string{}
+		for id, _ in g_checkbox_values {
+			if id !in g_active_checkboxes {
+				stale_checkboxes << id
+			}
+		}
+		for id in stale_checkboxes {
+			g_checkbox_values.delete(id)
+			g_checkbox_declared.delete(id)
+		}
 		mut stale_toggles := []string{}
 		for id, _ in g_toggle_values {
 			if id !in g_active_toggles {
@@ -1619,14 +1669,26 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.checkbox {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
+				mut checked := el.checked
+				if el.id.len > 0 {
+					previous_declared := g_checkbox_declared[el.id] or { el.checked }
+					previous_value := g_checkbox_values[el.id] or { el.checked }
+					if el.id !in g_checkbox_values
+						|| (previous_declared != el.checked && previous_value != el.checked) {
+						g_checkbox_values[el.id] = el.checked
+					}
+					checked = g_checkbox_values[el.id] or { el.checked }
+					g_checkbox_declared[el.id] = el.checked
+					g_active_checkboxes[el.id] = true
+				}
 				box_size := if el.frame.height < 18 { el.frame.height } else { 18.0 }
 				box_y := y + (el.frame.height - box_size) / 2
-				fill := if el.checked {
+				fill := if checked {
 					if el.enabled { u32(0x3478d4) } else { u32(0x94a3b8) }
 				} else {
 					u32(0xffffff)
 				}
-				border := if el.checked {
+				border := if checked {
 					if el.enabled { u32(0x2f6fc4) } else { u32(0x94a3b8) }
 				} else if el.enabled {
 					u32(0x64748b)
@@ -1635,7 +1697,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				}
 				draw_rect(ctx, x, box_y, box_size, box_size, fill, 4)
 				draw_outline(ctx, x, box_y, box_size, box_size, border, 4)
-				if el.checked {
+				if checked {
 					draw_check_mark(ctx, x, box_y, box_size, if el.enabled { u32(0xffffff) } else { u32(0xf8fafc) })
 				}
 				draw_text(ctx, el.text, x + box_size + 8, y, el.frame.width - box_size - 8, el.frame.height, el.text_style)
@@ -1647,6 +1709,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 						y: y
 						w: el.frame.width
 						h: el.frame.height
+						checkbox: true
+						checkbox_state: checked
 					}, clip)
 				}
 			}

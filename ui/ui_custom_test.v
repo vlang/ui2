@@ -181,6 +181,36 @@ $if ui2_custom_rendering ? {
 		g_touch = TouchState{}
 	}
 
+	fn test_custom_checkbox_tap_updates_live_checked_state() {
+		g_checkbox_values = map[string]bool{
+			'newsletter': false
+		}
+		g_active_checkboxes = map[string]bool{
+			'newsletter': true
+		}
+		g_hit_targets = [HitTarget{
+			id: 'newsletter'
+			action_id: 'newsletter_changed'
+			x: 10
+			y: 20
+			w: 120
+			h: 28
+			checkbox: true
+		}]
+		handle_touch_down(20, 30)
+		handle_touch_up(20, 30)
+		assert checkbox_checked('newsletter')
+		set_checkbox_checked('newsletter', false)
+		set_checkbox_checked('missing', true)
+		assert !checkbox_checked('newsletter')
+		assert !checkbox_checked('missing')
+		g_checkbox_values = map[string]bool{}
+		g_checkbox_declared = map[string]bool{}
+		g_active_checkboxes = map[string]bool{}
+		g_hit_targets = []HitTarget{}
+		g_touch = TouchState{}
+	}
+
 	fn test_custom_toggle_button_updates_live_pressed_state() {
 		g_toggle_values = map[string]bool{
 			'bold': false
