@@ -65,15 +65,15 @@ fn test_compiled_vml_event_clears_pressed_group_peers() {
 		reset_compiled_vml_bindings()
 		_ = compiled_vml_event('left', 'pressed', 'app.checked', '')
 		event := compiled_vml_event('right', 'pressed', 'app.secondary', '')
-		g_toggle_values = map[string]bool{
+		g_gg_app.toggle_values = map[string]bool{
 			'left':  false
 			'right': true
 		}
-		g_toggle_groups = map[string]string{
+		g_gg_app.toggle_groups = map[string]string{
 			'left':  'choice'
 			'right': 'choice'
 		}
-		g_active_toggles = map[string]bool{
+		g_gg_app.active_toggles = map[string]bool{
 			'left':  true
 			'right': true
 		}
@@ -84,9 +84,9 @@ fn test_compiled_vml_event_clears_pressed_group_peers() {
 		assert handled
 		assert !model.checked
 		assert model.secondary
-		g_toggle_values = map[string]bool{}
-		g_toggle_groups = map[string]string{}
-		g_active_toggles = map[string]bool{}
+		g_gg_app.toggle_values = map[string]bool{}
+		g_gg_app.toggle_groups = map[string]string{}
+		g_gg_app.active_toggles = map[string]bool{}
 		reset_compiled_vml_bindings()
 	}
 }

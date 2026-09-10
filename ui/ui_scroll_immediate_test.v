@@ -8,20 +8,20 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	fn reset_scroll_test_state() {
 		reset_scroll_frame()
-		g_scroll_offsets = map[string]f64{}
-		g_scroll_content_h = map[string]f64{}
-		g_active_scrolls = map[string]bool{}
-		g_active_fields = map[string]bool{}
-		g_text_values = map[string]string{}
-		g_text_props = map[string]string{}
-		g_text_kinds = map[string]Kind{}
-		g_text_editors = map[string]TextEditor{}
-		g_text_area_layouts = map[string]TextAreaLayout{}
-		g_hit_targets = []HitTarget{}
-		g_touch = TouchState{}
-		g_focused_field = ''
-		g_scroll_handler = ScrollFn(unsafe { nil })
-		g_event_handler = EventFn(unsafe { nil })
+		g_gg_app.scroll_offsets = map[string]f64{}
+		g_gg_app.scroll_content_h = map[string]f64{}
+		g_gg_app.active_scrolls = map[string]bool{}
+		g_gg_app.active_fields = map[string]bool{}
+		g_gg_app.text_values = map[string]string{}
+		g_gg_app.text_props = map[string]string{}
+		g_gg_app.text_kinds = map[string]Kind{}
+		g_gg_app.text_editors = map[string]TextEditor{}
+		g_gg_app.text_area_layouts = map[string]TextAreaLayout{}
+		g_gg_app.hit_targets = []HitTarget{}
+		g_gg_app.touch = TouchState{}
+		g_gg_app.focused_field = ''
+		g_gg_app.scroll_handler = ScrollFn(unsafe { nil })
+		g_gg_app.event_handler = EventFn(unsafe { nil })
 		scroll_test_events = []string{}
 		scroll_test_measurements = 0
 		close_dropdown()
@@ -122,7 +122,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		handle_touch_up(150, 30)
 		assert scroll_offset('text') == 146
 		assert scroll_offset('info') == 48
-		assert g_focused_field == ''
+		assert g_gg_app.focused_field == ''
 		assert scroll_test_events == ['text', 'info', 'text']
 	}
 
@@ -162,7 +162,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		register_scroll_view('inner', rect(20, 20, 100, 200), rect(0, 0, 300, 100), 1000,
 			true, true, false)
 		assert scroll_maximum('inner') == 800
-		assert g_scroll_areas['inner'] == rect(20, 20, 100, 80)
+		assert g_gg_app.scroll_areas['inner'] == rect(20, 20, 100, 80)
 		handle_mouse_scroll(50, 50, -1)
 		assert scroll_offset('inner') == 48
 		assert scroll_offset('outer') == 0
@@ -210,7 +210,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		assert scroll_hit_test(50, 50) == ''
 		reset_scroll_frame()
 		register_scroll_view('hidden-bar', frame, frame, 1000, true, false, false)
-		assert 'hidden-bar' !in g_scrollbar_geometries
+		assert 'hidden-bar' !in g_gg_app.scrollbar_geometries
 		handle_mouse_scroll(50, 50, -0.5)
 		assert scroll_offset('hidden-bar') == 24
 	}
@@ -233,11 +233,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		frame := rect(0, 0, 100, 100)
 		register_scroll_view('text', frame, frame, 1000, true, true, false)
 		handle_touch_down(94, 10)
-		assert g_touch.scrollbar_drag
+		assert g_gg_app.touch.scrollbar_drag
 		handle_touch_move(94, 74)
 		handle_touch_up(94, 74)
 		assert scroll_offset('text') == 900
-		assert g_focused_field == ''
+		assert g_gg_app.focused_field == ''
 		set_scroll_offset('text', 0, 900)
 		reset_scroll_frame()
 		register_scroll_view('text', frame, frame, 1000, true, true, false)
@@ -260,14 +260,14 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		reset_scroll_test_state()
 		scroll_test_panes()
 		text_area_lines('text', 'abcdef', 30, TextStyle{}, 15, scroll_test_width)
-		g_text_values['text'] = 'abcdef'
-		g_text_kinds['text'] = .text_area
-		g_active_scrolls = map[string]bool{}
+		g_gg_app.text_values['text'] = 'abcdef'
+		g_gg_app.text_kinds['text'] = .text_area
+		g_gg_app.active_scrolls = map[string]bool{}
 		reset_scroll_frame()
 		prune_unmounted_state()
-		assert 'text' !in g_scroll_offsets
-		assert 'text' !in g_scroll_content_h
-		assert 'text' !in g_text_area_layouts
+		assert 'text' !in g_gg_app.scroll_offsets
+		assert 'text' !in g_gg_app.scroll_content_h
+		assert 'text' !in g_gg_app.text_area_layouts
 		assert scroll_hit_test(150, 50) == ''
 	}
 }
