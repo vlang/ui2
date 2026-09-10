@@ -118,6 +118,8 @@ fn C.ui2_win_apply_control_colors(dc voidptr, foreground u32, background u32, tr
 
 fn C.ui2_win_paint_background(hwnd voidptr, background u32, radius f64, transparent int, border_color u32, border_left f64, border_top f64, border_right f64, border_bottom f64)
 
+fn C.ui2_win_paint_background_into(hwnd voidptr, dc voidptr, background u32, radius f64, transparent int, border_color u32, border_left f64, border_top f64, border_right f64, border_bottom f64)
+
 fn C.ui2_win_paint_control_border(hwnd voidptr, color u32, radius f64, left f64, top f64, right f64, bottom f64)
 
 fn C.ui2_win_invalidate(hwnd voidptr)
@@ -183,6 +185,7 @@ const win_wm_lbutton_up = u32(0x0202)
 const win_wm_mouse_wheel = u32(0x020a)
 const win_wm_dropfiles = u32(0x0233)
 const win_wm_refresh = u32(0x8000 + 77)
+const win_wm_paint_background = u32(0x8000 + 79)
 
 const win_bn_clicked = 0
 const win_cbn_selchange = 1
@@ -1366,6 +1369,18 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 				.label,
 				.checkbox,
 			]), brush)
+		}
+		win_wm_paint_background {
+			box := if hwnd == st.root {
+				st.node_boxes[''] or { BoxStyle{} }
+			} else {
+				key := st.handle_keys[windows_handle_id(hwnd)] or { return 0 }
+				st.node_boxes[key] or { return 0 }
+			}
+			C.ui2_win_paint_background_into(hwnd, voidptr(wparam), box.bg, box.radius,
+				windows_bool(box.transparent), box.border_color, box.border_left,
+				box.border_top, box.border_right, box.border_bottom)
+			return 0
 		}
 		win_wm_paint {
 			if hwnd == st.root {

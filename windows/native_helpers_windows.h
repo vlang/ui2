@@ -29,6 +29,7 @@
 
 #define UI2_WM_REFRESH (WM_APP + 77)
 #define UI2_WM_TRAY (WM_APP + 78)
+#define UI2_WM_PAINT_BACKGROUND (WM_APP + 79)
 
 enum {
 	UI2_WIN_VIEW = 1,
@@ -1010,6 +1011,71 @@ static inline void ui2_win_paint_control_border(void *hwnd_ptr, unsigned int col
 	ReleaseDC(hwnd, dc);
 }
 
+static inline void ui2_win_fill_background(HDC dc, const RECT *rect,
+		unsigned int background, double radius) {
+	HBRUSH brush = CreateSolidBrush(ui2_win_color(background));
+	if (brush == NULL) return;
+	if (radius > 0.5) {
+		HPEN pen = CreatePen(PS_NULL, 0, ui2_win_color(background));
+		HGDIOBJ old_brush = SelectObject(dc, brush);
+		HGDIOBJ old_pen = SelectObject(dc, pen);
+		int diameter = (int)(radius * 2.0 + 0.5);
+		RoundRect(dc, rect->left, rect->top, rect->right, rect->bottom, diameter, diameter);
+		SelectObject(dc, old_pen);
+		SelectObject(dc, old_brush);
+		DeleteObject(pen);
+	} else {
+		FillRect(dc, rect, brush);
+	}
+	DeleteObject(brush);
+}
+
+static inline void ui2_win_paint_background_into(void *hwnd_ptr, void *dc_ptr,
+		unsigned int background, double radius, int transparent,
+		unsigned int border_color, double border_left, double border_top,
+		double border_right, double border_bottom) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	HDC dc = (HDC)dc_ptr;
+	if (hwnd == NULL || dc == NULL) return;
+
+	// UI2Container parents paint with WS_CLIPCHILDREN, so a child cannot leave
+	// clear pixels untouched. Rebuild the ancestor backdrop in this DC first;
+	// this preserves both color-key pixels and rounded ancestor boundaries.
+	HWND parent = GetParent(hwnd);
+	if (parent != NULL) {
+		POINT parent_origin = {0, 0};
+		MapWindowPoints(parent, hwnd, &parent_origin, 1);
+		int saved = SaveDC(dc);
+		OffsetViewportOrgEx(dc, parent_origin.x, parent_origin.y, NULL);
+		SendMessageW(parent, UI2_WM_PAINT_BACKGROUND, (WPARAM)dc, 0);
+		if (saved != 0) RestoreDC(dc, saved);
+	}
+
+	RECT rect;
+	GetClientRect(hwnd, &rect);
+	if (parent == NULL && transparent) {
+		// A top-level window has no native surface to inherit from. Its declared
+		// background is the deterministic clear color (and may be a color key).
+		ui2_win_fill_background(dc, &rect, background, 0.0);
+	}
+	if (!transparent) {
+		ui2_win_fill_background(dc, &rect, background, radius);
+	}
+	HRGN clip = NULL;
+	if (radius > 0.5) {
+		int diameter = (int)(radius * 2.0 + 0.5);
+		clip = CreateRoundRectRgn(rect.left, rect.top, rect.right + 1, rect.bottom + 1,
+			diameter, diameter);
+		if (clip != NULL) SelectClipRgn(dc, clip);
+	}
+	ui2_win_draw_borders(dc, &rect, border_color, border_left, border_top,
+		border_right, border_bottom);
+	if (clip != NULL) {
+		SelectClipRgn(dc, NULL);
+		DeleteObject(clip);
+	}
+}
+
 static inline void ui2_win_paint_background(void *hwnd_ptr, unsigned int background,
 		double radius, int transparent, unsigned int border_color, double border_left,
 		double border_top, double border_right, double border_bottom) {
@@ -1017,37 +1083,8 @@ static inline void ui2_win_paint_background(void *hwnd_ptr, unsigned int backgro
 	PAINTSTRUCT paint;
 	HDC dc = BeginPaint(hwnd, &paint);
 	if (dc != NULL) {
-		RECT rect;
-		GetClientRect(hwnd, &rect);
-		if (!transparent) {
-			HBRUSH brush = CreateSolidBrush(ui2_win_color(background));
-			if (radius > 0.5) {
-				HPEN pen = CreatePen(PS_NULL, 0, ui2_win_color(background));
-				HGDIOBJ old_brush = SelectObject(dc, brush);
-				HGDIOBJ old_pen = SelectObject(dc, pen);
-				int diameter = (int)(radius * 2.0 + 0.5);
-				RoundRect(dc, rect.left, rect.top, rect.right, rect.bottom, diameter, diameter);
-				SelectObject(dc, old_pen);
-				SelectObject(dc, old_brush);
-				DeleteObject(pen);
-			} else {
-				FillRect(dc, &rect, brush);
-			}
-			DeleteObject(brush);
-		}
-		HRGN clip = NULL;
-		if (radius > 0.5) {
-			int diameter = (int)(radius * 2.0 + 0.5);
-			clip = CreateRoundRectRgn(rect.left, rect.top, rect.right + 1, rect.bottom + 1,
-				diameter, diameter);
-			if (clip != NULL) SelectClipRgn(dc, clip);
-		}
-		ui2_win_draw_borders(dc, &rect, border_color, border_left, border_top,
-			border_right, border_bottom);
-		if (clip != NULL) {
-			SelectClipRgn(dc, NULL);
-			DeleteObject(clip);
-		}
+		ui2_win_paint_background_into(hwnd, dc, background, radius, transparent,
+			border_color, border_left, border_top, border_right, border_bottom);
 	}
 	EndPaint(hwnd, &paint);
 }
