@@ -170,6 +170,23 @@ fn test_parse_requires_a_single_complete_root() {
 	}
 }
 
+fn test_parse_allows_assignments_only_in_event_properties() {
+	node := parse_vml('Button { on_tap: app.screen_name = "home" }') or { panic(err) }
+	assignment := node.expressions['on_tap'] or { panic('missing event assignment') }
+	assert assignment.kind == .assignment
+
+	for source in [
+		'Rectangle { width: app.width = 10 }',
+		r'Label { text: "Width ${app.width = 10}" }',
+	] {
+		if _ := parse_vml(source) {
+			assert false, 'assignments outside event properties must be rejected'
+		} else {
+			assert err.msg().contains('=')
+		}
+	}
+}
+
 fn test_plain_container_children_use_resolved_local_frame() {
 	node := parse_vml('View { x: 30 y: 40 width: 200 height: 100 Label {} }') or {
 		panic(err)

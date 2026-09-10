@@ -427,7 +427,11 @@ fn (mut p Parser) parse_node() !&VNode {
 			} else if p.pos + 1 < p.tokens.len && p.tokens[p.pos + 1].kind == .colon {
 				key := p.eat(.ident)!
 				p.eat(.colon)!
-				expr := p.parse_expression()!
+				expr := if vml_is_event_property(key.val) {
+					p.parse_event_expression()!
+				} else {
+					p.parse_expression()!
+				}
 				val := expression_text(expr)
 				if key.val == 'id' {
 					if expr.kind !in [.literal, .path] {
@@ -446,6 +450,11 @@ fn (mut p Parser) parse_node() !&VNode {
 	}
 	p.eat(.rbrace)!
 	return node
+}
+
+fn vml_is_event_property(property string) bool {
+	return property in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
+		'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss']
 }
 
 fn expression_text(expr &VExpression) string {
@@ -483,6 +492,12 @@ fn expression_text(expr &VExpression) string {
 }
 
 fn (mut p Parser) parse_expression() !&VExpression {
+	return p.parse_conditional()
+}
+
+// parse_event_expression admits assignments because event handlers are the
+// only VML expressions allowed to mutate the model.
+fn (mut p Parser) parse_event_expression() !&VExpression {
 	return p.parse_assignment()
 }
 
