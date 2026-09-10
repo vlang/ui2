@@ -1043,6 +1043,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		mut navigation_key := match key {
 			.left { 'left' }
 			.right { 'right' }
+			.up { 'up' }
+			.down { 'down' }
 			.home { 'home' }
 			.end { 'end' }
 			.page_up { 'page_up' }
@@ -1073,6 +1075,21 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		boundary_modifier := text_navigation_boundary_modifier(
 			modifiers & u32(gg.Modifier.super) != 0,
 		)
+		if focused_text_area && (navigation_key == 'up' || navigation_key == 'down') {
+			if move_focused_text_area_caret(mut editor, if navigation_key == 'up' { -1 } else { 1 },
+				modifiers & u32(gg.Modifier.shift) != 0) {
+				g_text_editors[g_focused_field] = editor
+			}
+			return
+		}
+		if focused_text_area && (navigation_key == 'home' || navigation_key == 'end')
+			&& !primary_modifier {
+			if move_focused_text_area_line_boundary(mut editor, navigation_key == 'end',
+				modifiers & u32(gg.Modifier.shift) != 0) {
+				g_text_editors[g_focused_field] = editor
+			}
+			return
+		}
 		if boundary_modifier && navigation_key == 'left' {
 			navigation_key = 'home'
 		} else if boundary_modifier && navigation_key == 'right' {

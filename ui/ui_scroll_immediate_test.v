@@ -298,3 +298,41 @@ fn test_text_area_line_ranges_follow_wrapped_source_runes() {
 		},
 	]
 }
+
+fn test_text_area_line_ranges_keep_original_crlf_offsets() {
+	assert text_area_line_rune_ranges('a\r\nbc', ['a', 'bc']) == [
+		TextAreaLineRange{
+			start: 0
+			end: 1
+		},
+		TextAreaLineRange{
+			start: 3
+			end: 5
+		},
+	]
+}
+
+fn test_text_area_vertical_and_line_boundary_navigation() {
+	reset_scroll_test_state()
+	g_focused_field = 'notes'
+	g_text_area_layouts['notes'] = TextAreaLayout{
+		text: 'one\ntwo\nthree'
+		lines: ['one', 'two', 'three']
+	}
+	mut editor := text_editor('one\ntwo\nthree')
+	editor.set_caret(6)
+	assert move_focused_text_area_caret(mut editor, 1, false)
+	assert editor.selection.caret == 10
+	assert move_focused_text_area_caret(mut editor, -1, true)
+	assert editor.selection == TextSelection{
+		anchor: 10
+		caret: 6
+	}
+	assert move_focused_text_area_line_boundary(mut editor, false, false)
+	assert editor.selection.caret == 4
+	assert move_focused_text_area_line_boundary(mut editor, true, true)
+	assert editor.selection == TextSelection{
+		anchor: 4
+		caret: 7
+	}
+}

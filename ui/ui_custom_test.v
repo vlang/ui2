@@ -107,12 +107,12 @@ $if ui2_custom_rendering ? {
 			assert !text_navigation_word_modifier(true, false)
 			assert text_navigation_boundary_modifier(true)
 		} $else {
-		assert text_navigation_primary_modifier(true, false, false)
-		assert !text_navigation_primary_modifier(true, true, false)
-		assert text_navigation_word_modifier(true, false)
-		assert !text_navigation_word_modifier(true, true)
-		assert !text_navigation_boundary_modifier(true)
-	}
+			assert text_navigation_primary_modifier(true, false, false)
+			assert !text_navigation_primary_modifier(true, true, false)
+			assert text_navigation_word_modifier(true, false)
+			assert !text_navigation_word_modifier(true, true)
+			assert !text_navigation_boundary_modifier(true)
+		}
 	}
 
 	fn test_custom_slider_pointer_value_uses_range_step_and_orientation() {
