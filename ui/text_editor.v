@@ -235,7 +235,15 @@ fn clamp_int(value int, min int, max int) int {
 }
 
 fn is_word_rune(value rune) bool {
-	return utf8.is_letter(value) || utf8.is_number(value) || value == `_`
+	return utf8.is_letter(value) || utf8.is_number(value) || value == `_` || is_combining_mark(value)
+}
+
+// is_combining_mark keeps decomposed characters, such as e followed by a
+// combining acute accent, in the same word during keyboard navigation.
+fn is_combining_mark(value rune) bool {
+	return (value >= 0x0300 && value <= 0x036f) || (value >= 0x1ab0 && value <= 0x1aff)
+		|| (value >= 0x1dc0 && value <= 0x1dff) || (value >= 0x20d0 && value <= 0x20ff)
+		|| (value >= 0xfe00 && value <= 0xfe0f) || (value >= 0xfe20 && value <= 0xfe2f)
 }
 
 fn previous_word_boundary(runes []rune, caret int) int {

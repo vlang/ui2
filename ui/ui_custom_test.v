@@ -498,3 +498,12 @@ $if ui2_custom_rendering ? {
 		g_touch = TouchState{}
 	}
 }
+
+fn test_text_field_selection_text_uses_rune_offsets() {
+	before, selected := text_field_selection_text('a🙂bc', TextSelection{
+		anchor: 4
+		caret: 1
+	})
+	assert before == 'a'
+	assert selected == '🙂bc'
+}

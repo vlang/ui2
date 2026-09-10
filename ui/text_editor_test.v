@@ -5,7 +5,7 @@ fn test_text_editor_insert_and_replace_selection() {
 	editor.set_selection(6, 11)
 	editor.insert_text('V')
 	assert editor.text == 'Hello V'
-	assert editor.selection.caret == 7
+	assert editor.selection.caret == 8
 	assert editor.selection.collapsed()
 }
 
@@ -144,6 +144,15 @@ fn test_text_editor_navigation_moves_by_unicode_words_and_page_boundaries() {
 	assert start == 0
 	assert end == rune_len(editor.text)
 	assert !apply_text_editor_navigation(mut editor, 'a', false, false)
+}
+
+fn test_text_editor_word_navigation_keeps_combining_marks_in_words() {
+	mut editor := text_editor('éclair cafe')
+	editor.set_caret(rune_len(editor.text))
+	assert apply_text_editor_navigation(mut editor, 'left', false, true)
+	assert editor.selection.caret == 7
+	assert apply_text_editor_navigation(mut editor, 'left', false, true)
+	assert editor.selection.caret == 0
 }
 
 fn test_rich_text_area_keeps_runs() {

@@ -1799,6 +1799,10 @@ fn page_focused_text_area(direction int) {
 				is_focused := g_focused_field == el.id
 				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box,
 					is_focused, el.enabled)
+				if is_focused && !editor.selection.collapsed() {
+					draw_text_field_selection(ctx, display_text, editor.selection, x + padding_left,
+						y, content_width, el.frame.height, el.text_style)
+				}
 				if current_text.len > 0 {
 					draw_editable_text(ctx, display_text, x + padding_left, y, content_width, el.frame.height, el.text_style)
 				} else if el.placeholder.len > 0 {
@@ -2550,6 +2554,46 @@ fn page_focused_text_area(direction int) {
 	// shortened line would leave the caret sitting past the end of it.
 	fn draw_editable_text(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle) {
 		draw_text_in_box(ctx, t, x, y, w, h, style, false)
+	}
+
+	// draw_text_field_selection paints the selected rune range before its text.
+	// The range is derived from the rendered string so secure fields highlight
+	// their bullet characters instead of leaking the underlying value.
+	fn draw_text_field_selection(ctx &gg.Context, display_text string, selection TextSelection, x f64, y f64, w f64, h f64, style TextStyle) {
+		before, selected := text_field_selection_text(display_text, selection)
+		if selected.len == 0 || w <= 0 {
+			return
+		}
+		family := text_font_file(style.font_family, style.bold, style.italic)
+		ensure_family_fallbacks(ctx, family)
+		ctx.set_text_cfg(gg.TextCfg{
+			color: hex_color(style.color)
+			size: int(font_render_size(style.size, text_font_metrics(family)) + 0.5)
+			bold: style.bold
+			italic: style.italic
+			family: family
+			align: text_align(style.align)
+			vertical_align: .middle
+		})
+		mut left := x + f64(ctx.text_width(before))
+		mut right := left + f64(ctx.text_width(selected))
+		if left < x {
+			left = x
+		}
+		if right > x + w {
+			right = x + w
+		}
+		if right > left {
+			draw_rect(ctx, left, y + h * 0.2, right - left, h * 0.6, 0xb8d7ff, 0)
+		}
+	}
+
+	fn text_field_selection_text(display_text string, selection TextSelection) (string, string) {
+		runes := display_text.runes()
+		start, end := selection.ordered()
+		from := clamp_int(start, 0, runes.len)
+		to := clamp_int(end, from, runes.len)
+		return runes[..from].string(), runes[from..to].string()
 	}
 
 	fn draw_text_in_box(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle, fit bool) {
