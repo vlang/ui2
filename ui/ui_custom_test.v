@@ -34,6 +34,26 @@ $if ui2_custom_rendering ? {
 		quit()
 	}
 
+	fn test_custom_text_editor_replaces_owned_state_after_caret_moves() {
+		g_text_values = map[string]string{}
+		g_text_props = map[string]string{}
+		g_text_editors = map[string]TextEditor{}
+		g_text_kinds = map[string]Kind{}
+		g_active_fields = map[string]bool{
+			'field': true
+		}
+		g_focused_field = 'field'
+		replace_text_value('field', 'abc')
+		replace_text_editor('field', text_editor('abc'.clone()))
+		handle_key_down(.left)
+		handle_key_down(.backspace)
+		handle_char_input(`x`)
+		assert text('field') == 'axc'
+		forget_text_state('field')
+		g_active_fields = map[string]bool{}
+		g_focused_field = ''
+	}
+
 	fn test_custom_pointer_event_ids_are_normalized() {
 		assert pointer_event_id('down', 'surface', 20, 30) == 'pointer:down:surface:20.0:30.0'
 		assert pointer_event_id('drag', 'surface', 40, 50) == 'pointer:drag:surface:40.0:50.0'

@@ -19,6 +19,10 @@ fn test_text_editor_deletes_utf8_by_rune() {
 	assert editor.text == 'a'
 }
 
+fn test_rune_len_counts_utf8_code_points() {
+	assert rune_len('a🙂é') == 3
+}
+
 fn test_text_editor_clamps_publicly_mutated_selection_before_editing() {
 	mut editor := text_editor('a')
 	editor.selection.anchor = 100
