@@ -119,6 +119,12 @@ pub:
 	border_bottom f64
 }
 
+// box_draws_fill is shared by native and custom renderers so every element
+// backed by BoxStyle gives transparent the same meaning.
+fn box_draws_fill(box BoxStyle) bool {
+	return !box.transparent
+}
+
 // box_border_width keeps a declared border inside its element. Border widths
 // are logical units, just like Rect and corner radii; each backend is
 // responsible for mapping those units to its native device scale.

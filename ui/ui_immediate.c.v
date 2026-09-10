@@ -1383,7 +1383,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.screen {
 				w := f64(ctx.width)
 				h := f64(ctx.height)
-				if !el.box.transparent {
+				if box_draws_fill(el.box) {
 					draw_rect(ctx, off_x, off_y, w - off_x, h - off_y, el.box.bg, 0)
 				}
 				draw_box_borders(ctx, off_x, off_y, w - off_x, h - off_y, el.box)
@@ -1394,7 +1394,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.view {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
-				if !el.box.transparent {
+				if box_draws_fill(el.box) {
 					draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
 				}
 				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
@@ -1421,7 +1421,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
 				frame := rect(x, y, el.frame.width, el.frame.height)
-				draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, 0)
+				if box_draws_fill(el.box) {
+					draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, 0)
+				}
 				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
 				mut content_h := 0.0
 				for child in el.children {
@@ -1477,11 +1479,14 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.button {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
-				if el.native_style && el.box.bg == unstyled_box_bg {
-					draw_button_bezel(ctx, x, y, el.frame.width, el.frame.height, el.box.radius,
-						el.enabled)
-				} else {
-					draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
+				if box_draws_fill(el.box) {
+					if el.native_style && el.box.bg == unstyled_box_bg {
+						draw_button_bezel(ctx, x, y, el.frame.width, el.frame.height, el.box.radius,
+							el.enabled)
+					} else {
+						draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg,
+							el.box.radius)
+					}
 				}
 				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
 				draw_text_centered(ctx, el.text, x, y, el.frame.width, el.frame.height, el.text_style)
@@ -1519,11 +1524,13 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				}
 				box := if pressed { el.toggle_down_box } else { el.box }
 				style := if pressed { el.toggle_down_text_style } else { el.text_style }
-				if el.native_style && box.bg == unstyled_box_bg {
-					draw_button_bezel(ctx, x, y, el.frame.width, el.frame.height, box.radius,
-						el.enabled)
-				} else {
-					draw_rect(ctx, x, y, el.frame.width, el.frame.height, box.bg, box.radius)
+				if box_draws_fill(box) {
+					if el.native_style && box.bg == unstyled_box_bg {
+						draw_button_bezel(ctx, x, y, el.frame.width, el.frame.height, box.radius,
+							el.enabled)
+					} else {
+						draw_rect(ctx, x, y, el.frame.width, el.frame.height, box.bg, box.radius)
+					}
 				}
 				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, box)
 				draw_text_centered(ctx, el.text, x, y, el.frame.width, el.frame.height, style)
@@ -1972,7 +1979,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn draw_control_surface(ctx &gg.Context, x f64, y f64, w f64, h f64, box BoxStyle, focused bool, enabled bool) {
-		draw_rect(ctx, x, y, w, h, box.bg, box.radius)
+		if box_draws_fill(box) {
+			draw_rect(ctx, x, y, w, h, box.bg, box.radius)
+		}
 		border := if focused {
 			u32(0x3478d4)
 		} else if enabled {

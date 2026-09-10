@@ -155,8 +155,10 @@ fn test_macos_native_style_button_keeps_appkit_bezel_and_press_state() {
 	defer {
 		macos.release(pool)
 	}
-	button_view := native_new_button(native_rect(0, 0, 96, 40), 'Count', 0x3478d4,
-		0xffffff, 15, true, false, false, 7, 1, '', true)
+	button_view := native_new_button(native_rect(0, 0, 96, 40), 'Count', BoxStyle{
+		bg: 0x3478d4
+		radius: 7
+	}, 0xffffff, 15, true, false, false, 1, '', true)
 	defer {
 		macos.release(button_view)
 	}
@@ -164,6 +166,55 @@ fn test_macos_native_style_button_keeps_appkit_bezel_and_press_state() {
 	assert macos.msg_bool(button_view, 'isBordered')
 	assert macos.msg_u64(macos.msg_id(button_view, 'cell'), 'highlightsBy') & u64(2) != 0
 	assert !macos.msg_bool(button_view, 'wantsLayer')
+}
+
+fn test_macos_transparent_box_controls_disable_native_backgrounds() {
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	transparent_box := BoxStyle{
+		bg: 0xff00ff
+		transparent: true
+	}
+	button_view := native_new_button(native_rect(0, 0, 96, 40), 'Clear', BoxStyle{},
+		0xffffff, 15, false, false, false, 0, '', true)
+	scroll_view := native_new_scroll(native_rect(0, 0, 120, 80), BoxStyle{}, false)
+	toggle_view := native_new_toggle_button(toggle_button(
+		title: 'Clear toggle'
+		box: transparent_box
+		native_style: true
+	))
+	dropdown_view := native_new_dropdown(dropdown('clear-dropdown', 'One', ['One'], rect(0,
+		0, 120, 32), transparent_box, TextStyle{}))
+	field := native_new_text_field(text_field('clear-field', '', '', rect(0, 0, 120, 32),
+		transparent_box, TextStyle{}, keyboard_default))
+	text_area_view := native_new_text_area(text_area('clear-area', '', rect(0, 0, 120, 80),
+		transparent_box, TextStyle{}))
+	defer {
+		macos.release(button_view)
+		macos.release(scroll_view)
+		macos.release(toggle_view)
+		macos.release(dropdown_view)
+		macos.release(field)
+		macos.release(text_area_view)
+	}
+
+	native_update_button(button_view, native_rect(0, 0, 96, 40), 'Clear', transparent_box,
+		0xffffff, 15, false, false, false, 0, '', true)
+	native_set_scroll_background(scroll_view, transparent_box)
+
+	assert !macos.msg_bool(button_view, 'isBordered')
+	assert macos.msg_bool(button_view, 'wantsLayer')
+	layer := macos.msg_id(button_view, 'layer')
+	assert native_is_nil(macos.msg_id(layer, 'backgroundColor'))
+	assert !macos.msg_bool(scroll_view, 'drawsBackground')
+	assert !macos.msg_bool(toggle_view, 'isBordered')
+	assert !macos.msg_bool(dropdown_view, 'isBordered')
+	assert !macos.msg_bool(field, 'drawsBackground')
+	assert !macos.msg_bool(text_area_view, 'drawsBackground')
+	text_view := text_area_text_view(text_area_view, false)
+	assert !macos.msg_bool(text_view, 'drawsBackground')
 }
 
 fn test_macos_text_field_uses_native_bezel_without_layer_mask() {

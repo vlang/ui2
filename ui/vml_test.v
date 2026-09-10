@@ -318,6 +318,20 @@ fn test_vml_scroll_preserves_box_borders() {
 	assert el.box.border_right == 2
 }
 
+fn test_vml_transparency_reaches_box_backed_controls() {
+	for source in [
+		'Button { transparent: true }',
+		'ToggleButton { transparent: true }',
+		'Scroll { transparent: true }',
+		'Dropdown { transparent: true }',
+		'TextField { transparent: true }',
+		'TextArea { transparent: true }',
+	] {
+		el := element_from_vml(source, rect(0, 0, 120, 40)) or { panic(err) }
+		assert el.box.transparent, source
+	}
+}
+
 fn test_vml_applies_pointer_and_transform_properties() {
 	node := parse_vml('Image {
 		id: movable_logo

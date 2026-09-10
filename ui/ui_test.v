@@ -1,5 +1,13 @@
 module ui2
 
+fn test_transparent_box_does_not_draw_a_fill() {
+	assert box_draws_fill(BoxStyle{})
+	assert !box_draws_fill(BoxStyle{
+		bg: 0xff00ff
+		transparent: true
+	})
+}
+
 fn test_box_border_width_stays_inside_the_element() {
 	assert box_border_width(-1, 20) == 0
 	assert box_border_width(0, 20) == 0
