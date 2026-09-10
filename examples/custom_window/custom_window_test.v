@@ -28,12 +28,12 @@ fn test_custom_window_counter_never_becomes_negative() {
 	assert app.completed == 0
 }
 
-fn test_custom_window_qml_exposes_clear_space_and_custom_chrome() {
+fn test_custom_window_vml_exposes_clear_space_and_custom_chrome() {
 	app := CustomWindowDemo{
 		transparent_screen: true
 		screen_background: '#010203'
 	}
-	root := ui2.element_from_qml_model(custom_window_qml_source, app, ui2.rect(0, 0, custom_window_width, custom_window_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(custom_window_vml_source, app, ui2.rect(0, 0, custom_window_width, custom_window_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	assert root.box.transparent
 	drag := find_custom_window_element(root, 'window_drag') or { panic('missing drag surface') }

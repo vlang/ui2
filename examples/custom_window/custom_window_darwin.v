@@ -16,7 +16,7 @@ fn macos_configure_custom_window() bool {
 	// small NSWindow subclass, so add the capability before dropping its frame.
 	window_class := macos.get_class('UI2Window')
 	if !macos_custom_window_is_nil(window_class) {
-		macos.add_method(window_class, 'canBecomeKey', voidptr(custom_window_can_become_key), 'B@:')
+		macos.add_method(window_class, 'canBecomeKeyWindow', voidptr(custom_window_can_become_key), 'B@:')
 		macos.add_method(window_class, 'canBecomeMainWindow', voidptr(custom_window_can_become_key), 'B@:')
 	}
 	macos.msg_void_u64(window, 'setStyleMask:', ns_window_style_borderless)

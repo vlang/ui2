@@ -306,8 +306,13 @@ fn font(size f64, bold bool) macos.Id {
 	return macos.msg_id_f64(macos.get_class('UIFont'), 'systemFontOfSize:', size)
 }
 
-fn set_background(view View, hex u32) {
-	macos.msg_void1(view, 'setBackgroundColor:', ios.color(hex))
+fn set_box_background(view View, box BoxStyle) {
+	color := if box_draws_fill(box) {
+		ios.color(box.bg)
+	} else {
+		macos.msg_id(macos.get_class('UIColor'), 'clearColor')
+	}
+	macos.msg_void1(view, 'setBackgroundColor:', color)
 }
 
 fn set_corner_radius(view View, radius f64) {
@@ -478,17 +483,17 @@ fn set_scroll_content_offset_y(scroll View, y f64) {
 	sender(voidptr(scroll), voidptr(macos.sel('setContentOffset:animated:')), offset, false)
 }
 
-fn new_native_view(frame Rect, bg_hex u32, radius f64) View {
+fn new_native_view(frame Rect, box BoxStyle) View {
 	view := macos.msg_id_rect(macos.alloc('UIView'), 'initWithFrame:', native_rect(frame))
-	set_background(view, bg_hex)
-	set_corner_radius(view, radius)
+	set_box_background(view, box)
+	set_corner_radius(view, box.radius)
 	return view
 }
 
-fn new_scroll_view(frame Rect, bg_hex u32, radius f64) View {
+fn new_scroll_view(frame Rect, box BoxStyle) View {
 	scroll := macos.msg_id_rect(macos.alloc('UIScrollView'), 'initWithFrame:', native_rect(frame))
-	set_background(scroll, bg_hex)
-	set_corner_radius(scroll, radius)
+	set_box_background(scroll, box)
+	set_corner_radius(scroll, box.radius)
 	macos.msg_void_bool(scroll, 'setAlwaysBounceVertical:', true)
 	macos.msg_void_i64(scroll, 'setKeyboardDismissMode:', 1)
 	macos.msg_void_i64(scroll, 'setContentInsetAdjustmentBehavior:', 2)
@@ -538,7 +543,7 @@ fn new_text_area_view(el Element) View {
 
 fn update_text_area_view(view View, el Element, declared_text_changed bool) {
 	macos.msg_void_rect(view, 'setFrame:', native_rect(el.frame))
-	set_background(view, el.box.bg)
+	set_box_background(view, el.box)
 	macos.msg_void1(view, 'setTextColor:', ios.color(el.text_style.color))
 	macos.msg_void1(view, 'setFont:', font(el.text_style.size, el.text_style.bold))
 	macos.msg_void_bool(view, 'setEditable:', !el.readonly && el.enabled)
@@ -551,7 +556,7 @@ fn update_text_area_view(view View, el Element, declared_text_changed bool) {
 }
 
 fn new_dropdown_view(el Element) View {
-	view := new_button_view(el.frame, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.box.radius, el.text_style.lines)
+	view := new_button_view(el.frame, el.text, el.box, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.lines)
 	update_dropdown_view(view, el, true)
 	return view
 }
@@ -561,28 +566,28 @@ fn update_dropdown_view(view View, el Element, declared_text_changed bool) {
 	if declared_text_changed && macos.utf8_string(macos.msg_id(view, 'currentTitle')) != el.text {
 		macos.msg_void2(view, 'setTitle:forState:', macos.nsstring(el.text), macos.Id(usize(0)))
 	}
-	set_background(view, el.box.bg)
+	set_box_background(view, el.box)
 	set_corner_radius(view, el.box.radius)
 	native_configure_dropdown(view, el.menu)
 }
 
-fn new_button_view(frame Rect, title string, bg_hex u32, text_hex u32, size f64, bold bool, radius f64, lines int) View {
+fn new_button_view(frame Rect, title string, box BoxStyle, text_hex u32, size f64, bold bool, lines int) View {
 	btn := macos.msg_id_u64(macos.get_class('UIButton'), 'buttonWithType:', u64(0))
 	// buttonWithType: is autoreleased. Retain so all native_create_element
 	// results follow the same +1 ownership contract.
 	macos.msg_id(btn, 'retain')
-	update_button_view(btn, frame, title, bg_hex, text_hex, size, bold, radius, lines)
+	update_button_view(btn, frame, title, box, text_hex, size, bold, lines)
 	return btn
 }
 
-fn update_button_view(btn View, frame Rect, title string, bg_hex u32, text_hex u32, size f64, bold bool, radius f64, lines int) {
+fn update_button_view(btn View, frame Rect, title string, box BoxStyle, text_hex u32, size f64, bold bool, lines int) {
 	macos.msg_void_rect(btn, 'setFrame:', native_rect(frame))
 	macos.msg_void2(btn, 'setTitle:forState:', macos.nsstring(title), macos.Id(usize(0)))
 	macos.msg_void2(btn, 'setTitleColor:forState:', ios.color(text_hex), macos.Id(usize(0)))
-	set_background(btn, bg_hex)
+	set_box_background(btn, box)
 	title_label := macos.msg_id(btn, 'titleLabel')
 	macos.msg_void1(title_label, 'setFont:', font(size, bold))
-	set_corner_radius(btn, radius)
+	set_corner_radius(btn, box.radius)
 	macos.msg_void_i64(title_label, 'setNumberOfLines:', i64(lines))
 	macos.msg_void_i64(title_label, 'setTextAlignment:', 1)
 	macos.msg_void_i64(title_label, 'setLineBreakMode:', 4)
@@ -594,14 +599,13 @@ fn checkbox_title(el Element) string {
 }
 
 fn new_checkbox_view(el Element) View {
-	view := new_button_view(el.frame, checkbox_title(el), el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, 0, el.text_style.lines)
+	view := new_button_view(el.frame, checkbox_title(el), el.box, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.lines)
 	update_checkbox_view(view, el)
 	return view
 }
 
 fn update_checkbox_view(view View, el Element) {
-	update_button_view(view, el.frame, checkbox_title(el), el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, 0, el.text_style.lines)
-	macos.msg_void1(view, 'setBackgroundColor:', macos.msg_id(macos.get_class('UIColor'), 'clearColor'))
+	update_button_view(view, el.frame, checkbox_title(el), el.box, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.lines)
 	macos.msg_void_i64(view, 'setContentHorizontalAlignment:', 1)
 }
 
@@ -620,7 +624,7 @@ fn update_switch_control_view(view View, el Element) {
 }
 
 fn new_toggle_button_view(el Element) View {
-	view := new_button_view(el.frame, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.box.radius, el.text_style.lines)
+	view := new_button_view(el.frame, el.text, el.box, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.lines)
 	update_toggle_button_view(view, el)
 	return view
 }
@@ -628,7 +632,7 @@ fn new_toggle_button_view(el Element) View {
 fn update_toggle_button_view(view View, el Element) {
 	box := if el.checked { el.toggle_down_box } else { el.box }
 	style := if el.checked { el.toggle_down_text_style } else { el.text_style }
-	update_button_view(view, el.frame, el.text, box.bg, style.color, style.size, style.bold, box.radius, style.lines)
+	update_button_view(view, el.frame, el.text, box, style.color, style.size, style.bold, style.lines)
 	macos.msg_void_bool(view, 'setSelected:', el.checked)
 }
 
@@ -689,15 +693,15 @@ fn native_snap_slider_value(view View, spec SliderSpec) f64 {
 	return value
 }
 
-fn new_text_field_view(frame Rect, placeholder string, t string, bg_hex u32, text_hex u32, size f64, radius f64, keyboard int, secure bool) View {
+fn new_text_field_view(frame Rect, placeholder string, t string, box BoxStyle, text_hex u32, size f64, keyboard int, secure bool) View {
 	field := macos.msg_id_rect(macos.alloc('UITextField'), 'initWithFrame:', native_rect(frame))
-	update_text_field_view(field, frame, placeholder, t, bg_hex, text_hex, size, radius, keyboard, secure, true, true, 12, false, true)
+	update_text_field_view(field, frame, placeholder, t, box, text_hex, size, keyboard, secure, true, true, 12, false, true)
 	return field
 }
 
-fn update_text_field_view(field View, frame Rect, placeholder string, t string, bg_hex u32, text_hex u32, size f64, radius f64, keyboard int, secure bool, autocorrect bool, declared_text_changed bool, padding_left f64, readonly bool, enabled bool) {
+fn update_text_field_view(field View, frame Rect, placeholder string, t string, box BoxStyle, text_hex u32, size f64, keyboard int, secure bool, autocorrect bool, declared_text_changed bool, padding_left f64, readonly bool, enabled bool) {
 	macos.msg_void_rect(field, 'setFrame:', native_rect(frame))
-	set_background(field, bg_hex)
+	set_box_background(field, box)
 	macos.msg_void1(field, 'setTextColor:', ios.color(text_hex))
 	macos.msg_void1(field, 'setFont:', font(size, false))
 	macos.msg_void1(field, 'setPlaceholder:', macos.nsstring(placeholder))
@@ -711,7 +715,7 @@ fn update_text_field_view(field View, frame Rect, placeholder string, t string, 
 	macos.msg_void_i64(field, 'setAutocorrectionType:', if autocorrect { i64(0) } else { i64(1) })
 	macos.msg_void_bool(field, 'setEnabled:', enabled && !readonly)
 	macos.msg_void_i64(field, 'setClearButtonMode:', 1)
-	set_corner_radius(field, radius)
+	set_corner_radius(field, box.radius)
 	mut pad := macos.msg_id(field, 'leftView')
 	if pad == unsafe { nil } {
 		pad = macos.msg_id_rect(macos.alloc('UIView'), 'initWithFrame:', macos.rect(0, 0, padding_left, frame.height))
@@ -821,7 +825,7 @@ fn render_root(declared Element) {
 	g_toggle_ids = map[u64]string{}
 	g_toggle_views = map[u64]View{}
 	g_scroll_ids = map[string]bool{}
-	set_background(g_root_view, root.box.bg)
+	set_box_background(g_root_view, root.box)
 	mut active := map[string]bool{}
 	render_children(g_root_view, root.children, '', mut active)
 	remove_stale_nodes(active)
@@ -869,22 +873,22 @@ fn render_children(parent View, children []Element, parent_key string, mut activ
 fn native_create_element(el Element) View {
 	return match el.kind {
 		.screen { View(unsafe { nil }) }
-		.view { new_native_view(el.frame, el.box.bg, el.box.radius) }
-		.scroll { new_scroll_view(el.frame, el.box.bg, el.box.radius) }
+		.view { new_native_view(el.frame, el.box) }
+		.scroll { new_scroll_view(el.frame, el.box) }
 		.label {
 			new_label_view(el.frame, el.text, el.text_style.color, el.text_style.size, el.text_style.bold, align_value(el.text_style.align), el.text_style.lines)
 		}
 		.image { new_image_view(el.frame, el.image_path, el.rotation) }
 		.button {
-			new_button_view(el.frame, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.box.radius, el.text_style.lines)
+			new_button_view(el.frame, el.text, el.box, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.lines)
 		}
 		.checkbox { new_checkbox_view(el) }
 		.switch_control { new_switch_control_view(el) }
 		.toggle_button { new_toggle_button_view(el) }
 		.dropdown { new_dropdown_view(el) }
 		.text_field {
-			field := new_text_field_view(el.frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure)
-			update_text_field_view(field, el.frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure, el.autocorrect, true, el.padding_left, el.readonly, el.enabled)
+			field := new_text_field_view(el.frame, el.placeholder, el.text, el.box, el.text_style.color, el.text_style.size, el.keyboard, el.secure)
+			update_text_field_view(field, el.frame, el.placeholder, el.text, el.box, el.text_style.color, el.text_style.size, el.keyboard, el.secure, el.autocorrect, true, el.padding_left, el.readonly, el.enabled)
 			field
 		}
 		.text_area { new_text_area_view(el) }
@@ -897,12 +901,12 @@ fn native_update_element(native View, el Element, declared_text_changed bool) {
 		.screen {}
 		.view {
 			macos.msg_void_rect(native, 'setFrame:', native_rect(el.frame))
-			set_background(native, el.box.bg)
+			set_box_background(native, el.box)
 			set_corner_radius(native, el.box.radius)
 		}
 		.scroll {
 			macos.msg_void_rect(native, 'setFrame:', native_rect(el.frame))
-			set_background(native, el.box.bg)
+			set_box_background(native, el.box)
 			set_corner_radius(native, el.box.radius)
 		}
 		.label {
@@ -910,14 +914,14 @@ fn native_update_element(native View, el Element, declared_text_changed bool) {
 		}
 		.image { update_image_view(native, el.frame, el.image_path, el.rotation) }
 		.button {
-			update_button_view(native, el.frame, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.box.radius, el.text_style.lines)
+			update_button_view(native, el.frame, el.text, el.box, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.lines)
 		}
 		.checkbox { update_checkbox_view(native, el) }
 		.switch_control { update_switch_control_view(native, el) }
 		.toggle_button { update_toggle_button_view(native, el) }
 		.dropdown { update_dropdown_view(native, el, declared_text_changed) }
 		.text_field {
-			update_text_field_view(native, el.frame, el.placeholder, el.text, el.box.bg, el.text_style.color, el.text_style.size, el.box.radius, el.keyboard, el.secure, el.autocorrect, declared_text_changed, el.padding_left, el.readonly, el.enabled)
+			update_text_field_view(native, el.frame, el.placeholder, el.text, el.box, el.text_style.color, el.text_style.size, el.keyboard, el.secure, el.autocorrect, declared_text_changed, el.padding_left, el.readonly, el.enabled)
 		}
 		.text_area { update_text_area_view(native, el, declared_text_changed) }
 		.slider { update_slider_view(native, el) }
@@ -1045,7 +1049,7 @@ fn register_native_handlers(native View, el Element) {
 fn render_element(parent View, el Element, key string, mut active map[string]bool) View {
 	active[key] = true
 	if el.kind == .screen {
-		set_background(parent, el.box.bg)
+		set_box_background(parent, el.box)
 		render_children(parent, el.children, key, mut active)
 		return parent
 	}
