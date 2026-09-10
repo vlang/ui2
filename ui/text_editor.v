@@ -132,11 +132,7 @@ fn (mut e TextEditor) clamp_selection() {
 }
 
 pub fn rune_len(text string) int {
-	mut count := 0
-	for _ in text {
-		count++
-	}
-	return count
+	return text.runes().len
 }
 
 @[manualfree]
