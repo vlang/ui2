@@ -69,6 +69,16 @@ $if !ui2_custom_rendering ? {
 		assert windows_content_height(children) == 115
 	}
 
+	fn test_windows_transparent_push_buttons_use_custom_painting() {
+		transparent := BoxStyle{
+			transparent: true
+		}
+		assert windows_uses_transparent_button_paint(.button, transparent)
+		assert windows_uses_transparent_button_paint(.toggle_button, transparent)
+		assert !windows_uses_transparent_button_paint(.button, BoxStyle{})
+		assert !windows_uses_transparent_button_paint(.checkbox, transparent)
+	}
+
 	fn windows_test_font_family(font voidptr) string {
 		mut buffer := []u16{len: 32}
 		C.ui2_win_font_family(font, unsafe { &buffer[0] }, buffer.len)

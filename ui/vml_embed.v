@@ -36,17 +36,6 @@ pub mut:
 // than on the first frame the embedder tries to draw.
 pub fn new_vml_app[T](source string, model T) !&VmlApp[T] {
 	template := parse_vml(source)!
-	return new_vml_app_from_template[T](template, model)
-}
-
-// new_vml_app_file creates an embeddable VML application from a file. Unlike
-// new_vml_app, it can resolve imports declared by that document.
-pub fn new_vml_app_file[T](path string, model T) !&VmlApp[T] {
-	template := parse_vml_file(path)!
-	return new_vml_app_from_template[T](template, model)
-}
-
-fn new_vml_app_from_template[T](template &VNode, model T) !&VmlApp[T] {
 	v_validate_template[T](template, model)!
 	// Evaluate once against a representative nominal frame. Responsive layouts
 	// commonly subtract margins from the root size, so a 1x1 probe can turn
@@ -56,7 +45,7 @@ fn new_vml_app_from_template[T](template &VNode, model T) !&VmlApp[T] {
 	validate_element_tree(element_from_vnode(resolved, probe)!)!
 	return &VmlApp[T]{
 		template: template
-		model: model
+		model:    model
 	}
 }
 
@@ -110,6 +99,7 @@ pub fn (mut app VmlApp[T]) handle(event_id string) ! {
 				v_string(app.text_of(binding.control))
 			}
 		}
+
 		vml_set_field[T](mut app.model, field_name, value)!
 		if binding.property == 'pressed' && value.truthy() {
 			for peer in event.group_bindings {
@@ -127,6 +117,9 @@ pub fn (mut app VmlApp[T]) handle(event_id string) ! {
 	}
 	if invocation := event.invocation {
 		vml_dispatch[T](mut app.model, invocation)!
+	}
+	if assignment := event.assignment {
+		vml_apply_assignment[T](mut app.model, assignment)!
 	}
 }
 

@@ -128,44 +128,6 @@ ui2.run_vml[App](
 )!
 ```
 
-### VML imports
-
-File-backed VML can split reusable screens into modules. Declare an import in
-the parent document, use the module name as an element, and declare the same
-name in the imported file. CamelCase module names resolve to snake_case file
-names relative to the importing document, so `PrimaryScreen` resolves to
-`primary_screen.vml`.
-
-```vml
-// main.vml
-import PrimaryScreen
-
-Screen {
-    ScreenManager { PrimaryScreen {} }
-}
-```
-
-```vml
-// primary_screen.vml
-module PrimaryScreen
-
-Screen { Label { text: "Home" } }
-```
-
-Use a file-backed API so the importer has a base directory:
-
-```v
-ui2.run_vml[App](
-    source_path: 'main.vml'
-    model: App{}
-)!
-```
-
-`parse_vml_file`, `element_from_vml_file`, `new_vml_app_file`, and
-`element_from_vml_model_file` provide the corresponding parser, renderer, and
-embedded-app entry points. Imports are expanded recursively, require a matching
-`module` declaration, and reject cycles.
-
 For VML that ships with the application, the v3 compiler can lower the document
 straight to V expressions that construct `ui2.Element` values. Name the model
 parameter `app`, use `$vml` in a build function, and pass it to
@@ -223,13 +185,26 @@ On macOS, set `native: true` on a `Button` (or wrap a V-built button with
 `with_native_style`) to let AppKit own its bezel, font, hover, and pressed
 appearance. Its declared colors remain the fallback for the custom renderer.
 
-Action arguments are evaluated when the event is dispatched, after any two-way
-binding on that event has written the control value into the model.
+Runtime VML event handlers (`run_vml` and `VmlApp`) can also assign an ordinary
+VML expression to a public mutable top-level model field, which is useful for
+simple state transitions that do not need a dedicated model method:
+
+```vml
+Button { text: "Home" on_tap: app.screen_name = "home" }
+```
+
+Action arguments and assignment values are evaluated when the event is
+dispatched, after any two-way binding on that event has written the control
+value into the model.
 
 Expressions support property paths, arithmetic, comparisons, boolean operators,
-conditionals, parentheses, and string interpolation. They are side-effect-free;
-calls are restricted to event handlers. Unknown model paths, non-writable
-binding targets, and invalid action signatures fail document loading.
+conditionals, parentheses, and string interpolation. They are side-effect-free
+outside event handlers; calls and assignments are restricted to event handlers.
+Unknown model paths, non-writable binding targets, and invalid action signatures
+fail document loading.
+
+Compile-time `$vml` supports typed method actions and two-way bindings, but not
+event assignments; use a public model method for those transitions.
 Validation traverses every expression branch and repeater item schema without
 executing expressions against the model's initial values.
 

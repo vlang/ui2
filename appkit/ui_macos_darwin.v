@@ -1007,14 +1007,14 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			doc_h := content_height(el.children) + 16
 			mut doc := st.nodes[doc_key] or { native_nil_view() }
 			if native_is_nil(doc) {
-				doc = native_new_flipped_view(native_rect(0, 0, el.frame.width, doc_h), el.box.bg)
+				doc = native_new_flipped_view(native_rect(0, 0, el.frame.width, doc_h), el.box)
 				st.nodes[doc_key] = doc
 				st.node_kinds[doc_key] = .view
 				native_set_document_view(native, doc)
 				macos.release(doc)
 			} else {
 				native_set_frame(doc, native_rect(0, 0, el.frame.width, doc_h))
-				native_set_background(doc, el.box.bg)
+				native_set_box_background(doc, el.box)
 			}
 			render_children(doc, el.children, doc_key, mut active)
 		}
@@ -1158,7 +1158,7 @@ fn native_create_element(el Element) NativeView {
 			native_new_view(element_rect(el.frame), el.box, element_interactive(el))
 		}
 		.scroll {
-			native_new_scroll(element_rect(el.frame), el.box.bg, el.persistent_scrollbars)
+			native_new_scroll(element_rect(el.frame), el.box, el.persistent_scrollbars)
 		}
 		.label {
 			native_new_label(element_rect(el.frame), el.text, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, align_value(el.text_style.align), el.text_style.lines)
@@ -1167,7 +1167,7 @@ fn native_create_element(el Element) NativeView {
 			native_new_image(element_rect(el.frame), el.image_path, el.rotation)
 		}
 		.button {
-			native_new_button(element_rect(el.frame), el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.box.radius, el.text_style.lines, el.image_path, el.native_style)
+			native_new_button(element_rect(el.frame), el.text, el.box, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.text_style.lines, el.image_path, el.native_style)
 		}
 		.checkbox {
 			native_new_checkbox(el)
@@ -1203,7 +1203,7 @@ fn native_update_element(native NativeView, el Element, declared_text_changed bo
 		}
 		.scroll {
 			native_set_frame(native, element_rect(el.frame))
-			native_set_scroll_background(native, el.box.bg)
+			native_set_scroll_background(native, el.box)
 			native_set_scrollbar_mode(native, el.persistent_scrollbars)
 		}
 		.label {
@@ -1213,7 +1213,7 @@ fn native_update_element(native NativeView, el Element, declared_text_changed bo
 			native_update_image(native, element_rect(el.frame), el.image_path, el.rotation)
 		}
 		.button {
-			native_update_button(native, element_rect(el.frame), el.text, el.box.bg, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.box.radius, el.text_style.lines, el.image_path, el.native_style)
+			native_update_button(native, element_rect(el.frame), el.text, el.box, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.text_style.lines, el.image_path, el.native_style)
 		}
 		.checkbox {
 			native_update_checkbox(native, el)
@@ -1229,7 +1229,7 @@ fn native_update_element(native NativeView, el Element, declared_text_changed bo
 		}
 		.text_field {
 			native_update_text_field(native, element_rect(el.frame), el.placeholder, el.text,
-				el.box.bg, el.text_style.color, el.text_style.size, el.box.radius,
+				el.box, el.text_style.color, el.text_style.size,
 				declared_text_changed, el.readonly, el.enabled)
 		}
 		.text_area {
@@ -1687,9 +1687,9 @@ fn native_set_associated_object(obj NativeView, key voidptr, value NativeView) {
 	macos.set_associated_object(obj, key, value, macos.assoc_retain_nonatomic)
 }
 
-fn native_new_flipped_view(frame NativeRect, bg u32) NativeView {
+fn native_new_flipped_view(frame NativeRect, box BoxStyle) NativeView {
 	native := macos.msg_id_rect(macos.alloc('UI2FlippedView'), 'initWithFrame:', appkit_rect(frame))
-	native_set_background(native, bg)
+	native_set_box_background(native, box)
 	return native
 }
 
@@ -1701,12 +1701,11 @@ fn native_new_view(frame NativeRect, box BoxStyle, interactive bool) NativeView 
 	return native
 }
 
-fn native_new_scroll(frame NativeRect, bg u32, persistent_scrollbars bool) NativeView {
+fn native_new_scroll(frame NativeRect, box BoxStyle, persistent_scrollbars bool) NativeView {
 	scroll_view := macos.msg_id_rect(macos.alloc('NSScrollView'), 'initWithFrame:', appkit_rect(frame))
 	macos.msg_void_bool(scroll_view, 'setHasVerticalScroller:', true)
 	native_set_scrollbar_mode(scroll_view, persistent_scrollbars)
-	macos.msg_void_bool(scroll_view, 'setDrawsBackground:', true)
-	native_set_scroll_background(scroll_view, bg)
+	native_set_scroll_background(scroll_view, box)
 	return scroll_view
 }
 
@@ -1720,9 +1719,12 @@ fn native_set_document_view(scroll NativeView, view NativeView) {
 	macos.msg_void1(scroll, 'setDocumentView:', view)
 }
 
-fn native_set_scroll_background(scroll NativeView, bg u32) {
-	macos.msg_void_bool(scroll, 'setDrawsBackground:', true)
-	macos.msg_void1(scroll, 'setBackgroundColor:', native_color(bg))
+fn native_set_scroll_background(scroll NativeView, box BoxStyle) {
+	draws_background := box_draws_fill(box)
+	macos.msg_void_bool(scroll, 'setDrawsBackground:', draws_background)
+	if draws_background {
+		macos.msg_void1(scroll, 'setBackgroundColor:', native_color(box.bg))
+	}
 }
 
 fn native_new_image(frame NativeRect, path string, rotation f64) NativeView {
@@ -1777,17 +1779,18 @@ fn native_update_label(label_view NativeView, frame NativeRect, text string, tex
 	macos.msg_void_bool(cell, 'setUsesSingleLineMode:', lines == 1)
 }
 
-fn native_new_button(frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int, image_name string, native_style bool) NativeView {
+fn native_new_button(frame NativeRect, title string, box BoxStyle, text_hex u32, size f64, bold bool, italic bool, underline bool, lines int, image_name string, native_style bool) NativeView {
 	button_view := macos.msg_id_rect(macos.alloc('NSButton'), 'initWithFrame:', appkit_rect(frame))
-	native_update_button(button_view, frame, title, bg_hex, text_hex, size, bold, italic, underline, radius, lines, image_name, native_style)
+	native_update_button(button_view, frame, title, box, text_hex, size, bold, italic, underline,
+		lines, image_name, native_style)
 	return button_view
 }
 
-fn native_update_button(button_view NativeView, frame NativeRect, title string, bg_hex u32, text_hex u32, size f64, bold bool, italic bool, underline bool, radius f64, lines int, image_name string, native_style bool) {
+fn native_update_button(button_view NativeView, frame NativeRect, title string, box BoxStyle, text_hex u32, size f64, bold bool, italic bool, underline bool, lines int, image_name string, native_style bool) {
 	native_set_frame(button_view, frame)
 	macos.msg_void1(button_view, 'setTitle:', macos.nsstring(title))
 	macos.msg_void_u64(button_view, 'setBezelStyle:', 1)
-	if native_style {
+	if native_style && box_draws_fill(box) {
 		macos.msg_void_i64(button_view, 'setButtonType:', ns_button_type_momentary_push_in)
 		macos.msg_void_bool(button_view, 'setBordered:', true)
 		macos.msg_void_bool(button_view, 'setWantsLayer:', false)
@@ -1796,8 +1799,8 @@ fn native_update_button(button_view NativeView, frame NativeRect, title string, 
 		macos.msg_void_bool(button_view, 'setBordered:', false)
 		macos.msg_void1(button_view, 'setFont:', native_font(size, bold, italic))
 		native_control_set_attributed_title(button_view, title, text_hex, size, bold, italic, underline)
-		native_set_background(button_view, bg_hex)
-		native_set_corner_radius(button_view, radius)
+		native_set_box_background(button_view, box)
+		native_set_corner_radius(button_view, box.radius)
 	}
 	cell := macos.msg_id(button_view, 'cell')
 	macos.msg_void_i64(cell, 'setLineBreakMode:', 4)
@@ -1839,9 +1842,9 @@ fn native_update_switch_control(view NativeView, el Element) {
 }
 
 fn native_new_toggle_button(el Element) NativeView {
-	native := native_new_button(element_rect(el.frame), el.text, el.box.bg, el.text_style.color,
+	native := native_new_button(element_rect(el.frame), el.text, el.box, el.text_style.color,
 		el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline,
-		el.box.radius, el.text_style.lines, el.image_path, el.native_style)
+		el.text_style.lines, el.image_path, el.native_style)
 	native_update_toggle_button(native, el)
 	return native
 }
@@ -1849,8 +1852,8 @@ fn native_new_toggle_button(el Element) NativeView {
 fn native_update_toggle_button(native NativeView, el Element) {
 	box := if el.checked { el.toggle_down_box } else { el.box }
 	style := if el.checked { el.toggle_down_text_style } else { el.text_style }
-	native_update_button(native, element_rect(el.frame), el.text, box.bg, style.color, style.size,
-		style.bold, style.italic, style.underline, box.radius, style.lines, el.image_path,
+	native_update_button(native, element_rect(el.frame), el.text, box, style.color, style.size,
+		style.bold, style.italic, style.underline, style.lines, el.image_path,
 		el.native_style)
 	macos.msg_void_i64(native, 'setButtonType:', ns_button_type_push_on_push_off)
 	macos.msg_void_i64(native, 'setState:', if el.checked { i64(1) } else { i64(0) })
@@ -1920,7 +1923,7 @@ fn native_update_dropdown(popup NativeView, el Element) {
 	}
 	native_select_dropdown_item(popup, el.text)
 	macos.msg_void1(popup, 'setFont:', native_font(el.text_style.size, el.text_style.bold, el.text_style.italic))
-	macos.msg_void_bool(popup, 'setBordered:', true)
+	macos.msg_void_bool(popup, 'setBordered:', box_draws_fill(el.box))
 	macos.msg_void_u64(popup, 'setBezelStyle:', 1)
 }
 
@@ -1928,12 +1931,12 @@ fn native_new_text_field(el Element) NativeView {
 	frame := element_rect(el.frame)
 	cls := if el.secure { 'NSSecureTextField' } else { 'NSTextField' }
 	field := macos.msg_id_rect(macos.alloc(cls), 'initWithFrame:', appkit_rect(frame))
-	native_update_text_field(field, frame, el.placeholder, el.text, el.box.bg, el.text_style.color,
-		el.text_style.size, el.box.radius, true, el.readonly, el.enabled)
+	native_update_text_field(field, frame, el.placeholder, el.text, el.box, el.text_style.color,
+		el.text_style.size, true, el.readonly, el.enabled)
 	return field
 }
 
-fn native_update_text_field(field NativeView, frame NativeRect, placeholder string, text string, bg_hex u32, text_hex u32, size f64, _radius f64, declared_text_changed bool, readonly bool, enabled bool) {
+fn native_update_text_field(field NativeView, frame NativeRect, placeholder string, text string, box BoxStyle, text_hex u32, size f64, declared_text_changed bool, readonly bool, enabled bool) {
 	native_set_frame(field, frame)
 	// Unrelated refreshes preserve native edits. A changed declaration remains
 	// controlled and is applied explicitly.
@@ -1946,8 +1949,11 @@ fn native_update_text_field(field NativeView, frame NativeRect, placeholder stri
 	macos.msg_void_bool(field, 'setBordered:', true)
 	macos.msg_void_bool(field, 'setBezeled:', true)
 	macos.msg_void_u64(field, 'setBezelStyle:', 1)
-	macos.msg_void_bool(field, 'setDrawsBackground:', true)
-	macos.msg_void1(field, 'setBackgroundColor:', native_color(bg_hex))
+	draws_background := box_draws_fill(box)
+	macos.msg_void_bool(field, 'setDrawsBackground:', draws_background)
+	if draws_background {
+		macos.msg_void1(field, 'setBackgroundColor:', native_color(box.bg))
+	}
 	macos.msg_void_bool(field, 'setEditable:', !readonly && enabled)
 	macos.msg_void_bool(field, 'setSelectable:', true)
 	macos.msg_void_bool(field, 'setEnabled:', enabled)
@@ -1964,6 +1970,7 @@ fn native_new_text_area(el Element) NativeView {
 	scroll_view := macos.msg_id_rect(macos.alloc('NSScrollView'), 'initWithFrame:', appkit_rect(frame))
 	macos.msg_void_bool(scroll_view, 'setHasVerticalScroller:', true)
 	macos.msg_void_bool(scroll_view, 'setAutohidesScrollers:', true)
+	native_set_scroll_background(scroll_view, el.box)
 	tv := native_new_text_view(macos.rect(0, 0, frame.width, frame.height), el)
 	macos.msg_void1(scroll_view, 'setDocumentView:', tv)
 	macos.release(tv)
@@ -1979,8 +1986,8 @@ fn native_new_text_view(frame macos.Rect, el Element) NativeView {
 	macos.msg_void_bool(tv, 'setVerticallyResizable:', true)
 	macos.msg_void_bool(tv, 'setHorizontallyResizable:', false)
 	macos.msg_void_u64(tv, 'setAutoresizingMask:', 2) // NSViewWidthSizable
-	macos.msg_void_bool(tv, 'setDrawsBackground:', !el.box.transparent)
-	if !el.box.transparent {
+	macos.msg_void_bool(tv, 'setDrawsBackground:', box_draws_fill(el.box))
+	if box_draws_fill(el.box) {
 		macos.msg_void1(tv, 'setBackgroundColor:', native_color(el.box.bg))
 	}
 	macos.msg_void1(tv, 'setTextColor:', native_color(el.text_style.color))
@@ -1999,6 +2006,7 @@ fn native_update_text_area(native NativeView, el Element, declared_text_changed 
 	if !el.disable_scroll {
 		macos.msg_void_bool(native, 'setHasVerticalScroller:', true)
 		macos.msg_void_bool(native, 'setAutohidesScrollers:', true)
+		native_set_scroll_background(native, el.box)
 	}
 	tv := text_area_text_view(native, el.disable_scroll)
 	if native_is_nil(tv) {
@@ -2008,8 +2016,8 @@ fn native_update_text_area(native NativeView, el Element, declared_text_changed 
 	macos.msg_void_bool(tv, 'setSelectable:', true)
 	macos.msg_void1(tv, 'setFont:', native_text_style_font(el.text_style))
 	macos.msg_void1(tv, 'setTextColor:', native_color(el.text_style.color))
-	macos.msg_void_bool(tv, 'setDrawsBackground:', !el.box.transparent)
-	if !el.box.transparent {
+	macos.msg_void_bool(tv, 'setDrawsBackground:', box_draws_fill(el.box))
+	if box_draws_fill(el.box) {
 		macos.msg_void1(tv, 'setBackgroundColor:', native_color(el.box.bg))
 	}
 	current := macos.utf8_string(macos.msg_id(tv, 'string'))
@@ -2133,7 +2141,7 @@ fn native_set_background(view NativeView, hex u32) {
 }
 
 fn native_set_box_background(view NativeView, box BoxStyle) {
-	if !box.transparent {
+	if box_draws_fill(box) {
 		native_set_background(view, box.bg)
 		return
 	}
@@ -2243,7 +2251,9 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 	// The app delegate doubles as window delegate for windowDidResize:
 	macos.msg_void1(st.window, 'setDelegate:', st.app_delegate)
 	root_frame := native_rect(0, 0, f64(st.run_config.width), f64(st.run_config.height))
-	st.root_view = native_new_flipped_view(root_frame, 0xffffff)
+	st.root_view = native_new_flipped_view(root_frame, BoxStyle{
+		bg: 0xffffff
+	})
 	native_register_drop_types(st.root_view)
 	native_set_content_view(st.window, st.root_view)
 	macos.release(st.root_view)

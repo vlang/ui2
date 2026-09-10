@@ -98,6 +98,23 @@ $if ui2_custom_rendering ? {
 		assert system_symbol_fallback('future.symbol') == ''
 	}
 
+	fn test_custom_text_navigation_uses_the_platform_primary_modifier() {
+		assert !text_navigation_primary_modifier(false, false, false)
+		$if macos {
+			assert !text_navigation_primary_modifier(true, false, false)
+			assert text_navigation_primary_modifier(false, false, true)
+			assert text_navigation_word_modifier(false, true)
+			assert !text_navigation_word_modifier(true, false)
+			assert text_navigation_boundary_modifier(true)
+		} $else {
+			assert text_navigation_primary_modifier(true, false, false)
+			assert !text_navigation_primary_modifier(true, true, false)
+			assert text_navigation_word_modifier(true, false)
+			assert !text_navigation_word_modifier(true, true)
+			assert !text_navigation_boundary_modifier(true)
+		}
+	}
+
 	fn test_custom_slider_pointer_value_uses_range_step_and_orientation() {
 		horizontal := HitTarget{
 			slider: true
@@ -178,6 +195,77 @@ $if ui2_custom_rendering ? {
 		g_switch_declared = map[string]bool{}
 		g_active_switches = map[string]bool{}
 		g_hit_targets = []HitTarget{}
+		g_touch = TouchState{}
+	}
+
+	fn test_custom_checkbox_tap_updates_live_checked_state() {
+		g_checkbox_values = map[string]bool{
+			'newsletter': false
+		}
+		g_active_checkboxes = map[string]bool{
+			'newsletter': true
+		}
+		g_hit_targets = [HitTarget{
+			id: 'newsletter'
+			action_id: 'newsletter_changed'
+			x: 10
+			y: 20
+			w: 120
+			h: 28
+			checkbox: true
+		}]
+		handle_touch_down(20, 30)
+		handle_touch_up(20, 30)
+		assert checkbox_checked('newsletter')
+		set_checkbox_checked('newsletter', false)
+		set_checkbox_checked('missing', true)
+		assert !checkbox_checked('newsletter')
+		assert !checkbox_checked('missing')
+		g_checkbox_values = map[string]bool{}
+		g_checkbox_declared = map[string]bool{}
+		g_active_checkboxes = map[string]bool{}
+		g_hit_targets = []HitTarget{}
+		g_touch = TouchState{}
+	}
+
+	fn test_custom_checkbox_drag_preserves_scrolling_without_toggling() {
+		g_checkbox_values = map[string]bool{
+			'newsletter': false
+		}
+		g_active_checkboxes = map[string]bool{
+			'newsletter': true
+		}
+		g_hit_targets = [HitTarget{
+			id: 'newsletter'
+			x: 10
+			y: 60
+			w: 120
+			h: 28
+			checkbox: true
+		}]
+		g_scroll_areas = map[string]Rect{
+			'form': rect(0, 0, 160, 160)
+		}
+		g_scroll_viewports = map[string]Rect{
+			'form': rect(0, 0, 160, 160)
+		}
+		g_scroll_order = ['form']
+		g_scroll_content_h = map[string]f64{
+			'form': 320
+		}
+		g_scroll_offsets = map[string]f64{}
+		handle_touch_down(20, 70)
+		handle_touch_move(20, 20)
+		handle_touch_up(20, 20)
+		assert scroll_offset('form') == 50
+		assert !checkbox_checked('newsletter')
+		g_checkbox_values = map[string]bool{}
+		g_checkbox_declared = map[string]bool{}
+		g_active_checkboxes = map[string]bool{}
+		g_hit_targets = []HitTarget{}
+		reset_scroll_frame()
+		g_scroll_content_h = map[string]f64{}
+		g_scroll_offsets = map[string]f64{}
 		g_touch = TouchState{}
 	}
 
@@ -480,4 +568,19 @@ $if ui2_custom_rendering ? {
 		assert !touch_is_held_inside(10, 10, 100, 30)
 		g_touch = TouchState{}
 	}
+}
+
+fn test_text_field_selection_text_uses_rune_offsets() {
+	before, selected := text_field_selection_text('a🙂bc', TextSelection{
+		anchor: 4
+		caret: 1
+	})
+	assert before == 'a'
+	assert selected == '🙂bc'
+}
+
+fn test_text_field_selection_origin_respects_text_alignment() {
+	assert text_field_aligned_text_origin(10, 100, 40, .left) == 10
+	assert text_field_aligned_text_origin(10, 100, 40, .center) == 40
+	assert text_field_aligned_text_origin(10, 100, 40, .right) == 70
 }

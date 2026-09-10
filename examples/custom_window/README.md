@@ -18,7 +18,7 @@ The header is an ordinary draggable ui2 `Rectangle`. Its pointer-down event is
 handed to `performWindowDragWithEvent:` or `WM_NCLBUTTONDOWN`, so the operating
 system still performs the move. The close button calls `ui2.quit()`. Everything
 else—including the separated rounded surfaces and the clear space between
-them—is declared in [`custom_window.qml`](custom_window.qml).
+them—is declared in [`custom_window.vml`](custom_window.vml).
 
 For a resizable custom frame, keep the same pattern and add narrow draggable
 ui2 regions at the edges, routing them to the platform's native resize action.

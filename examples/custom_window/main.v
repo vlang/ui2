@@ -4,7 +4,7 @@ import ui2
 
 const custom_window_width = 440
 const custom_window_height = 210
-const custom_window_qml_source = $embed_file('custom_window.qml').to_string()
+const custom_window_vml_source = $embed_file('custom_window.vml').to_string()
 
 @[heap]
 pub struct CustomWindowDemo {
@@ -68,8 +68,8 @@ fn custom_window_pointer(raw string) ?(string, string) {
 fn build_custom_window_screen() ui2.Element {
 	mut state := unsafe { custom_window_state }
 	state.prepare_window()
-	return ui2.element_from_qml_model(custom_window_qml_source, *state, ui2.bounds()) or {
-		eprintln('custom-window QML failed: ${err}')
+	return ui2.element_from_vml_model(custom_window_vml_source, *state, ui2.bounds()) or {
+		eprintln('custom-window VML failed: ${err}')
 		ui2.screen(0x0f172a, [])
 	}
 }

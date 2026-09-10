@@ -84,6 +84,97 @@ fn test_text_editor_move_and_select_all() {
 	assert end2 == 3
 }
 
+fn test_text_editor_navigation_extends_and_collapses_selection() {
+	mut editor := text_editor('abcdef')
+	editor.set_selection(1, 5)
+	assert apply_text_editor_navigation(mut editor, 'left', false, false)
+	assert editor.selection == TextSelection{
+		anchor: 1
+		caret: 1
+	}
+
+	editor.set_selection(1, 5)
+	assert apply_text_editor_navigation(mut editor, 'right', false, false)
+	assert editor.selection == TextSelection{
+		anchor: 5
+		caret: 5
+	}
+
+	editor.set_caret(3)
+	assert apply_text_editor_navigation(mut editor, 'left', true, false)
+	assert editor.selection == TextSelection{
+		anchor: 3
+		caret: 2
+	}
+	assert apply_text_editor_navigation(mut editor, 'end', true, false)
+	assert editor.selection == TextSelection{
+		anchor: 3
+		caret: 6
+	}
+	assert apply_text_editor_navigation(mut editor, 'home', false, false)
+	assert editor.selection == TextSelection{}
+}
+
+fn test_text_editor_navigation_moves_by_unicode_words_and_page_boundaries() {
+	mut editor := text_editor('one, two_2  世界')
+	editor.set_caret(rune_len(editor.text))
+	assert apply_text_editor_navigation(mut editor, 'left', false, true)
+	assert editor.selection.caret == 12
+	assert apply_text_editor_navigation(mut editor, 'left', false, true)
+	assert editor.selection.caret == 5
+	assert apply_text_editor_navigation(mut editor, 'left', false, true)
+	assert editor.selection.caret == 0
+	assert apply_text_editor_navigation(mut editor, 'right', false, true)
+	assert editor.selection.caret == 5
+	assert apply_text_editor_navigation(mut editor, 'right', true, true)
+	assert editor.selection == TextSelection{
+		anchor: 5
+		caret: 12
+	}
+
+	assert apply_text_editor_navigation(mut editor, 'page_down', false, false)
+	assert editor.selection.caret == rune_len(editor.text)
+	assert apply_text_editor_navigation(mut editor, 'page_up', true, false)
+	assert editor.selection == TextSelection{
+		anchor: rune_len(editor.text)
+		caret: 0
+	}
+	assert apply_text_editor_navigation(mut editor, 'a', false, true)
+	start, end := editor.selection.ordered()
+	assert start == 0
+	assert end == rune_len(editor.text)
+	assert !apply_text_editor_navigation(mut editor, 'a', false, false)
+}
+
+fn test_text_editor_word_navigation_keeps_combining_marks_in_words() {
+	mut editor := text_editor('éclair cafe')
+	editor.set_caret(rune_len(editor.text))
+	assert apply_text_editor_navigation(mut editor, 'left', false, true)
+	assert editor.selection.caret == 7
+	assert apply_text_editor_navigation(mut editor, 'left', false, true)
+	assert editor.selection.caret == 0
+}
+
+fn test_text_editor_word_navigation_keeps_indic_and_arabic_marks_in_words() {
+	assert is_unicode_mark(`ि`)
+	assert is_unicode_mark(`َ`)
+	assert is_unicode_mark(`ࢗ`)
+
+	mut editor := text_editor('किरण test')
+	editor.set_caret(rune_len(editor.text))
+	assert apply_text_editor_navigation(mut editor, 'left', false, true)
+	assert editor.selection.caret == 5
+	assert apply_text_editor_navigation(mut editor, 'left', false, true)
+	assert editor.selection.caret == 0
+
+	mut newer_arabic := text_editor('بࢗت test')
+	newer_arabic.set_caret(rune_len(newer_arabic.text))
+	assert apply_text_editor_navigation(mut newer_arabic, 'left', false, true)
+	assert newer_arabic.selection.caret == 4
+	assert apply_text_editor_navigation(mut newer_arabic, 'left', false, true)
+	assert newer_arabic.selection.caret == 0
+}
+
 fn test_rich_text_area_keeps_runs() {
 	runs := [
 		TextRun{

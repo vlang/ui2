@@ -29,23 +29,39 @@ mut:
 }
 
 fn v_string(value string) VValue {
-	return VValue{ kind: .string_, text: value }
+	return VValue{
+		kind: .string_
+		text: value
+	}
 }
 
 fn v_number(value f64, text string) VValue {
-	return VValue{ kind: .number, number: value, text: text }
+	return VValue{
+		kind:   .number
+		number: value
+		text:   text
+	}
 }
 
 fn v_bool(value bool) VValue {
-	return VValue{ kind: .bool_, bool_: value }
+	return VValue{
+		kind:  .bool_
+		bool_: value
+	}
 }
 
 fn v_object(fields map[string]VValue) VValue {
-	return VValue{ kind: .object, fields: fields }
+	return VValue{
+		kind:   .object
+		fields: fields
+	}
 }
 
 fn v_list(items []VValue) VValue {
-	return VValue{ kind: .list, items: items }
+	return VValue{
+		kind:  .list
+		items: items
+	}
 }
 
 fn v_value_from[T](value T) VValue {
@@ -86,14 +102,23 @@ fn v_array_element_schema[E](_ []E) VSchema {
 
 fn v_schema_from[T](value T) VSchema {
 	$if T is string {
-		return VSchema{ kind: .string_ }
+		return VSchema{
+			kind: .string_
+		}
 	} $else $if T is bool {
-		return VSchema{ kind: .bool_ }
+		return VSchema{
+			kind: .bool_
+		}
 	} $else $if T is $int || T is $float {
-		return VSchema{ kind: .number }
+		return VSchema{
+			kind: .number
+		}
 	} $else $if T is $array {
 		element := v_array_element_schema(value)
-		return VSchema{ kind: .list, element: &element }
+		return VSchema{
+			kind:    .list
+			element: &element
+		}
 	} $else $if T is $struct {
 		mut fields := map[string]VSchema{}
 		$for field in T.fields {
@@ -101,7 +126,10 @@ fn v_schema_from[T](value T) VSchema {
 				fields[field.name] = v_schema_from(value.$(field.name))
 			}
 		}
-		return VSchema{ kind: .object, fields: fields }
+		return VSchema{
+			kind:   .object
+			fields: fields
+		}
 	} $else {
 		return VSchema{}
 	}
@@ -109,13 +137,25 @@ fn v_schema_from[T](value T) VSchema {
 
 fn (value VValue) string_value() string {
 	return match value.kind {
-		.string_, .number { value.text }
-		.bool_ {
-			if value.bool_ { 'true' } else { 'false' }
+		.string_, .number {
+			value.text
 		}
-		.list { value.items.len.str() }
-		.object { '' }
-		.invalid { '' }
+		.bool_ {
+			if value.bool_ {
+				'true'
+			} else {
+				'false'
+			}
+		}
+		.list {
+			value.items.len.str()
+		}
+		.object {
+			''
+		}
+		.invalid {
+			''
+		}
 	}
 }
 
@@ -190,7 +230,9 @@ fn v_schema_lookup(scope map[string]VSchema, path string, line int) !VSchema {
 		// Bare VML enum and color values are string-like literals. Qualified
 		// paths must always resolve against the schema.
 		if parts.len == 1 {
-			return VSchema{ kind: .string_ }
+			return VSchema{
+				kind: .string_
+			}
 		}
 		return error('unknown property path `${path}` at line ${line}')
 	}
@@ -205,13 +247,17 @@ fn v_schema_lookup(scope map[string]VSchema, path string, line int) !VSchema {
 				if part != 'len' {
 					return error('unknown collection property `${part}` in `${path}` at line ${line}')
 				}
-				VSchema{ kind: .number }
+				VSchema{
+					kind: .number
+				}
 			}
 			.string_ {
 				if part != 'len' {
 					return error('unknown string property `${part}` in `${path}` at line ${line}')
 				}
-				VSchema{ kind: .number }
+				VSchema{
+					kind: .number
+				}
 			}
 			else {
 				return error('cannot read `${part}` from `${path}` at line ${line}')
@@ -231,31 +277,50 @@ fn v_schema_expression(expr &VExpression, scope map[string]VSchema) !VSchema {
 	return match expr.kind {
 		.literal {
 			if expr.quoted {
-				VSchema{ kind: .string_ }
+				VSchema{
+					kind: .string_
+				}
 			} else if expr.value in ['true', 'false'] {
-				VSchema{ kind: .bool_ }
+				VSchema{
+					kind: .bool_
+				}
 			} else {
-				VSchema{ kind: .number }
+				VSchema{
+					kind: .number
+				}
 			}
 		}
-		.path { v_schema_lookup(scope, expr.value, expr.line)! }
+		.path {
+			v_schema_lookup(scope, expr.value, expr.line)!
+		}
 		.call {
 			return error('calls are only allowed in event handlers at line ${expr.line}')
+		}
+		.assignment {
+			return error('assignments are only allowed in event handlers at line ${expr.line}')
 		}
 		.unary {
 			value := v_schema_expression(expr.left, scope)!
 			match expr.value {
-				'!' { VSchema{ kind: .bool_ } }
+				'!' {
+					VSchema{
+						kind: .bool_
+					}
+				}
 				'-' {
 					v_require_schema(value, .number, expr.line)!
-					VSchema{ kind: .number }
+					VSchema{
+						kind: .number
+					}
 				}
 				else {
 					return error('unknown unary operator `${expr.value}` at line ${expr.line}')
 				}
 			}
 		}
-		.binary { v_schema_binary(expr, scope)! }
+		.binary {
+			v_schema_binary(expr, scope)!
+		}
 		.conditional {
 			v_schema_expression(expr.left, scope)!
 			when_true := v_schema_expression(expr.right, scope)!
@@ -271,7 +336,9 @@ fn v_schema_expression(expr &VExpression, scope map[string]VSchema) !VSchema {
 					v_schema_expression(part.expr, scope)!
 				}
 			}
-			VSchema{ kind: .string_ }
+			VSchema{
+				kind: .string_
+			}
 		}
 	}
 }
@@ -282,24 +349,36 @@ fn v_schema_binary(expr &VExpression, scope map[string]VSchema) !VSchema {
 	return match expr.value {
 		'+' {
 			if left.kind == .string_ || right.kind == .string_ {
-				VSchema{ kind: .string_ }
+				VSchema{
+					kind: .string_
+				}
 			} else {
 				v_require_schema(left, .number, expr.line)!
 				v_require_schema(right, .number, expr.line)!
-				VSchema{ kind: .number }
+				VSchema{
+					kind: .number
+				}
 			}
 		}
 		'-', '*', '/', '%' {
 			v_require_schema(left, .number, expr.line)!
 			v_require_schema(right, .number, expr.line)!
-			VSchema{ kind: .number }
+			VSchema{
+				kind: .number
+			}
 		}
 		'<', '<=', '>', '>=' {
 			v_require_schema(left, .number, expr.line)!
 			v_require_schema(right, .number, expr.line)!
-			VSchema{ kind: .bool_ }
+			VSchema{
+				kind: .bool_
+			}
 		}
-		'==', '!=', '&&', '||' { VSchema{ kind: .bool_ } }
+		'==', '!=', '&&', '||' {
+			VSchema{
+				kind: .bool_
+			}
+		}
 		else {
 			return error('unknown operator `${expr.value}` at line ${expr.line}')
 		}
@@ -318,13 +397,20 @@ fn v_values_equal(left VValue, right VValue) bool {
 
 fn v_validate_declared_property(name string, type_name string, value VValue, line int) ! {
 	valid := match type_name {
-		'bool' { value.kind == .bool_ }
-		'string' { value.kind == .string_ }
-		'int', 'f32', 'f64' { value.kind == .number }
+		'bool' {
+			value.kind == .bool_
+		}
+		'string' {
+			value.kind == .string_
+		}
+		'int', 'f32', 'f64' {
+			value.kind == .number
+		}
 		else {
 			return error('unsupported property type `${type_name}` at line ${line}')
 		}
 	}
+
 	if !valid {
 		return error('property `${name}` expects `${type_name}` at line ${line}')
 	}
@@ -343,14 +429,21 @@ fn v_eval(expr &VExpression, scope map[string]VValue) !VValue {
 				v_number(expr.value.f64(), expr.value)
 			}
 		}
-		.path { v_lookup(scope, expr.value, expr.line)! }
+		.path {
+			v_lookup(scope, expr.value, expr.line)!
+		}
 		.call {
 			return error('calls are only allowed in event handlers at line ${expr.line}')
+		}
+		.assignment {
+			return error('assignments are only allowed in event handlers at line ${expr.line}')
 		}
 		.unary {
 			value := v_eval(expr.left, scope)!
 			match expr.value {
-				'!' { v_bool(!value.truthy()) }
+				'!' {
+					v_bool(!value.truthy())
+				}
 				'-' {
 					number := -value.numeric(expr.line)!
 					v_number(number, number.str())
@@ -360,7 +453,9 @@ fn v_eval(expr &VExpression, scope map[string]VValue) !VValue {
 				}
 			}
 		}
-		.binary { v_eval_binary(expr, scope)! }
+		.binary {
+			v_eval_binary(expr, scope)!
+		}
 		.conditional {
 			if v_eval(expr.left, scope)!.truthy() {
 				v_eval(expr.right, scope)!
@@ -424,14 +519,30 @@ fn v_eval_binary(expr &VExpression, scope map[string]VValue) !VValue {
 			value := math.fmod(left.numeric(expr.line)!, divisor)
 			v_number(value, value.str())
 		}
-		'==' { v_bool(v_values_equal(left, right)) }
-		'!=' { v_bool(!v_values_equal(left, right)) }
-		'<' { v_bool(left.numeric(expr.line)! < right.numeric(expr.line)!) }
-		'<=' { v_bool(left.numeric(expr.line)! <= right.numeric(expr.line)!) }
-		'>' { v_bool(left.numeric(expr.line)! > right.numeric(expr.line)!) }
-		'>=' { v_bool(left.numeric(expr.line)! >= right.numeric(expr.line)!) }
-		'&&' { v_bool(left.truthy() && right.truthy()) }
-		'||' { v_bool(left.truthy() || right.truthy()) }
+		'==' {
+			v_bool(v_values_equal(left, right))
+		}
+		'!=' {
+			v_bool(!v_values_equal(left, right))
+		}
+		'<' {
+			v_bool(left.numeric(expr.line)! < right.numeric(expr.line)!)
+		}
+		'<=' {
+			v_bool(left.numeric(expr.line)! <= right.numeric(expr.line)!)
+		}
+		'>' {
+			v_bool(left.numeric(expr.line)! > right.numeric(expr.line)!)
+		}
+		'>=' {
+			v_bool(left.numeric(expr.line)! >= right.numeric(expr.line)!)
+		}
+		'&&' {
+			v_bool(left.truthy() && right.truthy())
+		}
+		'||' {
+			v_bool(left.truthy() || right.truthy())
+		}
 		else {
 			return error('unknown operator `${expr.value}` at line ${expr.line}')
 		}
@@ -443,6 +554,13 @@ struct VmlInvocation {
 	args  []&VExpression
 	scope map[string]VValue
 	line  int
+}
+
+struct VmlAssignment {
+	target string
+	value  &VExpression
+	scope  map[string]VValue
+	line   int
 }
 
 struct VmlBinding {
@@ -457,6 +575,7 @@ struct VmlEvent {
 	binding        ?VmlBinding
 	group_bindings []VmlBinding
 	invocation     ?VmlInvocation
+	assignment     ?VmlAssignment
 }
 
 struct VmlEvaluation {
@@ -476,10 +595,25 @@ fn v_action(expr &VExpression, scope map[string]VValue) !VmlInvocation {
 	mut action_scope := scope.clone()
 	action_scope.delete('app')
 	return VmlInvocation{
-		name: name
-		args: expr.args.clone()
+		name:  name
+		args:  expr.args.clone()
 		scope: action_scope
-		line: expr.line
+		line:  expr.line
+	}
+}
+
+fn v_assignment(expr &VExpression, scope map[string]VValue) !VmlAssignment {
+	if expr.kind != .assignment || expr.left.kind != .path || !expr.left.value.starts_with('app.')
+		|| expr.left.value.count('.') != 1 {
+		return error('event assignments must target a mutable top-level app field at line ${expr.line}')
+	}
+	mut assignment_scope := scope.clone()
+	assignment_scope.delete('app')
+	return VmlAssignment{
+		target: expr.left.value.all_after('app.')
+		value:  expr.right
+		scope:  assignment_scope
+		line:   expr.line
 	}
 }
 
@@ -554,6 +688,7 @@ fn v_child_layout(node &VNode, actual Rect, metrics []VLayoutChildMetrics) !VChi
 		'Accordion' { VChildLayoutKind.accordion }
 		else { VChildLayoutKind.overlay }
 	}
+
 	padding := node.prop_or('padding', '0').f64()
 	local := rect(0, 0, actual.width, actual.height)
 	mut child_sizes := []Rect{cap: metrics.len}
@@ -565,27 +700,31 @@ fn v_child_layout(node &VNode, actual Rect, metrics []VLayoutChildMetrics) !VChi
 		child_sizes << metric.frame
 		if kind == .box {
 			box_children << BoxLayoutChild{
-				element: Element{ frame: metric.frame }
-				size_hint_x: metric.size_hint_x
-				size_hint_y: metric.size_hint_y
-				minimum_width: metric.minimum_width
-				minimum_height: metric.minimum_height
-				maximum_width: metric.maximum_width
-				maximum_height: metric.maximum_height
+				element:          Element{
+					frame: metric.frame
+				}
+				size_hint_x:      metric.size_hint_x
+				size_hint_y:      metric.size_hint_y
+				minimum_width:    metric.minimum_width
+				minimum_height:   metric.minimum_height
+				maximum_width:    metric.maximum_width
+				maximum_height:   metric.maximum_height
 				horizontal_align: metric.horizontal_align
-				vertical_align: metric.vertical_align
+				vertical_align:   metric.vertical_align
 			}
 		} else if kind == .float {
 			float_children << FloatLayoutChild{
-				element: Element{ frame: metric.frame }
-				size_hint_x: metric.size_hint_x
-				size_hint_y: metric.size_hint_y
-				minimum_width: metric.minimum_width
+				element:        Element{
+					frame: metric.frame
+				}
+				size_hint_x:    metric.size_hint_x
+				size_hint_y:    metric.size_hint_y
+				minimum_width:  metric.minimum_width
 				minimum_height: metric.minimum_height
-				maximum_width: metric.maximum_width
+				maximum_width:  metric.maximum_width
 				maximum_height: metric.maximum_height
-				x_hint: metric.x_hint
-				y_hint: metric.y_hint
+				x_hint:         metric.x_hint
+				y_hint:         metric.y_hint
 			}
 		} else if kind == .tabs {
 			panel_tabs << TabbedPanelTab{}
@@ -612,13 +751,13 @@ fn v_child_layout(node &VNode, actual Rect, metrics []VLayoutChildMetrics) !VChi
 		cells = []Rect{len: accordion_items.len, init: geometry.content}
 	}
 	return VChildLayout{
-		kind: kind
-		frame: local
+		kind:    kind
+		frame:   local
 		padding: padding
 		spacing: node.prop_or('spacing', '0').f64()
-		cursor: padding
-		cells: cells
-		anchor: if kind == .anchor {
+		cursor:  padding
+		cells:   cells
+		anchor:  if kind == .anchor {
 			v_anchor_config(node, local)!
 		} else {
 			AnchorLayoutConfig{}
@@ -635,7 +774,9 @@ fn v_layout_dimension(node &VNode, key string, scope map[string]VValue, fallback
 
 fn (layout &VChildLayout) fallback(child &VNode, scope map[string]VValue) !Rect {
 	return match layout.kind {
-		.overlay { layout.frame }
+		.overlay {
+			layout.frame
+		}
 		.column {
 			rect(layout.padding, layout.cursor, layout.frame.width - layout.padding * 2, 32)
 		}
@@ -643,28 +784,57 @@ fn (layout &VChildLayout) fallback(child &VNode, scope map[string]VValue) !Rect 
 			rect(layout.cursor, layout.padding, 80, layout.frame.height - layout.padding * 2)
 		}
 		.box {
-			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
+			if layout.index < layout.cells.len {
+				layout.cells[layout.index]
+			} else {
+				layout.frame
+			}
 		}
 		.float {
-			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
+			if layout.index < layout.cells.len {
+				layout.cells[layout.index]
+			} else {
+				layout.frame
+			}
 		}
 		.grid {
-			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
+			if layout.index < layout.cells.len {
+				layout.cells[layout.index]
+			} else {
+				layout.frame
+			}
 		}
 		.anchor {
-			anchor_layout_frame(layout.anchor, rect(0, 0, v_layout_dimension(child, 'width', scope, 80)!, v_layout_dimension(child, 'height', scope, 32)!))
+			anchor_layout_frame(layout.anchor, rect(0, 0, v_layout_dimension(child, 'width', scope,
+				80)!, v_layout_dimension(child, 'height', scope, 32)!))
 		}
 		.stack {
-			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
+			if layout.index < layout.cells.len {
+				layout.cells[layout.index]
+			} else {
+				layout.frame
+			}
 		}
 		.page {
-			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
+			if layout.index < layout.cells.len {
+				layout.cells[layout.index]
+			} else {
+				layout.frame
+			}
 		}
 		.tabs {
-			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
+			if layout.index < layout.cells.len {
+				layout.cells[layout.index]
+			} else {
+				layout.frame
+			}
 		}
 		.accordion {
-			if layout.index < layout.cells.len { layout.cells[layout.index] } else { layout.frame }
+			if layout.index < layout.cells.len {
+				layout.cells[layout.index]
+			} else {
+				layout.frame
+			}
 		}
 	}
 }
@@ -716,14 +886,23 @@ fn v_layout_alignment(node &VNode, key string, scope map[string]VValue) !BoxAlig
 fn v_layout_float_axis_hint(node &VNode, scope map[string]VValue, start_keys []string, center_key string, end_key string) !FloatAxisHint {
 	for key in start_keys {
 		if expr := node.expressions[key] {
-			return FloatAxisHint{ anchor: .start, value: v_eval(expr, scope)!.numeric(expr.line)! }
+			return FloatAxisHint{
+				anchor: .start
+				value:  v_eval(expr, scope)!.numeric(expr.line)!
+			}
 		}
 	}
 	if expr := node.expressions[center_key] {
-		return FloatAxisHint{ anchor: .center, value: v_eval(expr, scope)!.numeric(expr.line)! }
+		return FloatAxisHint{
+			anchor: .center
+			value:  v_eval(expr, scope)!.numeric(expr.line)!
+		}
 	}
 	if expr := node.expressions[end_key] {
-		return FloatAxisHint{ anchor: .end, value: v_eval(expr, scope)!.numeric(expr.line)! }
+		return FloatAxisHint{
+			anchor: .end
+			value:  v_eval(expr, scope)!.numeric(expr.line)!
+		}
 	}
 	return FloatAxisHint{}
 }
@@ -731,30 +910,34 @@ fn v_layout_float_axis_hint(node &VNode, scope map[string]VValue, start_keys []s
 fn v_layout_child_metric(node &VNode, scope map[string]VValue, box bool, floating bool) !VLayoutChildMetrics {
 	if !box && !floating {
 		return VLayoutChildMetrics{
-			frame: rect(0, 0, v_layout_dimension(node, 'width', scope, 80)!, v_layout_dimension(node, 'height', scope, 32)!)
+			frame: rect(0, 0, v_layout_dimension(node, 'width', scope, 80)!, v_layout_dimension(node,
+				'height', scope, 32)!)
 		}
 	}
 	return VLayoutChildMetrics{
-		frame: rect(if floating { v_layout_dimension(node, 'x', scope, 0)! } else { 0.0 }, if floating {
+		frame:            rect(if floating { v_layout_dimension(node, 'x', scope, 0)! } else { 0.0 }, if floating {
 			v_layout_dimension(node, 'y', scope, 0)!
 		} else {
 			0.0
-		}, v_layout_dimension(node, 'width', scope, 80)!, v_layout_dimension(node, 'height', scope, 32)!)
-		size_hint_x: v_layout_dimension(node, 'size_hint_x', scope, 1)!
-		size_hint_y: v_layout_dimension(node, 'size_hint_y', scope, 1)!
-		minimum_width: v_layout_dimension(node, 'size_hint_min_x', scope, -1)!
-		minimum_height: v_layout_dimension(node, 'size_hint_min_y', scope, -1)!
-		maximum_width: v_layout_dimension(node, 'size_hint_max_x', scope, -1)!
-		maximum_height: v_layout_dimension(node, 'size_hint_max_y', scope, -1)!
+		}, v_layout_dimension(node, 'width', scope, 80)!, v_layout_dimension(node, 'height', scope,
+			32)!)
+		size_hint_x:      v_layout_dimension(node, 'size_hint_x', scope, 1)!
+		size_hint_y:      v_layout_dimension(node, 'size_hint_y', scope, 1)!
+		minimum_width:    v_layout_dimension(node, 'size_hint_min_x', scope, -1)!
+		minimum_height:   v_layout_dimension(node, 'size_hint_min_y', scope, -1)!
+		maximum_width:    v_layout_dimension(node, 'size_hint_max_x', scope, -1)!
+		maximum_height:   v_layout_dimension(node, 'size_hint_max_y', scope, -1)!
 		horizontal_align: v_layout_alignment(node, 'align_x', scope)!
-		vertical_align: v_layout_alignment(node, 'align_y', scope)!
-		x_hint: if floating {
-			v_layout_float_axis_hint(node, scope, ['pos_hint_x'], 'pos_hint_center_x', 'pos_hint_right')!
+		vertical_align:   v_layout_alignment(node, 'align_y', scope)!
+		x_hint:           if floating {
+			v_layout_float_axis_hint(node, scope, ['pos_hint_x'], 'pos_hint_center_x',
+				'pos_hint_right')!
 		} else {
 			FloatAxisHint{}
 		}
-		y_hint: if floating {
-			v_layout_float_axis_hint(node, scope, ['pos_hint_y', 'pos_hint_top'], 'pos_hint_center_y', 'pos_hint_bottom')!
+		y_hint:           if floating {
+			v_layout_float_axis_hint(node, scope, ['pos_hint_y', 'pos_hint_top'],
+				'pos_hint_center_y', 'pos_hint_bottom')!
 		} else {
 			FloatAxisHint{}
 		}
@@ -804,8 +987,8 @@ fn v_layout_child_metrics(node &VNode, scope map[string]VValue) ![]VLayoutChildM
 fn v_eval_node(node &VNode, incoming_scope map[string]VValue, frame Rect, mut evaluation VmlEvaluation) !&VNode {
 	mut scope := incoming_scope.clone()
 	mut resolved := &VNode{
-		tag: node.tag
-		id: node.id
+		tag:  node.tag
+		id:   node.id
 		line: node.line
 		path: node.path
 	}
@@ -838,8 +1021,7 @@ fn v_eval_node(node &VNode, incoming_scope map[string]VValue, frame Rect, mut ev
 	mut binding := ?VmlBinding(none)
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
-			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
-				'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
+			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit', 'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 			continue
 		}
 		resolved.props[key] = v_eval(expr, scope)!.string_value()
@@ -860,10 +1042,10 @@ fn v_eval_node(node &VNode, incoming_scope map[string]VValue, frame Rect, mut ev
 			resolved.id = v_control_id(node, scope)
 		}
 		resolved_binding := VmlBinding{
-			property: property
-			target: expr.value
-			control: resolved.id
-			group: if node.tag == 'ToggleButton' && property == 'pressed' {
+			property:           property
+			target:             expr.value
+			control:            resolved.id
+			group:              if node.tag == 'ToggleButton' && property == 'pressed' {
 				resolved.prop('group')
 			} else {
 				''
@@ -894,35 +1076,53 @@ fn v_eval_node(node &VNode, incoming_scope map[string]VValue, frame Rect, mut ev
 	mut binding_event_property := ''
 	if b := binding {
 		binding_event_property = match b.property {
-			'checked' { 'on_tap' }
-			'active' { 'on_active' }
-			'pressed' { 'on_state' }
+			'checked' {
+				'on_tap'
+			}
+			'active' {
+				'on_active'
+			}
+			'pressed' {
+				'on_state'
+			}
 			'text' {
 				if node.tag == 'Spinner' { 'on_text' } else { 'on_change' }
 			}
-			'value' { 'on_change' }
+			'value' {
+				'on_change'
+			}
 			else {
 				return error('two-way binding is not supported for `${b.property}` at line ${node.line}')
 			}
 		}
+
 		event_id := v_event_id(node, scope, binding_event_property)
 		resolved.props[binding_event_property] = event_id
-		evaluation.events[event_id] = VmlEvent{ binding: binding }
+		evaluation.events[event_id] = VmlEvent{
+			binding: binding
+		}
 	}
 	for property in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
 		'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 		expr := node.expressions[property] or { continue }
-		if expr.kind == .call {
+		if expr.kind == .call || expr.kind == .assignment {
 			event_id := v_event_id(node, scope, property)
 			existing := evaluation.events[event_id] or { VmlEvent{} }
 			resolved.props[property] = event_id
-			evaluation.events[event_id] = VmlEvent{
-				binding: existing.binding
-				invocation: v_action(expr, scope)!
+			if expr.kind == .call {
+				evaluation.events[event_id] = VmlEvent{
+					binding:    existing.binding
+					invocation: v_action(expr, scope)!
+				}
+			} else {
+				evaluation.events[event_id] = VmlEvent{
+					binding:    existing.binding
+					assignment: v_assignment(expr, scope)!
+				}
 			}
 		} else {
 			if property == binding_event_property {
-				return error('a bound `${property}` handler must call an app action at line ${expr.line}')
+				return error('a bound `${property}` handler must call an app action or assign an app field at line ${expr.line}')
 			}
 			resolved.props[property] = expression_text(expr)
 		}
@@ -934,7 +1134,8 @@ fn v_eval_node(node &VNode, incoming_scope map[string]VValue, frame Rect, mut ev
 		if child.tag == 'Repeater' {
 			v_expand_repeater(child, scope, mut resolved.children, mut evaluation, mut layout)!
 		} else {
-			resolved_child := v_eval_node(child, scope, layout.fallback(child, scope)!, mut evaluation)!
+			resolved_child := v_eval_node(child, scope, layout.fallback(child, scope)!, mut
+				evaluation)!
 			resolved.children << resolved_child
 			layout.advance(resolved_child)
 		}
@@ -969,7 +1170,8 @@ fn v_expand_repeater(node &VNode, scope map[string]VValue, mut output []&VNode, 
 		parent_key := (scope['__repeat_key'] or { v_string('') }).string_value()
 		item_scope['__repeat_key'] = v_string(v_repeat_identity(parent_key, key))
 		for child_index, child in node.children {
-			mut repeated := v_eval_node(child, item_scope, layout.fallback(child, item_scope)!, mut evaluation)!
+			mut repeated := v_eval_node(child, item_scope, layout.fallback(child, item_scope)!, mut
+				evaluation)!
 			if repeated.props['key'].len == 0 {
 				repeated.props['key'] = if node.children.len == 1 {
 					key
@@ -985,13 +1187,20 @@ fn v_expand_repeater(node &VNode, scope map[string]VValue, mut output []&VNode, 
 
 fn v_validate_declared_schema(name string, type_name string, schema VSchema, line int) ! {
 	expected := match type_name {
-		'bool' { VValueKind.bool_ }
-		'string' { VValueKind.string_ }
-		'int', 'f32', 'f64' { VValueKind.number }
+		'bool' {
+			VValueKind.bool_
+		}
+		'string' {
+			VValueKind.string_
+		}
+		'int', 'f32', 'f64' {
+			VValueKind.number
+		}
 		else {
 			return error('unsupported property type `${type_name}` at line ${line}')
 		}
 	}
+
 	if schema.kind != expected {
 		return error('property `${name}` expects `${type_name}` at line ${line}')
 	}
@@ -1012,6 +1221,17 @@ fn v_validate_action[T](expr &VExpression, scope map[string]VSchema) ! {
 	type_check_action[T](name, args, expr.line)!
 }
 
+fn v_validate_assignment[T](expr &VExpression, scope map[string]VSchema) ! {
+	if expr.kind != .assignment || expr.left.kind != .path || !expr.left.value.starts_with('app.')
+		|| expr.left.value.count('.') != 1 {
+		return error('event assignments must target a mutable top-level app field at line ${expr.line}')
+	}
+	target := expr.left.value.all_after('app.')
+	type_name := vml_writable_field_type[T](target)!
+	schema := v_schema_expression(expr.right, scope)!
+	v_validate_declared_schema(target, type_name, schema, expr.line)!
+}
+
 fn v_validate_repeater_schema[T](node &VNode, scope map[string]VSchema) ! {
 	model_expr := node.expressions['model'] or {
 		return error('Repeater requires `model` at line ${node.line}')
@@ -1025,7 +1245,9 @@ fn v_validate_repeater_schema[T](node &VNode, scope map[string]VSchema) ! {
 	}
 	mut item_scope := scope.clone()
 	item_scope['item'] = *items.element
-	item_scope['index'] = VSchema{ kind: .number }
+	item_scope['index'] = VSchema{
+		kind: .number
+	}
 	key := v_schema_expression(key_expr, item_scope)!
 	if key.kind in [.invalid, .object, .list] {
 		return error('Repeater key must be a scalar value at line ${key_expr.line}')
@@ -1039,12 +1261,20 @@ fn v_validate_node_schema[T](node &VNode, incoming_scope map[string]VSchema) ! {
 	mut scope := incoming_scope.clone()
 	if node.id.len > 0 {
 		scope[node.id] = VSchema{
-			kind: .object
+			kind:   .object
 			fields: {
-				'x':      VSchema{ kind: .number }
-				'y':      VSchema{ kind: .number }
-				'width':  VSchema{ kind: .number }
-				'height': VSchema{ kind: .number }
+				'x':      VSchema{
+					kind: .number
+				}
+				'y':      VSchema{
+					kind: .number
+				}
+				'width':  VSchema{
+					kind: .number
+				}
+				'height': VSchema{
+					kind: .number
+				}
 			}
 		}
 	}
@@ -1062,8 +1292,7 @@ fn v_validate_node_schema[T](node &VNode, incoming_scope map[string]VSchema) ! {
 	}
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
-			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
-				'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
+			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit', 'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 			continue
 		}
 		v_schema_expression(expr, scope)!
@@ -1094,6 +1323,8 @@ fn v_validate_node_schema[T](node &VNode, incoming_scope map[string]VSchema) ! {
 		expr := node.expressions[property] or { continue }
 		if expr.kind == .call {
 			v_validate_action[T](expr, scope)!
+		} else if expr.kind == .assignment {
+			v_validate_assignment[T](expr, scope)!
 		} else {
 			v_schema_expression(expr, scope)!
 		}
@@ -1132,21 +1363,21 @@ fn v_normalize_toggle_groups(node &VNode, mut selected map[string]bool) &VNode {
 		children << v_normalize_toggle_groups(child, mut selected)
 	}
 	return &VNode{
-		tag: node.tag
-		id: node.id
-		props: props
-		children: children
-		expressions: node.expressions
+		tag:            node.tag
+		id:             node.id
+		props:          props
+		children:       children
+		expressions:    node.expressions
 		property_types: node.property_types
 		property_order: node.property_order
-		line: node.line
-		path: node.path
+		line:           node.line
+		path:           node.path
 	}
 }
 
 fn v_evaluate_template[T](root &VNode, model T, frame Rect) !(&VNode, map[string]VmlEvent) {
 	mut evaluation := VmlEvaluation{
-		events: map[string]VmlEvent{}
+		events:                map[string]VmlEvent{}
 		toggle_group_bindings: map[string][]VmlBinding{}
 	}
 	scope := {
@@ -1160,9 +1391,10 @@ fn v_evaluate_template[T](root &VNode, model T, frame Rect) !(&VNode, map[string
 		if binding := event.binding {
 			if binding.group.len > 0 {
 				events[event_id] = VmlEvent{
-					binding: event.binding
+					binding:        event.binding
 					group_bindings: evaluation.toggle_group_bindings[binding.group].clone()
-					invocation: event.invocation
+					invocation:     event.invocation
+					assignment:     event.assignment
 				}
 			}
 		}
@@ -1175,17 +1407,6 @@ fn v_evaluate_template[T](root &VNode, model T, frame Rect) !(&VNode, map[string
 // and additionally wires two-way bindings and actions to the live model.
 pub fn element_from_vml_model[T](source string, model T, frame Rect) !Element {
 	template := parse_vml(source)!
-	return element_from_vml_model_template[T](template, model, frame)
-}
-
-// element_from_vml_model_file evaluates a file-backed VML document, including
-// any modules imported relative to that file.
-pub fn element_from_vml_model_file[T](path string, model T, frame Rect) !Element {
-	template := parse_vml_file(path)!
-	return element_from_vml_model_template[T](template, model, frame)
-}
-
-fn element_from_vml_model_template[T](template &VNode, model T, frame Rect) !Element {
 	v_validate_template[T](template, model)!
 	resolved, _ := v_evaluate_template(template, model, frame)!
 	element := element_from_vnode(resolved, frame)!
@@ -1213,17 +1434,17 @@ fn type_check_action[T](name string, args []VSchema, line int) ! {
 		if method.name == name {
 			$if !method.is_pub {
 				return error('app action `${name}` is not public')
-			} $else $if method.typ is fn ( ) {
+			} $else $if method.typ is fn () {
 				if args.len != 0 {
 					return error('app action `${name}` expects no arguments at line ${line}')
 				}
 				return
-			} $else $if method.typ is fn ( int ) {
+			} $else $if method.typ is fn (int) {
 				if args.len != 1 || args[0].kind != .number {
 					return error('app action `${name}` expects one int argument at line ${line}')
 				}
 				return
-			} $else $if method.typ is fn ( string ) {
+			} $else $if method.typ is fn (string) {
 				if args.len != 1 || args[0].kind != .string_ {
 					return error('app action `${name}` expects one string argument at line ${line}')
 				}
@@ -1277,13 +1498,13 @@ fn vml_dispatch[T](mut model T, invocation VmlInvocation) ! {
 	}
 	$for method in T.methods {
 		if method.name == invocation.name {
-			$if method.is_pub && method.typ is fn ( ) {
+			$if method.is_pub && method.typ is fn () {
 				model.$method()
 				return
-			} $else $if method.is_pub && method.typ is fn ( int ) {
+			} $else $if method.is_pub && method.typ is fn (int) {
 				model.$method(int(args[0].numeric(invocation.line)!))
 				return
-			} $else $if method.is_pub && method.typ is fn ( string ) {
+			} $else $if method.is_pub && method.typ is fn (string) {
 				model.$method(args[0].string_value())
 				return
 			}
@@ -1292,16 +1513,19 @@ fn vml_dispatch[T](mut model T, invocation VmlInvocation) ! {
 	return error('unknown or unsupported app action `${invocation.name}`')
 }
 
+fn vml_apply_assignment[T](mut model T, assignment VmlAssignment) ! {
+	mut scope := assignment.scope.clone()
+	scope['app'] = v_value_from(model)
+	vml_set_field[T](mut model, assignment.target, v_eval(assignment.value, scope)!)!
+}
+
 pub struct VmlRunConfig[T] {
 pub:
-	source      string
-	// source_path selects a VML document on disk instead of source. It enables
-	// imports, which are resolved relative to the document's directory.
-	source_path string
-	model       T
-	title       string = 'App'
-	width       int = 400
-	height      int = 800
+	source string
+	model  T
+	title  string = 'App'
+	width  int    = 400
+	height int    = 800
 }
 
 @[heap]
@@ -1338,7 +1562,8 @@ fn vml_controller_handle[T](event_id string) {
 
 fn (mut controller VmlController[T]) build() Element {
 	frame := bounds()
-	resolved, events := v_evaluate_template(controller.template, controller.model, rect(0, 0, frame.width, frame.height)) or {
+	resolved, events := v_evaluate_template(controller.template, controller.model, rect(0, 0,
+		frame.width, frame.height)) or {
 		eprintln('ui2 VML evaluation failed: ${err}')
 		return screen(0xffffff, [])
 	}
@@ -1374,6 +1599,7 @@ fn (mut controller VmlController[T]) handle(event_id string) {
 				v_string(text(binding.control))
 			}
 		}
+
 		vml_set_field[T](mut controller.model, field_name, value) or {
 			eprintln('ui2 VML binding failed: ${err}')
 			return
@@ -1396,30 +1622,33 @@ fn (mut controller VmlController[T]) handle(event_id string) {
 			return
 		}
 	}
+	if assignment := event.assignment {
+		vml_apply_assignment[T](mut controller.model, assignment) or {
+			eprintln('ui2 VML assignment failed: ${err}')
+			return
+		}
+	}
 	refresh()
 }
 
 // run_vml owns one typed model for the window, exposes it to VML as `app`, and
 // reconciles the cached document after each binding write or app action.
 pub fn run_vml[T](config VmlRunConfig[T]) ! {
-	template := if config.source_path.len > 0 {
-		parse_vml_file(config.source_path)!
-	} else {
-		parse_vml(config.source)!
-	}
+	template := parse_vml(config.source)!
 	v_validate_template[T](template, config.model)!
 	initial_frame := rect(0, 0, f64(config.width), f64(config.height))
 	resolved, events := v_evaluate_template(template, config.model, initial_frame)!
 	validate_element_tree(element_from_vnode(resolved, initial_frame)!)!
 	mut controller := &VmlController[T]{
 		template: template
-		model: config.model
-		events: events
+		model:    config.model
+		events:   events
 	}
 	mut runtime := vml_runtime()
 	runtime.controller = voidptr(controller)
 	$if macos || windows || linux {
-		run_window(config.title, config.width, config.height, vml_controller_build[T], vml_controller_handle[T])
+		run_window(config.title, config.width, config.height, vml_controller_build[T],
+			vml_controller_handle[T])
 	} $else {
 		run(vml_controller_build[T], vml_controller_handle[T])
 	}
