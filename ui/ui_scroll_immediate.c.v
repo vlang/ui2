@@ -10,6 +10,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	const text_area_vertical_padding = 8.0
 	const anonymous_text_area_scroll_prefix = '@text-area-key:'
 
+	struct TextAreaLineRange {
+		start int
+		end   int
+	}
+
 	fn reset_scroll_frame() {
 		g_scroll_areas = map[string]Rect{}
 		g_scroll_viewports = map[string]Rect{}
@@ -215,6 +220,46 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return lines
 	}
 
+	// text_area_line_rune_ranges maps rendered wrapped lines back to their rune
+	// offsets in the normalized source text. Whitespace discarded at wrap points
+	// is intentionally outside every line range.
+	fn text_area_line_rune_ranges(value string, lines []string) []TextAreaLineRange {
+		runes := value.replace('\r\n', '\n').replace('\r', '\n').runes()
+		mut ranges := []TextAreaLineRange{cap: lines.len}
+		mut cursor := 0
+		for line in lines {
+			line_runes := line.runes()
+			if line_runes.len == 0 {
+				ranges << TextAreaLineRange{
+					start: cursor
+					end: cursor
+				}
+				continue
+			}
+			mut start := cursor
+			for candidate := cursor; candidate + line_runes.len <= runes.len; candidate++ {
+				mut matches := true
+				for index in 0 .. line_runes.len {
+					if runes[candidate + index] != line_runes[index] {
+						matches = false
+						break
+					}
+				}
+				if matches {
+					start = candidate
+					break
+				}
+			}
+			end := start + line_runes.len
+			ranges << TextAreaLineRange{
+				start: start
+				end: end
+			}
+			cursor = end
+		}
+		return ranges
+	}
+
 	fn visible_text_area_rows(count int, top f64, line_height f64, offset f64, clip Rect) (int, int) {
 		if count <= 0 || line_height <= 0 || clip.width <= 0 || clip.height <= 0 {
 			return 0, 0
@@ -243,6 +288,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		lines := text_area_lines(el.id, value, content.width, style, cfg.size, fn [ctx] (line string) f64 {
 			return f64(ctx.text_width_f(line))
 		})
+		line_ranges := text_area_line_rune_ranges(value, lines)
+		editor := g_text_editors[el.id] or { text_editor(value.clone()) }
+		selection_start, selection_end := editor.selection.ordered()
+		show_selection := g_focused_field == el.id && selection_start != selection_end
 		line_height := math.max(1.0, font_line_height(style.size))
 		content_height := f64(lines.len) * line_height + text_area_vertical_padding * 2
 		// Read-only means not editable, not unscrollable. disable_scroll only
@@ -261,6 +310,21 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			first, last := visible_text_area_rows(lines.len, content.y, line_height, offset, text_clip)
 			for index in first .. last {
 				text_y := content.y + (f64(index) + 0.5) * line_height - offset
+				if show_selection && index < line_ranges.len {
+					line_range := line_ranges[index]
+					from := if selection_start > line_range.start { selection_start } else { line_range.start }
+					to := if selection_end < line_range.end { selection_end } else { line_range.end }
+					if to > from {
+						line_runes := lines[index].runes()
+						prefix := line_runes[..from - line_range.start].string()
+						selected := line_runes[from - line_range.start..to - line_range.start].string()
+						line_width := f64(ctx.text_width_f(lines[index]))
+						line_origin := text_field_aligned_text_origin(content.x, content.width, line_width,
+							style.align)
+						draw_rect(ctx, line_origin + f64(ctx.text_width_f(prefix)), text_y - line_height / 2,
+							f64(ctx.text_width_f(selected)), line_height, 0xb8d7ff, 0)
+					}
+				}
 				ctx.draw_text(int(text_x), int(text_y), lines[index], cfg)
 			}
 		}

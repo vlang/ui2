@@ -36,7 +36,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		scroll_test_events << id
 	}
 
-	fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
+fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		reset_scroll_test_state()
 		assert wrap_text_area_lines('one two three', 70, scroll_test_width) == ['one two', 'three']
 		assert wrap_text_area_lines('one\r\n\r\ntwo\n', 100, scroll_test_width) == ['one', '', 'two', '']
@@ -283,4 +283,18 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		assert 'text' !in g_text_area_layouts
 		assert scroll_hit_test(150, 50) == ''
 	}
+}
+
+fn test_text_area_line_ranges_follow_wrapped_source_runes() {
+	lines := ['one two', 'three']
+	assert text_area_line_rune_ranges('one two three', lines) == [
+		TextAreaLineRange{
+			start: 0
+			end: 7
+		},
+		TextAreaLineRange{
+			start: 8
+			end: 13
+		},
+	]
 }

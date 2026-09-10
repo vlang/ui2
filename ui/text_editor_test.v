@@ -158,6 +158,7 @@ fn test_text_editor_word_navigation_keeps_combining_marks_in_words() {
 fn test_text_editor_word_navigation_keeps_indic_and_arabic_marks_in_words() {
 	assert is_unicode_mark(`ि`)
 	assert is_unicode_mark(`َ`)
+	assert is_unicode_mark(`ࢗ`)
 
 	mut editor := text_editor('किरण test')
 	editor.set_caret(rune_len(editor.text))
@@ -165,6 +166,13 @@ fn test_text_editor_word_navigation_keeps_indic_and_arabic_marks_in_words() {
 	assert editor.selection.caret == 5
 	assert apply_text_editor_navigation(mut editor, 'left', false, true)
 	assert editor.selection.caret == 0
+
+	mut newer_arabic := text_editor('بࢗت test')
+	newer_arabic.set_caret(rune_len(newer_arabic.text))
+	assert apply_text_editor_navigation(mut newer_arabic, 'left', false, true)
+	assert newer_arabic.selection.caret == 4
+	assert apply_text_editor_navigation(mut newer_arabic, 'left', false, true)
+	assert newer_arabic.selection.caret == 0
 }
 
 fn test_rich_text_area_keeps_runs() {
