@@ -838,7 +838,7 @@ fn render_root(declared Element) {
 	st.textview_ids = map[u64]string{}
 	st.textview_action_ids = map[u64]string{}
 	st.scroll_ids = map[u64]string{}
-	native_set_background(st.root_view, root.box.bg)
+	native_set_box_background(st.root_view, root.box)
 	mut active := map[string]bool{}
 	render_children(st.root_view, root.children, '', mut active)
 	remove_stale_nodes(active)

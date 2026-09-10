@@ -716,7 +716,10 @@ fn node_to_element_base(node &QNode, frame Rect) !Element {
 	local := rect(0, 0, frame.width, frame.height)
 	match node.tag {
 		'Screen' {
-			return screen(q_color(node, 'background', 0xffffff), q_children(node, local)!)
+			return Element{
+				...screen(q_color(node, 'background', 0xffffff), q_children(node, local)!)
+				box: q_box(node)
+			}
 		}
 		'Column' {
 			return q_column(node, frame)!
@@ -1685,6 +1688,7 @@ fn q_box(node &QNode) BoxStyle {
 	return BoxStyle{
 		bg: q_color(node, 'background', 0xffffff)
 		radius: node.prop_or('corner_radius', node.prop_or('radius', '0')).f64()
+		transparent: node.prop_bool('transparent')
 		border_color: q_color(node, 'border_color', 0)
 		border_left: node.prop_or('border_left', border_width).f64()
 		border_top: node.prop_or('border_top', border_width).f64()
