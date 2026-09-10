@@ -5,7 +5,7 @@ fn test_text_editor_insert_and_replace_selection() {
 	editor.set_selection(6, 11)
 	editor.insert_text('V')
 	assert editor.text == 'Hello V'
-	assert editor.selection.caret == 8
+	assert editor.selection.caret == 7
 	assert editor.selection.collapsed()
 }
 
@@ -151,6 +151,18 @@ fn test_text_editor_word_navigation_keeps_combining_marks_in_words() {
 	editor.set_caret(rune_len(editor.text))
 	assert apply_text_editor_navigation(mut editor, 'left', false, true)
 	assert editor.selection.caret == 7
+	assert apply_text_editor_navigation(mut editor, 'left', false, true)
+	assert editor.selection.caret == 0
+}
+
+fn test_text_editor_word_navigation_keeps_indic_and_arabic_marks_in_words() {
+	assert is_unicode_mark(`ि`)
+	assert is_unicode_mark(`َ`)
+
+	mut editor := text_editor('किरण test')
+	editor.set_caret(rune_len(editor.text))
+	assert apply_text_editor_navigation(mut editor, 'left', false, true)
+	assert editor.selection.caret == 5
 	assert apply_text_editor_navigation(mut editor, 'left', false, true)
 	assert editor.selection.caret == 0
 }

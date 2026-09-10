@@ -1816,7 +1816,9 @@ fn page_focused_text_area(direction int) {
 					before := editor.text.runes()[..editor.selection.caret].string()
 					caret_text := text_field_display_text(before, el.secure)
 					text_w := f64(ctx.text_width(caret_text))
-					cursor_x := x + padding_left + text_w
+					text_origin := text_field_aligned_text_origin(x + padding_left, content_width,
+						f64(ctx.text_width(display_text)), el.text_style.align)
+					cursor_x := text_origin + text_w
 					cursor_y := y + el.frame.height * 0.2
 					cursor_h := el.frame.height * 0.6
 					draw_rect(ctx, cursor_x, cursor_y, 2, cursor_h, el.text_style.color, 0)
@@ -2575,7 +2577,9 @@ fn page_focused_text_area(direction int) {
 			align: text_align(style.align)
 			vertical_align: .middle
 		})
-		mut left := x + f64(ctx.text_width(before))
+		text_width := f64(ctx.text_width(display_text))
+		text_origin := text_field_aligned_text_origin(x, w, text_width, style.align)
+		mut left := text_origin + f64(ctx.text_width(before))
 		mut right := left + f64(ctx.text_width(selected))
 		if left < x {
 			left = x
@@ -2585,6 +2589,14 @@ fn page_focused_text_area(direction int) {
 		}
 		if right > left {
 			draw_rect(ctx, left, y + h * 0.2, right - left, h * 0.6, 0xb8d7ff, 0)
+		}
+	}
+
+	fn text_field_aligned_text_origin(x f64, w f64, text_width f64, align Align) f64 {
+		return match align {
+			.left { x }
+			.center { x + (w - text_width) / 2 }
+			.right { x + w - text_width }
 		}
 	}
 

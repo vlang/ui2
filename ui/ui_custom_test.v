@@ -507,3 +507,9 @@ fn test_text_field_selection_text_uses_rune_offsets() {
 	assert before == 'a'
 	assert selected == '🙂bc'
 }
+
+fn test_text_field_selection_origin_respects_text_alignment() {
+	assert text_field_aligned_text_origin(10, 100, 40, .left) == 10
+	assert text_field_aligned_text_origin(10, 100, 40, .center) == 40
+	assert text_field_aligned_text_origin(10, 100, 40, .right) == 70
+}
