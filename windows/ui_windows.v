@@ -120,6 +120,8 @@ fn C.ui2_win_paint_background(hwnd voidptr, background u32, radius f64, transpar
 
 fn C.ui2_win_paint_background_into(hwnd voidptr, dc voidptr, background u32, radius f64, transparent int, border_color u32, border_left f64, border_top f64, border_right f64, border_bottom f64)
 
+fn C.ui2_win_paint_transparent_button(hwnd voidptr, foreground u32, radius f64, border_color u32, border_left f64, border_top f64, border_right f64, border_bottom f64)
+
 fn C.ui2_win_paint_control_border(hwnd voidptr, color u32, radius f64, left f64, top f64, right f64, bottom f64)
 
 fn C.ui2_win_invalidate(hwnd voidptr)
@@ -309,6 +311,10 @@ fn windows_handle_id(hwnd voidptr) u64 {
 
 fn windows_bool(value bool) int {
 	return if value { 1 } else { 0 }
+}
+
+fn windows_uses_transparent_button_paint(kind Kind, box BoxStyle) bool {
+	return box.transparent && kind in [.button, .toggle_button]
 }
 
 fn windows_align(align Align) int {
@@ -1481,6 +1487,30 @@ fn ui2_windows_control_border(hwnd voidptr) {
 	box := st.node_boxes[key] or { return }
 	C.ui2_win_paint_control_border(hwnd, box.border_color, box.radius, box.border_left,
 		box.border_top, box.border_right, box.border_bottom)
+}
+
+@[export: 'ui2_windows_paint_transparent_button']
+fn ui2_windows_paint_transparent_button(hwnd voidptr) int {
+	st := windows_state()
+	key := st.handle_keys[windows_handle_id(hwnd)] or { return 0 }
+	kind := st.node_kinds[key] or { return 0 }
+	box := st.node_boxes[key] or { return 0 }
+	if !windows_uses_transparent_button_paint(kind, box) {
+		return 0
+	}
+	style := st.node_text_styles[key] or { TextStyle{} }
+	C.ui2_win_paint_transparent_button(hwnd, style.color, box.radius, box.border_color,
+		box.border_left, box.border_top, box.border_right, box.border_bottom)
+	return 1
+}
+
+@[export: 'ui2_windows_is_transparent_button']
+fn ui2_windows_is_transparent_button(hwnd voidptr) int {
+	st := windows_state()
+	key := st.handle_keys[windows_handle_id(hwnd)] or { return 0 }
+	kind := st.node_kinds[key] or { return 0 }
+	box := st.node_boxes[key] or { return 0 }
+	return windows_bool(windows_uses_transparent_button_paint(kind, box))
 }
 
 @[export: 'ui2_windows_edit_submit']

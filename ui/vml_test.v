@@ -329,6 +329,9 @@ fn test_vml_transparency_reaches_box_backed_controls() {
 	] {
 		el := element_from_vml(source, rect(0, 0, 120, 40)) or { panic(err) }
 		assert el.box.transparent, source
+		if el.kind == .toggle_button {
+			assert el.toggle_down_box.transparent, source
+		}
 	}
 }
 

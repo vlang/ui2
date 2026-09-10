@@ -866,6 +866,7 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 				down_box: BoxStyle{
 					bg: v_color(node, 'down_background', 0x2563eb)
 					radius: node.prop_or('down_corner_radius', normal_box.radius.str()).f64()
+					transparent: normal_box.transparent
 				}
 				text_style: v_text_style(node)
 				down_text_style: TextStyle{

@@ -54,6 +54,8 @@ extern int ui2_windows_context_menu(void *hwnd, int screen_x, int screen_y);
 extern int ui2_windows_cursor(void *hwnd);
 extern void ui2_windows_control_pointer(void *hwnd, unsigned int message, int x, int y);
 extern void ui2_windows_control_border(void *hwnd);
+extern int ui2_windows_is_transparent_button(void *hwnd);
+extern int ui2_windows_paint_transparent_button(void *hwnd);
 
 static inline void ui2_win_refresh_text_font(HWND hwnd);
 
@@ -143,7 +145,11 @@ static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM
 		ui2_windows_control_pointer(hwnd, message, GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
 		if (!IsWindow(hwnd)) return 0;
 	}
+	if (message == WM_ERASEBKGND && ui2_windows_is_transparent_button(hwnd)) {
+		return 1;
+	}
 	if (message == WM_PAINT) {
+		if (ui2_windows_paint_transparent_button(hwnd)) return 0;
 		LRESULT result = DefSubclassProc(hwnd, message, wparam, lparam);
 		ui2_win_draw_placeholder(hwnd);
 		ui2_windows_control_border(hwnd);
@@ -1030,6 +1036,21 @@ static inline void ui2_win_fill_background(HDC dc, const RECT *rect,
 	DeleteObject(brush);
 }
 
+static inline void ui2_win_paint_parent_background(HWND hwnd, HDC dc) {
+	HWND parent = GetParent(hwnd);
+	if (parent == NULL) return;
+	POINT parent_origin = {0, 0};
+	MapWindowPoints(parent, hwnd, &parent_origin, 1);
+	int saved = SaveDC(dc);
+	OffsetViewportOrgEx(dc, parent_origin.x, parent_origin.y, NULL);
+	SendMessageW(parent, UI2_WM_PAINT_BACKGROUND, (WPARAM)dc, 0);
+	if (saved != 0) {
+		RestoreDC(dc, saved);
+	} else {
+		OffsetViewportOrgEx(dc, -parent_origin.x, -parent_origin.y, NULL);
+	}
+}
+
 static inline void ui2_win_paint_background_into(void *hwnd_ptr, void *dc_ptr,
 		unsigned int background, double radius, int transparent,
 		unsigned int border_color, double border_left, double border_top,
@@ -1042,14 +1063,7 @@ static inline void ui2_win_paint_background_into(void *hwnd_ptr, void *dc_ptr,
 	// clear pixels untouched. Rebuild the ancestor backdrop in this DC first;
 	// this preserves both color-key pixels and rounded ancestor boundaries.
 	HWND parent = GetParent(hwnd);
-	if (parent != NULL) {
-		POINT parent_origin = {0, 0};
-		MapWindowPoints(parent, hwnd, &parent_origin, 1);
-		int saved = SaveDC(dc);
-		OffsetViewportOrgEx(dc, parent_origin.x, parent_origin.y, NULL);
-		SendMessageW(parent, UI2_WM_PAINT_BACKGROUND, (WPARAM)dc, 0);
-		if (saved != 0) RestoreDC(dc, saved);
-	}
+	ui2_win_paint_parent_background(hwnd, dc);
 
 	RECT rect;
 	GetClientRect(hwnd, &rect);
@@ -1085,6 +1099,62 @@ static inline void ui2_win_paint_background(void *hwnd_ptr, unsigned int backgro
 	if (dc != NULL) {
 		ui2_win_paint_background_into(hwnd, dc, background, radius, transparent,
 			border_color, border_left, border_top, border_right, border_bottom);
+	}
+	EndPaint(hwnd, &paint);
+}
+
+static inline void ui2_win_paint_transparent_button(void *hwnd_ptr,
+		unsigned int foreground, double radius, unsigned int border_color,
+		double border_left, double border_top, double border_right,
+		double border_bottom) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	if (hwnd == NULL) return;
+	PAINTSTRUCT paint;
+	HDC dc = BeginPaint(hwnd, &paint);
+	if (dc != NULL) {
+		ui2_win_paint_parent_background(hwnd, dc);
+		RECT rect;
+		GetClientRect(hwnd, &rect);
+		HRGN clip = NULL;
+		if (radius > 0.5) {
+			int diameter = (int)(radius * 2.0 + 0.5);
+			clip = CreateRoundRectRgn(rect.left, rect.top, rect.right + 1,
+				rect.bottom + 1, diameter, diameter);
+			if (clip != NULL) SelectClipRgn(dc, clip);
+		}
+		ui2_win_draw_borders(dc, &rect, border_color, border_left, border_top,
+			border_right, border_bottom);
+		if (clip != NULL) {
+			SelectClipRgn(dc, NULL);
+			DeleteObject(clip);
+		}
+
+		int length = GetWindowTextLengthW(hwnd);
+		wchar_t *text = (wchar_t *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
+			(size_t)(length + 1) * sizeof(wchar_t));
+		if (text != NULL) {
+			GetWindowTextW(hwnd, text, length + 1);
+			HFONT font = (HFONT)SendMessageW(hwnd, WM_GETFONT, 0, 0);
+			HGDIOBJ old_font = font == NULL ? NULL : SelectObject(dc, font);
+			int old_mode = SetBkMode(dc, TRANSPARENT);
+			COLORREF old_color = SetTextColor(dc, IsWindowEnabled(hwnd)
+				? ui2_win_color(foreground) : GetSysColor(COLOR_GRAYTEXT));
+			RECT text_rect = rect;
+			if ((SendMessageW(hwnd, BM_GETSTATE, 0, 0) & BST_PUSHED) != 0) {
+				OffsetRect(&text_rect, 1, 1);
+			}
+			DrawTextW(dc, text, length, &text_rect, DT_CENTER | DT_VCENTER
+				| DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+			SetTextColor(dc, old_color);
+			SetBkMode(dc, old_mode);
+			if (old_font != NULL) SelectObject(dc, old_font);
+			HeapFree(GetProcessHeap(), 0, text);
+		}
+		if (GetFocus() == hwnd) {
+			RECT focus = rect;
+			InflateRect(&focus, -3, -3);
+			DrawFocusRect(dc, &focus);
+		}
 	}
 	EndPaint(hwnd, &paint);
 }
