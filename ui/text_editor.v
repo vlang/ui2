@@ -1,6 +1,7 @@
 module ui2
 
 import strings
+import encoding.utf8
 
 // TextSelection stores positions as rune offsets, so cursor movement is stable
 // for UTF-8 text. The selection is collapsed when anchor == caret.
@@ -68,6 +69,11 @@ pub fn (mut e TextEditor) select_all() {
 
 pub fn (mut e TextEditor) move_caret(delta int, extend bool) {
 	length := rune_len(e.text)
+	if !extend && !e.selection.collapsed() {
+		start, end := e.selection.ordered()
+		e.set_caret(if delta < 0 { start } else { end })
+		return
+	}
 	next := clamp_int(e.selection.caret + delta, 0, length)
 	if extend {
 		e.selection.caret = next
@@ -77,6 +83,71 @@ pub fn (mut e TextEditor) move_caret(delta int, extend bool) {
 		anchor: next
 		caret: next
 	}
+}
+
+// move_word_caret moves to the beginning of the previous or next word. Word
+// positions are rune offsets, so Ctrl+Arrow remains safe for Unicode input.
+pub fn (mut e TextEditor) move_word_caret(direction int, extend bool) {
+	if !extend && !e.selection.collapsed() {
+		start, end := e.selection.ordered()
+		e.set_caret(if direction < 0 { start } else { end })
+		return
+	}
+	runes := e.text.runes()
+	next := if direction < 0 {
+		previous_word_boundary(runes, e.selection.caret)
+	} else {
+		next_word_boundary(runes, e.selection.caret)
+	}
+	e.move_caret_to(next, extend)
+}
+
+// move_caret_to moves or extends the selection to an absolute rune offset.
+pub fn (mut e TextEditor) move_caret_to(pos int, extend bool) {
+	next := clamp_int(pos, 0, rune_len(e.text))
+	if extend {
+		e.selection.caret = next
+		return
+	}
+	e.set_caret(next)
+}
+
+// apply_text_editor_navigation is shared by the custom renderer and tests.
+// A single-line field treats Page Up/Down like Home/End, matching the useful
+// boundary navigation users expect when there is no vertical viewport.
+fn apply_text_editor_navigation(mut editor TextEditor, key string, extend bool, ctrl bool) bool {
+	match key {
+		'left' {
+			if ctrl {
+				editor.move_word_caret(-1, extend)
+			} else {
+				editor.move_caret(-1, extend)
+			}
+		}
+		'right' {
+			if ctrl {
+				editor.move_word_caret(1, extend)
+			} else {
+				editor.move_caret(1, extend)
+			}
+		}
+		'home', 'page_up' {
+			editor.move_caret_to(0, extend)
+		}
+		'end', 'page_down' {
+			editor.move_caret_to(rune_len(editor.text), extend)
+		}
+		'a' {
+			if !ctrl {
+				return false
+			}
+			editor.select_all()
+		}
+		else {
+			return false
+		}
+	}
+	return true
 }
 
 pub fn (mut e TextEditor) insert_text(value string) {
@@ -161,4 +232,30 @@ fn clamp_int(value int, min int, max int) int {
 		return max
 	}
 	return value
+}
+
+fn is_word_rune(value rune) bool {
+	return utf8.is_letter(value) || utf8.is_number(value) || value == `_`
+}
+
+fn previous_word_boundary(runes []rune, caret int) int {
+	mut position := clamp_int(caret, 0, runes.len)
+	for position > 0 && !is_word_rune(runes[position - 1]) {
+		position--
+	}
+	for position > 0 && is_word_rune(runes[position - 1]) {
+		position--
+	}
+	return position
+}
+
+fn next_word_boundary(runes []rune, caret int) int {
+	mut position := clamp_int(caret, 0, runes.len)
+	for position < runes.len && is_word_rune(runes[position]) {
+		position++
+	}
+	for position < runes.len && !is_word_rune(runes[position]) {
+		position++
+	}
+	return position
 }

@@ -637,7 +637,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 					}
 				}
 				if !dispatch_key_event(e) {
-					handle_key_down(e.key_code)
+					handle_key_down(e.key_code, e.modifiers)
 				}
 			}
 			.files_dropped {
@@ -1019,7 +1019,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		fire_field_change(g_focused_field)
 	}
 
-	fn handle_key_down(key gg.KeyCode) {
+	fn handle_key_down(key gg.KeyCode, modifiers u32) {
 		if g_focused_field.len == 0 {
 			return
 		}
@@ -1040,17 +1040,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				fire_field_change(g_focused_field)
 			}
 		}
-		if key == .left || key == .right || key == .home || key == .end {
-			if key == .left {
-				editor.move_caret(-1, false)
-			} else if key == .right {
-				editor.move_caret(1, false)
-			} else if key == .home {
-				editor.set_caret(0)
-			} else {
-				editor.set_caret(rune_len(editor.text))
-			}
-			replace_text_editor(g_focused_field, editor)
+		navigation_key := match key {
+			.left { 'left' }
+			.right { 'right' }
+			.home { 'home' }
+			.end { 'end' }
+			.page_up { 'page_up' }
+			.page_down { 'page_down' }
+			.a { 'a' }
+			else { '' }
+		}
+		if navigation_key.len > 0 && apply_text_editor_navigation(mut editor, navigation_key,
+			modifiers & u32(gg.Modifier.shift) != 0, modifiers & u32(gg.Modifier.ctrl) != 0) {
+			g_text_editors[g_focused_field] = editor
 		}
 		if key == .enter || key == .kp_enter {
 			for target in g_hit_targets {
