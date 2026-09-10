@@ -44,6 +44,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		assert wrap_text_area_lines('one\ttwo', 30, scroll_test_width) == ['one', 'two']
 	}
 
+	fn test_page_navigation_scrolls_the_focused_text_area() {
+		reset_scroll_test_state()
+		frame := rect(0, 0, 100, 80)
+		register_scroll_view('notes', frame, frame, 400, true, true, false)
+		g_focused_field = 'notes'
+		page_focused_text_area(1)
+		assert scroll_offset('notes') == 80
+		page_focused_text_area(10)
+		assert scroll_offset('notes') == 320
+		page_focused_text_area(-1)
+		assert scroll_offset('notes') == 240
+	}
+
 	fn test_text_area_wraps_long_words_without_splitting_utf8_bytes() {
 		reset_scroll_test_state()
 		assert wrap_text_area_lines('é界🙂abcd', 30, scroll_test_width) == ['é界🙂', 'abc', 'd']

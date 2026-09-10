@@ -1040,7 +1040,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				fire_field_change(g_focused_field)
 			}
 		}
-		navigation_key := match key {
+		mut navigation_key := match key {
 			.left { 'left' }
 			.right { 'right' }
 			.home { 'home' }
@@ -1050,13 +1050,34 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			.a { 'a' }
 			else { '' }
 		}
+		mut focused_text_area := false
+		for target in g_hit_targets {
+			if target.id == g_focused_field {
+				focused_text_area = target.text_area
+				break
+			}
+		}
+		if focused_text_area && (navigation_key == 'page_up' || navigation_key == 'page_down') {
+			page_focused_text_area(if navigation_key == 'page_up' { -1 } else { 1 })
+			return
+		}
 		primary_modifier := text_navigation_primary_modifier(
 			modifiers & u32(gg.Modifier.ctrl) != 0,
 			modifiers & u32(gg.Modifier.alt) != 0,
 			modifiers & u32(gg.Modifier.super) != 0,
 		)
+		word_modifier := text_navigation_word_modifier(
+			modifiers & u32(gg.Modifier.ctrl) != 0,
+			modifiers & u32(gg.Modifier.alt) != 0,
+		)
+		if primary_modifier && navigation_key == 'left' {
+			navigation_key = 'home'
+		} else if primary_modifier && navigation_key == 'right' {
+			navigation_key = 'end'
+		}
+		navigation_modifier := if navigation_key == 'a' { primary_modifier } else { word_modifier }
 		if navigation_key.len > 0 && apply_text_editor_navigation(mut editor, navigation_key,
-			modifiers & u32(gg.Modifier.shift) != 0, primary_modifier) {
+			modifiers & u32(gg.Modifier.shift) != 0, navigation_modifier) {
 			g_text_editors[g_focused_field] = editor
 		}
 		if key == .enter || key == .kp_enter {
@@ -1089,6 +1110,23 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		} $else {
 			return ctrl && !alt
 		}
+	}
+
+	// text_navigation_word_modifier follows native word movement: Option on
+	// macOS, and Control everywhere else. Excluding Alt on non-macOS systems
+	// keeps AltGr from being interpreted as a Control shortcut.
+	fn text_navigation_word_modifier(ctrl bool, alt bool) bool {
+		$if macos {
+			return alt
+		} $else {
+			return ctrl && !alt
+		}
+	}
+
+	fn page_focused_text_area(direction int) {
+		viewport := g_scroll_viewports[g_focused_field] or { return }
+		set_scroll_offset(g_focused_field, scroll_offset(g_focused_field) + f64(direction) * viewport.height,
+			scroll_maximum(g_focused_field))
 	}
 
 	fn fire_field_change(id string) {
