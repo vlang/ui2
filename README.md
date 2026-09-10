@@ -220,6 +220,10 @@ Rectangle {
 }
 ```
 
+Set `transparent: true` to omit a box's fill. It also works on the root
+`Screen`; a transparent screen reveals the desktop when its native host window
+is configured for transparency, as demonstrated by `examples/custom_window`.
+
 `border_width` is shorthand for all four edges; an explicitly declared edge
 overrides it. The equivalent V API fields live directly on `BoxStyle`.
 
@@ -565,6 +569,9 @@ Typed-VML ports from `v-ui` include:
   separators, disabled and checked rows, and nested submenus.
 - `v run examples/tray_icon/main.v` — a status area icon whose menu sets a
   status, toggles a setting, and docks or hides the icon again.
+- `v run examples/custom_window/main.v` — a borderless desktop widget with
+  ui2-drawn chrome, draggable content, and genuinely transparent space between
+  its rounded surfaces on the native macOS and Windows backends.
 
 Run the calculator demo with:
 

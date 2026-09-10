@@ -716,7 +716,10 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 	local := rect(0, 0, frame.width, frame.height)
 	match node.tag {
 		'Screen' {
-			return screen(v_color(node, 'background', 0xffffff), v_children(node, local)!)
+			return Element{
+				...screen(v_color(node, 'background', 0xffffff), v_children(node, local)!)
+				box: v_box(node)
+			}
 		}
 		'Column' {
 			return v_column(node, frame)!
@@ -1685,6 +1688,7 @@ fn v_box(node &VNode) BoxStyle {
 	return BoxStyle{
 		bg: v_color(node, 'background', 0xffffff)
 		radius: node.prop_or('corner_radius', node.prop_or('radius', '0')).f64()
+		transparent: node.prop_bool('transparent')
 		border_color: v_color(node, 'border_color', 0)
 		border_left: node.prop_or('border_left', border_width).f64()
 		border_top: node.prop_or('border_top', border_width).f64()
