@@ -5,7 +5,7 @@ import ui2
 
 const window_width = 284
 const window_height = 364
-const calculator_qml_source = $embed_file('calculator.qml').to_string()
+const calculator_vml_source = $embed_file('calculator.vml').to_string()
 
 pub struct CalculatorKey {
 pub:
@@ -261,8 +261,8 @@ pub fn (mut calculator Calculator) press(key string) {
 }
 
 fn main() {
-	ui2.run_qml[Calculator](
-		source: calculator_qml_source
+	ui2.run_vml[Calculator](
+		source: calculator_vml_source
 		model: initial_calculator()
 		title: 'V Calc'
 		width: window_width

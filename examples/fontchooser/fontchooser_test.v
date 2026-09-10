@@ -31,14 +31,14 @@ fn test_fontchooser_updates_and_resets_style() {
 	assert !app.italic
 }
 
-fn test_fontchooser_qml_forwards_dynamic_text_style() {
+fn test_fontchooser_vml_forwards_dynamic_text_style() {
 	mut app := FontChooserDemo{}
 	app.font_choice = 'Serif'
 	app.size_choice = '36'
 	app.color_choice = 'Purple'
 	app.italic = true
 	app.style_changed()
-	root := ui2.element_from_qml_model(fontchooser_qml_source, app, ui2.rect(0, 0, fontchooser_width, fontchooser_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(fontchooser_vml_source, app, ui2.rect(0, 0, fontchooser_width, fontchooser_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	preview := find_fontchooser_element(root, 'preview_editor') or { panic('missing preview') }
 	assert preview.text_style.font_family == 'Times New Roman'

@@ -4,7 +4,7 @@ import ui2
 
 const radio_width = 680
 const radio_height = 370
-const radio_qml_source = $embed_file('demo_radio.qml').to_string()
+const radio_vml_source = $embed_file('demo_radio.vml').to_string()
 
 pub struct CountryChoice {
 pub:
@@ -38,8 +38,8 @@ pub fn (mut app RadioDemo) select_country(country string) {
 }
 
 fn main() {
-	ui2.run_qml[RadioDemo](
-		source: radio_qml_source
+	ui2.run_vml[RadioDemo](
+		source: radio_vml_source
 		model: initial_radio_demo()
 		title: 'Radio Choices'
 		width: radio_width

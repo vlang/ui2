@@ -4,7 +4,7 @@ import ui2
 
 const carousel_width = 460
 const carousel_height = 340
-const carousel_qml_source = $embed_file('carousel.qml').to_string()
+const carousel_vml_source = $embed_file('carousel.vml').to_string()
 
 pub struct CarouselDemo {
 pub mut:
@@ -20,8 +20,8 @@ pub fn (mut app CarouselDemo) next() {
 }
 
 fn main() {
-	ui2.run_qml[CarouselDemo](
-		source: carousel_qml_source
+	ui2.run_vml[CarouselDemo](
+		source: carousel_vml_source
 		model: CarouselDemo{}
 		title: 'Carousel'
 		width: carousel_width

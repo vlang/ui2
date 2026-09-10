@@ -4,7 +4,7 @@ import ui2
 
 const cells_width = 780
 const cells_height = 560
-const cells_qml_source = $embed_file('cells.qml').to_string()
+const cells_vml_source = $embed_file('cells.vml').to_string()
 
 pub struct SheetColumn {
 pub:
@@ -199,8 +199,8 @@ pub fn (mut app CellsDemo) apply_edit() {
 }
 
 fn main() {
-	ui2.run_qml[CellsDemo](
-		source: cells_qml_source
+	ui2.run_vml[CellsDemo](
+		source: cells_vml_source
 		model: initial_cells()
 		title: 'Cells'
 		width: cells_width

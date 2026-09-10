@@ -15,7 +15,7 @@ fn find_stack_element(element ui2.Element, id string) ?ui2.Element {
 }
 
 fn test_stack_layout_demo_wraps_tags_without_resizing_them() {
-	root := ui2.element_from_qml_model(stack_qml_source, StackLayoutDemo{}, ui2.rect(0, 0,
+	root := ui2.element_from_vml_model(stack_vml_source, StackLayoutDemo{}, ui2.rect(0, 0,
 		stack_width, stack_height)) or { panic(err) }
 	stack := find_stack_element(root, 'tags') or { panic('missing tags stack') }
 	assert stack.children.len == 6

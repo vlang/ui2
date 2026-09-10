@@ -60,10 +60,10 @@ fn test_accent_pointer_lands_on_the_channel_it_was_dragged_over() {
 	assert app.blue == 0
 }
 
-fn test_accent_qml_paints_every_swatch_and_the_demo_stack() {
+fn test_accent_vml_paints_every_swatch_and_the_demo_stack() {
 	app := accent_color_demo()
 	frame := ui2.rect(0, 0, accent_color_width, accent_color_height)
-	root := ui2.element_from_qml_model(accent_color_qml_source, app, frame) or { panic(err) }
+	root := ui2.element_from_vml_model(accent_color_vml_source, app, frame) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	track := find_accent_element(root, 'track_red') or { panic('missing red track') }
 	assert track.draggable && track.action_id == 'track_red'

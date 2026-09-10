@@ -4,7 +4,7 @@ import ui2
 
 const text_input_width = 430
 const text_input_height = 300
-const text_input_qml_source = $embed_file('text_input.qml').to_string()
+const text_input_vml_source = $embed_file('text_input.vml').to_string()
 
 pub struct TextInputDemo {
 pub mut:
@@ -18,8 +18,8 @@ pub fn (mut app TextInputDemo) save() {
 }
 
 fn main() {
-	ui2.run_qml[TextInputDemo](
-		source: text_input_qml_source
+	ui2.run_vml[TextInputDemo](
+		source: text_input_vml_source
 		model: TextInputDemo{}
 		title: 'Text Input'
 		width: text_input_width

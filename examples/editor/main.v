@@ -5,7 +5,7 @@ import ui2
 
 const editor_width = 900
 const editor_height = 600
-const editor_qml_source = $embed_file('editor.qml').to_string()
+const editor_vml_source = $embed_file('editor.vml').to_string()
 
 pub struct EditorFile {
 pub:
@@ -40,7 +40,7 @@ fn editor_at(path string) EditorDemo {
 
 fn editor_file_supported(name string) bool {
 	extension := os.file_ext(name).to_lower()
-	return extension in ['', '.v', '.md', '.txt', '.json', '.toml', '.yaml', '.yml', '.qml', '.c',
+	return extension in ['', '.v', '.md', '.txt', '.json', '.toml', '.yaml', '.yml', '.vml', '.c',
 		'.h']
 }
 
@@ -136,8 +136,8 @@ pub fn (mut app EditorDemo) create_file() {
 }
 
 fn main() {
-	ui2.run_qml[EditorDemo](
-		source: editor_qml_source
+	ui2.run_vml[EditorDemo](
+		source: editor_vml_source
 		model: editor_at(os.getwd())
 		title: 'Editor'
 		width: editor_width

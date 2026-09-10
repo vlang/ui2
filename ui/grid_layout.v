@@ -44,7 +44,7 @@ pub:
 	children             []Element
 }
 
-// grid_orientation converts the compact QML orientation names to the typed V
+// grid_orientation converts the compact VML orientation names to the typed V
 // API. The two letter pairs describe horizontal and vertical traversal.
 pub fn grid_orientation(value string) !GridOrientation {
 	return match value {

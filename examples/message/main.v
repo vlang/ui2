@@ -4,7 +4,7 @@ import ui2
 
 const message_width = 420
 const message_height = 320
-const message_qml_source = $embed_file('message.qml').to_string()
+const message_vml_source = $embed_file('message.vml').to_string()
 
 pub struct MessageDemo {
 pub mut:
@@ -40,8 +40,8 @@ pub fn (mut app MessageDemo) ask_native_question() {
 }
 
 fn main() {
-	ui2.run_qml[MessageDemo](
-		source: message_qml_source
+	ui2.run_vml[MessageDemo](
+		source: message_vml_source
 		model: MessageDemo{}
 		title: 'Message'
 		width: message_width

@@ -4,7 +4,7 @@ import ui2
 
 const accordion_width = 440
 const accordion_height = 320
-const accordion_qml_source = $embed_file('accordion_widget.qml').to_string()
+const accordion_vml_source = $embed_file('accordion_widget.vml').to_string()
 
 pub struct AccordionDemo {
 pub mut:
@@ -24,8 +24,8 @@ pub fn (mut app AccordionDemo) show_security() {
 }
 
 fn main() {
-	ui2.run_qml[AccordionDemo](
-		source: accordion_qml_source
+	ui2.run_vml[AccordionDemo](
+		source: accordion_vml_source
 		model: AccordionDemo{}
 		title: 'Accordion'
 		width: accordion_width

@@ -14,7 +14,7 @@ import ui2
 
 const menubar_width = 660
 const menubar_height = 470
-const menubar_qml_source = $embed_file('menubar.qml').to_string()
+const menubar_vml_source = $embed_file('menubar.vml').to_string()
 
 // menubar_action_titles is what each row is called in the log. Every row of
 // the declaration below has an entry, so an id that is missing here is a typo
@@ -164,8 +164,8 @@ fn on_off(value bool) string {
 
 fn build_menubar_screen() ui2.Element {
 	state := unsafe { menubar_state }
-	return ui2.element_from_qml_model(menubar_qml_source, *state, ui2.bounds()) or {
-		eprintln('menubar QML failed: ${err}')
+	return ui2.element_from_vml_model(menubar_vml_source, *state, ui2.bounds()) or {
+		eprintln('menubar VML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
 	}
 }

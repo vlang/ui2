@@ -22,8 +22,8 @@ fn test_nested_scrollview_builds_twelve_scrollable_boxes() {
 	assert app.boxes[0].content.split_into_lines().len == 8
 }
 
-fn test_nested_scrollview_qml_nests_text_areas_in_outer_scroll() {
-	root := ui2.element_from_qml_model(nested_scrollview_qml_source, initial_nested_scrollview(), ui2.rect(0, 0, nested_scrollview_width, nested_scrollview_height)) or { panic(err) }
+fn test_nested_scrollview_vml_nests_text_areas_in_outer_scroll() {
+	root := ui2.element_from_vml_model(nested_scrollview_vml_source, initial_nested_scrollview(), ui2.rect(0, 0, nested_scrollview_width, nested_scrollview_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	outer := find_nested_scroll_element(root, 'outer_scroll') or { panic('missing outer scroll') }

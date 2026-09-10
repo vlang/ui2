@@ -6,7 +6,7 @@ import ui2
 
 const temperature_width = 600
 const temperature_height = 168
-const temperature_qml_source = $embed_file('temperature_converter.qml').to_string()
+const temperature_vml_source = $embed_file('temperature_converter.vml').to_string()
 
 pub struct TemperatureConverter {
 pub mut:
@@ -68,8 +68,8 @@ pub fn (mut app TemperatureConverter) update_from_fahrenheit() {
 }
 
 fn main() {
-	ui2.run_qml[TemperatureConverter](
-		source: temperature_qml_source
+	ui2.run_vml[TemperatureConverter](
+		source: temperature_vml_source
 		model: TemperatureConverter{}
 		title: 'Temperature Converter'
 		width: temperature_width

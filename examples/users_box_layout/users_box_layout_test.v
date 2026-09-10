@@ -75,10 +75,10 @@ fn test_users_box_stops_at_capacity() {
 	assert app.progress_label == '0/10'
 }
 
-fn test_users_box_qml_anchors_the_table_pane_to_the_window() {
+fn test_users_box_vml_anchors_the_table_pane_to_the_window() {
 	app := users_box_demo()
 	frame := ui2.rect(0, 0, users_box_width, users_box_height)
-	root := ui2.element_from_qml_model(users_box_qml_source, app, frame) or { panic(err) }
+	root := ui2.element_from_vml_model(users_box_vml_source, app, frame) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	form := find_users_box_element(root, 'form') or { panic('missing form') }
 	table := find_users_box_element(root, 'table') or { panic('missing table') }
@@ -87,7 +87,7 @@ fn test_users_box_qml_anchors_the_table_pane_to_the_window() {
 
 	// Widening the window leaves the form alone and grows only the table.
 	wide := ui2.rect(0, 0, users_box_width + 200, users_box_height)
-	grown := ui2.element_from_qml_model(users_box_qml_source, app, wide) or { panic(err) }
+	grown := ui2.element_from_vml_model(users_box_vml_source, app, wide) or { panic(err) }
 	grown_form := find_users_box_element(grown, 'form') or { panic('missing form') }
 	grown_table := find_users_box_element(grown, 'table') or { panic('missing table') }
 	assert grown_form.frame.width == form.frame.width

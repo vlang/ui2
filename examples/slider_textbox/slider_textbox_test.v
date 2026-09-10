@@ -31,7 +31,7 @@ fn test_slider_textbox_synchronizes_ranges_and_validates_text() {
 
 fn test_slider_textbox_uses_reusable_slider_controls() {
 	app := slider_textbox_demo()
-	root := ui2.element_from_qml_model(slider_textbox_qml_source, app, ui2.rect(0, 0, slider_textbox_width, slider_textbox_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(slider_textbox_vml_source, app, ui2.rect(0, 0, slider_textbox_width, slider_textbox_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	horizontal := find_slider_textbox_element(root, 'horizontal_slider') or {
 		panic('missing horizontal slider')

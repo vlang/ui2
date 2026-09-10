@@ -66,10 +66,10 @@ fn test_grid2_editing_writes_back_to_the_selected_record() {
 	assert app.rows[6].sex == 'Male'
 }
 
-fn test_grid2_qml_scrolls_the_body_and_repeats_sortable_headers() {
+fn test_grid2_vml_scrolls_the_body_and_repeats_sortable_headers() {
 	app := grid2_demo()
 	frame := ui2.rect(0, 0, grid2_width, grid2_height)
-	root := ui2.element_from_qml_model(grid2_qml_source, app, frame) or { panic(err) }
+	root := ui2.element_from_vml_model(grid2_vml_source, app, frame) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	header := find_grid2_element(root, 'header') or { panic('missing header') }
 	assert header.children.len == 6
@@ -91,9 +91,9 @@ fn test_grid2_qml_scrolls_the_body_and_repeats_sortable_headers() {
 	assert worker.frame.x + worker.frame.width <= editor.frame.width
 }
 
-fn test_grid2_qml_compact_editor_keeps_fields_and_worker_checkbox_separate() {
+fn test_grid2_vml_compact_editor_keeps_fields_and_worker_checkbox_separate() {
 	app := grid2_demo()
-	root := ui2.element_from_qml_model(grid2_qml_source, app, ui2.rect(0, 0, 524, grid2_height)) or {
+	root := ui2.element_from_vml_model(grid2_vml_source, app, ui2.rect(0, 0, 524, grid2_height)) or {
 		panic(err)
 	}
 	ui2.validate_element_tree(root) or { panic(err) }

@@ -21,9 +21,9 @@ fn test_dropdown_updates_visible_feedback() {
 	assert app.message == 'Export users selected.'
 }
 
-fn test_dropdown_qml_contains_all_options() {
+fn test_dropdown_vml_contains_all_options() {
 	app := DropdownDemo{}
-	root := ui2.element_from_qml_model(dropdown_qml_source, app, ui2.rect(0, 0, dropdown_width, dropdown_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(dropdown_vml_source, app, ui2.rect(0, 0, dropdown_width, dropdown_height)) or { panic(err) }
 	actions := find_dropdown_element(root, 'actions') or { panic('missing actions dropdown') }
 	assert actions.text == 'Select an option'
 	assert actions.menu.len == 3

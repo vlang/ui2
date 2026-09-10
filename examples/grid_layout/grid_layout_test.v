@@ -15,7 +15,7 @@ fn find_grid_element(element ui2.Element, id string) ?ui2.Element {
 }
 
 fn test_grid_layout_demo_uses_responsive_equal_cells() {
-	root := ui2.element_from_qml_model(grid_qml_source, GridLayoutDemo{}, ui2.rect(0, 0,
+	root := ui2.element_from_vml_model(grid_vml_source, GridLayoutDemo{}, ui2.rect(0, 0,
 		grid_width, grid_height)) or { panic(err) }
 	grid := find_grid_element(root, 'dashboard') or { panic('missing dashboard grid') }
 	assert grid.children.len == 6

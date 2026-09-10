@@ -46,7 +46,7 @@ fn (app &IdeApp) menus() []ui2.Menu {
 				ui2.menu_check_item('toggle_output', 'Messages', app.output_open),
 				ui2.menu_separator(),
 				ui2.menu_item('tab_designer', 'Form Designer'),
-				ui2.menu_item('tab_source', 'QML Source'),
+				ui2.menu_item('tab_source', 'VML Source'),
 			]
 		},
 		ui2.Menu{
@@ -266,7 +266,7 @@ fn (mut app IdeApp) select_tab(tab string) {
 	app.active_tab = tab
 	app.armed_kind = ''
 	app.status = match tab {
-		'source' { 'QML source editor.' }
+		'source' { 'VML source editor.' }
 		'preview' { 'Preview mode. Controls are live; press F9 to return.' }
 		else { 'Visual form designer.' }
 	}
@@ -360,7 +360,7 @@ fn (mut app IdeApp) handle_event(event string) {
 			app.source_text = ui2.text('source_editor')
 			app.source_modified = true
 			app.dirty = true
-			app.status = 'QML source modified; apply it to update the designer.'
+			app.status = 'VML source modified; apply it to update the designer.'
 		}
 		'toggle_grid' {
 			app.show_grid = !app.show_grid
@@ -381,7 +381,7 @@ fn (mut app IdeApp) handle_event(event string) {
 			app.inspector_tab = 'properties'
 		}
 		'about' {
-			ui2.alert('UI2 Studio', 'A visual form designer written in V with ui2. Design, inspect, edit QML, preview, and build without leaving the app.')
+			ui2.alert('UI2 Studio', 'A visual form designer written in V with ui2. Design, inspect, edit VML, preview, and build without leaving the app.')
 		}
 		else {
 			if event.starts_with('preview_') {

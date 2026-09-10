@@ -132,7 +132,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		// Keyed repeater children do not need public ids for reconciliation, but
 		// the immediate backend still needs stable private state to scroll them.
-		// Prefix the key so it cannot alias a normal QML id in the scroll maps.
+		// Prefix the key so it cannot alias a normal VML id in the scroll maps.
 		if el.key.len > 0 {
 			return anonymous_text_area_scroll_prefix + el.key
 		}

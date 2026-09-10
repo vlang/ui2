@@ -30,10 +30,10 @@ fn test_row_layout_updates_and_resets_all_dimensions() {
 	assert app.row_margin == 24
 }
 
-fn test_row_layout_qml_distributes_responsive_space() {
+fn test_row_layout_vml_distributes_responsive_space() {
 	app := RowLayoutDemo{}
-	root := ui2.element_from_qml_model(row_layout_qml_source, app, ui2.rect(0, 0, row_layout_width, row_layout_height)) or { panic(err) }
-	wide := ui2.element_from_qml_model(row_layout_qml_source, app, ui2.rect(0, 0, 960, row_layout_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(row_layout_vml_source, app, ui2.rect(0, 0, row_layout_width, row_layout_height)) or { panic(err) }
+	wide := ui2.element_from_vml_model(row_layout_vml_source, app, ui2.rect(0, 0, 960, row_layout_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	stage := find_row_layout_element(root, 'row_stage') or { panic('missing row stage') }
 	first := find_row_layout_element(root, 'first_button') or { panic('missing first button') }

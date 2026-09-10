@@ -24,9 +24,9 @@ fn test_group_submit_validates_and_confirms_names() {
 	assert app.message == 'Added Ada Lovelace.'
 }
 
-fn test_group_qml_contains_bound_controls_and_native_button() {
+fn test_group_vml_contains_bound_controls_and_native_button() {
 	app := GroupDemo{}
-	root := ui2.element_from_qml_model(group_qml_source, app, ui2.rect(0, 0, group_width, group_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(group_vml_source, app, ui2.rect(0, 0, group_width, group_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	assert (find_group_element(root, 'registration1') or { panic('missing checkbox') }).checked

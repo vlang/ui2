@@ -4,13 +4,13 @@ import ui2
 
 const stack_width = 380
 const stack_height = 240
-const stack_qml_source = $embed_file('stack_layout.qml').to_string()
+const stack_vml_source = $embed_file('stack_layout.vml').to_string()
 
 pub struct StackLayoutDemo {}
 
 fn main() {
-	ui2.run_qml[StackLayoutDemo](
-		source: stack_qml_source
+	ui2.run_vml[StackLayoutDemo](
+		source: stack_vml_source
 		model: StackLayoutDemo{}
 		title: 'Stack Layout'
 		width: stack_width

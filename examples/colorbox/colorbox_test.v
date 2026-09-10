@@ -61,12 +61,12 @@ fn test_colorbox_stores_and_recalls_swatch_slots() {
 	assert app.swatch_at(swatch_root_x + 76, swatch_root_y + 10) == -1
 }
 
-fn test_colorbox_qml_paints_both_canvases_and_tracks_the_markers() {
+fn test_colorbox_vml_paints_both_canvases_and_tracks_the_markers() {
 	mut app := colorbox_demo()
 	app.set_hue(180)
 	app.set_saturation_value(0.5, 0.25)
 	frame := ui2.rect(0, 0, colorbox_width, colorbox_height)
-	root := ui2.element_from_qml_model(colorbox_qml_source, app, frame) or { panic(err) }
+	root := ui2.element_from_vml_model(colorbox_vml_source, app, frame) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	hue := find_colorbox_element(root, 'hue_strip') or { panic('missing hue strip') }
 	assert hue.draggable && hue.action_id == 'hue_strip'

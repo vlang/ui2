@@ -38,7 +38,7 @@ ln -s "$(pwd)" ~/.vmodules/ui2
   among siblings; IDs must be unique in the tree. Renderers validate both before
   changing native state.
 - `Element.action_id` identifies the emitted action and falls back to `id`.
-  QML `on_tap` and `on_change` populate `action_id` without replacing `id`.
+  VML `on_tap` and `on_change` populate `action_id` without replacing `id`.
 
 Text inputs use controlled-on-change semantics: changing the declared `text`
 applies that value, while a refresh with the same declaration preserves the
@@ -48,7 +48,7 @@ method composition. Use `set_text` for an explicit imperative replacement.
 ## Widget animations
 
 Animations target a mounted element by `id` and are applied after each
-declarative build, so they work with both V-built and QML-built trees. The
+declarative build, so they work with both V-built and VML-built trees. The
 native backends schedule redraws for the duration; the custom renderer already
 builds every frame.
 
@@ -93,14 +93,14 @@ its declaration. Query `animation_info(id)` for status and progress, or attach
 one callback for `.start`, `.progress`, and `.complete` with `on_event` or
 `with_event_handler`.
 
-## Typed QML models
+## Typed VML models
 
-`run_qml[T]` parses the document once, owns a model for the window, and exposes
+`run_vml[T]` parses the document once, owns a model for the window, and exposes
 its public fields as `app`:
 
 ```v
-ui2.run_qml[App](
-    source: $embed_file('app.qml').to_string()
+ui2.run_vml[App](
+    source: $embed_file('app.vml').to_string()
     model: App{}
     title: 'My app'
     width: 780
@@ -108,18 +108,18 @@ ui2.run_qml[App](
 )!
 ```
 
-For QML that ships with the application, the v3 compiler can lower the document
+For VML that ships with the application, the v3 compiler can lower the document
 straight to V expressions that construct `ui2.Element` values. Name the model
-parameter `app`, use `$qml` in a build function, and pass it to
-`run_compiled_qml`:
+parameter `app`, use `$vml` in a build function, and pass it to
+`run_compiled_vml`:
 
 ```v
 fn build(app &App) ui2.Element {
-    return $qml('app.qml')
+    return $vml('app.vml')
 }
 
 fn main() {
-    ui2.run_compiled_qml[App](
+    ui2.run_compiled_vml[App](
         model: App{}
         build: build
         title: 'My app'
@@ -129,22 +129,22 @@ fn main() {
 }
 ```
 
-`$qml` reads and validates the document during compilation, then emits direct
+`$vml` reads and validates the document during compilation, then emits direct
 element constructors and V loops for repeaters. Refreshes evaluate model
-expressions and build the element tree without parsing QML or interpreting an
+expressions and build the element tree without parsing VML or interpreting an
 expression AST. Typed actions and `bind.text`/`bind.checked`/`bind.active`/
-`bind.value` are handled by the compiled runner. Keep using `run_qml` when the
-QML source must be loaded or edited at runtime.
+`bind.value` are handled by the compiled runner. Keep using `run_vml` when the
+VML source must be loaded or edited at runtime.
 
 The compile-time form currently requires the v3 compiler. The included benchmark
-caches parsing for the runtime-QML baseline, so it compares steady-state tree
-building rather than charging runtime QML for repeatedly parsing the file:
+caches parsing for the runtime-VML baseline, so it compares steady-state tree
+building rather than charging runtime VML for repeatedly parsing the file:
 
 ```sh
 /path/to/vnew -nocache -prod \
     -path "$(dirname "$PWD")|@vlib|@vmodules" \
-    -o /tmp/ui2-qml-build-bench benchmarks/qml_build/main.v
-/tmp/ui2-qml-build-bench
+    -o /tmp/ui2-vml-build-bench benchmarks/vml_build/main.v
+/tmp/ui2-vml-build-bench
 ```
 
 Ordinary properties are one-way expressions. `bind.text` and `bind.checked`
@@ -152,7 +152,7 @@ write control edits back to a public mutable top-level model field. Public model
 methods with no arguments, one `int`, or one `string` argument can be used as
 actions:
 
-```qml
+```vml
 TextField { bind.text: app.name }
 Button {
     text: "Add"
@@ -178,7 +178,7 @@ executing expressions against the model's initial values.
 Use a keyed `Repeater` for model collections. `item` and `index` are scoped to
 each instance, and the evaluated key becomes `Element.key` for reconciliation:
 
-```qml
+```vml
 Repeater {
     model: app.users
     key: item.id
@@ -209,7 +209,7 @@ Box-backed elements (`Rectangle`/`View`, `Button`, `Scroll`, `Dropdown`,
 the same logical units as frames and corner radii, so native and custom
 renderers scale them with the rest of the element:
 
-```qml
+```vml
 Rectangle {
     background: #10131F
     border_color: #28314A
@@ -244,7 +244,7 @@ value; explicit Windows accessibility overrides are not yet implemented.
 
 UI2 Studio in [`ide/`](ide/) is a Delphi/Lazarus-style WYSIWYG form designer
 written in V with UI2 itself. It includes a component palette, draggable and
-resizable controls, object tree and inspector, undo/redo, QML source editing,
+resizable controls, object tree and inspector, undo/redo, VML source editing,
 live preview, project save/open, `main.v` generation, and a build messages pane.
 
 ```sh
@@ -284,10 +284,10 @@ single-button alert.
 `custom_message_box(...)` is the separate, hand-drawn alternative: a dimmed
 overlay with a rounded card that stays inside the window and never blocks. Flip
 its `hidden` field from the button events instead of reading a return value. It
-is also available from QML as `MessageBox`, whose `Button` children become the
+is also available from VML as `MessageBox`, whose `Button` children become the
 card's actions:
 
-```qml
+```vml
 MessageBox {
     id: overlay
     hidden: !app.visible
@@ -297,6 +297,43 @@ MessageBox {
     Button { id: close_message text: "OK" on_tap: app.close_message() }
 }
 ```
+
+## File and folder dialogs
+
+`open_file_dialog`, `save_file_dialog`, and `open_folder_dialog` show the
+operating system picker and return the selected absolute paths. They block while
+the picker is open; cancellation is an empty array. `open_file_dialog` can
+return several paths when `multiple: true`.
+
+```v
+paths := ui2.open_file_dialog(
+	title: 'Open a V source file'
+	directory: '/work/project'
+	filters: [ui2.FileDialogFilter{
+		name: 'V source'
+		extensions: ['v', 'vv']
+	}]
+)
+if paths.len > 0 {
+	println('Opening ${paths[0]}')
+}
+
+destination := ui2.save_file_dialog(
+	title: 'Save report'
+	filename: 'report.txt'
+	filters: [ui2.FileDialogFilter{
+		name: 'Text'
+		extensions: ['txt']
+	}]
+)
+```
+
+The API uses `NSOpenPanel`/`NSSavePanel` on macOS, standard Win32 open/save
+and folder dialogs on Windows, and the desktop's `zenity` or `kdialog` picker
+on Linux. Linux requires a graphical session and one of those helpers;
+`file_dialog_supported()` reports that availability. The synchronous API is not
+available on iOS or Android, where a document picker needs an app-specific
+asynchronous presentation callback.
 
 ## Menus and the tray
 
@@ -352,7 +389,7 @@ declaration can be checked in a test without a window.
 
 ## Layout and text offsets
 
-The QML layer provides fixed frames plus `Row` and `Column` layout. Child frames
+The VML layer provides fixed frames plus `Row` and `Column` layout. Child frames
 are parent-local. It does not implement intrinsic sizing, flex/grid, wrapping,
 or min/max constraints; applications can compute frames before constructing an
 element tree.
@@ -450,7 +487,7 @@ UI2_FONT_SYMBOLS=/usr/share/fonts/truetype/ancient-scripts/Symbola.ttf ./treevie
 
 ## Examples
 
-Typed-QML ports from `v-ui` include:
+Typed-VML ports from `v-ui` include:
 
 - `v run examples/counter/main.v` — the 7GUIs counter.
 - `v run examples/temperature_converter/main.v` — the two-way 7GUIs
@@ -579,7 +616,7 @@ Run the calculator demo with:
 v run examples/calculator/main.v
 ```
 
-It ports the `v-ui` calculator to typed QML: the display reads from the model,
+It ports the `v-ui` calculator to typed VML: the display reads from the model,
 a keyed `Repeater` builds the keypad, and button actions call the calculator's
 business logic directly. It includes decimal input, sign and percentage
 controls, exponentiation, repeated equals, and division-by-zero recovery.
@@ -591,7 +628,7 @@ v run examples/users/main.v
 ```
 
 It ports the native-widget users example from `v-ui`. The complete screen is
-declared in `examples/users/users.qml` and embedded once with `$embed_file`; V only
+declared in `examples/users/users.vml` and embedded once with `$embed_file`; V only
 contains the typed model and business actions. The example includes validated
 text entry, password masking, country selection, toggles, a progress indicator,
 and a keyed, scrollable user table.

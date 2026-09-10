@@ -27,8 +27,8 @@ fn test_group2_fills_ipsum_and_validates_submission() {
 	assert app.status.contains('V likes you too')
 }
 
-fn test_group2_qml_contains_bound_groups_and_native_buttons() {
-	root := ui2.element_from_qml_model(group2_qml_source, Group2Demo{}, ui2.rect(0, 0, group2_width, group2_height)) or { panic(err) }
+fn test_group2_vml_contains_bound_groups_and_native_buttons() {
+	root := ui2.element_from_vml_model(group2_vml_source, Group2Demo{}, ui2.rect(0, 0, group2_width, group2_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	first := find_group2_element(root, 'first_group') or { panic('missing first group') }

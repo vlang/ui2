@@ -15,7 +15,7 @@ fn find_float_element(element ui2.Element, id string) ?ui2.Element {
 }
 
 fn test_float_layout_demo_centers_fixed_action() {
-	root := ui2.element_from_qml_model(float_qml_source, FloatLayoutDemo{}, ui2.rect(0, 0,
+	root := ui2.element_from_vml_model(float_vml_source, FloatLayoutDemo{}, ui2.rect(0, 0,
 		float_width, float_height)) or { panic(err) }
 	canvas := find_float_element(root, 'canvas') or { panic('missing float canvas') }
 	action := find_float_element(root, 'center_action') or { panic('missing centered action') }

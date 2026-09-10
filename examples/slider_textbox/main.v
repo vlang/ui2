@@ -4,7 +4,7 @@ import ui2
 
 const slider_textbox_width = 620
 const slider_textbox_height = 560
-const slider_textbox_qml_source = $embed_file('slider_textbox.qml').to_string()
+const slider_textbox_vml_source = $embed_file('slider_textbox.vml').to_string()
 
 @[heap]
 pub struct SliderTextboxDemo {
@@ -114,8 +114,8 @@ fn (mut app SliderTextboxDemo) handle_event(event string) {
 
 fn build_slider_textbox_screen() ui2.Element {
 	state := unsafe { slider_textbox_state }
-	return ui2.element_from_qml_model(slider_textbox_qml_source, *state, ui2.bounds()) or {
-		eprintln('slider-textbox QML failed: ${err}')
+	return ui2.element_from_vml_model(slider_textbox_vml_source, *state, ui2.bounds()) or {
+		eprintln('slider-textbox VML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
 	}
 }

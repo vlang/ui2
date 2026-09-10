@@ -70,11 +70,11 @@ fn test_inside_row_rotation_cycles_through_four_quarters() {
 	assert app.pane_name == 'tray'
 }
 
-fn test_inside_row_qml_builds_two_panes_and_a_draggable_image() {
+fn test_inside_row_vml_builds_two_panes_and_a_draggable_image() {
 	mut app := inside_row_demo()
 	app.rotate()
 	frame := ui2.rect(0, 0, inside_row_width, inside_row_height)
-	root := ui2.element_from_qml_model(inside_row_qml_source, app, frame) or { panic(err) }
+	root := ui2.element_from_vml_model(inside_row_vml_source, app, frame) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	tray := find_inside_row_element(root, 'tray') or { panic('missing tray') }
 	canvas := find_inside_row_element(root, 'canvas') or { panic('missing canvas') }

@@ -4,7 +4,7 @@ import ui2
 
 const resizable_rectangles_width = 560
 const resizable_rectangles_height = 220
-const resizable_rectangles_qml_source = $embed_file('rectangles_resizable.qml').to_string()
+const resizable_rectangles_vml_source = $embed_file('rectangles_resizable.vml').to_string()
 
 pub struct ResizableColorBox {
 pub:
@@ -31,8 +31,8 @@ fn initial_resizable_rectangles() ResizableRectanglesDemo {
 }
 
 fn main() {
-	ui2.run_qml[ResizableRectanglesDemo](
-		source: resizable_rectangles_qml_source
+	ui2.run_vml[ResizableRectanglesDemo](
+		source: resizable_rectangles_vml_source
 		model: initial_resizable_rectangles()
 		title: 'Resizable Rectangles'
 		width: resizable_rectangles_width

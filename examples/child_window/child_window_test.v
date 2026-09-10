@@ -61,9 +61,9 @@ fn test_child_window_drag_keeps_the_panel_inside_the_card() {
 	assert app.panel_x == 12 && app.panel_y == 12
 }
 
-fn test_child_window_qml_hides_the_panel_until_it_is_created() {
+fn test_child_window_vml_hides_the_panel_until_it_is_created() {
 	frame := ui2.rect(0, 0, child_window_width, child_window_height)
-	closed := ui2.element_from_qml_model(child_window_qml_source, ChildWindowDemo{}, frame) or {
+	closed := ui2.element_from_vml_model(child_window_vml_source, ChildWindowDemo{}, frame) or {
 		panic(err)
 	}
 	ui2.validate_element_tree(closed) or { panic(err) }
@@ -72,7 +72,7 @@ fn test_child_window_qml_hides_the_panel_until_it_is_created() {
 	mut app := ChildWindowDemo{}
 	app.create_window()
 	app.toggle_woman()
-	open := ui2.element_from_qml_model(child_window_qml_source, app, frame) or { panic(err) }
+	open := ui2.element_from_vml_model(child_window_vml_source, app, frame) or { panic(err) }
 	ui2.validate_element_tree(open) or { panic(err) }
 	panel := find_child_element(open, 'child_panel') or { panic('missing panel') }
 	assert !panel.hidden

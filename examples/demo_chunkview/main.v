@@ -4,7 +4,7 @@ import ui2
 
 const chunkview_width = 820
 const chunkview_height = 560
-const chunkview_qml_source = $embed_file('demo_chunkview.qml').to_string()
+const chunkview_vml_source = $embed_file('demo_chunkview.vml').to_string()
 
 pub struct ChunkviewDemo {
 pub mut:
@@ -44,8 +44,8 @@ pub fn (mut app ChunkviewDemo) reset_chunks() {
 }
 
 fn main() {
-	ui2.run_qml[ChunkviewDemo](
-		source: chunkview_qml_source
+	ui2.run_vml[ChunkviewDemo](
+		source: chunkview_vml_source
 		model: ChunkviewDemo{}
 		title: 'Chunk View'
 		width: chunkview_width

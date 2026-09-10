@@ -80,7 +80,7 @@ fn test_custom_message_box_names_unlabelled_actions_after_the_overlay() {
 	assert overlay.children[0].children[2].id == 'message_box_action_0'
 }
 
-fn test_qml_message_box_turns_button_children_into_dialog_actions() {
+fn test_vml_message_box_turns_button_children_into_dialog_actions() {
 	source := 'Screen {
 		MessageBox {
 			id: overlay
@@ -92,7 +92,7 @@ fn test_qml_message_box_turns_button_children_into_dialog_actions() {
 			Button { id: close text: "OK" on_tap: dismiss }
 		}
 	}'
-	root := element_from_qml(source, rect(0, 0, 400, 300)) or { panic(err) }
+	root := element_from_vml(source, rect(0, 0, 400, 300)) or { panic(err) }
 	validate_element_tree(root) or { panic(err) }
 
 	overlay := root.children[0]

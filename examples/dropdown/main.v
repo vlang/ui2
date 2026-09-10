@@ -4,7 +4,7 @@ import ui2
 
 const dropdown_width = 360
 const dropdown_height = 220
-const dropdown_qml_source = $embed_file('dropdown.qml').to_string()
+const dropdown_vml_source = $embed_file('dropdown.vml').to_string()
 
 pub struct DropdownDemo {
 pub mut:
@@ -22,8 +22,8 @@ pub fn (mut app DropdownDemo) selection_changed() {
 }
 
 fn main() {
-	ui2.run_qml[DropdownDemo](
-		source: dropdown_qml_source
+	ui2.run_vml[DropdownDemo](
+		source: dropdown_vml_source
 		model: DropdownDemo{}
 		title: 'Dropdown'
 		width: dropdown_width

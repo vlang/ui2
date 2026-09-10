@@ -22,8 +22,8 @@ fn test_scrollview_generates_one_hundred_lines() {
 	assert lines[99].starts_with('line 99')
 }
 
-fn test_scrollview_qml_builds_two_readonly_responsive_panes() {
-	root := ui2.element_from_qml_model(scrollview_qml_source, initial_scrollview(), ui2.rect(0, 0, scrollview_width, scrollview_height)) or { panic(err) }
+fn test_scrollview_vml_builds_two_readonly_responsive_panes() {
+	root := ui2.element_from_vml_model(scrollview_vml_source, initial_scrollview(), ui2.rect(0, 0, scrollview_width, scrollview_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	info := find_scrollview_element(root, 'info') or { panic('missing information pane') }

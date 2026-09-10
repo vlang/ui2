@@ -31,10 +31,10 @@ fn test_dynamic_layout_adds_removes_moves_hides_and_renames() {
 	assert app.status == '1 button'
 }
 
-fn test_dynamic_layout_qml_builds_keyed_native_buttons() {
+fn test_dynamic_layout_vml_builds_keyed_native_buttons() {
 	mut app := initial_dynamic_layout()
 	app.add_two()
-	root := ui2.element_from_qml_model(dynamic_layout_qml_source, app, ui2.rect(0, 0, dynamic_layout_width, dynamic_layout_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(dynamic_layout_vml_source, app, ui2.rect(0, 0, dynamic_layout_width, dynamic_layout_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	list := find_dynamic_element(root, 'item_list') or { panic('missing generated list') }
@@ -45,7 +45,7 @@ fn test_dynamic_layout_qml_builds_keyed_native_buttons() {
 	assert (find_dynamic_element(root, 'remove_second') or { panic('missing remove button') }).enabled
 
 	app.toggle_items()
-	hidden_root := ui2.element_from_qml_model(dynamic_layout_qml_source, app, ui2.rect(0, 0, dynamic_layout_width, dynamic_layout_height)) or { panic(err) }
+	hidden_root := ui2.element_from_vml_model(dynamic_layout_vml_source, app, ui2.rect(0, 0, dynamic_layout_width, dynamic_layout_height)) or { panic(err) }
 	assert (find_dynamic_element(hidden_root, 'item_list') or { panic('missing hidden list') }).hidden
 	assert !(find_dynamic_element(hidden_root, 'hidden_message') or {
 		panic('missing hidden-state message')

@@ -59,7 +59,7 @@ fn test_designer_drag_and_resize_stay_inside_form() {
 	assert app.components[0].height == moved.height
 }
 
-fn test_generated_qml_round_trips_all_palette_components() {
+fn test_generated_vml_round_trips_all_palette_components() {
 	mut app := new_ide_app('.')
 	kinds := ['label', 'button', 'text_field', 'text_area', 'checkbox', 'dropdown', 'rectangle',
 		'image']
@@ -71,7 +71,7 @@ fn test_generated_qml_round_trips_all_palette_components() {
 	app.components[1].event_handler = 'save_clicked'
 	app.sync_source()
 
-	document := document_from_qml(app.source_text) or { panic(err) }
+	document := document_from_vml(app.source_text) or { panic(err) }
 	assert document.form_name == 'Form1'
 	assert document.components.len == kinds.len
 	for index, kind in kinds {
@@ -80,14 +80,14 @@ fn test_generated_qml_round_trips_all_palette_components() {
 	assert document.components[0].text == app.components[0].text
 	assert document.components[4].checked
 	assert document.components[1].event_handler == 'save_clicked'
-	ui2.element_from_qml(app.source_text, ui2.rect(0, 0, app.form_width, app.form_height)) or {
+	ui2.element_from_vml(app.source_text, ui2.rect(0, 0, app.form_width, app.form_height)) or {
 		panic(err)
 	}
 }
 
 fn test_source_loader_reports_unsupported_dynamic_layout() {
 	source := 'Screen { id: Form1 Row { width: 300 height: 40 } }'
-	if _ := document_from_qml(source) {
+	if _ := document_from_vml(source) {
 		assert false, 'Row should require source editing rather than lossy visual loading'
 	} else {
 		assert err.msg().contains('not yet editable')
@@ -96,7 +96,7 @@ fn test_source_loader_reports_unsupported_dynamic_layout() {
 
 fn test_source_loader_rejects_nested_controls_instead_of_losing_them() {
 	source := 'Screen { id: Form1 Rectangle { id: card width: 300 height: 200 Button { id: ok } } }'
-	if _ := document_from_qml(source) {
+	if _ := document_from_vml(source) {
 		assert false, 'nested controls must not be flattened or lost'
 	} else {
 		assert err.msg().contains('nested `Button`')
@@ -248,7 +248,7 @@ fn test_saved_form_and_generated_main_compile_together() {
 		os.rmdir_all(test_dir) or {}
 	}
 	mut app := new_ide_app(test_dir)
-	app.path_input = os.join_path(test_dir, 'form.qml')
+	app.path_input = os.join_path(test_dir, 'form.vml')
 	app.add_component('button', 40, 48)
 	app.components[0].event_handler = 'button_clicked'
 	app.sync_source()

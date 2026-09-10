@@ -4,7 +4,7 @@ import ui2
 
 const double_list_width = 700
 const double_list_height = 460
-const double_list_qml_source = $embed_file('double_listbox.qml').to_string()
+const double_list_vml_source = $embed_file('double_listbox.vml').to_string()
 
 pub struct TransferChoice {
 pub:
@@ -66,8 +66,8 @@ pub fn (mut app DoubleListboxDemo) show_values() {
 }
 
 fn main() {
-	ui2.run_qml[DoubleListboxDemo](
-		source: double_list_qml_source
+	ui2.run_vml[DoubleListboxDemo](
+		source: double_list_vml_source
 		model: initial_double_listbox()
 		title: 'Double Listbox'
 		width: double_list_width

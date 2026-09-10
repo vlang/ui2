@@ -30,8 +30,8 @@ fn test_rgb_color_updates_preview_and_rejects_invalid_components() {
 	assert app.preview_color == '#FFFFFF'
 }
 
-fn test_rgb_color_qml_uses_dynamic_preview_and_native_button() {
-	root := ui2.element_from_qml_model(rgb_color_qml_source, RgbColorDemo{}, ui2.rect(0, 0, rgb_color_width, rgb_color_height)) or { panic(err) }
+fn test_rgb_color_vml_uses_dynamic_preview_and_native_button() {
+	root := ui2.element_from_vml_model(rgb_color_vml_source, RgbColorDemo{}, ui2.rect(0, 0, rgb_color_width, rgb_color_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	assert (find_rgb_element(root, 'preview') or { panic('missing preview') }).box.bg == 0x808080

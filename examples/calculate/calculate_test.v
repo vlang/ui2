@@ -31,8 +31,8 @@ fn test_calculate_model_reports_errors_and_recovers() {
 	assert app.result == '10'
 }
 
-fn test_calculate_qml_has_submit_and_native_actions() {
-	root := ui2.element_from_qml_model(calculate_qml_source, CalculateDemo{}, ui2.rect(0, 0, calculate_width, calculate_height)) or { panic(err) }
+fn test_calculate_vml_has_submit_and_native_actions() {
+	root := ui2.element_from_vml_model(calculate_vml_source, CalculateDemo{}, ui2.rect(0, 0, calculate_width, calculate_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	field := find_calculate_element(root, 'expression') or { panic('missing expression field') }
 	result := find_calculate_element(root, 'result') or { panic('missing result') }

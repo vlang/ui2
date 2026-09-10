@@ -5,7 +5,7 @@ import ui2
 
 const resizable_calc_width = 340
 const resizable_calc_height = 480
-const resizable_calc_qml_source = $embed_file('calculator_resizable.qml').to_string()
+const resizable_calc_vml_source = $embed_file('calculator_resizable.vml').to_string()
 
 pub struct CalculatorKey {
 pub:
@@ -209,8 +209,8 @@ pub fn (mut calc ResizableCalculator) press(key string) {
 }
 
 fn main() {
-	ui2.run_qml[ResizableCalculator](
-		source: resizable_calc_qml_source
+	ui2.run_vml[ResizableCalculator](
+		source: resizable_calc_vml_source
 		model: resizable_calculator()
 		title: 'V Calc (resizable)'
 		width: resizable_calc_width

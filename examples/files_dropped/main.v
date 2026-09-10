@@ -4,7 +4,7 @@ import ui2
 
 const files_dropped_width = 620
 const files_dropped_height = 400
-const files_dropped_qml_source = $embed_file('files_dropped.qml').to_string()
+const files_dropped_vml_source = $embed_file('files_dropped.vml').to_string()
 
 pub struct DroppedFile {
 pub:
@@ -54,8 +54,8 @@ fn (mut app FilesDroppedDemo) receive(paths []string, dropped_text string) {
 
 fn build_files_dropped_screen() ui2.Element {
 	state := unsafe { files_dropped_state }
-	return ui2.element_from_qml_model(files_dropped_qml_source, *state, ui2.bounds()) or {
-		eprintln('files-dropped QML failed: ${err}')
+	return ui2.element_from_vml_model(files_dropped_vml_source, *state, ui2.bounds()) or {
+		eprintln('files-dropped VML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
 	}
 }

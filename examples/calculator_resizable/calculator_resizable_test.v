@@ -63,10 +63,10 @@ fn test_resizable_calculator_recovers_from_division_by_zero() {
 	assert calc.display == '8'
 }
 
-fn test_resizable_calculator_qml_scales_every_measurement_with_the_window() {
+fn test_resizable_calculator_vml_scales_every_measurement_with_the_window() {
 	app := resizable_calculator()
 	small := ui2.rect(0, 0, resizable_calc_width, resizable_calc_height)
-	root := ui2.element_from_qml_model(resizable_calc_qml_source, app, small) or { panic(err) }
+	root := ui2.element_from_vml_model(resizable_calc_vml_source, app, small) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	display := find_resizable_calc_element(root, 'display') or { panic('missing display') }
 	assert display.text_style.size == resizable_calc_height / 10
@@ -80,7 +80,7 @@ fn test_resizable_calculator_qml_scales_every_measurement_with_the_window() {
 
 	// Doubling the window doubles the type and the keys with it.
 	big := ui2.rect(0, 0, resizable_calc_width * 2, resizable_calc_height * 2)
-	grown := ui2.element_from_qml_model(resizable_calc_qml_source, app, big) or { panic(err) }
+	grown := ui2.element_from_vml_model(resizable_calc_vml_source, app, big) or { panic(err) }
 	grown_display := find_resizable_calc_element(grown, 'display') or { panic('missing display') }
 	assert grown_display.text_style.size == display.text_style.size * 2
 	grown_keys := grown.children.filter(it.id == '')

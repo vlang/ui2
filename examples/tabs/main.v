@@ -4,7 +4,7 @@ import ui2
 
 const tabs_width = 640
 const tabs_height = 400
-const tabs_qml_source = $embed_file('tabs.qml').to_string()
+const tabs_vml_source = $embed_file('tabs.vml').to_string()
 
 pub struct TabPage {
 pub:
@@ -44,8 +44,8 @@ pub fn (mut app TabsDemo) select_tab(id int) {
 }
 
 fn main() {
-	ui2.run_qml[TabsDemo](
-		source: tabs_qml_source
+	ui2.run_vml[TabsDemo](
+		source: tabs_vml_source
 		model: initial_tabs()
 		title: 'Tabs'
 		width: tabs_width

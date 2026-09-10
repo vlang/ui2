@@ -1,5 +1,7 @@
 module ui2
 
+import strings
+
 // TextSelection stores positions as rune offsets, so cursor movement is stable
 // for UTF-8 text. The selection is collapsed when anchor == caret.
 pub struct TextSelection {
@@ -133,11 +135,22 @@ pub fn rune_len(text string) int {
 	return text.runes().len
 }
 
+@[manualfree]
 fn replace_rune_range(text string, start int, end int, value string) string {
-	runes := text.runes()
+	mut runes := text.runes()
+	defer {
+		unsafe { runes.free() }
+	}
 	from := clamp_int(start, 0, runes.len)
 	to := clamp_int(end, from, runes.len)
-	return runes[..from].string() + value + runes[to..].string()
+	mut result := strings.new_builder(text.len + value.len)
+	defer {
+		unsafe { result.free() }
+	}
+	result.write_runes(runes[..from])
+	result.write_string(value)
+	result.write_runes(runes[to..])
+	return result.str()
 }
 
 fn clamp_int(value int, min int, max int) int {

@@ -5,7 +5,7 @@ import ui2
 
 const calculate_width = 600
 const calculate_height = 360
-const calculate_qml_source = $embed_file('calculate.qml').to_string()
+const calculate_vml_source = $embed_file('calculate.vml').to_string()
 
 struct ArithmeticParser {
 	input string
@@ -144,8 +144,8 @@ pub fn (mut app CalculateDemo) load_example(index int) {
 }
 
 fn main() {
-	ui2.run_qml[CalculateDemo](
-		source: calculate_qml_source
+	ui2.run_vml[CalculateDemo](
+		source: calculate_vml_source
 		model: CalculateDemo{}
 		title: 'Calculate'
 		width: calculate_width

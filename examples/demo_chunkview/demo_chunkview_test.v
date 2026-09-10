@@ -28,10 +28,10 @@ fn test_chunkview_toggles_sections_and_alignment() {
 	assert app.text_align == 'center'
 }
 
-fn test_chunkview_qml_preserves_nested_text_styles() {
+fn test_chunkview_vml_preserves_nested_text_styles() {
 	mut app := ChunkviewDemo{}
 	app.second_open = false
-	root := ui2.element_from_qml_model(chunkview_qml_source, app, ui2.rect(0, 0, chunkview_width, chunkview_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(chunkview_vml_source, app, ui2.rect(0, 0, chunkview_width, chunkview_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	first := find_chunkview_element(root, 'first_chunk') or { panic('missing first chunk') }
 	second := find_chunkview_element(root, 'second_chunk') or { panic('missing second chunk') }

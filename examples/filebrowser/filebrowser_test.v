@@ -41,7 +41,7 @@ fn test_filebrowser_opens_folders_and_builds_native_rows() {
 		os.rmdir_all(root_path) or {}
 	}
 	mut app := file_browser_at(root_path)
-	root := ui2.element_from_qml_model(filebrowser_qml_source, app, ui2.rect(0, 0, filebrowser_width, filebrowser_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(filebrowser_vml_source, app, ui2.rect(0, 0, filebrowser_width, filebrowser_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	list := find_filebrowser_element(root, 'browser_list') or { panic('missing browser list') }
 	assert list.children.len == 2

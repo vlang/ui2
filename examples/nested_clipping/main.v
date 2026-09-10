@@ -4,7 +4,7 @@ import ui2
 
 const nested_clipping_width = 820
 const nested_clipping_height = 640
-const nested_clipping_qml_source = $embed_file('nested_clipping.qml').to_string()
+const nested_clipping_vml_source = $embed_file('nested_clipping.vml').to_string()
 const clip_grid_side = 4
 
 pub struct ClipBox {
@@ -125,8 +125,8 @@ pub fn (mut app NestedClippingDemo) clip_none() {
 }
 
 fn main() {
-	ui2.run_qml[NestedClippingDemo](
-		source: nested_clipping_qml_source
+	ui2.run_vml[NestedClippingDemo](
+		source: nested_clipping_vml_source
 		model: nested_clipping_demo()
 		title: 'Nested Clipping'
 		width: nested_clipping_width

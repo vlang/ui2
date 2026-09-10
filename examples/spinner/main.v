@@ -4,7 +4,7 @@ import ui2
 
 const spinner_width = 360
 const spinner_height = 190
-const spinner_qml_source = $embed_file('spinner.qml').to_string()
+const spinner_vml_source = $embed_file('spinner.vml').to_string()
 
 pub struct SpinnerDemo {
 pub mut:
@@ -17,8 +17,8 @@ pub fn (mut app SpinnerDemo) selection_changed() {
 }
 
 fn main() {
-	ui2.run_qml[SpinnerDemo](
-		source: spinner_qml_source
+	ui2.run_vml[SpinnerDemo](
+		source: spinner_vml_source
 		model: SpinnerDemo{}
 		title: 'Spinner'
 		width: spinner_width

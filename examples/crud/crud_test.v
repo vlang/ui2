@@ -38,8 +38,8 @@ fn test_crud_filters_selects_updates_creates_and_deletes() {
 	assert app.people.last().display == 'Hopper, Grace'
 }
 
-fn test_crud_qml_builds_filtered_list_and_native_actions() {
-	root := ui2.element_from_qml_model(crud_qml_source, initial_crud(), ui2.rect(0, 0, crud_width, crud_height)) or { panic(err) }
+fn test_crud_vml_builds_filtered_list_and_native_actions() {
+	root := ui2.element_from_vml_model(crud_vml_source, initial_crud(), ui2.rect(0, 0, crud_width, crud_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	list := find_crud_element(root, 'people_list') or { panic('missing people list') }

@@ -4,7 +4,7 @@ import ui2
 
 const demo_event_width = 680
 const demo_event_height = 500
-const demo_event_qml_source = $embed_file('demo_event.qml').to_string()
+const demo_event_vml_source = $embed_file('demo_event.vml').to_string()
 
 @[heap]
 pub struct DemoEvent {
@@ -59,8 +59,8 @@ fn (mut app DemoEvent) record_key(key string) {
 
 fn build_demo_event_screen() ui2.Element {
 	state := unsafe { demo_event_state }
-	return ui2.element_from_qml_model(demo_event_qml_source, *state, ui2.bounds()) or {
-		eprintln('event-demo QML failed: ${err}')
+	return ui2.element_from_vml_model(demo_event_vml_source, *state, ui2.bounds()) or {
+		eprintln('event-demo VML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
 	}
 }

@@ -136,6 +136,63 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_dropdown_hover = -1
 	__global g_dropdown_scroll = 0.0
 
+	// Map values are copied byte-for-byte when an existing key is replaced.
+	// Unlike keys, their nested strings are not released by map.set. The text
+	// state below changes on every keystroke, so it owns clones explicitly and
+	// disposes the previous value before overwriting it.
+	@[manualfree]
+	fn free_owned_string(value string) {
+		unsafe { value.free() }
+	}
+
+	@[manualfree]
+	fn replace_text_value(id string, value string) {
+		owned := value.clone()
+		if previous := g_text_values[id] {
+			free_owned_string(previous)
+		}
+		g_text_values[id] = owned
+	}
+
+	@[manualfree]
+	fn replace_text_prop(id string, value string) {
+		owned := value.clone()
+		if previous := g_text_props[id] {
+			free_owned_string(previous)
+		}
+		g_text_props[id] = owned
+	}
+
+	@[manualfree]
+	fn replace_text_editor(id string, editor TextEditor) {
+		if previous := g_text_editors[id] {
+			// Caret-only updates retain the editor's text allocation. Releasing
+			// it in that case would leave the replacement editor pointing at
+			// freed memory.
+			if previous.text.str != editor.text.str {
+				free_owned_string(previous.text)
+			}
+		}
+		g_text_editors[id] = editor
+	}
+
+	@[manualfree]
+	fn forget_text_state(id string) {
+		if value := g_text_values[id] {
+			free_owned_string(value)
+		}
+		if prop := g_text_props[id] {
+			free_owned_string(prop)
+		}
+		if editor := g_text_editors[id] {
+			free_owned_string(editor.text)
+		}
+		g_text_values.delete(id)
+		g_text_props.delete(id)
+		g_text_editors.delete(id)
+		g_text_kinds.delete(id)
+	}
+
 	// ── Public API ─────────────────────────────────────────────────────
 
 	pub fn bounds() Rect {
@@ -223,17 +280,21 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	pub fn text(id string) string {
-		return g_text_values[id] or { '' }
+		// State maps store owned strings so that replacing their values can
+		// release the previous allocation. Callers, in particular QML bindings,
+		// may retain the returned value after the next edit, so give them their
+		// own copy rather than exposing the map's storage.
+		return (g_text_values[id] or { '' }).clone()
 	}
 
 	pub fn set_text(id string, t string) {
 		if id !in g_active_fields {
 			return
 		}
-		g_text_values[id] = t
-		mut editor := g_text_editors[id] or { text_editor(t) }
-		editor.set_text(t)
-		g_text_editors[id] = editor
+		replace_text_value(id, t)
+		mut editor := g_text_editors[id] or { text_editor(t.clone()) }
+		editor.set_text(t.clone())
+		replace_text_editor(id, editor)
 	}
 
 	// slider_value returns the live value currently displayed by a mounted
@@ -315,9 +376,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		g_focused_field = id
-		mut editor := g_text_editors[id] or { text_editor(g_text_values[id] or { '' }) }
+		mut editor := g_text_editors[id] or { text_editor((g_text_values[id] or { '' }).clone()) }
 		editor.set_caret(rune_len(editor.text))
-		g_text_editors[id] = editor
+		replace_text_editor(id, editor)
 	}
 
 	pub fn focused_id() string {
@@ -365,10 +426,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if id !in g_active_fields || (g_text_kinds[id] or { Kind.screen }) != .text_area {
 			return
 		}
-		mut editor := g_text_editors[id] or { text_editor(g_text_values[id] or { '' }) }
+		mut editor := g_text_editors[id] or { text_editor((g_text_values[id] or { '' }).clone()) }
 		editor.insert_text(value)
-		g_text_editors[id] = editor
-		g_text_values[id] = editor.text
+		replace_text_value(id, editor.text)
+		replace_text_editor(id, editor)
 		fire_field_change(id)
 	}
 
@@ -742,16 +803,20 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		if target.text_field {
 			g_focused_field = target.id
-			mut editor := g_text_editors[target.id] or { text_editor(g_text_values[target.id] or { '' }) }
+			mut editor := g_text_editors[target.id] or {
+				text_editor((g_text_values[target.id] or { '' }).clone())
+			}
 			editor.set_caret(rune_len(editor.text))
-			g_text_editors[target.id] = editor
+			replace_text_editor(target.id, editor)
 			return
 		}
 		if target.text_area {
 			g_focused_field = target.id
-			mut editor := g_text_editors[target.id] or { text_editor(g_text_values[target.id] or { '' }) }
+			mut editor := g_text_editors[target.id] or {
+				text_editor((g_text_values[target.id] or { '' }).clone())
+			}
 			editor.set_caret(rune_len(editor.text))
-			g_text_editors[target.id] = editor
+			replace_text_editor(target.id, editor)
 			return
 		}
 		if target.dropdown {
@@ -946,11 +1011,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		mut editor := g_text_editors[g_focused_field] or {
-			text_editor(g_text_values[g_focused_field] or { '' })
+			text_editor((g_text_values[g_focused_field] or { '' }).clone())
 		}
 		editor.insert_text(rune(ch).str())
-		g_text_editors[g_focused_field] = editor
-		g_text_values[g_focused_field] = editor.text
+		replace_text_value(g_focused_field, editor.text)
+		replace_text_editor(g_focused_field, editor)
 		fire_field_change(g_focused_field)
 	}
 
@@ -959,19 +1024,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		mut editor := g_text_editors[g_focused_field] or {
-			text_editor(g_text_values[g_focused_field] or { '' })
+			text_editor((g_text_values[g_focused_field] or { '' }).clone())
 		}
 		if key == .backspace {
 			if editor.backspace() {
-				g_text_editors[g_focused_field] = editor
-				g_text_values[g_focused_field] = editor.text
+				replace_text_value(g_focused_field, editor.text)
+				replace_text_editor(g_focused_field, editor)
 				fire_field_change(g_focused_field)
 			}
 		}
 		if key == .delete {
 			if editor.delete_forward() {
-				g_text_editors[g_focused_field] = editor
-				g_text_values[g_focused_field] = editor.text
+				replace_text_value(g_focused_field, editor.text)
+				replace_text_editor(g_focused_field, editor)
 				fire_field_change(g_focused_field)
 			}
 		}
@@ -985,14 +1050,14 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			} else {
 				editor.set_caret(rune_len(editor.text))
 			}
-			g_text_editors[g_focused_field] = editor
+			replace_text_editor(g_focused_field, editor)
 		}
 		if key == .enter || key == .kp_enter {
 			for target in g_hit_targets {
 				if target.id == g_focused_field && target.text_area {
 					editor.insert_text('\n')
-					g_text_editors[g_focused_field] = editor
-					g_text_values[g_focused_field] = editor.text
+					replace_text_value(g_focused_field, editor.text)
+					replace_text_editor(g_focused_field, editor)
 					fire_field_change(g_focused_field)
 					return
 				}
@@ -1059,7 +1124,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	fn commit_dropdown(id string, action_id string, value string) {
 		close_dropdown()
-		g_text_values[id] = value
+		replace_text_value(id, value)
 		fire_event(action_id)
 	}
 
@@ -1302,10 +1367,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			}
 		}
 		for id in stale_fields {
-			g_text_values.delete(id)
-			g_text_props.delete(id)
-			g_text_editors.delete(id)
-			g_text_kinds.delete(id)
+			forget_text_state(id)
 			forget_portable_text_area_selection(id)
 			if g_focused_field == id {
 				g_focused_field = ''
@@ -1594,9 +1656,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				previous_prop := g_text_props[el.id] or { el.text }
 				kind_changed := el.id in g_text_kinds && (g_text_kinds[el.id] or { el.kind }) != el.kind
 				if kind_changed || el.id !in g_text_values || (el.text != previous_prop && (g_text_values[el.id] or { '' }) != el.text) {
-					g_text_values[el.id] = el.text
+					replace_text_value(el.id, el.text)
 				}
-				g_text_props[el.id] = el.text
+				if el.id !in g_text_props || el.text != previous_prop {
+					replace_text_prop(el.id, el.text)
+				}
 				g_text_kinds[el.id] = el.kind
 				g_active_fields[el.id] = true
 				selected := g_text_values[el.id] or { el.text }
@@ -1648,17 +1712,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				previous_prop := g_text_props[el.id] or { el.text }
 				kind_changed := el.id in g_text_kinds && (g_text_kinds[el.id] or { el.kind }) != el.kind
 				if kind_changed || el.id !in g_text_values || (el.text != previous_prop && (g_text_values[el.id] or { '' }) != el.text) {
-					g_text_values[el.id] = el.text
-					g_text_editors[el.id] = text_editor(el.text)
+					replace_text_value(el.id, el.text)
+					replace_text_editor(el.id, text_editor(el.text.clone()))
 				}
-				g_text_props[el.id] = el.text
+				if el.id !in g_text_props || el.text != previous_prop {
+					replace_text_prop(el.id, el.text)
+				}
 				g_text_kinds[el.id] = el.kind
 				g_active_fields[el.id] = true
 				current_text := g_text_values[el.id] or { el.text }
-				mut editor := g_text_editors[el.id] or { text_editor(current_text) }
+				mut editor := g_text_editors[el.id] or { text_editor(current_text.clone()) }
 				if editor.text != current_text {
-					editor.set_text(current_text)
-					g_text_editors[el.id] = editor
+					editor.set_text(current_text.clone())
+					replace_text_editor(el.id, editor)
 				}
 				display_text := text_field_display_text(current_text, el.secure)
 				is_focused := g_focused_field == el.id
@@ -1702,10 +1768,12 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				previous_prop := g_text_props[el.id] or { el.text }
 				kind_changed := el.id in g_text_kinds && (g_text_kinds[el.id] or { el.kind }) != el.kind
 				if kind_changed || el.id !in g_text_values || (el.text != previous_prop && (g_text_values[el.id] or { '' }) != el.text) {
-					g_text_values[el.id] = el.text
-					g_text_editors[el.id] = text_editor(el.text)
+					replace_text_value(el.id, el.text)
+					replace_text_editor(el.id, text_editor(el.text.clone()))
 				}
-				g_text_props[el.id] = el.text
+				if el.id !in g_text_props || el.text != previous_prop {
+					replace_text_prop(el.id, el.text)
+				}
 				g_text_kinds[el.id] = el.kind
 				g_active_fields[el.id] = true
 				current_text := g_text_values[el.id] or { el.text }

@@ -4,7 +4,7 @@ import ui2
 
 const grid2_width = 880
 const grid2_height = 640
-const grid2_qml_source = $embed_file('grid2.qml').to_string()
+const grid2_vml_source = $embed_file('grid2.vml').to_string()
 const grid2_row_count = 32
 const grid2_sex_levels = ['Male', 'Female']
 const grid2_csp_levels = ['job1', 'job2', 'other']
@@ -21,7 +21,7 @@ pub mut:
 	label string
 }
 
-// GridRow is the projection the QML repeater draws: already sorted, already
+// GridRow is the projection the VML repeater draws: already sorted, already
 // numbered, and already told whether it is the selected record.
 pub struct GridRow {
 pub:
@@ -229,8 +229,8 @@ pub fn (mut app Grid2Demo) apply_edits() {
 }
 
 fn main() {
-	ui2.run_qml[Grid2Demo](
-		source: grid2_qml_source
+	ui2.run_vml[Grid2Demo](
+		source: grid2_vml_source
 		model: grid2_demo()
 		title: 'Grid 2'
 		width: grid2_width

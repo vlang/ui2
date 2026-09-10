@@ -47,7 +47,7 @@ fn find_element_by_text(element ui2.Element, text string) ?ui2.Element {
 	return none
 }
 
-fn test_users_screen_is_evaluated_from_model_qml() {
+fn test_users_screen_is_evaluated_from_model_vml() {
 	data_path := users_test_data_path('screen')
 	reset_test_users_data(data_path)
 	defer {
@@ -56,10 +56,10 @@ fn test_users_screen_is_evaluated_from_model_qml() {
 	app := app_with_data_path(data_path)
 	assert os.exists(data_path)
 	bounds := ui2.rect(0, 0, window_width, window_height)
-	assert users_qml_source.contains('bind.text: app.first_name')
-	assert users_qml_source.contains('Repeater {')
-	assert !users_qml_source.contains('__USER_ROWS__')
-	root := ui2.element_from_qml_model(users_qml_source, app, bounds) or { panic(err) }
+	assert users_vml_source.contains('bind.text: app.first_name')
+	assert users_vml_source.contains('Repeater {')
+	assert !users_vml_source.contains('__USER_ROWS__')
+	root := ui2.element_from_vml_model(users_vml_source, app, bounds) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	add_user := find_element_by_id(root, 'add-user') or { panic('missing Add user button') }

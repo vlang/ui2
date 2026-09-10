@@ -6,7 +6,7 @@ import ui2
 
 const timer_width = 600
 const timer_height = 380
-const timer_qml_source = $embed_file('timer.qml').to_string()
+const timer_vml_source = $embed_file('timer.vml').to_string()
 
 @[heap]
 pub struct TimerDemo {
@@ -114,8 +114,8 @@ fn refresh_timer_for_duration() {
 fn build_timer_screen() ui2.Element {
 	mut state := unsafe { timer_state }
 	state.sync_at(time.ticks())
-	return ui2.element_from_qml_model(timer_qml_source, *state, ui2.bounds()) or {
-		eprintln('timer QML failed: ${err}')
+	return ui2.element_from_vml_model(timer_vml_source, *state, ui2.bounds()) or {
+		eprintln('timer VML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
 	}
 }

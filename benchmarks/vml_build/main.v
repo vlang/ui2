@@ -4,7 +4,7 @@ import time
 import ui2
 
 const iterations = 10_000
-const calculator_qml = $embed_file('form.qml').to_string()
+const calculator_vml = $embed_file('form.vml').to_string()
 
 struct Key {
 pub:
@@ -39,13 +39,13 @@ fn benchmark_model() Calculator {
 }
 
 fn build_compiled(app &Calculator) ui2.Element {
-	return $qml('form.qml')
+	return $vml('form.vml')
 }
 
 fn main() {
 	app := benchmark_model()
 	frame := ui2.rect(0, 0, 800, 600)
-	mut runtime_app := ui2.new_qml_app(calculator_qml, app) or { panic(err) }
+	mut runtime_app := ui2.new_vml_app(calculator_vml, app) or { panic(err) }
 	_ = build_compiled(&app)
 	_ = runtime_app.build(frame) or { panic(err) }
 
@@ -65,8 +65,8 @@ fn main() {
 	compiled_elapsed := watch.elapsed()
 
 	println('iterations: ${iterations}')
-	println('runtime QML:  ${f64(runtime_elapsed) / f64(time.millisecond):.3f} ms')
-	println('compiled QML: ${f64(compiled_elapsed) / f64(time.millisecond):.3f} ms')
+	println('runtime VML:  ${f64(runtime_elapsed) / f64(time.millisecond):.3f} ms')
+	println('compiled VML: ${f64(compiled_elapsed) / f64(time.millisecond):.3f} ms')
 	println('speedup:      ${f64(runtime_elapsed) / f64(compiled_elapsed):.2f}x')
 	println('checksum:     ${checksum}')
 }

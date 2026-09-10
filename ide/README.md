@@ -13,11 +13,11 @@ Run it from the repository root:
 v run ide
 ```
 
-Pass a flat, fixed-coordinate QML file (or a directory containing one) to open
+Pass a flat, fixed-coordinate VML file (or a directory containing one) to open
 it immediately:
 
 ```sh
-v run ide ide/sample.qml
+v run ide ide/sample.vml
 ```
 
 The designer provides:
@@ -33,9 +33,9 @@ The designer provides:
 - project and object trees plus a live property/event inspector whose editable
   rows support Tab and Shift+Tab traversal;
 - undo/redo, duplicate, delete, and z-order commands;
-- generated QML source with a source-to-designer apply workflow;
+- generated VML source with a source-to-designer apply workflow;
 - an interactive preview and a messages/build pane;
-- QML save/open, file drop, safe unsaved-change prompts, `main.v` scaffolding,
+- VML save/open, file drop, safe unsaved-change prompts, `main.v` scaffolding,
   and project checking through the installed V compiler.
 
 The visual loader deliberately accepts only a flat `Screen` with plain numeric
@@ -43,5 +43,5 @@ coordinates. Dynamic expressions, repeaters, and nested `Row`/`Column` layouts
 remain editable in Source view, but are rejected by the designer instead of
 being flattened or silently lost.
 
-Saving a new form will not overwrite an existing QML file that was not opened
+Saving a new form will not overwrite an existing VML file that was not opened
 first. `Generate main.v` also leaves an existing companion file untouched.

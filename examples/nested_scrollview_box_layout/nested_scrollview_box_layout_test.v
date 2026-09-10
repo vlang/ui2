@@ -24,8 +24,8 @@ fn test_nested_scroll_box_layout_builds_five_by_five_grid() {
 	assert app.boxes[24].content.starts_with('box 44')
 }
 
-fn test_nested_scroll_box_layout_qml_positions_editable_areas() {
-	root := ui2.element_from_qml_model(nested_box_qml_source, initial_nested_scroll_box_layout(), ui2.rect(0, 0, nested_box_width, nested_box_height)) or {
+fn test_nested_scroll_box_layout_vml_positions_editable_areas() {
+	root := ui2.element_from_vml_model(nested_box_vml_source, initial_nested_scroll_box_layout(), ui2.rect(0, 0, nested_box_width, nested_box_height)) or {
 		panic(err)
 	}
 	ui2.validate_element_tree(root) or { panic(err) }

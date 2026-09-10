@@ -35,9 +35,9 @@ fn test_dirbrowser_lists_only_folders_and_navigates() {
 	assert app.entries.len == 2
 }
 
-fn test_dirbrowser_qml_builds_keyed_native_folder_rows() {
+fn test_dirbrowser_vml_builds_keyed_native_folder_rows() {
 	app := directory_browser_at(os.getwd())
-	root := ui2.element_from_qml_model(dirbrowser_qml_source, app, ui2.rect(0, 0, dirbrowser_width, dirbrowser_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(dirbrowser_vml_source, app, ui2.rect(0, 0, dirbrowser_width, dirbrowser_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	list := find_dirbrowser_element(root, 'folder_list') or { panic('missing folder list') }
 	assert list.children.len == app.entries.len + 1

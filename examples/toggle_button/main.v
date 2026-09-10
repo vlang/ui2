@@ -4,7 +4,7 @@ import ui2
 
 const toggle_width = 340
 const toggle_height = 180
-const toggle_qml_source = $embed_file('toggle_button.qml').to_string()
+const toggle_vml_source = $embed_file('toggle_button.vml').to_string()
 
 pub struct ToggleButtonDemo {
 pub mut:
@@ -13,8 +13,8 @@ pub mut:
 }
 
 fn main() {
-	ui2.run_qml[ToggleButtonDemo](
-		source: toggle_qml_source
+	ui2.run_vml[ToggleButtonDemo](
+		source: toggle_vml_source
 		model: ToggleButtonDemo{}
 		title: 'Toggle Button'
 		width: toggle_width

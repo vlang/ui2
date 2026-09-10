@@ -30,10 +30,10 @@ fn test_double_listbox_moves_values_both_directions() {
 	assert app.selected.len == 0
 }
 
-fn test_double_listbox_qml_builds_keyed_native_rows() {
+fn test_double_listbox_vml_builds_keyed_native_rows() {
 	mut app := initial_double_listbox()
 	app.move_right(3)
-	root := ui2.element_from_qml_model(double_list_qml_source, app, ui2.rect(0, 0, double_list_width, double_list_height)) or { panic(err) }
+	root := ui2.element_from_vml_model(double_list_vml_source, app, ui2.rect(0, 0, double_list_width, double_list_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	available := find_double_list_element(root, 'available_list') or {
 		panic('missing available list')

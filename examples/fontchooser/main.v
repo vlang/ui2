@@ -4,7 +4,7 @@ import ui2
 
 const fontchooser_width = 720
 const fontchooser_height = 460
-const fontchooser_qml_source = $embed_file('fontchooser.qml').to_string()
+const fontchooser_vml_source = $embed_file('fontchooser.vml').to_string()
 
 pub struct FontChooserDemo {
 pub mut:
@@ -50,8 +50,8 @@ pub fn (mut app FontChooserDemo) reset_style() {
 }
 
 fn main() {
-	ui2.run_qml[FontChooserDemo](
-		source: fontchooser_qml_source
+	ui2.run_vml[FontChooserDemo](
+		source: fontchooser_vml_source
 		model: FontChooserDemo{}
 		title: 'Font Chooser'
 		width: fontchooser_width

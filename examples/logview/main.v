@@ -4,7 +4,7 @@ import ui2
 
 const logview_width = 640
 const logview_height = 420
-const logview_qml_source = $embed_file('logview.qml').to_string()
+const logview_vml_source = $embed_file('logview.vml').to_string()
 
 pub struct LogviewDemo {
 pub mut:
@@ -31,8 +31,8 @@ pub fn (mut app LogviewDemo) clear() {
 }
 
 fn main() {
-	ui2.run_qml[LogviewDemo](
-		source: logview_qml_source
+	ui2.run_vml[LogviewDemo](
+		source: logview_vml_source
 		model: LogviewDemo{}
 		title: 'Log View'
 		width: logview_width

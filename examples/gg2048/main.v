@@ -4,7 +4,7 @@ import ui2
 
 const game_2048_width = 600
 const game_2048_height = 680
-const game_2048_qml_source = $embed_file('gg2048.qml').to_string()
+const game_2048_vml_source = $embed_file('gg2048.vml').to_string()
 
 pub struct GameCell {
 pub:
@@ -189,8 +189,8 @@ pub fn (mut app Game2048) new_game() {
 }
 
 fn main() {
-	ui2.run_qml[Game2048](
-		source: game_2048_qml_source
+	ui2.run_vml[Game2048](
+		source: game_2048_vml_source
 		model: initial_2048()
 		title: '2048'
 		width: game_2048_width

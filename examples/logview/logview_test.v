@@ -28,8 +28,8 @@ fn test_logview_appends_batches_and_clears() {
 	assert app.next_task == 1
 }
 
-fn test_logview_qml_uses_readonly_log_and_native_actions() {
-	root := ui2.element_from_qml_model(logview_qml_source, LogviewDemo{}, ui2.rect(0, 0, logview_width, logview_height)) or { panic(err) }
+fn test_logview_vml_uses_readonly_log_and_native_actions() {
+	root := ui2.element_from_vml_model(logview_vml_source, LogviewDemo{}, ui2.rect(0, 0, logview_width, logview_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 
 	log := find_logview_element(root, 'log') or { panic('missing log area') }

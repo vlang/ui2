@@ -52,12 +52,12 @@ fn test_canvas_theme_menu_and_notes_react_to_events() {
 	assert app.notes.len == 0
 }
 
-fn test_canvas_layout_qml_builds_a_scrolling_sheet_with_a_draggable_tile() {
+fn test_canvas_layout_vml_builds_a_scrolling_sheet_with_a_draggable_tile() {
 	mut app := CanvasLayoutDemo{}
 	app.add_note()
 	app.toggle_menu()
 	frame := ui2.rect(0, 0, canvas_layout_width, canvas_layout_height)
-	root := ui2.element_from_qml_model(canvas_layout_qml_source, app, frame) or { panic(err) }
+	root := ui2.element_from_vml_model(canvas_layout_vml_source, app, frame) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	canvas := find_canvas_element(root, 'canvas') or { panic('missing canvas') }
 	assert canvas.frame.x == 18

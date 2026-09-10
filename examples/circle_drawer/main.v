@@ -5,7 +5,7 @@ import ui2
 
 const circle_drawer_width = 680
 const circle_drawer_height = 520
-const circle_drawer_qml_source = $embed_file('circle_drawer.qml').to_string()
+const circle_drawer_vml_source = $embed_file('circle_drawer.vml').to_string()
 const circle_canvas_root_x = 34.0
 const circle_canvas_root_y = 92.0
 
@@ -168,8 +168,8 @@ fn (mut app CircleDrawerDemo) handle_event(event string) {
 
 fn build_circle_drawer_screen() ui2.Element {
 	state := unsafe { circle_drawer_state }
-	return ui2.element_from_qml_model(circle_drawer_qml_source, *state, ui2.bounds()) or {
-		eprintln('circle-drawer QML failed: ${err}')
+	return ui2.element_from_vml_model(circle_drawer_vml_source, *state, ui2.bounds()) or {
+		eprintln('circle-drawer VML failed: ${err}')
 		ui2.screen(0xf1f5f9, [])
 	}
 }
