@@ -20,6 +20,8 @@ fn C.ui2_win_visual_styles_enabled() int
 
 fn C.ui2_win_create_main_window(title &u16, width int, height int) voidptr
 
+fn C.ui2_win_apply_min_size(hwnd voidptr, lparam isize, width int, height int)
+
 fn C.ui2_win_set_window_title(hwnd voidptr, title &u16)
 
 fn C.ui2_win_create_widget(kind int, parent voidptr, x int, y int, width int, height int, text &u16, alignment int, secure int, readonly int, disable_scroll int, vertical int) voidptr
@@ -188,6 +190,7 @@ const win_wm_mouse_wheel = u32(0x020a)
 const win_wm_dropfiles = u32(0x0233)
 const win_wm_refresh = u32(0x8000 + 77)
 const win_wm_paint_background = u32(0x8000 + 79)
+const win_wm_getminmaxinfo = u32(0x0024)
 
 const win_bn_clicked = 0
 const win_cbn_selchange = 1
@@ -197,6 +200,8 @@ struct WindowsRunConfig {
 	title  string = 'App'
 	width  int = 400
 	height int = 800
+	min_width  int
+	min_height int
 }
 
 struct WindowsPointerBinding {
@@ -363,6 +368,10 @@ pub fn run(build_fn BuildFn, event_fn EventFn) {
 }
 
 pub fn run_window(title string, width int, height int, build_fn BuildFn, event_fn EventFn) {
+	run_window_with_min_size(title, width, height, 0, 0, build_fn, event_fn)
+}
+
+fn run_window_with_min_size(title string, width int, height int, min_width int, min_height int, build_fn BuildFn, event_fn EventFn) {
 	mut st := windows_state()
 	st.build_screen = build_fn
 	st.event_handler = event_fn
@@ -371,6 +380,8 @@ pub fn run_window(title string, width int, height int, build_fn BuildFn, event_f
 		title: title
 		width: width
 		height: height
+		min_width: min_width
+		min_height: min_height
 	}
 	if C.ui2_win_register_classes() == 0 {
 		eprintln('ui2: failed to register Win32 window classes')
@@ -1332,6 +1343,11 @@ fn windows_handle_drop(drop voidptr) {
 fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize) isize {
 	mut st := windows_state()
 	match message {
+		win_wm_getminmaxinfo {
+			C.ui2_win_apply_min_size(hwnd, lparam, st.run_config.min_width,
+				st.run_config.min_height)
+			return 0
+		}
 		win_wm_command {
 			child := voidptr(usize(lparam))
 			if child == unsafe { nil } {

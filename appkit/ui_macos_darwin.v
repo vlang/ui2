@@ -37,6 +37,8 @@ struct RunConfig {
 	title  string = 'App'
 	width  int = 400
 	height int = 800
+	min_width  int
+	min_height int
 }
 
 struct RefreshDebug {
@@ -160,6 +162,10 @@ pub fn run(build_fn BuildFn, event_fn EventFn) {
 }
 
 pub fn run_window(title string, width int, height int, build_fn BuildFn, event_fn EventFn) {
+	run_window_with_min_size(title, width, height, 0, 0, build_fn, event_fn)
+}
+
+fn run_window_with_min_size(title string, width int, height int, min_width int, min_height int, build_fn BuildFn, event_fn EventFn) {
 	mut st := state()
 	st.build_screen = build_fn
 	st.event_handler = event_fn
@@ -168,6 +174,8 @@ pub fn run_window(title string, width int, height int, build_fn BuildFn, event_f
 		title: title
 		width: width
 		height: height
+		min_width: min_width
+		min_height: min_height
 	}
 	publish_menu_context(event_fn, title, unsafe { nil })
 	ensure_runtime_classes()
@@ -1649,6 +1657,10 @@ fn native_set_content_view(window NativeView, view NativeView) {
 	macos.msg_void1(window, 'setContentView:', view)
 }
 
+fn native_set_content_min_size(window NativeView, width f64, height f64) {
+	macos.msg_void_point(window, 'setContentMinSize:', macos.point(width, height))
+}
+
 fn native_bounds(view NativeView) NativeRect {
 	b := macos.msg_rect(view, 'bounds')
 	return native_rect(b.x, b.y, b.width, b.height)
@@ -2248,6 +2260,8 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 	install_declared_menus()
 	frame := native_rect(120, 120, f64(st.run_config.width), f64(st.run_config.height))
 	st.window = native_new_window(frame, st.run_config.title)
+	native_set_content_min_size(st.window, f64(st.run_config.min_width),
+		f64(st.run_config.min_height))
 	// The app delegate doubles as window delegate for windowDidResize:
 	macos.msg_void1(st.window, 'setDelegate:', st.app_delegate)
 	root_frame := native_rect(0, 0, f64(st.run_config.width), f64(st.run_config.height))
