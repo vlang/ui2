@@ -19,6 +19,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		g_scroll_areas = map[string]Rect{}
 		g_scroll_viewports = map[string]Rect{}
 		g_scroll_order = []string{}
+		g_scroll_parents = map[string]string{}
 		g_scrollbar_geometries = map[string]ScrollbarGeometry{}
 	}
 
@@ -32,12 +33,20 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn register_scroll_view(id string, frame Rect, clip Rect, content_height f64, enabled bool, show_scrollbar bool, persistent bool) f64 {
+		return register_scroll_view_in_parent(id, '', frame, clip, content_height, enabled,
+			show_scrollbar, persistent)
+	}
+
+	fn register_scroll_view_in_parent(id string, parent_id string, frame Rect, clip Rect, content_height f64, enabled bool, show_scrollbar bool, persistent bool) f64 {
 		if id.len == 0 {
 			return 0.0
 		}
 		g_active_scrolls[id] = true
 		g_scroll_viewports[id] = frame
 		g_scroll_content_h[id] = content_height
+		if parent_id.len > 0 {
+			g_scroll_parents[id] = parent_id
+		}
 		// Preserve the position across rebuilds and resizes, only clamping when
 		// the content or viewport changes the available range.
 		set_scroll_offset(id, scroll_offset(id), scroll_maximum(id))
@@ -71,6 +80,24 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			}
 		}
 		return ''
+	}
+
+	// Apply a scroll delta to the innermost pane first, then pass any distance
+	// left at its boundary to each scrollable ancestor.
+	fn scroll_chain(id string, delta f64) {
+		mut current_id := id
+		mut remaining := delta
+		for _ in 0 .. g_scroll_viewports.len {
+			if current_id.len == 0 || math.abs(remaining) < 0.000001 {
+				return
+			}
+			if current_id in g_scroll_areas {
+				before := scroll_offset(current_id)
+				set_scroll_offset(current_id, before + remaining, scroll_maximum(current_id))
+				remaining -= scroll_offset(current_id) - before
+			}
+			current_id = g_scroll_parents[current_id] or { '' }
+		}
 	}
 
 	fn scrollbar_geometry(frame Rect, content_height f64, offset f64, persistent bool) ScrollbarGeometry {
@@ -343,7 +370,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return first, last
 	}
 
-	fn draw_text_area_content(ctx &gg.Context, el Element, value string, x f64, y f64, clip Rect) {
+	fn draw_text_area_content(ctx &gg.Context, el Element, value string, x f64, y f64, clip Rect, scroll_parent_id string) {
 		frame := rect(x, y, el.frame.width, el.frame.height)
 		content := text_area_content_rect(frame, el.padding_left, !el.disable_scroll)
 		style := el.text_style
@@ -371,7 +398,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		// Read-only means not editable, not unscrollable. disable_scroll only
 		// hides the scroller, matching Element's documented/native behavior.
 		scroll_id := text_area_scroll_id(el)
-		offset := register_scroll_view(scroll_id, frame, clip, content_height, el.enabled,
+		offset := register_scroll_view_in_parent(scroll_id, scroll_parent_id, frame, clip, content_height, el.enabled,
 			!el.disable_scroll, el.persistent_scrollbars)
 		text_clip := intersect_rect(content, clip)
 		if text_clip.width > 0 && text_clip.height > 0 {

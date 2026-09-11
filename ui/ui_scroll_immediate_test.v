@@ -197,6 +197,55 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		assert scroll_offset('outer') == 48
 	}
 
+	fn nested_scroll_test_panes() {
+		clip := rect(0, 0, 300, 300)
+		register_scroll_view('outer', clip, clip, 1200, true, true, false)
+		register_scroll_view_in_parent('inner', 'outer', rect(20, 20, 100, 100), clip,
+			200, true, true, false)
+	}
+
+	fn test_mouse_wheel_chains_remaining_delta_to_a_parent_at_child_boundary() {
+		reset_scroll_test_state()
+		nested_scroll_test_panes()
+		set_scroll_offset('inner', 80, scroll_maximum('inner'))
+		on_scroll(scroll_test_changed)
+
+		handle_mouse_scroll(50, 50, -1)
+		assert scroll_offset('inner') == 100
+		assert scroll_offset('outer') == 28
+		handle_mouse_scroll(50, 50, -1)
+		assert scroll_offset('inner') == 100
+		assert scroll_offset('outer') == 76
+		assert scroll_test_events == ['inner', 'outer', 'outer']
+
+		set_scroll_offset('inner', 0, scroll_maximum('inner'))
+		scroll_test_events = []string{}
+		handle_mouse_scroll(50, 50, 1)
+		assert scroll_offset('inner') == 0
+		assert scroll_offset('outer') == 28
+		assert scroll_test_events == ['outer']
+	}
+
+	fn test_touch_drag_chains_remaining_delta_and_reverses_into_the_child() {
+		reset_scroll_test_state()
+		nested_scroll_test_panes()
+		set_scroll_offset('inner', 80, scroll_maximum('inner'))
+		on_scroll(scroll_test_changed)
+
+		handle_touch_down(50, 80)
+		handle_touch_move(50, 30)
+		assert scroll_offset('inner') == 100
+		assert scroll_offset('outer') == 30
+		handle_touch_move(50, 0)
+		assert scroll_offset('inner') == 100
+		assert scroll_offset('outer') == 60
+		handle_touch_move(50, 40)
+		assert scroll_offset('inner') == 60
+		assert scroll_offset('outer') == 60
+		handle_touch_up(50, 40)
+		assert scroll_test_events == ['inner', 'outer', 'outer', 'inner']
+	}
+
 	fn test_keyed_anonymous_text_areas_get_independent_nested_scroll_state() {
 		reset_scroll_test_state()
 		first := Element{kind: .text_area, key: '0'}
