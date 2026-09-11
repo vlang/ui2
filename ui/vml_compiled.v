@@ -187,6 +187,8 @@ pub:
 	title  string = 'App'
 	width  int = 400
 	height int = 800
+	min_width  int
+	min_height int
 }
 
 @[heap]
@@ -242,7 +244,8 @@ pub fn run_compiled_vml[T](config CompiledVmlRunConfig[T]) ! {
 	mut runtime := compiled_vml_runtime()
 	runtime.controller = voidptr(controller)
 	$if macos || windows || linux {
-		run_window(config.title, config.width, config.height, compiled_vml_controller_build[T], compiled_vml_controller_handle[T])
+		run_window_with_min_size(config.title, config.width, config.height, config.min_width,
+			config.min_height, compiled_vml_controller_build[T], compiled_vml_controller_handle[T])
 	} $else {
 		run(compiled_vml_controller_build[T], compiled_vml_controller_handle[T])
 	}

@@ -230,6 +230,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	pub fn run_window(title string, width int, height int, build_fn BuildFn, event_fn EventFn) {
+		run_window_with_min_size(title, width, height, 0, 0, build_fn, event_fn)
+	}
+
+	fn run_window_with_min_size(title string, width int, height int, min_width int, min_height int, build_fn BuildFn, event_fn EventFn) {
 		g_build_screen = build_fn
 		g_event_handler = event_fn
 		configure_animation_driver(request_refresh, false)
@@ -247,6 +251,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			custom_bold_font_path: font_bold
 			width: width
 			height: height
+			min_width: min_width
+			min_height: min_height
 			sample_count: 4
 			create_window: true
 			window_title: title
