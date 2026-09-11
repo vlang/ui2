@@ -81,6 +81,23 @@ fn test_users_screen_is_evaluated_from_model_vml() {
 	assert country.menu[1].title == 'Canada'
 }
 
+fn test_users_screen_keeps_stacked_content_reachable_after_compact_resize() {
+	data_path := users_test_data_path('compact-resize')
+	reset_test_users_data(data_path)
+	defer {
+		reset_test_users_data(data_path)
+	}
+	app := app_with_data_path(data_path)
+	resized := ui2.rect(0, 0, 500, 300)
+	root := ui2.element_from_vml_model(users_vml_source, app, resized) or { panic(err) }
+	page := find_element_by_id(root, 'users_page') or { panic('missing users page scroll') }
+	table := find_element_by_id(page, 'users_table') or { panic('missing compact users table') }
+	assert page.frame == resized
+	assert table.frame.x == 16
+	assert table.frame.y == 414
+	assert table.frame.y + table.frame.height > page.frame.height
+}
+
 fn test_app_add_user_is_only_business_logic() {
 	data_path := users_test_data_path('add')
 	reset_test_users_data(data_path)

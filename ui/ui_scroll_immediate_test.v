@@ -184,6 +184,19 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		assert scroll_offset('inner') == 48
 	}
 
+	fn test_scroll_hit_testing_falls_through_a_fitted_child_to_its_parent() {
+		reset_scroll_test_state()
+		clip := rect(0, 0, 300, 300)
+		register_scroll_view('outer', clip, clip, 1000, true, true, false)
+		register_scroll_view('inner', rect(20, 20, 100, 100), clip, 100, true, true,
+			false)
+		assert scroll_maximum('inner') == 0
+		assert scroll_hit_test(50, 50) == 'outer'
+		handle_mouse_scroll(50, 50, -1)
+		assert scroll_offset('inner') == 0
+		assert scroll_offset('outer') == 48
+	}
+
 	fn test_keyed_anonymous_text_areas_get_independent_nested_scroll_state() {
 		reset_scroll_test_state()
 		first := Element{kind: .text_area, key: '0'}
@@ -214,6 +227,7 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		reset_scroll_test_state()
 		frame := rect(0, 0, 100, 100)
 		register_scroll_view('short', frame, frame, 50, true, true, false)
+		assert scroll_hit_test(50, 50) == ''
 		on_scroll(scroll_test_changed)
 		handle_mouse_scroll(50, 50, -1)
 		assert scroll_offset('short') == 0

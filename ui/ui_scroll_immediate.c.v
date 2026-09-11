@@ -64,7 +64,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		for index := g_scroll_order.len - 1; index >= 0; index-- {
 			id := g_scroll_order[index]
 			area := g_scroll_areas[id] or { continue }
-			if scroll_rect_contains(area, x, y) {
+			// A fitted child has nowhere to scroll. Let its scrollable parent
+			// receive the wheel or drag instead of trapping the gesture here.
+			if scroll_maximum(id) > 0 && scroll_rect_contains(area, x, y) {
 				return id
 			}
 		}
