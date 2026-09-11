@@ -6,6 +6,7 @@ import ui2
 
 const window_width = 780
 const window_height = 420
+const window_min_width = 700
 const maximum_users = 10
 const users_data_directory = 'ui2-users-example'
 const users_data_filename = 'users.json'
@@ -187,6 +188,7 @@ fn main() {
 		title: 'V UI Demo'
 		width: window_width
 		height: window_height
+		min_width: window_min_width
 	) or {
 		panic(err)
 	}

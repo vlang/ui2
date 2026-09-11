@@ -339,6 +339,18 @@ static inline void *ui2_win_create_main_window(const wchar_t *title, int width, 
 	return hwnd;
 }
 
+static inline void ui2_win_apply_min_size(void *hwnd_ptr, intptr_t lparam,
+		int width, int height) {
+	if (lparam == 0 || (width <= 0 && height <= 0)) return;
+	HWND hwnd = (HWND)hwnd_ptr;
+	RECT frame = {0, 0, width > 0 ? width : 0, height > 0 ? height : 0};
+	AdjustWindowRectEx(&frame, (DWORD)GetWindowLongPtrW(hwnd, GWL_STYLE),
+		GetMenu(hwnd) != NULL, (DWORD)GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
+	MINMAXINFO *info = (MINMAXINFO *)lparam;
+	if (width > 0) info->ptMinTrackSize.x = frame.right - frame.left;
+	if (height > 0) info->ptMinTrackSize.y = frame.bottom - frame.top;
+}
+
 static inline void ui2_win_set_window_title(void *hwnd, const wchar_t *title) {
 	if (hwnd != NULL) SetWindowTextW((HWND)hwnd, title == NULL ? L"" : title);
 }

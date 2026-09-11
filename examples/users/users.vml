@@ -2,19 +2,18 @@ Screen {
     id: root
     background: #F1F5F9
 
-    property bool compact: root.width < 700
-    property f64 form_width: root.compact ? root.width - 32 : 210
-    property f64 table_left: root.compact ? 16 : 244
-    property f64 table_top: root.compact ? 414 : 16
-    property f64 table_width: root.compact ? root.form_width : root.width - 260
-    property f64 table_height: root.compact && root.height - root.table_top - 16 > 220 ? root.height - root.table_top - 16 : 270
+    property f64 form_width: 210
+    property f64 table_left: 244
+    property f64 table_top: 16
+    property f64 table_width: root.width - 260
+    property f64 table_height: 270
     property f64 first_width: root.table_width * 0.23
     property f64 last_width: root.table_width * 0.23
     property f64 age_width: root.table_width * 0.12
     property f64 country_width: root.table_width - root.first_width - root.last_width - root.age_width
 
-    // A compact window stacks the table below the form. Keep that content
-    // reachable when the resized viewport is shorter than the stacked page.
+    // Keep the form and table on one row. The window runner enforces the
+    // minimum width, while this page scroll keeps short windows usable.
     Scroll {
         id: users_page
         x: 0
@@ -306,7 +305,6 @@ Screen {
 
         Image {
             id: v_logo
-            hidden: root.compact
             source: app.logo_path
             x: root.table_left + root.table_width - 50
             y: root.height - 66
@@ -317,9 +315,9 @@ Screen {
         Label {
             hidden: !app.is_error
             text: "First name, last name and age are required."
-            x: root.compact ? 16 : root.table_left
-            y: root.compact ? 390 : 302
-            width: root.compact ? root.form_width : root.table_width - 112
+            x: root.table_left
+            y: 302
+            width: root.table_width - 112
             height: 24
             color: #B42318
             font_size: 13
