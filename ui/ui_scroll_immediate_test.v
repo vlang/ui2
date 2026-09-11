@@ -246,6 +246,35 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		assert scroll_test_events == ['inner', 'outer', 'outer', 'inner']
 	}
 
+	fn test_touch_drag_keeps_its_parent_chain_when_the_child_is_culled() {
+		reset_scroll_test_state()
+		nested_scroll_test_panes()
+		set_scroll_offset('inner', 80, scroll_maximum('inner'))
+
+		handle_touch_down(50, 80)
+		assert g_touch.scroll_chain == ['inner', 'outer']
+		handle_touch_move(50, 30)
+		assert scroll_offset('inner') == 100
+		assert scroll_offset('outer') == 30
+
+		// Simulate the next frame after the parent has moved the child outside
+		// its viewport. Only the parent is registered and the child is pruned.
+		g_active_scrolls = map[string]bool{}
+		reset_scroll_frame()
+		clip := rect(0, 0, 300, 300)
+		register_scroll_view('outer', clip, clip, 1200, true, true, false)
+		prune_unmounted_state()
+		assert 'inner' !in g_scroll_viewports
+		assert 'inner' !in g_scroll_offsets
+		assert g_scroll_parents.len == 0
+
+		handle_touch_move(50, 0)
+		assert scroll_offset('outer') == 60
+		handle_touch_move(50, 40)
+		assert scroll_offset('outer') == 20
+		handle_touch_up(50, 40)
+	}
+
 	fn test_keyed_anonymous_text_areas_get_independent_nested_scroll_state() {
 		reset_scroll_test_state()
 		first := Element{kind: .text_area, key: '0'}

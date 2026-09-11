@@ -82,21 +82,34 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return ''
 	}
 
-	// Apply a scroll delta to the innermost pane first, then pass any distance
-	// left at its boundary to each scrollable ancestor.
-	fn scroll_chain(id string, delta f64) {
+	fn scroll_ancestor_chain(id string) []string {
+		mut chain := []string{}
 		mut current_id := id
-		mut remaining := delta
 		for _ in 0 .. g_scroll_viewports.len {
-			if current_id.len == 0 || math.abs(remaining) < 0.000001 {
+			if current_id.len == 0 {
+				break
+			}
+			chain << current_id
+			current_id = g_scroll_parents[current_id] or { '' }
+		}
+		return chain
+	}
+
+	// Apply a scroll delta to the innermost available pane first, then pass any
+	// distance left at its boundary to each available ancestor. Touch input
+	// captures this chain on pointer-down so frame culling cannot sever it.
+	fn apply_scroll_chain(chain []string, delta f64) {
+		mut remaining := delta
+		for id in chain {
+			if math.abs(remaining) < 0.000001 {
 				return
 			}
-			if current_id in g_scroll_areas {
-				before := scroll_offset(current_id)
-				set_scroll_offset(current_id, before + remaining, scroll_maximum(current_id))
-				remaining -= scroll_offset(current_id) - before
+			if id !in g_scroll_areas {
+				continue
 			}
-			current_id = g_scroll_parents[current_id] or { '' }
+			before := scroll_offset(id)
+			set_scroll_offset(id, before + remaining, scroll_maximum(id))
+			remaining -= scroll_offset(id) - before
 		}
 	}
 

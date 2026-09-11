@@ -56,6 +56,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		start_time         i64
 		moved              bool
 		scroll_id          string
+		scroll_chain       []string
 		long_press_fired   bool
 		scrollbar_drag     bool
 		scrollbar_grab_y   f64
@@ -696,6 +697,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		g_touch.scroll_id = scroll_hit_test(x, y)
+		g_touch.scroll_chain = scroll_ancestor_chain(g_touch.scroll_id)
 		if begin_scrollbar_drag(x, y) {
 			return
 		}
@@ -729,8 +731,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			drag_scrollbar(y)
 			return
 		}
-		if g_touch.scroll_id.len > 0 {
-			scroll_chain(g_touch.scroll_id, previous_y - y)
+		if g_touch.scroll_chain.len > 0 {
+			apply_scroll_chain(g_touch.scroll_chain, previous_y - y)
 		}
 		if target.action_id.len > 0 && target.draggable {
 			fire_event(pointer_event_id('drag', target.action_id, x, y))
@@ -747,7 +749,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if id.len == 0 {
 			return
 		}
-		scroll_chain(id, -delta_y * 48)
+		apply_scroll_chain(scroll_ancestor_chain(id), -delta_y * 48)
 	}
 
 	fn set_scroll_offset(id string, requested f64, maximum f64) {
