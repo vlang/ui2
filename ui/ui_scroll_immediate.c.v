@@ -63,6 +63,28 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return offset
 	}
 
+	// Rendering skips subtrees outside a scroll viewport, but those elements are
+	// still mounted. Keep their scroll-backed state active so unmount cleanup
+	// does not discard positions that must be restored when they re-enter view.
+	fn retain_culled_scroll_state(el Element) {
+		if el.hidden {
+			return
+		}
+		if el.kind == .scroll {
+			if el.id.len > 0 {
+				g_active_scrolls[el.id] = true
+			}
+		} else if el.kind == .text_area {
+			id := text_area_scroll_id(el)
+			if id.len > 0 {
+				g_active_scrolls[id] = true
+			}
+		}
+		for child in el.children {
+			retain_culled_scroll_state(child)
+		}
+	}
+
 	fn scroll_rect_contains(r Rect, x f64, y f64) bool {
 		return r.width > 0 && r.height > 0 && x >= r.x && x < r.x + r.width
 			&& y >= r.y && y < r.y + r.height

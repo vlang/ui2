@@ -1633,6 +1633,7 @@ fn page_focused_text_area(direction int) {
 				for child in el.children {
 					child_screen_y := child.frame.y - scroll_y
 					if child_screen_y + child.frame.height < 0 || child_screen_y > el.frame.height {
+						retain_culled_scroll_state(child)
 						continue
 					}
 					render_element(ctx, child, x, y - scroll_y, child_clip, child_scroll_parent_id)

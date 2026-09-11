@@ -258,20 +258,36 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		assert scroll_offset('outer') == 30
 
 		// Simulate the next frame after the parent has moved the child outside
-		// its viewport. Only the parent is registered and the child is pruned.
+		// its viewport. Only the parent is registered, but the renderer retains
+		// scroll state from the child's still-mounted element subtree.
 		g_active_scrolls = map[string]bool{}
 		reset_scroll_frame()
 		clip := rect(0, 0, 300, 300)
 		register_scroll_view('outer', clip, clip, 1200, true, true, false)
+		retain_culled_scroll_state(Element{
+			kind: .view
+			children: [Element{
+				kind: .scroll
+				id: 'inner'
+			}]
+		})
 		prune_unmounted_state()
 		assert 'inner' !in g_scroll_viewports
-		assert 'inner' !in g_scroll_offsets
+		assert scroll_offset('inner') == 100
+		assert g_scroll_content_h['inner'] == 200
 		assert g_scroll_parents.len == 0
 
 		handle_touch_move(50, 0)
 		assert scroll_offset('outer') == 60
 		handle_touch_move(50, 40)
 		assert scroll_offset('outer') == 20
+
+		// Re-registering the child after it re-enters the viewport restores its
+		// previous position instead of jumping back to the top.
+		reset_scroll_frame()
+		register_scroll_view('outer', clip, clip, 1200, true, true, false)
+		assert register_scroll_view_in_parent('inner', 'outer', rect(20, 20, 100,
+			100), clip, 200, true, true, false) == 100
 		handle_touch_up(50, 40)
 	}
 
