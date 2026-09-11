@@ -184,6 +184,113 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		assert scroll_offset('inner') == 48
 	}
 
+	fn test_scroll_hit_testing_falls_through_a_fitted_child_to_its_parent() {
+		reset_scroll_test_state()
+		clip := rect(0, 0, 300, 300)
+		register_scroll_view('outer', clip, clip, 1000, true, true, false)
+		register_scroll_view('inner', rect(20, 20, 100, 100), clip, 100, true, true,
+			false)
+		assert scroll_maximum('inner') == 0
+		assert scroll_hit_test(50, 50) == 'outer'
+		handle_mouse_scroll(50, 50, -1)
+		assert scroll_offset('inner') == 0
+		assert scroll_offset('outer') == 48
+	}
+
+	fn nested_scroll_test_panes() {
+		clip := rect(0, 0, 300, 300)
+		register_scroll_view('outer', clip, clip, 1200, true, true, false)
+		register_scroll_view_in_parent('inner', 'outer', rect(20, 20, 100, 100), clip,
+			200, true, true, false)
+	}
+
+	fn test_mouse_wheel_chains_remaining_delta_to_a_parent_at_child_boundary() {
+		reset_scroll_test_state()
+		nested_scroll_test_panes()
+		set_scroll_offset('inner', 80, scroll_maximum('inner'))
+		on_scroll(scroll_test_changed)
+
+		handle_mouse_scroll(50, 50, -1)
+		assert scroll_offset('inner') == 100
+		assert scroll_offset('outer') == 28
+		handle_mouse_scroll(50, 50, -1)
+		assert scroll_offset('inner') == 100
+		assert scroll_offset('outer') == 76
+		assert scroll_test_events == ['inner', 'outer', 'outer']
+
+		set_scroll_offset('inner', 0, scroll_maximum('inner'))
+		scroll_test_events = []string{}
+		handle_mouse_scroll(50, 50, 1)
+		assert scroll_offset('inner') == 0
+		assert scroll_offset('outer') == 28
+		assert scroll_test_events == ['outer']
+	}
+
+	fn test_touch_drag_chains_remaining_delta_and_reverses_into_the_child() {
+		reset_scroll_test_state()
+		nested_scroll_test_panes()
+		set_scroll_offset('inner', 80, scroll_maximum('inner'))
+		on_scroll(scroll_test_changed)
+
+		handle_touch_down(50, 80)
+		handle_touch_move(50, 30)
+		assert scroll_offset('inner') == 100
+		assert scroll_offset('outer') == 30
+		handle_touch_move(50, 0)
+		assert scroll_offset('inner') == 100
+		assert scroll_offset('outer') == 60
+		handle_touch_move(50, 40)
+		assert scroll_offset('inner') == 60
+		assert scroll_offset('outer') == 60
+		handle_touch_up(50, 40)
+		assert scroll_test_events == ['inner', 'outer', 'outer', 'inner']
+	}
+
+	fn test_touch_drag_keeps_its_parent_chain_when_the_child_is_culled() {
+		reset_scroll_test_state()
+		nested_scroll_test_panes()
+		set_scroll_offset('inner', 80, scroll_maximum('inner'))
+
+		handle_touch_down(50, 80)
+		assert g_touch.scroll_chain == ['inner', 'outer']
+		handle_touch_move(50, 30)
+		assert scroll_offset('inner') == 100
+		assert scroll_offset('outer') == 30
+
+		// Simulate the next frame after the parent has moved the child outside
+		// its viewport. Only the parent is registered, but the renderer retains
+		// scroll state from the child's still-mounted element subtree.
+		g_active_scrolls = map[string]bool{}
+		reset_scroll_frame()
+		clip := rect(0, 0, 300, 300)
+		register_scroll_view('outer', clip, clip, 1200, true, true, false)
+		retain_culled_scroll_state(Element{
+			kind: .view
+			children: [Element{
+				kind: .scroll
+				id: 'inner'
+			}]
+		})
+		prune_unmounted_state()
+		assert 'inner' !in g_scroll_viewports
+		assert scroll_offset('inner') == 100
+		assert g_scroll_content_h['inner'] == 200
+		assert g_scroll_parents.len == 0
+
+		handle_touch_move(50, 0)
+		assert scroll_offset('outer') == 60
+		handle_touch_move(50, 40)
+		assert scroll_offset('outer') == 20
+
+		// Re-registering the child after it re-enters the viewport restores its
+		// previous position instead of jumping back to the top.
+		reset_scroll_frame()
+		register_scroll_view('outer', clip, clip, 1200, true, true, false)
+		assert register_scroll_view_in_parent('inner', 'outer', rect(20, 20, 100,
+			100), clip, 200, true, true, false) == 100
+		handle_touch_up(50, 40)
+	}
+
 	fn test_keyed_anonymous_text_areas_get_independent_nested_scroll_state() {
 		reset_scroll_test_state()
 		first := Element{kind: .text_area, key: '0'}
@@ -214,6 +321,7 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		reset_scroll_test_state()
 		frame := rect(0, 0, 100, 100)
 		register_scroll_view('short', frame, frame, 50, true, true, false)
+		assert scroll_hit_test(50, 50) == ''
 		on_scroll(scroll_test_changed)
 		handle_mouse_scroll(50, 50, -1)
 		assert scroll_offset('short') == 0

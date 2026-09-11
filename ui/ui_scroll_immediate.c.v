@@ -19,6 +19,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		g_scroll_areas = map[string]Rect{}
 		g_scroll_viewports = map[string]Rect{}
 		g_scroll_order = []string{}
+		g_scroll_parents = map[string]string{}
 		g_scrollbar_geometries = map[string]ScrollbarGeometry{}
 	}
 
@@ -32,12 +33,20 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn register_scroll_view(id string, frame Rect, clip Rect, content_height f64, enabled bool, show_scrollbar bool, persistent bool) f64 {
+		return register_scroll_view_in_parent(id, '', frame, clip, content_height, enabled,
+			show_scrollbar, persistent)
+	}
+
+	fn register_scroll_view_in_parent(id string, parent_id string, frame Rect, clip Rect, content_height f64, enabled bool, show_scrollbar bool, persistent bool) f64 {
 		if id.len == 0 {
 			return 0.0
 		}
 		g_active_scrolls[id] = true
 		g_scroll_viewports[id] = frame
 		g_scroll_content_h[id] = content_height
+		if parent_id.len > 0 {
+			g_scroll_parents[id] = parent_id
+		}
 		// Preserve the position across rebuilds and resizes, only clamping when
 		// the content or viewport changes the available range.
 		set_scroll_offset(id, scroll_offset(id), scroll_maximum(id))
@@ -54,6 +63,28 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return offset
 	}
 
+	// Rendering skips subtrees outside a scroll viewport, but those elements are
+	// still mounted. Keep their scroll-backed state active so unmount cleanup
+	// does not discard positions that must be restored when they re-enter view.
+	fn retain_culled_scroll_state(el Element) {
+		if el.hidden {
+			return
+		}
+		if el.kind == .scroll {
+			if el.id.len > 0 {
+				g_active_scrolls[el.id] = true
+			}
+		} else if el.kind == .text_area {
+			id := text_area_scroll_id(el)
+			if id.len > 0 {
+				g_active_scrolls[id] = true
+			}
+		}
+		for child in el.children {
+			retain_culled_scroll_state(child)
+		}
+	}
+
 	fn scroll_rect_contains(r Rect, x f64, y f64) bool {
 		return r.width > 0 && r.height > 0 && x >= r.x && x < r.x + r.width
 			&& y >= r.y && y < r.y + r.height
@@ -64,11 +95,44 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		for index := g_scroll_order.len - 1; index >= 0; index-- {
 			id := g_scroll_order[index]
 			area := g_scroll_areas[id] or { continue }
-			if scroll_rect_contains(area, x, y) {
+			// A fitted child has nowhere to scroll. Let its scrollable parent
+			// receive the wheel or drag instead of trapping the gesture here.
+			if scroll_maximum(id) > 0 && scroll_rect_contains(area, x, y) {
 				return id
 			}
 		}
 		return ''
+	}
+
+	fn scroll_ancestor_chain(id string) []string {
+		mut chain := []string{}
+		mut current_id := id
+		for _ in 0 .. g_scroll_viewports.len {
+			if current_id.len == 0 {
+				break
+			}
+			chain << current_id
+			current_id = g_scroll_parents[current_id] or { '' }
+		}
+		return chain
+	}
+
+	// Apply a scroll delta to the innermost available pane first, then pass any
+	// distance left at its boundary to each available ancestor. Touch input
+	// captures this chain on pointer-down so frame culling cannot sever it.
+	fn apply_scroll_chain(chain []string, delta f64) {
+		mut remaining := delta
+		for id in chain {
+			if math.abs(remaining) < 0.000001 {
+				return
+			}
+			if id !in g_scroll_areas {
+				continue
+			}
+			before := scroll_offset(id)
+			set_scroll_offset(id, before + remaining, scroll_maximum(id))
+			remaining -= scroll_offset(id) - before
+		}
 	}
 
 	fn scrollbar_geometry(frame Rect, content_height f64, offset f64, persistent bool) ScrollbarGeometry {
@@ -341,7 +405,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return first, last
 	}
 
-	fn draw_text_area_content(ctx &gg.Context, el Element, value string, x f64, y f64, clip Rect) {
+	fn draw_text_area_content(ctx &gg.Context, el Element, value string, x f64, y f64, clip Rect, scroll_parent_id string) {
 		frame := rect(x, y, el.frame.width, el.frame.height)
 		content := text_area_content_rect(frame, el.padding_left, !el.disable_scroll)
 		style := el.text_style
@@ -369,7 +433,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		// Read-only means not editable, not unscrollable. disable_scroll only
 		// hides the scroller, matching Element's documented/native behavior.
 		scroll_id := text_area_scroll_id(el)
-		offset := register_scroll_view(scroll_id, frame, clip, content_height, el.enabled,
+		offset := register_scroll_view_in_parent(scroll_id, scroll_parent_id, frame, clip, content_height, el.enabled,
 			!el.disable_scroll, el.persistent_scrollbars)
 		text_clip := intersect_rect(content, clip)
 		if text_clip.width > 0 && text_clip.height > 0 {

@@ -56,7 +56,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		start_time         i64
 		moved              bool
 		scroll_id          string
-		scroll_start_off_y f64
+		scroll_chain       []string
 		long_press_fired   bool
 		scrollbar_drag     bool
 		scrollbar_grab_y   f64
@@ -579,7 +579,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if has_root {
 			g_dropdown_popup.mounted = false
 			top := menu_bar_height()
-			render_element(ctx, root, 0, top, rect(0, top, f64(ctx.width), f64(ctx.height) - top))
+			render_element(ctx, root, 0, top, rect(0, top, f64(ctx.width), f64(ctx.height) - top),
+				'')
 			if g_open_dropdown.len > 0 {
 				if g_dropdown_popup.mounted {
 					draw_dropdown_popup(ctx)
@@ -696,7 +697,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		g_touch.scroll_id = scroll_hit_test(x, y)
-		g_touch.scroll_start_off_y = scroll_offset(g_touch.scroll_id)
+		g_touch.scroll_chain = scroll_ancestor_chain(g_touch.scroll_id)
 		if begin_scrollbar_drag(x, y) {
 			return
 		}
@@ -709,6 +710,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if !g_touch.down {
 			return
 		}
+		previous_y := g_touch.current_y
 		dx := x - g_touch.start_x
 		dy := y - g_touch.start_y
 		if dx * dx + dy * dy > 100 {
@@ -729,10 +731,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			drag_scrollbar(y)
 			return
 		}
-		if g_touch.scroll_id.len > 0 {
-			delta := g_touch.start_y - y
-			new_offset := g_touch.scroll_start_off_y + delta
-			set_scroll_offset(g_touch.scroll_id, new_offset, scroll_maximum(g_touch.scroll_id))
+		if g_touch.scroll_chain.len > 0 {
+			apply_scroll_chain(g_touch.scroll_chain, previous_y - y)
 		}
 		if target.action_id.len > 0 && target.draggable {
 			fire_event(pointer_event_id('drag', target.action_id, x, y))
@@ -749,7 +749,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if id.len == 0 {
 			return
 		}
-		set_scroll_offset(id, scroll_offset(id) - delta_y * 48, scroll_maximum(id))
+		apply_scroll_chain(scroll_ancestor_chain(id), -delta_y * 48)
 	}
 
 	fn set_scroll_offset(id string, requested f64, maximum f64) {
@@ -1567,7 +1567,7 @@ fn page_focused_text_area(direction int) {
 
 	// ── Rendering ──────────────────────────────────────────────────────
 
-	fn render_element(ctx &gg.Context, el Element, off_x f64, off_y f64, clip Rect) {
+	fn render_element(ctx &gg.Context, el Element, off_x f64, off_y f64, clip Rect, scroll_parent_id string) {
 		if el.hidden {
 			return
 		}
@@ -1581,7 +1581,7 @@ fn page_focused_text_area(direction int) {
 				}
 				draw_box_borders(ctx, off_x, off_y, w - off_x, h - off_y, el.box)
 				for child in el.children {
-					render_element(ctx, child, off_x, off_y, clip)
+					render_element(ctx, child, off_x, off_y, clip, scroll_parent_id)
 				}
 			}
 			.view {
@@ -1607,7 +1607,7 @@ fn page_focused_text_area(direction int) {
 					}, clip)
 				}
 				for child in el.children {
-					render_element(ctx, child, x, y, clip)
+					render_element(ctx, child, x, y, clip, scroll_parent_id)
 				}
 			}
 			.scroll {
@@ -1626,15 +1626,17 @@ fn page_focused_text_area(direction int) {
 				if content_h > 0 {
 					content_h += 16
 				}
-				scroll_y := register_scroll_view(el.id, frame, clip, content_h, el.enabled,
+				scroll_y := register_scroll_view_in_parent(el.id, scroll_parent_id, frame, clip, content_h, el.enabled,
 					true, el.persistent_scrollbars)
+				child_scroll_parent_id := if el.id.len > 0 { el.id } else { scroll_parent_id }
 				child_clip := intersect_rect(frame, clip)
 				for child in el.children {
 					child_screen_y := child.frame.y - scroll_y
 					if child_screen_y + child.frame.height < 0 || child_screen_y > el.frame.height {
+						retain_culled_scroll_state(child)
 						continue
 					}
-					render_element(ctx, child, x, y - scroll_y, child_clip)
+					render_element(ctx, child, x, y - scroll_y, child_clip, child_scroll_parent_id)
 				}
 				if child_clip.width > 0 && child_clip.height > 0 {
 					apply_clip(ctx, child_clip)
@@ -1929,7 +1931,7 @@ fn page_focused_text_area(direction int) {
 				current_text := g_text_values[el.id] or { el.text }
 				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box,
 					g_focused_field == el.id, el.enabled)
-				draw_text_area_content(ctx, el, current_text, x, y, clip)
+				draw_text_area_content(ctx, el, current_text, x, y, clip, scroll_parent_id)
 				if el.enabled && !el.readonly {
 					add_hit_target(HitTarget{
 						id: el.id

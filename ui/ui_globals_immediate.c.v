@@ -22,6 +22,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// Using the clipped height for the range makes nested panes overscroll.
 	__global g_scroll_viewports = map[string]Rect{}
 	__global g_scroll_order = []string{}
+	__global g_scroll_parents = map[string]string{}
 	__global g_scrollbar_geometries = map[string]ScrollbarGeometry{}
 	__global g_text_area_layouts = map[string]TextAreaLayout{}
 }
