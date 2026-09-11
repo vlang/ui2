@@ -87,15 +87,20 @@ fn test_users_screen_keeps_stacked_content_reachable_after_compact_resize() {
 	defer {
 		reset_test_users_data(data_path)
 	}
-	app := app_with_data_path(data_path)
+	mut app := app_with_data_path(data_path)
+	app.show_help = true
 	resized := ui2.rect(0, 0, 500, 300)
 	root := ui2.element_from_vml_model(users_vml_source, app, resized) or { panic(err) }
 	page := find_element_by_id(root, 'users_page') or { panic('missing users page scroll') }
 	table := find_element_by_id(page, 'users_table') or { panic('missing compact users table') }
+	dialog := find_element_by_id(root, 'help_dialog') or { panic('missing help dialog') }
 	assert page.frame == resized
 	assert table.frame.x == 16
 	assert table.frame.y == 414
 	assert table.frame.y + table.frame.height > page.frame.height
+	assert dialog.frame == ui2.rect(90, 118, 320, 145)
+	assert !dialog.hidden
+	assert find_element_by_id(page, 'help_dialog') == none
 }
 
 fn test_app_add_user_is_only_business_logic() {

@@ -325,49 +325,52 @@ Screen {
             font_size: 13
         }
 
-        Rectangle {
-            hidden: !app.show_help
-            x: root.width > 320 ? (root.width - 320) / 2 : 0
-            y: 118
-            width: 320
-            height: 145
-            background: #FFFFFF
-            corner_radius: 10
+    }
 
-            Label {
-                text: "V UI Demo"
-                x: 20
-                y: 16
-                width: 280
-                height: 28
-                font_size: 19
-                bold: true
-                align: center
-            }
-            Label {
-                text: "Built with V, ui2 VML, and native controls."
-                x: 20
-                y: 52
-                width: 280
-                height: 24
-                font_size: 14
-                align: center
-            }
-            Button {
-                id: close-help
-                text: "Close"
-                on_tap: app.close_help()
-                native: true
-                x: 100
-                y: 94
-                width: 120
-                height: 34
-                background: #3478D4
-                color: #FFFFFF
-                corner_radius: 6
-                bold: true
-                align: center
-            }
+    // Overlays stay in viewport coordinates while the compact page scrolls.
+    Rectangle {
+        id: help_dialog
+        hidden: !app.show_help
+        x: root.width > 320 ? (root.width - 320) / 2 : 0
+        y: 118
+        width: 320
+        height: 145
+        background: #FFFFFF
+        corner_radius: 10
+
+        Label {
+            text: "V UI Demo"
+            x: 20
+            y: 16
+            width: 280
+            height: 28
+            font_size: 19
+            bold: true
+            align: center
+        }
+        Label {
+            text: "Built with V, ui2 VML, and native controls."
+            x: 20
+            y: 52
+            width: 280
+            height: 24
+            font_size: 14
+            align: center
+        }
+        Button {
+            id: close-help
+            text: "Close"
+            on_tap: app.close_help()
+            native: true
+            x: 100
+            y: 94
+            width: 120
+            height: 34
+            background: #3478D4
+            color: #FFFFFF
+            corner_radius: 6
+            bold: true
+            align: center
         }
     }
 }
