@@ -61,6 +61,7 @@ mut:
 	build_screen        BuildFn = BuildFn(unsafe { nil })
 	event_handler       EventFn = EventFn(unsafe { nil })
 	key_handler         KeyFn = KeyFn(unsafe { nil })
+	key_event_handler   KeyEventFn = KeyEventFn(unsafe { nil })
 	key_consumed        bool
 	text_key_consumed   bool
 	scroll_handler      ScrollFn = ScrollFn(unsafe { nil })
@@ -271,6 +272,12 @@ fn debug_milliseconds(nanoseconds u64) f64 {
 pub fn on_key(handler KeyFn) {
 	mut st := state()
 	st.key_handler = handler
+}
+
+// on_key_event registers a typed, layout-independent physical-key handler.
+pub fn on_key_event(handler KeyEventFn) {
+	mut st := state()
+	st.key_event_handler = handler
 }
 
 // on_scroll registers a handler called with a Scroll element's id whenever
@@ -2705,6 +2712,9 @@ fn ui2_window_did_resize(_self voidptr, _cmd voidptr, _notification voidptr) {
 
 @[export: 'ui2_window_key_down']
 fn ui2_window_key_down(_self voidptr, _cmd voidptr, event voidptr) {
+	if dispatch_typed_key_event(macos.Id(event)) {
+		return
+	}
 	st := state()
 	if voidptr(st.key_handler) == unsafe { nil } {
 		return
@@ -2714,6 +2724,9 @@ fn ui2_window_key_down(_self voidptr, _cmd voidptr, event voidptr) {
 
 @[export: 'ui2_window_perform_key_equiv']
 fn ui2_window_perform_key_equiv(_self voidptr, _cmd voidptr, event voidptr) bool {
+	if dispatch_typed_key_event(macos.Id(event)) {
+		return true
+	}
 	s := key_event_string(macos.Id(event))
 	if s == 'cmd+v' && native_pasteboard_has_image() {
 		st := state()
@@ -2734,6 +2747,18 @@ fn ui2_window_perform_key_equiv(_self voidptr, _cmd voidptr, event voidptr) bool
 	}
 	st.key_handler(s)
 	return true
+}
+
+fn dispatch_typed_key_event(event macos.Id) bool {
+	mut st := state()
+	if voidptr(st.key_event_handler) == unsafe { nil } {
+		return false
+	}
+	st.key_consumed = false
+	st.key_event_handler(appkit_key_event(event))
+	consumed := st.key_consumed
+	st.key_consumed = false
+	return consumed
 }
 
 fn dispatch_pre_native_command_key(key string) bool {
@@ -2767,54 +2792,139 @@ fn handle_native_edit_key(key string) bool {
 	return native_app_send_edit_command(command)
 }
 
-// key_event_string normalizes an NSEvent into 'cmd+shift+r' style strings.
-fn key_event_string(event macos.Id) string {
-	chars := macos.utf8_string(macos.msg_id(event, 'charactersIgnoringModifiers'))
+fn appkit_key_code(native_code u64) KeyCode {
+	return match native_code {
+		0x00 { .a }
+		0x01 { .s }
+		0x02 { .d }
+		0x03 { .f }
+		0x04 { .h }
+		0x05 { .g }
+		0x06 { .z }
+		0x07 { .x }
+		0x08 { .c }
+		0x09 { .v }
+		0x0a { .world_1 }
+		0x0b { .b }
+		0x0c { .q }
+		0x0d { .w }
+		0x0e { .e }
+		0x0f { .r }
+		0x10 { .y }
+		0x11 { .t }
+		0x12 { ._1 }
+		0x13 { ._2 }
+		0x14 { ._3 }
+		0x15 { ._4 }
+		0x16 { ._6 }
+		0x17 { ._5 }
+		0x18 { .equal }
+		0x19 { ._9 }
+		0x1a { ._7 }
+		0x1b { .minus }
+		0x1c { ._8 }
+		0x1d { ._0 }
+		0x1e { .right_bracket }
+		0x1f { .o }
+		0x20 { .u }
+		0x21 { .left_bracket }
+		0x22 { .i }
+		0x23 { .p }
+		0x24 { .enter }
+		0x25 { .l }
+		0x26 { .j }
+		0x27 { .apostrophe }
+		0x28 { .k }
+		0x29 { .semicolon }
+		0x2a { .backslash }
+		0x2b { .comma }
+		0x2c { .slash }
+		0x2d { .n }
+		0x2e { .m }
+		0x2f { .period }
+		0x30 { .tab }
+		0x31 { .space }
+		0x32 { .grave_accent }
+		0x33 { .backspace }
+		0x35 { .escape }
+		0x41 { .kp_decimal }
+		0x43 { .kp_multiply }
+		0x45 { .kp_add }
+		0x4b { .kp_divide }
+		0x4c { .kp_enter }
+		0x4e { .kp_subtract }
+		0x51 { .kp_equal }
+		0x52 { .kp_0 }
+		0x53 { .kp_1 }
+		0x54 { .kp_2 }
+		0x55 { .kp_3 }
+		0x56 { .kp_4 }
+		0x57 { .kp_5 }
+		0x58 { .kp_6 }
+		0x59 { .kp_7 }
+		0x5b { .kp_8 }
+		0x5c { .kp_9 }
+		0x60 { .f5 }
+		0x61 { .f6 }
+		0x62 { .f7 }
+		0x63 { .f3 }
+		0x64 { .f8 }
+		0x65 { .f9 }
+		0x67 { .f11 }
+		0x69 { .f13 }
+		0x6a { .f16 }
+		0x6b { .f14 }
+		0x6d { .f10 }
+		0x6f { .f12 }
+		0x71 { .f15 }
+		0x72 { .insert }
+		0x73 { .home }
+		0x74 { .page_up }
+		0x75 { .delete }
+		0x76 { .f4 }
+		0x77 { .end }
+		0x78 { .f2 }
+		0x79 { .page_down }
+		0x7a { .f1 }
+		0x7b { .left }
+		0x7c { .right }
+		0x7d { .down }
+		0x7e { .up }
+		else { .invalid }
+	}
+}
+
+fn appkit_key_event(event macos.Id) KeyEvent {
 	mods := macos.msg_u64(event, 'modifierFlags')
-	mut name := ''
-	if chars.len > 0 {
-		r := u32(chars.runes()[0])
-		name = match r {
-			0xF700 { 'up' }
-			0xF701 { 'down' }
-			0xF702 { 'left' }
-			0xF703 { 'right' }
-			0xF704 { 'f1' }
-			0xF705 { 'f2' }
-			0xF706 { 'f3' }
-			0xF707 { 'f4' }
-			0xF708 { 'f5' }
-			0xF709 { 'f6' }
-			0xF70A { 'f7' }
-			0xF70B { 'f8' }
-			0xF70C { 'f9' }
-			0xF70D { 'f10' }
-			0xF70E { 'f11' }
-			0xF70F { 'f12' }
-			0xF728 { 'forward_delete' }
-			0xF729 { 'home' }
-			0xF72B { 'end' }
-			0xF72C { 'page_up' }
-			0xF72D { 'page_down' }
-			0x7F { 'backspace' }
-			0x0D, 0x03 { 'enter' }
-			0x1B { 'escape' }
-			0x09 { 'tab' }
-			0x20 { 'space' }
-			else { chars.to_lower() }
-		}
+	return KeyEvent{
+		code: appkit_key_code(macos.msg_u64(event, 'keyCode'))
+		shift: mods & 0x20000 != 0
+		ctrl: mods & 0x40000 != 0
+		alt: mods & 0x80000 != 0
+		cmd: mods & 0x100000 != 0
+	}
+}
+
+// key_event_string normalizes an NSEvent into 'cmd+shift+r' style strings.
+// Known keys come from the physical AppKit key code, not layout-dependent
+// charactersIgnoringModifiers.
+fn key_event_string(event macos.Id) string {
+	key_event := appkit_key_event(event)
+	mut name := key_event.code.name()
+	if name.len == 0 {
+		name = macos.utf8_string(macos.msg_id(event, 'charactersIgnoringModifiers')).to_lower()
 	}
 	mut prefix := ''
-	if mods & 0x100000 != 0 {
+	if key_event.cmd {
 		prefix += 'cmd+'
 	}
-	if mods & 0x40000 != 0 {
+	if key_event.ctrl {
 		prefix += 'ctrl+'
 	}
-	if mods & 0x80000 != 0 {
+	if key_event.alt {
 		prefix += 'alt+'
 	}
-	if mods & 0x20000 != 0 {
+	if key_event.shift {
 		prefix += 'shift+'
 	}
 	return prefix + name

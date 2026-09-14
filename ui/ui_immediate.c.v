@@ -95,6 +95,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_build_screen = BuildFn(unsafe { nil })
 	__global g_event_handler = EventFn(unsafe { nil })
 	__global g_key_handler = KeyFn(unsafe { nil })
+	__global g_key_event_handler = KeyEventFn(unsafe { nil })
 	__global g_scroll_handler = ScrollFn(unsafe { nil })
 	__global g_drop_handler = DropFn(unsafe { nil })
 	__global g_key_consumed = false
@@ -280,6 +281,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	pub fn on_key(handler KeyFn) {
 		g_key_handler = handler
+	}
+
+	pub fn on_key_event(handler KeyEventFn) {
+		g_key_event_handler = handler
 	}
 
 	pub fn on_scroll(handler ScrollFn) {
@@ -993,6 +998,14 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// ── Keyboard input ─────────────────────────────────────────────────
 
 	fn dispatch_key_event(e &gg.Event) bool {
+		if voidptr(g_key_event_handler) != unsafe { nil } {
+			g_key_consumed = false
+			g_key_event_handler(immediate_key_event(e))
+			if g_key_consumed {
+				g_key_consumed = false
+				return true
+			}
+		}
 		if voidptr(g_key_handler) == unsafe { nil } {
 			return false
 		}
@@ -1012,6 +1025,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		consumed := g_key_consumed
 		g_key_consumed = false
 		return consumed
+	}
+
+	fn immediate_key_event(e &gg.Event) KeyEvent {
+		return KeyEvent{
+			code: unsafe { KeyCode(int(e.key_code)) }
+			shift: e.modifiers & u32(gg.Modifier.shift) != 0
+			ctrl: e.modifiers & u32(gg.Modifier.ctrl) != 0
+			alt: e.modifiers & u32(gg.Modifier.alt) != 0
+			cmd: e.modifiers & u32(gg.Modifier.super) != 0
+		}
 	}
 
 	fn immediate_normalized_key(e &gg.Event) string {

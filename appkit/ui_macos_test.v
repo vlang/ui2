@@ -6,6 +6,13 @@ $if !ui2_custom_rendering ? {
 
 import macos
 
+fn test_appkit_key_codes_use_physical_ansi_positions() {
+	assert appkit_key_code(0x2b) == .comma
+	assert appkit_key_code(0x2d) == .n
+	assert appkit_key_code(0x2e) == .m
+	assert appkit_key_code(0xffff) == .invalid
+}
+
 fn test_macos_checkbox_uses_native_switch_and_retains_state() {
 	pool := macos.autorelease_pool_new()
 	defer {

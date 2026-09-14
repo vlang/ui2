@@ -1,5 +1,15 @@
 module ui2
 
+fn test_key_code_names_match_normalized_shortcut_names() {
+	assert KeyCode.n.name() == 'n'
+	assert KeyCode.comma.name() == ','
+	assert KeyCode._7.name() == '7'
+	assert KeyCode.delete.name() == 'forward_delete'
+	assert KeyCode.kp_7.name() == '7'
+	assert KeyCode.kp_enter.name() == 'enter'
+	assert KeyCode.invalid.name() == ''
+}
+
 fn test_transparent_box_does_not_draw_a_fill() {
 	assert box_draws_fill(BoxStyle{})
 	assert !box_draws_fill(BoxStyle{

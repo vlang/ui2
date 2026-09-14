@@ -225,6 +225,7 @@ mut:
 	build_screen       BuildFn = BuildFn(unsafe { nil })
 	event_handler      EventFn = EventFn(unsafe { nil })
 	key_handler        KeyFn = KeyFn(unsafe { nil })
+	key_event_handler  KeyEventFn = KeyEventFn(unsafe { nil })
 	scroll_handler     ScrollFn = ScrollFn(unsafe { nil })
 	drop_handler       DropFn = DropFn(unsafe { nil })
 	root               voidptr
@@ -532,6 +533,11 @@ pub fn request_refresh() {
 pub fn on_key(handler KeyFn) {
 	mut st := windows_state()
 	st.key_handler = handler
+}
+
+pub fn on_key_event(handler KeyEventFn) {
+	mut st := windows_state()
+	st.key_event_handler = handler
 }
 
 pub fn on_scroll(handler ScrollFn) {
@@ -1444,45 +1450,80 @@ fn windows_snap_slider_value(hwnd voidptr, spec SliderSpec) f64 {
 	return value
 }
 
-fn windows_normalized_key(virtual_key u32) string {
-	mut key := match virtual_key {
-		0x08 { 'backspace' }
-		0x09 { 'tab' }
-		0x0d { 'enter' }
-		0x1b { 'escape' }
-		0x21 { 'page_up' }
-		0x22 { 'page_down' }
-		0x23 { 'end' }
-		0x24 { 'home' }
-		0x25 { 'left' }
-		0x26 { 'up' }
-		0x27 { 'right' }
-		0x28 { 'down' }
-		0x2e { 'forward_delete' }
-		else {
-			if virtual_key >= 0x70 && virtual_key <= 0x87 {
-				'f${virtual_key - 0x6f}'
-			} else if virtual_key >= 0x30 && virtual_key <= 0x5a {
-				rune(virtual_key).str().to_lower()
-			} else {
-				''
-			}
-		}
+fn windows_key_code(virtual_key u32) KeyCode {
+	if (virtual_key >= 0x30 && virtual_key <= 0x39)
+		|| (virtual_key >= 0x41 && virtual_key <= 0x5a) {
+		return unsafe { KeyCode(virtual_key) }
 	}
+	if virtual_key >= 0x70 && virtual_key <= 0x87 {
+		return unsafe { KeyCode(int(KeyCode.f1) + int(virtual_key - 0x70)) }
+	}
+	if virtual_key >= 0x60 && virtual_key <= 0x69 {
+		return unsafe { KeyCode(int(KeyCode.kp_0) + int(virtual_key - 0x60)) }
+	}
+	return match virtual_key {
+		0x08 { .backspace }
+		0x09 { .tab }
+		0x0d { .enter }
+		0x1b { .escape }
+		0x20 { .space }
+		0x21 { .page_up }
+		0x22 { .page_down }
+		0x23 { .end }
+		0x24 { .home }
+		0x25 { .left }
+		0x26 { .up }
+		0x27 { .right }
+		0x28 { .down }
+		0x2d { .insert }
+		0x2e { .delete }
+		0x6a { .kp_multiply }
+		0x6b { .kp_add }
+		0x6d { .kp_subtract }
+		0x6e { .kp_decimal }
+		0x6f { .kp_divide }
+		0xba { .semicolon }
+		0xbb { .equal }
+		0xbc { .comma }
+		0xbd { .minus }
+		0xbe { .period }
+		0xbf { .slash }
+		0xc0 { .grave_accent }
+		0xdb { .left_bracket }
+		0xdc { .backslash }
+		0xdd { .right_bracket }
+		0xde { .apostrophe }
+		else { .invalid }
+	}
+}
+
+fn windows_key_event(virtual_key u32) KeyEvent {
+	return KeyEvent{
+		code: windows_key_code(virtual_key)
+		ctrl: C.ui2_win_key_down(0x11) != 0
+		alt: C.ui2_win_key_down(0x12) != 0
+		shift: C.ui2_win_key_down(0x10) != 0
+		cmd: C.ui2_win_key_down(0x5b) != 0 || C.ui2_win_key_down(0x5c) != 0
+	}
+}
+
+fn windows_normalized_key(virtual_key u32) string {
+	key_event := windows_key_event(virtual_key)
+	mut key := key_event.code.name()
 	if key.len == 0 {
 		return ''
 	}
 	mut modifiers := []string{}
-	if C.ui2_win_key_down(0x11) != 0 {
+	if key_event.ctrl {
 		modifiers << 'ctrl'
 	}
-	if C.ui2_win_key_down(0x12) != 0 {
+	if key_event.alt {
 		modifiers << 'alt'
 	}
-	if C.ui2_win_key_down(0x10) != 0 {
+	if key_event.shift {
 		modifiers << 'shift'
 	}
-	if C.ui2_win_key_down(0x5b) != 0 || C.ui2_win_key_down(0x5c) != 0 {
+	if key_event.cmd {
 		modifiers << 'cmd'
 	}
 	if modifiers.len > 0 {
@@ -1491,7 +1532,19 @@ fn windows_normalized_key(virtual_key u32) string {
 	return key
 }
 
-fn windows_dispatch_key(virtual_key u32) bool {
+fn windows_dispatch_typed_key(virtual_key u32) bool {
+	mut st := windows_state()
+	if voidptr(st.key_event_handler) == unsafe { nil } {
+		return false
+	}
+	st.key_consumed = false
+	st.key_event_handler(windows_key_event(virtual_key))
+	consumed := st.key_consumed
+	st.key_consumed = false
+	return consumed
+}
+
+fn windows_dispatch_key_string(virtual_key u32) bool {
 	mut st := windows_state()
 	if voidptr(st.key_handler) == unsafe { nil } {
 		return false
@@ -1505,7 +1558,17 @@ fn windows_dispatch_key(virtual_key u32) bool {
 	return st.key_consumed
 }
 
+fn windows_dispatch_key(virtual_key u32) bool {
+	if windows_dispatch_typed_key(virtual_key) {
+		return true
+	}
+	return windows_dispatch_key_string(virtual_key)
+}
+
 fn windows_dispatch_control_key(hwnd voidptr, virtual_key u32) bool {
+	if windows_dispatch_typed_key(virtual_key) {
+		return true
+	}
 	mut st := windows_state()
 	if voidptr(st.key_handler) == unsafe { nil } {
 		return false
@@ -1514,13 +1577,15 @@ fn windows_dispatch_control_key(hwnd voidptr, virtual_key u32) bool {
 	if key_name.len == 0 {
 		return false
 	}
-	key := st.handle_keys[windows_handle_id(hwnd)] or { return windows_dispatch_key(virtual_key) }
+	key := st.handle_keys[windows_handle_id(hwnd)] or {
+		return windows_dispatch_key_string(virtual_key)
+	}
 	if (st.node_kinds[key] or { Kind.view }) != .text_area {
-		return windows_dispatch_key(virtual_key)
+		return windows_dispatch_key_string(virtual_key)
 	}
 	id := st.node_ids[key] or { '' }
 	if id.len == 0 {
-		return windows_dispatch_key(virtual_key)
+		return windows_dispatch_key_string(virtual_key)
 	}
 	st.key_consumed = false
 	st.key_handler('text:${id}:${key_name}')

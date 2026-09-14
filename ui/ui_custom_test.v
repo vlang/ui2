@@ -2,6 +2,7 @@ module ui2
 
 $if ui2_custom_rendering ? {
 	fn custom_test_key_handler(_key string) {}
+	fn custom_test_key_event_handler(_event KeyEvent) {}
 
 	fn custom_test_scroll_handler(_id string) {}
 
@@ -20,6 +21,7 @@ $if ui2_custom_rendering ? {
 
 	fn test_custom_desktop_backend_exposes_desktop_hooks() {
 		on_key(custom_test_key_handler)
+		on_key_event(custom_test_key_event_handler)
 		on_scroll(custom_test_scroll_handler)
 		on_drop(custom_test_drop_handler)
 		request_refresh()

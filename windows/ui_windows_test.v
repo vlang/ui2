@@ -1,6 +1,13 @@
 module ui2
 
 $if !ui2_custom_rendering ? {
+	fn test_windows_virtual_keys_map_to_portable_key_codes() {
+		assert windows_key_code(0x4e) == .n
+		assert windows_key_code(0xbc) == .comma
+		assert windows_key_code(0x71) == .f2
+		assert windows_key_code(0xffff) == .invalid
+	}
+
 	fn test_windows_widget_kind_mapping_covers_every_native_control() {
 		assert windows_widget_kind(.screen) == 0
 		assert windows_widget_kind(.view) == 1

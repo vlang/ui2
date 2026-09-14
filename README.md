@@ -518,6 +518,28 @@ which is no better.
 UI2_FONT_SYMBOLS=/usr/share/fonts/truetype/ancient-scripts/Symbola.ttf ./treeview
 ```
 
+## Keyboard events
+
+Use `on_key_event` when a shortcut should follow a physical key across keyboard
+layouts. `KeyEvent.code` is a portable `KeyCode`; text entry still follows the
+active layout.
+
+```v
+fn handle_key(event ui2.KeyEvent) {
+	if event.cmd && !event.shift && !event.ctrl && !event.alt
+		&& event.code == ui2.KeyCode.n {
+		ui2.consume_key()
+		// New document
+	}
+}
+
+ui2.on_key_event(handle_key)
+```
+
+The existing `on_key` callback remains available for normalized strings such as
+`cmd+n` and `up`. On AppKit those strings are now also derived from physical key
+codes for known keys, so command shortcuts are independent of the input source.
+
 ## Examples
 
 Typed-VML ports from `v-ui` include:
