@@ -1,6 +1,18 @@
 module ui2
 
 $if !ui2_custom_rendering ? {
+	// Import the clipboard alongside ui2's native backend.
+	// V's Windows clipboard module declares C.DestroyWindow(HWND).  The native
+	// backend must not declare that symbol with a different V signature; it uses
+	// the ui2_win_destroy(voidptr) wrapper instead.
+	import clipboard
+
+	fn test_windows_backend_compiles_with_clipboard() {
+		mut system_clipboard := clipboard.new()
+		assert system_clipboard != unsafe { nil }
+		system_clipboard.free()
+	}
+
 	fn test_windows_virtual_keys_map_to_portable_key_codes() {
 		assert windows_key_code(0x4e) == .n
 		assert windows_key_code(0xbc) == .comma
