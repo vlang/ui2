@@ -1030,9 +1030,50 @@ fn (mut app IdeApp) save_document() !string {
 	return path
 }
 
+// companion_main_template uses a raw string with @PLACEHOLDER@ tokens instead of
+// interpolation, because the generated source itself contains `${...}` and the
+// new compiler mis-parses escaped `\$` inside an interpolated literal. The
+// user-supplied names are emitted as double-quoted literals because vml_escape
+// escapes `"` but not `'`.
+const companion_main_template = r'module main
+
+import ui2
+
+const @CONST@ = $embed_file("@VML@").to_string()
+
+fn build_form() ui2.Element {
+	return ui2.element_from_vml(@CONST@, ui2.bounds()) or {
+		eprintln("Could not load @VML@: ${err}")
+		ui2.screen(0x@BG@, [])
+	}
+}
+
+fn handle_form_event(event string) {
+	println("event: ${event}")
+}
+
+fn main() {
+	ui2.run_window("@NAME@", @W@, @H@, build_form, handle_form_event)
+}
+'
+
 fn companion_main_source(app &IdeApp, vml_name string) string {
-	const_name := 'form_source'
-	return "module main\n\nimport ui2\n\nconst ${const_name} = \$embed_file('${vml_escape(vml_name)}').to_string()\n\nfn build_form() ui2.Element {\n\treturn ui2.element_from_vml(${const_name}, ui2.bounds()) or {\n\t\teprintln('Could not load ${vml_escape(vml_name)}: \${err}')\n\t\tui2.screen(0x${app.form_background:06x}, [])\n\t}\n}\n\nfn handle_form_event(event string) {\n\tprintln('event: \${event}')\n}\n\nfn main() {\n\tui2.run_window('${vml_escape(app.form_name)}', ${int(app.form_width)}, ${int(app.form_height)}, build_form, handle_form_event)\n}\n"
+	// replace_each substitutes in a single pass, so a name containing another
+	// placeholder cannot be expanded a second time.
+	return companion_main_template.replace_each([
+		'@CONST@',
+		'form_source',
+		'@VML@',
+		vml_escape(vml_name),
+		'@BG@',
+		'${app.form_background:06x}',
+		'@NAME@',
+		vml_escape(app.form_name),
+		'@W@',
+		int(app.form_width).str(),
+		'@H@',
+		int(app.form_height).str(),
+	])
 }
 
 fn (mut app IdeApp) generate_companion(overwrite bool) !string {
