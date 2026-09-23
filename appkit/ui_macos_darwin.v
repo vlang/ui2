@@ -14,6 +14,17 @@ import time
 
 #flag darwin -framework QuartzCore
 
+#include "@VMODROOT/appkit/ui_macos_geometry_darwin.h"
+
+struct C.ui2_macos_rect {
+	x      f64
+	y      f64
+	width  f64
+	height f64
+}
+
+fn C.ui2_macos_msg_rect_rect(obj voidptr, sel voidptr, rect C.ui2_macos_rect) C.ui2_macos_rect
+
 const ns_window_style_titled = u64(1)
 const ns_window_style_closable = u64(2)
 const ns_window_style_miniaturizable = u64(4)
@@ -84,6 +95,7 @@ mut:
 	node_declared_text  map[string]string
 	node_content_sig    map[string]string
 	node_tooltips       map[string]string
+	node_shortened      map[string]ShortenedText
 	node_menu_sig       map[string]string
 	node_menu_items     map[string][]u64
 	textview_ids        map[u64]string // NSTextView pointer -> lookup id (no tag on NSView)
@@ -123,6 +135,7 @@ const runtime_state_singleton = &RuntimeState{
 	node_declared_text: map[string]string{}
 	node_content_sig: map[string]string{}
 	node_tooltips: map[string]string{}
+	node_shortened: map[string]ShortenedText{}
 	node_menu_sig: map[string]string{}
 	node_menu_items: map[string][]u64{}
 	textview_ids: map[u64]string{}
@@ -984,6 +997,7 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			}
 		}
 		st.node_tooltips.delete(key)
+		st.node_shortened.delete(key)
 		create_started := if st.refresh_debug.active { time.sys_mono_now() } else { u64(0) }
 		native = native_create_element(create_el)
 		if st.refresh_debug.active {
@@ -1130,15 +1144,16 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		clear_menu(key, native)
 	}
 	if el.kind != .screen {
+		tooltip := native_hover_text(key, native, el)
 		previous_tooltip := st.node_tooltips[key] or { '' }
-		if previous_tooltip != el.tooltip {
-			macos.msg_void1(native, 'setToolTip:', macos.nsstring(el.tooltip))
+		if previous_tooltip != tooltip {
+			macos.msg_void1(native, 'setToolTip:', macos.nsstring(tooltip))
 			if st.refresh_debug.active {
 				st.refresh_debug.tooltips_set++
 			}
 		}
-		if el.tooltip.len > 0 {
-			st.node_tooltips[key] = el.tooltip
+		if tooltip.len > 0 {
+			st.node_tooltips[key] = tooltip
 		} else {
 			// Do not cache the default empty value. Apart from avoiding a map entry
 			// per node, this keeps newly-created views from installing thousands of
@@ -1520,6 +1535,7 @@ fn forget_descendant_nodes(key string) {
 		st.node_declared_text.delete(child_key_)
 		st.node_content_sig.delete(child_key_)
 		st.node_tooltips.delete(child_key_)
+		st.node_shortened.delete(child_key_)
 	}
 }
 
@@ -1579,6 +1595,7 @@ fn remove_stale_nodes(active map[string]bool) {
 		st.node_declared_text.delete(key)
 		st.node_content_sig.delete(key)
 		st.node_tooltips.delete(key)
+		st.node_shortened.delete(key)
 	}
 }
 
@@ -1638,6 +1655,7 @@ fn remove_stale_nodes_below(root_key string, active map[string]bool) {
 		st.node_declared_text.delete(key)
 		st.node_content_sig.delete(key)
 		st.node_tooltips.delete(key)
+		st.node_shortened.delete(key)
 	}
 }
 
@@ -2003,6 +2021,118 @@ fn native_apply_line_limit(view NativeView, lines int) {
 	// Wrapped text that outgrows its budget ends in an ellipsis rather than being cut
 	// off mid-line.
 	macos.msg_void_bool(cell, 'setTruncatesLastVisibleLine:', !single)
+}
+
+// What a control was last measured with, and whether its text had to be cut short.
+// A refresh visits every node, so a control is measured again only when something the
+// measurement depends on has changed.
+struct ShortenedText {
+	text      string
+	width     f64
+	height    f64
+	size      f64
+	bold      bool
+	italic    bool
+	image     string
+	shortened bool
+}
+
+// What a control shows when the pointer rests on it: the help its caller gave it, or
+// else, when its text did not fit and ends in an ellipsis, the whole of that text.
+// Without it the rest of a shortened title can only be read by resizing something.
+fn native_hover_text(key string, native NativeView, el Element) string {
+	if el.tooltip.len > 0 {
+		return el.tooltip
+	}
+	full_text := shortenable_text(el)
+	if full_text.len == 0 || el.frame.width <= 0 || native_is_nil(native) {
+		return ''
+	}
+	if text_surely_fits(full_text, el) {
+		return ''
+	}
+	mut st := state()
+	if cached := st.node_shortened[key] {
+		if cached.text == full_text && cached.width == el.frame.width
+			&& cached.height == el.frame.height && cached.size == el.text_style.size
+			&& cached.bold == el.text_style.bold && cached.italic == el.text_style.italic
+			&& cached.image == el.image_path {
+			return if cached.shortened { full_text } else { '' }
+		}
+	}
+	shortened := native_text_shortened(native, el)
+	st.node_shortened[key] = ShortenedText{
+		text:      full_text
+		width:     el.frame.width
+		height:    el.frame.height
+		size:      el.text_style.size
+		bold:      el.text_style.bold
+		italic:    el.text_style.italic
+		image:     el.image_path
+		shortened: shortened
+	}
+	return if shortened { full_text } else { '' }
+}
+
+// The text AppKit truncates with an ellipsis: a one-line label, a button or check box
+// title, and the selected entry of a dropdown. Editable text scrolls rather than being
+// shortened, and wrapped text is left to the lines it was given.
+fn shortenable_text(el Element) string {
+	return match el.kind {
+		.label, .button, .toggle_button, .checkbox {
+			if el.text_style.lines > 1 { '' } else { el.text }
+		}
+		.dropdown {
+			el.text
+		}
+		else {
+			''
+		}
+	}
+}
+
+// No glyph in a UI font is much wider than the font is tall, so text that would fit
+// with every character that wide, beside whatever the control draws next to it, needs
+// no measuring. Most labels in a grid are short numbers and stop here.
+fn text_surely_fits(text string, el Element) bool {
+	size := if el.text_style.size > 0 { el.text_style.size } else { 13.0 }
+	reserve := match el.kind {
+		.label { 6.0 }
+		.checkbox { 28.0 }
+		.dropdown { 44.0 }
+		else { if el.image_path.len > 0 { 36.0 } else { 16.0 } }
+	}
+	return f64(text.len_utf8()) * size * 1.3 + reserve <= el.frame.width
+}
+
+// Whether AppKit has had to shorten the control's text. A label's cell reports the
+// width its whole text needs; a button's title is measured against the part of the
+// frame its cell leaves for the title once the image, check box or arrows are drawn.
+fn native_text_shortened(native NativeView, el Element) bool {
+	if el.kind == .label {
+		field := if label_needs_container(el) { label_text_field(native) } else { native }
+		cell := macos.msg_id(field, 'cell')
+		if native_is_nil(cell) {
+			return false
+		}
+		return macos.msg_point(cell, 'cellSize').x > el.frame.width + 0.01
+	}
+	cell := macos.msg_id(native, 'cell')
+	if native_is_nil(cell) {
+		return false
+	}
+	title := macos.msg_id(cell, 'attributedTitle')
+	if native_is_nil(title) {
+		return false
+	}
+	frame := macos.msg_rect(native, 'bounds')
+	title_rect := C.ui2_macos_msg_rect_rect(cell, macos.sel('titleRectForBounds:'), C.ui2_macos_rect{
+		x:      frame.x
+		y:      frame.y
+		width:  frame.width
+		height: frame.height
+	})
+	return macos.msg_point(title, 'size').x > title_rect.width + 0.5
 }
 
 fn native_new_button(frame NativeRect, title string, box BoxStyle, text_hex u32, size f64, bold bool, italic bool, underline bool, lines int, image_name string, native_style bool) NativeView {
