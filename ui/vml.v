@@ -776,7 +776,11 @@ pub fn element_from_vnode(node &VNode, frame Rect) !Element {
 }
 
 fn node_to_element(node &VNode, frame Rect) !Element {
-	resolved := if node.tag == 'Screen' && node.prop_bool('adaptive') { frame } else { v_frame(node, frame) }
+	resolved := if node.tag == 'StatusBar' || (node.tag == 'Screen' && node.prop_bool('adaptive')) {
+		frame
+	} else {
+		v_frame(node, frame)
+	}
 	el := node_to_element_base(node, resolved)!
 	key := node.prop('key')
 	menu := v_menu(node)
@@ -889,6 +893,51 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 		}
 		'View', 'Rectangle' {
 			return view(node.id, frame, v_box(node), v_children(node, local)!)
+		}
+		'StatusBar' {
+			for property in ['x', 'y', 'width', 'height'] {
+				if node.prop(property).len > 0 {
+					return error('StatusBar positions and sizes itself; remove `${property}`')
+				}
+			}
+			mut indicators := []StatusIndicator{}
+			for child in node.children {
+				if child.tag != 'StatusIndicator' {
+					return error('StatusBar only accepts StatusIndicator children')
+				}
+				for property in ['x', 'y', 'height'] {
+					if child.prop(property).len > 0 {
+						return error('StatusIndicator positions itself; remove `${property}`')
+					}
+				}
+				if child.prop_bool('toggle') && child.prop('on_tap').len == 0 {
+					return error('a toggle StatusIndicator needs `on_tap`')
+				}
+				indicators << StatusIndicator{
+					id: child.id
+					text: child.prop('text')
+					tooltip: child.prop('tooltip')
+					width: child.prop_f64('width')
+					action_id: child.prop('on_tap')
+					toggle: child.prop_bool('toggle')
+					pressed: child.prop_bool('pressed')
+					enabled: child.prop('enabled') != 'false'
+				}
+			}
+			defaults := StatusBarConfig{}.box
+			return statusbar(
+				id: if node.id.len > 0 { node.id } else { 'status_bar' }
+				area: frame
+				message: node.prop('text')
+				indicators: indicators
+				box: BoxStyle{
+					...v_box(node)
+					bg: v_color(node, 'background', defaults.bg)
+					border_color: v_color(node, 'border_color', defaults.border_color)
+					border_top: node.prop_or('border_top', node.prop_or('border_width',
+						defaults.border_top.str())).f64()
+				}
+			)
 		}
 		'Label' {
 			return label(node.id, node.prop('text'), frame, v_text_style(node))
@@ -1122,9 +1171,9 @@ fn v_message_box(node &VNode, frame Rect) Element {
 }
 
 // Layout metadata must be excluded before assigning slots or measuring a
-// container. Dedicated menu/option traversals still consume their own entries.
+// container. Dedicated menu, option, and status bar traversals consume them.
 fn v_is_layout_metadata(node &VNode) bool {
-	return node.tag in ['MenuItem', 'Option', 'LayoutVariation']
+	return node.tag in ['MenuItem', 'Option', 'LayoutVariation', 'StatusIndicator']
 }
 
 fn v_children(node &VNode, frame Rect) ![]Element {
