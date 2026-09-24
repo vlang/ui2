@@ -547,9 +547,47 @@ codes for known keys, so command shortcuts are independent of the input source.
 
 ## Examples
 
+`ui2.statusbar` docks at the bottom of the window and sets its own height. Its
+message fills the available space; optional indicators line up on the right.
+Indicators can be labels, action buttons, or pressed/released toggles. Set an
+`action_id` for a button; add `toggle: true` and `pressed` for a toggle. When
+the window narrows, secondary indicators disappear before the message.
+Rebuild the screen with `ui2.refresh()` after changing the message. If other
+content must stop above it, use `ui2.statusbar_content_area(ui2.bounds())` for
+that content's available rectangle. See `examples/statusbar/main.v` for a live
+example.
+
+```v
+ui2.statusbar(
+    message: app.status
+    indicators: [
+        ui2.StatusIndicator{ id: 'encoding', text: 'UTF-8' },
+        ui2.StatusIndicator{
+            id: 'grid'
+            text: 'Grid on'
+            action_id: 'toggle_grid'
+            toggle: true
+            pressed: app.show_grid
+        },
+    ]
+)
+```
+
+Use `StatusBar` and `StatusIndicator` in typed VML; neither needs geometry:
+
+```vml
+StatusBar {
+    id: status
+    text: app.status
+    StatusIndicator { id: encoding text: "UTF-8" }
+    StatusIndicator { id: grid text: "Grid on" toggle: true pressed: app.show_grid on_tap: app.toggle_grid() }
+}
+```
+
 Typed-VML ports from `v-ui` include:
 
 - `v run examples/counter/main.v` — the 7GUIs counter.
+- `v run examples/statusbar/main.v` — a reusable status bar with live text.
 - `v run examples/temperature_converter/main.v` — the two-way 7GUIs
   temperature converter.
 - `v run examples/flight_booker/main.v` — the validated 7GUIs flight booker.
