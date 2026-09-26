@@ -373,6 +373,40 @@ on Linux. Linux requires a graphical session and one of those helpers;
 available on iOS or Android, where a document picker needs an app-specific
 asynchronous presentation callback.
 
+For Linux and custom-rendered applications, `FilePicker` provides an in-window
+picker with no `zenity` or `kdialog` dependency. It uses the same
+`FileDialogConfig` for open, save, and folder modes. Keep the picker in app
+state, add `picker.render(ui2.bounds())` as the last screen child, and forward
+events to `picker.handle`. The picker is asynchronous: `done` becomes true when
+the user accepts or cancels, and cancellation returns no paths. Call
+`ui2.refresh()` after opening it or handling an event on native backends.
+
+```v
+mut picker := ui2.new_file_picker(
+	id: 'picker'
+	dialog: ui2.FileDialogConfig{
+		kind: .open
+		directory: '/work/project'
+		multiple: true
+		filters: [ui2.FileDialogFilter{ name: 'V source', extensions: ['v'] }]
+	}
+)!
+picker.open()!
+// In the window's event callback:
+value := if event == 'picker__go' { ui2.text(picker.path_id()) }
+    else if event == picker.filename_id() { ui2.text(picker.filename_id()) }
+    else { '' }
+result := picker.handle(event, value)
+if result.done {
+	println(result.paths)
+}
+```
+
+Run `v run examples/custom_file_picker/main.v` for a complete example. The
+picker lists directories first, filters files by extension, supports multiple
+selection in open mode, and validates save filenames before returning an
+absolute path.
+
 ## Menus and the tray
 
 `set_menu_bar(...)` installs the application's top level menu bar and
