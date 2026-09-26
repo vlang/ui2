@@ -5,6 +5,7 @@
 module ui2
 
 $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
+	import clipboard
 	import fontstash
 	import gg
 	import math
@@ -104,9 +105,12 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_key_consumed = false
 	__global g_gg_app = &GgApp{}
 	__global g_text_values = map[string]string{}
+	__global g_clipboard = &clipboard.Clipboard(unsafe { nil })
+	__global g_clipboard_override = ?TextClipboard(none)
 	__global g_text_props = map[string]string{}
 	__global g_text_editors = map[string]TextEditor{}
 	__global g_text_kinds = map[string]Kind{}
+	__global g_text_secure = map[string]bool{}
 	__global g_slider_values = map[string]f64{}
 	__global g_slider_declared = map[string]f64{}
 	__global g_slider_specs = map[string]SliderSpec{}
@@ -200,6 +204,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		g_text_props.delete(id)
 		g_text_editors.delete(id)
 		g_text_kinds.delete(id)
+		g_text_secure.delete(id)
 	}
 
 	// ── Public API ─────────────────────────────────────────────────────
@@ -689,7 +694,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				cancel_touch()
 			}
 			.char {
-				handle_char_input(e.char_code)
+				handle_char_input(e.char_code, e.modifiers)
 			}
 			.key_down {
 				if menu_bar_handle_key(e) {
@@ -1126,11 +1131,23 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return key
 	}
 
-	fn handle_char_input(ch u32) {
+	fn handle_char_input(ch u32, modifiers u32) {
 		if g_focused_field.len == 0 {
 			return
 		}
-		if ch < 32 {
+		// Control characters are never text. macOS additionally reports
+		// Backspace as 0x7F (DEL) after the key event that already deleted.
+		if ch < 32 || ch == 127 {
+			return
+		}
+		// macOS (Cmd+V) and X11 (Ctrl+V) still deliver the chord's letter as
+		// a character; the key handler owns those, not the text. Ctrl+Alt is
+		// left alone because Windows reports AltGr that way, and AltGr
+		// characters ('@', '€', ...) are genuine text.
+		ctrl := modifiers & u32(gg.Modifier.ctrl) != 0
+		alt := modifiers & u32(gg.Modifier.alt) != 0
+		super_ := modifiers & u32(gg.Modifier.super) != 0
+		if super_ || (ctrl && !alt) {
 			return
 		}
 		mut editor := g_text_editors[g_focused_field] or {
@@ -1148,6 +1165,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		mut editor := g_text_editors[g_focused_field] or {
 			text_editor((g_text_values[g_focused_field] or { '' }).clone())
+		}
+		if handle_clipboard_shortcut(key, modifiers, mut editor) {
+			return
 		}
 		if key == .backspace {
 			if editor.backspace() {
@@ -1242,6 +1262,99 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				}
 			}
 		}
+	}
+
+	// handle_clipboard_shortcut implements copy, cut and paste for the focused
+	// field with the platform's primary modifier (Cmd on macOS, Ctrl elsewhere).
+	// Single-line fields receive pasted newlines as spaces.
+	fn handle_clipboard_shortcut(key gg.KeyCode, modifiers u32, mut editor TextEditor) bool {
+		if key !in [gg.KeyCode.c, .x, .v] {
+			return false
+		}
+		primary := text_navigation_primary_modifier(modifiers & u32(gg.Modifier.ctrl) != 0,
+			modifiers & u32(gg.Modifier.alt) != 0, modifiers & u32(gg.Modifier.super) != 0)
+		if !primary {
+			return false
+		}
+		id := g_focused_field
+		// A secure field keeps its plaintext in the editor and only masks at draw
+		// time, so exporting the selection would publish the password. Consume the
+		// chord without touching the clipboard, the text or the selection. Paste
+		// stays available.
+		if key != .v && (g_text_secure[id] or { false }) {
+			return true
+		}
+		mut cb := system_clipboard()
+		match key {
+			.c {
+				selected := editor_selected_text(editor)
+				if selected.len > 0 {
+					cb.copy(selected)
+				}
+			}
+			.x {
+				selected := editor_selected_text(editor)
+				// A cut that could not reach the clipboard must not destroy the
+				// text; the Windows backend returns false when it cannot lock the
+				// clipboard or SetClipboardData fails.
+				if selected.len > 0 && cb.copy(selected) {
+					editor.replace_selection('')
+					replace_text_value(id, editor.text)
+					replace_text_editor(id, editor)
+					fire_field_change(id)
+				}
+			}
+			.v {
+				mut pasted := cb.paste()
+				if pasted.len == 0 {
+					return true
+				}
+				if (g_text_kinds[id] or { Kind.text_field }) != .text_area {
+					pasted = pasted.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ')
+				}
+				editor.replace_selection(pasted)
+				replace_text_value(id, editor.text)
+				replace_text_editor(id, editor)
+				fire_field_change(id)
+			}
+			else {}
+		}
+		return true
+	}
+
+	// TextClipboard is the part of clipboard.Clipboard the shortcuts use. Tests
+	// install their own through g_clipboard_override to exercise failed copies
+	// and pasted text without touching the system clipboard.
+	interface TextClipboard {
+	mut:
+		copy(text string) bool
+		paste() string
+	}
+
+	// system_clipboard returns the process-wide clipboard, created on first use.
+	// The instance must outlive each copy: on X11 the clipboard owns a window
+	// that holds CLIPBOARD selection ownership, and destroying it right after
+	// a copy hands the selection back to nobody.
+	fn system_clipboard() TextClipboard {
+		if override := g_clipboard_override {
+			return override
+		}
+		if isnil(g_clipboard) {
+			g_clipboard = clipboard.new()
+		}
+		return g_clipboard
+	}
+
+	fn editor_selected_text(editor TextEditor) string {
+		start, end := editor.selection.ordered()
+		if start >= end {
+			return ''
+		}
+		runes := editor.text.runes()
+		if end > runes.len {
+			return ''
+		}
+		return runes[start..end].string()
 	}
 
 	// text_navigation_primary_modifier keeps the native text-editing shortcuts
@@ -1955,6 +2068,7 @@ fn page_focused_text_area(direction int) {
 					replace_text_prop(el.id, el.text)
 				}
 				g_text_kinds[el.id] = el.kind
+				g_text_secure[el.id] = el.secure
 				g_active_fields[el.id] = true
 				current_text := g_text_values[el.id] or { el.text }
 				mut editor := g_text_editors[el.id] or { text_editor(current_text.clone()) }
@@ -2025,6 +2139,7 @@ fn page_focused_text_area(direction int) {
 					replace_text_prop(el.id, el.text)
 				}
 				g_text_kinds[el.id] = el.kind
+				g_text_secure[el.id] = el.secure
 				g_active_fields[el.id] = true
 				current_text := g_text_values[el.id] or { el.text }
 				draw_control_surface(ctx, x, y, el.frame.width, el.frame.height, el.box,
