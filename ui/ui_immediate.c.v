@@ -95,6 +95,53 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	const dropdown_popup_margin = 4.0
 	const dropdown_popup_min_row_height = 24.0
 
+	// TooltipTarget is a region of the window with hover text: an element's
+	// declared tooltip, or the full text of a line the renderer had to shorten
+	// to fit it. A target without text is an opaque surface drawn over earlier
+	// targets, which hides their tooltips just as it hides the targets.
+	struct TooltipTarget {
+		// key tells the pointer resting on one target apart from moving on to
+		// another, across frames that rebuild every target from scratch.
+		key   string
+		text  string
+		frame Rect
+	}
+
+	// TooltipState follows the pointer from frame to frame. The window is
+	// redrawn continuously, so the first frame after the pointer has rested
+	// on a target long enough shows its tooltip, and no timer is needed.
+	struct TooltipState {
+	mut:
+		pointer_x  f64
+		pointer_y  f64
+		pointer_in bool
+		key        string
+		rest_since i64
+		// dismissed is a tooltip closed by a click or a key press. It stays
+		// closed until the pointer reaches another target, so it does not pop
+		// back up over what the user is now doing with this one.
+		dismissed  bool
+		visible    bool
+		anchor_x   f64
+		anchor_y   f64
+		text       string
+	}
+
+	const tooltip_delay_ms = i64(500)
+	const tooltip_offset_x = 12.0
+	const tooltip_offset_y = 20.0
+	const tooltip_gap = 6.0
+	const tooltip_margin = 4.0
+	const tooltip_padding = 6.0
+	const tooltip_radius = 4.0
+	const tooltip_text_size = 12.0
+	const tooltip_max_text_width = 360.0
+	const tooltip_max_lines = 12
+	const tooltip_background = u32(0xfffff0)
+	const tooltip_border = u32(0x94a3b8)
+	const tooltip_shadow = u32(0xdbe2ea)
+	const tooltip_text_color = u32(0x1f2937)
+
 	__global g_build_screen = BuildFn(unsafe { nil })
 	__global g_event_handler = EventFn(unsafe { nil })
 	__global g_key_handler = KeyFn(unsafe { nil })
@@ -144,6 +191,12 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_dropdown_popup = DropdownPopup{}
 	__global g_dropdown_hover = -1
 	__global g_dropdown_scroll = 0.0
+	__global g_tooltip_targets = []TooltipTarget{}
+	__global g_tooltip = TooltipState{}
+	// g_tooltip_owners counts the elements being rendered that declared a
+	// tooltip. Their tooltip covers their descendants too, so a surface drawn
+	// inside one must not hide it the way an unrelated overlay would.
+	__global g_tooltip_owners = 0
 
 	// Map values are copied byte-for-byte when an existing key is replaced.
 	// Unlike keys, their nested strings are not released by map.set. The text
@@ -589,6 +642,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		mut has_root := false
 		if voidptr(g_build_screen) != unsafe { nil } {
 			g_hit_targets = []HitTarget{}
+			g_tooltip_targets.clear()
+			g_tooltip_owners = 0
 			reset_scroll_frame()
 			g_active_fields = map[string]bool{}
 			g_active_sliders = map[string]bool{}
@@ -623,6 +678,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			}
 			// The bar and its panels float above every control in the window.
 			draw_menu_bar(ctx)
+			// A tooltip floats above everything, the bar included: one flipped
+			// above a control near the top of the window can reach over it.
+			update_tooltip(time.ticks())
+			draw_tooltip(ctx)
 			prune_unmounted_state()
 		}
 		check_long_press()
@@ -632,12 +691,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	fn on_event(e &gg.Event, _ &GgApp) {
 		match e.typ {
 			.mouse_down {
+				g_tooltip.dismiss()
 				if menu_bar_handle_down(f64(e.mouse_x), f64(e.mouse_y)) {
 					return
 				}
 				handle_touch_down(f64(e.mouse_x), f64(e.mouse_y))
 			}
 			.mouse_move {
+				// Recorded before any handler below can claim the move, so the
+				// tooltip always knows where the pointer is.
+				g_tooltip.pointer_moved(f64(e.mouse_x), f64(e.mouse_y), time.ticks())
 				if g_touch.down && g_touch.pointer_target.action_id.len > 0 {
 					handle_touch_move(f64(e.mouse_x), f64(e.mouse_y))
 					return
@@ -653,10 +716,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				}
 			}
 			.mouse_scroll {
+				// The content moves under a pointer that stays put, so whatever
+				// ends up beneath it waits for a fresh rest.
+				g_tooltip.restart(time.ticks())
 				if menu_bar_open() {
 					return
 				}
 				handle_mouse_scroll(f64(e.mouse_x), f64(e.mouse_y), f64(e.scroll_y))
+			}
+			.mouse_leave {
+				g_tooltip.pointer_left()
 			}
 			.mouse_up {
 				if g_touch.down && g_touch.pointer_target.action_id.len > 0 {
@@ -686,12 +755,14 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				}
 			}
 			.touches_cancelled, .unfocused, .suspended {
+				g_tooltip.dismiss()
 				cancel_touch()
 			}
 			.char {
 				handle_char_input(e.char_code)
 			}
 			.key_down {
+				g_tooltip.dismiss()
 				if menu_bar_handle_key(e) {
 					return
 				}
@@ -1568,6 +1639,225 @@ fn page_focused_text_area(direction int) {
 		apply_clip(ctx, window)
 	}
 
+	// ── Tooltips ───────────────────────────────────────────────────────
+
+	// pointer_moved restarts the rest a tooltip waits for. One already showing
+	// stays where it opened while the pointer moves within its target, as the
+	// native ones do, rather than chasing the cursor.
+	fn (mut state TooltipState) pointer_moved(x f64, y f64, now i64) {
+		state.pointer_x = x
+		state.pointer_y = y
+		state.pointer_in = true
+		if !state.visible {
+			state.rest_since = now
+		}
+	}
+
+	fn (mut state TooltipState) pointer_left() {
+		state.pointer_in = false
+		state.visible = false
+		state.dismissed = false
+		state.key = ''
+	}
+
+	fn (mut state TooltipState) dismiss() {
+		state.visible = false
+		state.dismissed = true
+	}
+
+	fn (mut state TooltipState) restart(now i64) {
+		state.visible = false
+		state.rest_since = now
+	}
+
+	// update settles the tooltip for a frame, given the target now under the
+	// pointer. A blocked frame is one where something else holds the pointer's
+	// attention; the rest only starts once it lets go.
+	fn (mut state TooltipState) update(target TooltipTarget, blocked bool, now i64) {
+		if !state.pointer_in || target.text.len == 0 {
+			state.key = ''
+			state.dismissed = false
+			state.visible = false
+			return
+		}
+		if target.key != state.key {
+			state.key = target.key
+			state.rest_since = now
+			state.dismissed = false
+			state.visible = false
+		}
+		if blocked {
+			state.visible = false
+			state.rest_since = now
+			return
+		}
+		if state.dismissed {
+			return
+		}
+		if !state.visible && now - state.rest_since >= tooltip_delay_ms {
+			state.visible = true
+			state.anchor_x = state.pointer_x
+			state.anchor_y = state.pointer_y
+		}
+		// A label that changes while its tooltip is open shows the new text.
+		state.text = target.text
+	}
+
+	// tooltip_target_at finds the target under a point. Targets are registered
+	// in drawing order, so the last one containing the point is the one drawn
+	// on top, whether it has text to show or only hides what is beneath it.
+	fn tooltip_target_at(targets []TooltipTarget, x f64, y f64) TooltipTarget {
+		for i := targets.len - 1; i >= 0; i-- {
+			frame := targets[i].frame
+			if x >= frame.x && x < frame.x + frame.width && y >= frame.y
+				&& y < frame.y + frame.height {
+				return targets[i]
+			}
+		}
+		return TooltipTarget{}
+	}
+
+	// tooltip_key names an element's target. An id stays the same while the
+	// element moves; an element without one is known by where it is drawn,
+	// which holds for as long as nothing, such as a scroll, moves it.
+	fn tooltip_key(el Element, area Rect) string {
+		if el.id.len > 0 {
+			return '${el.kind}#${el.id}'
+		}
+		return '${el.kind}@${area.x},${area.y},${area.width},${area.height}'
+	}
+
+	// add_tooltip_target registers the part of a target that is visible under
+	// the clip it was drawn with, so a control scrolled out of its viewport
+	// cannot answer for the pointer.
+	fn add_tooltip_target(key string, text string, area Rect, clip Rect) {
+		visible := intersect_rect(area, clip)
+		if visible.width <= 0 || visible.height <= 0 {
+			return
+		}
+		g_tooltip_targets << TooltipTarget{
+			key: key
+			text: text
+			frame: visible
+		}
+	}
+
+	// add_full_text_tooltip lets the pointer read text the renderer had to
+	// shorten, the way a truncated cell expands to its full text on hover in
+	// the native toolkits. A tooltip the element declared is more specific
+	// about it and was registered already, so it is kept instead.
+	fn add_full_text_tooltip(el Element, area Rect, clip Rect, full string, shortened bool) {
+		if !shortened || el.tooltip.len > 0 || full.len == 0 {
+			return
+		}
+		add_tooltip_target(tooltip_key(el, area), full, area, clip)
+	}
+
+	// tooltip_hides_beneath reports a surface that covers whatever was drawn
+	// before it: a filled view, such as a dialog or its backdrop, or a scroll
+	// view, which always paints its background. Without one, a truncated label
+	// underneath would still answer for the pointer through it.
+	fn tooltip_hides_beneath(el Element) bool {
+		return (el.kind == .view && !el.box.transparent) || el.kind == .scroll
+	}
+
+	// element_area is where an element is drawn in the window. The screen
+	// fills the window below its offset, whatever its frame says.
+	fn element_area(ctx &gg.Context, el Element, off_x f64, off_y f64) Rect {
+		if el.kind == .screen {
+			return rect(off_x, off_y, f64(ctx.width) - off_x, f64(ctx.height) - off_y)
+		}
+		return rect(el.frame.x + off_x, el.frame.y + off_y, el.frame.width, el.frame.height)
+	}
+
+	// update_tooltip settles the tooltip once the frame's targets are known.
+	// Nothing shows while an open dropdown list or menu has the pointer, or
+	// while a press or a drag is still in progress.
+	fn update_tooltip(now i64) {
+		target := tooltip_target_at(g_tooltip_targets, g_tooltip.pointer_x, g_tooltip.pointer_y)
+		blocked := g_open_dropdown.len > 0 || menu_bar_open() || g_touch.down
+		g_tooltip.update(target, blocked, now)
+	}
+
+	// tooltip_lines wraps tooltip text to a readable measure and reports the
+	// width of the widest line, so short help gets a snug bubble. The line cap
+	// keeps a long string from filling the window; its last line carries the
+	// rest and is shortened when drawn.
+	fn tooltip_lines(text string, measure fn (string) f64) ([]string, f64) {
+		lines := wrap_text_lines_measured(text.trim_right(' \t\r\n'), tooltip_max_text_width,
+			tooltip_max_lines, measure)
+		mut widest := 0.0
+		for line in lines {
+			width := measure(line)
+			if width > widest {
+				widest = width
+			}
+		}
+		return lines, math.min(math.ceil(widest), tooltip_max_text_width)
+	}
+
+	// tooltip_frame puts a tooltip below and to the right of the pointer, clear
+	// of the cursor, and keeps it inside the window: it is pushed in from the
+	// right edge, and opens above the pointer when there is no room below.
+	fn tooltip_frame(pointer_x f64, pointer_y f64, width f64, height f64, window Rect) Rect {
+		right := window.x + window.width - tooltip_margin
+		bottom := window.y + window.height - tooltip_margin
+		mut x := pointer_x + tooltip_offset_x
+		mut y := pointer_y + tooltip_offset_y
+		if y + height > bottom {
+			y = pointer_y - tooltip_gap - height
+		}
+		if x + width > right {
+			x = right - width
+		}
+		if x < window.x + tooltip_margin {
+			x = window.x + tooltip_margin
+		}
+		if y < window.y + tooltip_margin {
+			y = window.y + tooltip_margin
+		}
+		return rect(x, y, width, height)
+	}
+
+	fn draw_tooltip(ctx &gg.Context) {
+		if !g_tooltip.visible || g_tooltip.text.len == 0 {
+			return
+		}
+		style := TextStyle{
+			color: tooltip_text_color
+			size: tooltip_text_size
+			align: .left
+		}
+		// Measured with the configuration draw_text_in_box draws with, so no
+		// line that fits here is shortened when it is drawn.
+		ctx.set_text_cfg(gg.TextCfg{
+			size: int(font_render_size(style.size, text_font_metrics('')) + 0.5)
+			align: .left
+			vertical_align: .middle
+		})
+		lines, text_width := tooltip_lines(g_tooltip.text, fn [ctx] (line string) f64 {
+			return f64(ctx.text_width_f(line))
+		})
+		if lines.len == 0 {
+			return
+		}
+		line_h := font_line_height(style.size)
+		window := rect(0, 0, f64(ctx.width), f64(ctx.height))
+		frame := tooltip_frame(g_tooltip.anchor_x, g_tooltip.anchor_y,
+			text_width + tooltip_padding * 2, f64(lines.len) * line_h + tooltip_padding * 2, window)
+		apply_clip(ctx, window)
+		draw_rect(ctx, frame.x + 1, frame.y + 2, frame.width, frame.height, tooltip_shadow,
+			tooltip_radius)
+		draw_rect(ctx, frame.x, frame.y, frame.width, frame.height, tooltip_background,
+			tooltip_radius)
+		draw_outline(ctx, frame.x, frame.y, frame.width, frame.height, tooltip_border,
+			tooltip_radius)
+		for i, line in lines {
+			draw_text_in_box(ctx, line, frame.x + tooltip_padding,
+				frame.y + tooltip_padding + f64(i) * line_h, text_width, line_h, style, true, Rect{})
+		}
+	}
+
 	fn prune_unmounted_state() {
 		mut stale_fields := []string{}
 		for id, _ in g_text_values {
@@ -1661,6 +1951,23 @@ fn page_focused_text_area(direction int) {
 			return
 		}
 		apply_clip(ctx, clip)
+		area := element_area(ctx, el, off_x, off_y)
+		// A declared tooltip covers the element's whole area and is registered
+		// before its children, so a child with hover text of its own wins over
+		// it where they overlap. A surface only has anything to hide once some
+		// target has been registered before it.
+		owns_tooltip := el.tooltip.len > 0
+		if owns_tooltip {
+			add_tooltip_target(tooltip_key(el, area), el.tooltip, area, clip)
+			g_tooltip_owners++
+		} else if g_tooltip_owners == 0 && g_tooltip_targets.len > 0 && tooltip_hides_beneath(el) {
+			add_tooltip_target('', '', area, clip)
+		}
+		defer {
+			if owns_tooltip {
+				g_tooltip_owners--
+			}
+		}
 		match el.kind {
 			.screen {
 				w := f64(ctx.width)
@@ -1737,8 +2044,9 @@ fn page_focused_text_area(direction int) {
 			.label {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
-				draw_label_text(ctx, el.text, x, y, el.frame.width, el.frame.height, el.text_style,
-					clip)
+				shortened := draw_label_text(ctx, el.text, x, y, el.frame.width, el.frame.height,
+					el.text_style, clip)
+				add_full_text_tooltip(el, area, clip, el.text, shortened)
 			}
 			.image {
 				x := el.frame.x + off_x
@@ -1779,8 +2087,10 @@ fn page_focused_text_area(direction int) {
 						el.text_style)
 				}
 				if el.text.len > 0 && image_layout.has_title_area() {
-					draw_text_centered(ctx, el.text, x + image_layout.text.x, y + image_layout.text.y,
-						image_layout.text.width, image_layout.text.height, el.text_style)
+					shortened := draw_text_centered(ctx, el.text, x + image_layout.text.x,
+						y + image_layout.text.y, image_layout.text.width, image_layout.text.height,
+						el.text_style)
+					add_full_text_tooltip(el, area, clip, el.text, shortened)
 				}
 				if el.enabled {
 					add_hit_target(HitTarget{
@@ -1823,7 +2133,9 @@ fn page_focused_text_area(direction int) {
 					draw_rect(ctx, x, y, el.frame.width, el.frame.height, box.bg, box.radius)
 				}
 				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, box)
-				draw_text_centered(ctx, el.text, x, y, el.frame.width, el.frame.height, style)
+				shortened := draw_text_centered(ctx, el.text, x, y, el.frame.width, el.frame.height,
+					style)
+				add_full_text_tooltip(el, area, clip, el.text, shortened)
 				if el.enabled {
 					add_hit_target(HitTarget{
 						id: el.id
@@ -1872,7 +2184,9 @@ fn page_focused_text_area(direction int) {
 				if checked {
 					draw_check_mark(ctx, x, box_y, box_size, if el.enabled { u32(0xffffff) } else { u32(0xf8fafc) })
 				}
-				draw_text(ctx, el.text, x + box_size + 8, y, el.frame.width - box_size - 8, el.frame.height, el.text_style)
+				shortened := draw_text(ctx, el.text, x + box_size + 8, y, el.frame.width - box_size - 8,
+					el.frame.height, el.text_style)
+				add_full_text_tooltip(el, area, clip, el.text, shortened)
 				if el.enabled {
 					add_hit_target(HitTarget{
 						id: el.id
@@ -1905,7 +2219,9 @@ fn page_focused_text_area(direction int) {
 					list_open, el.enabled)
 				padding := if el.padding_left > 0 { el.padding_left } else { 12.0 }
 				text_width := if el.frame.width > padding + 32 { el.frame.width - padding - 32 } else { 0.0 }
-				draw_text(ctx, selected, x + padding, y, text_width, el.frame.height, el.text_style)
+				shortened := draw_text(ctx, selected, x + padding, y, text_width, el.frame.height,
+					el.text_style)
+				add_full_text_tooltip(el, area, clip, selected, shortened)
 				draw_chevron_down(ctx, x + el.frame.width - 17, y + el.frame.height / 2,
 					if el.enabled { u32(0x475569) } else { u32(0x94a3b8) })
 				if el.enabled {
@@ -2741,19 +3057,20 @@ fn page_focused_text_area(direction int) {
 	}
 
 	// draw_text draws text that belongs to a box, shortening it when it does
-	// not fit. A control draws its text down the middle of the box whatever the
-	// style says, because a label is the only thing the native backends let
-	// place its text, and a style shared with one must not move a button.
-	fn draw_text(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle) {
-		draw_text_in_box(ctx, t, x, y, w, h, centered_text_style(style), true, Rect{})
+	// not fit, and reports whether it had to. A control draws its text down the
+	// middle of the box whatever the style says, because a label is the only
+	// thing the native backends let place its text, and a style shared with one
+	// must not move a button.
+	fn draw_text(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle) bool {
+		return draw_text_in_box(ctx, t, x, y, w, h, centered_text_style(style), true, Rect{})
 	}
 
 	// draw_label_text draws a label, the one control whose style says where its
 	// text sits in a box with room to spare. It is drawn against the clip it was
 	// rendered under, so a block of lines too tall for the label stops at the
 	// label rather than running on over what comes after it.
-	fn draw_label_text(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle, clip Rect) {
-		draw_text_in_box(ctx, t, x, y, w, h, style, true, clip)
+	fn draw_label_text(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle, clip Rect) bool {
+		return draw_text_in_box(ctx, t, x, y, w, h, style, true, clip)
 	}
 
 	// draw_editable_text draws the text of a field the caller can type in.
@@ -2826,9 +3143,13 @@ fn page_focused_text_area(direction int) {
 	// clip is the region the caller is drawn under, and is what a block of text too
 	// tall for its box is held inside. An empty one is a caller that does not bound
 	// its text, which draws under whatever clip is already in force.
-	fn draw_text_in_box(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle, fit bool, clip Rect) {
+	//
+	// The result reports text the reader cannot see: a line cut short with the
+	// ellipsis, or a line of a bounded block that falls mostly below its box and is
+	// clipped away. A caller offers the full text on hover when there is any.
+	fn draw_text_in_box(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle, fit bool, clip Rect) bool {
 		if t.len == 0 {
-			return
+			return false
 		}
 		text_x := match style.align {
 			.left { int(x) }
@@ -2866,7 +3187,7 @@ fn page_focused_text_area(direction int) {
 				height: h
 			}, clip)
 			if inside.width <= 0 || inside.height <= 0 {
-				return
+				return false
 			}
 			apply_clip(ctx, inside)
 		}
@@ -2874,20 +3195,26 @@ fn page_focused_text_area(direction int) {
 		// where that block sits in a frame with room to spare. draw_text is given the
 		// centre of each line because the config centres a line on its baseline box.
 		start_y := text_block_top(y, h, block_h, style.valign) + line_h / 2
+		mut shortened := false
 		for i, part in parts {
+			line_y := start_y + f64(i) * line_h
 			line := if fit { fit_text(ctx, part, w, cfg) } else { part }
-			ctx.draw_text(int(text_x), int(start_y + f64(i) * line_h), line, cfg)
+			if line != part || (bounded && line_y > y + h) {
+				shortened = true
+			}
+			ctx.draw_text(int(text_x), int(line_y), line, cfg)
 		}
 		if bounded {
 			apply_clip(ctx, clip)
 		}
+		return shortened
 	}
 
-	fn draw_text_centered(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle) {
+	fn draw_text_centered(ctx &gg.Context, t string, x f64, y f64, w f64, h f64, style TextStyle) bool {
 		centered_style := TextStyle{
 			...style
 			align: .center
 		}
-		draw_text(ctx, t, x, y, w, h, centered_style)
+		return draw_text(ctx, t, x, y, w, h, centered_style)
 	}
 }
