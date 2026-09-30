@@ -318,6 +318,55 @@ fn test_vml_applies_independent_box_borders() {
 	assert el.box.border_bottom == 4
 }
 
+fn test_vml_status_bar_preserves_defaults_and_children() {
+	node := parse_vml('StatusBar {
+		id: status
+		text: "Ready"
+		StatusIndicator { id: encoding text: "UTF-8" }
+		StatusIndicator { id: reset text: "Reset" on_tap: reset }
+	}') or { panic(err) }
+	bar := element_from_vnode(node, rect(0, 0, 400, 300)) or { panic(err) }
+	assert bar.id == 'status'
+	assert bar.kind == .view
+	assert bar.frame == rect(0, 272, 400, 28)
+	assert bar.box.bg == 0xf5f5f5
+	assert bar.box.border_top == 1
+	assert bar.children[0].text == 'Ready'
+	assert bar.children[1].children[0].text == 'UTF-8'
+	assert bar.children[2].children[0].kind == .button
+	assert bar.children[2].children[0].action_id == 'reset'
+}
+
+fn test_vml_status_bar_accepts_box_style_overrides() {
+	node := parse_vml('StatusBar {
+		background: #E2E8F0
+		border_color: #334155
+		border_top: 2
+	}') or { panic(err) }
+	bar := element_from_vnode(node, rect(0, 0, 400, 28)) or { panic(err) }
+	assert bar.box.bg == 0xe2e8f0
+	assert bar.box.border_color == 0x334155
+	assert bar.box.border_top == 2
+}
+
+fn test_vml_status_bar_rejects_manual_geometry() {
+	node := parse_vml('StatusBar { y: 100 text: "Ready" }') or { panic(err) }
+	if _ := element_from_vnode(node, rect(0, 0, 400, 300)) {
+		assert false, 'StatusBar should dock itself'
+	} else {
+		assert err.msg().contains('remove `y`')
+	}
+}
+
+fn test_vml_status_bar_rejects_arbitrary_children() {
+	node := parse_vml('StatusBar { Label { text: "Ignored" } }') or { panic(err) }
+	if _ := element_from_vnode(node, rect(0, 0, 400, 300)) {
+		assert false, 'StatusBar should not silently drop children'
+	} else {
+		assert err.msg().contains('only accepts StatusIndicator')
+	}
+}
+
 fn test_vml_border_width_is_an_all_sides_shorthand_with_edge_overrides() {
 	node := parse_vml('Button {
 		text: "Panel"

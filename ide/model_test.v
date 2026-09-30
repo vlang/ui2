@@ -134,7 +134,7 @@ fn test_ide_docks_tree_above_inspector_and_keeps_workspace_to_the_right() {
 	assert layout.navigator.x == 0
 	assert layout.inspector.x == 0
 	assert layout.navigator.y + layout.navigator.height < layout.inspector.y + 0.1
-	assert layout.inspector.y + layout.inspector.height == layout.status.y
+	assert layout.inspector.y + layout.inspector.height == ui2.statusbar_content_area(layout.frame).height
 	assert layout.center.x == layout.left.width
 	assert layout.center.width == frame.width - layout.left.width
 	assert layout.stage.y == layout.center.y
@@ -152,6 +152,26 @@ fn test_ide_docks_tree_above_inspector_and_keeps_workspace_to_the_right() {
 	if _ := find_ide_element(root, 'right_panel') {
 		assert false, 'the single-window layout must not have a right inspector dock'
 	}
+}
+
+fn test_ide_status_indicators_toggle_grid_and_snap() {
+	mut app := new_ide_app('.')
+	frame := ui2.rect(0, 0, ide_width, ide_height)
+	initial := build_status(ide_layout(frame, app), app)
+	grid := find_ide_element(initial, 'status_bar__grid__control') or { panic('missing grid control') }
+	snap := find_ide_element(initial, 'status_bar__snap__control') or { panic('missing snap control') }
+	assert grid.kind == .toggle_button
+	assert grid.action_id == 'toggle_grid'
+	assert grid.checked
+	assert snap.kind == .toggle_button
+	assert snap.action_id == 'toggle_snap'
+	assert snap.checked
+
+	app.handle_event('toggle_grid')
+	app.handle_event('toggle_snap')
+	updated := build_status(ide_layout(frame, app), app)
+	assert !(find_ide_element(updated, 'status_bar__grid__control') or { panic('missing grid control') }).checked
+	assert !(find_ide_element(updated, 'status_bar__snap__control') or { panic('missing snap control') }).checked
 }
 
 fn test_object_inspector_uses_compact_property_rows() {

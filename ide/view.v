@@ -4,7 +4,6 @@ import ui2
 
 const ide_toolbar_height = 46.0
 const ide_palette_height = 62.0
-const ide_status_height = 24.0
 const ide_tab_height = 36.0
 const ide_inspector_row_height = 24.0
 const ide_inspector_field_height = 22.0
@@ -29,7 +28,6 @@ struct IdeLayout {
 	tabs      ui2.Rect
 	stage     ui2.Rect
 	output    ui2.Rect
-	status    ui2.Rect
 	form      ui2.Rect
 	scale     f64
 }
@@ -41,7 +39,7 @@ fn minimum(value f64, other f64) f64 {
 fn ide_layout(frame ui2.Rect, app &IdeApp) IdeLayout {
 	left_width := if frame.width >= 1120 { 286.0 } else { 244.0 }
 	body_y := ide_toolbar_height + ide_palette_height
-	status_y := frame.height - ide_status_height
+	status_y := ui2.statusbar_content_area(frame).height
 	body_height := status_y - body_y
 	center_x := left_width
 	center_width := if frame.width - left_width > 320 {
@@ -85,7 +83,6 @@ fn ide_layout(frame ui2.Rect, app &IdeApp) IdeLayout {
 		tabs: tabs
 		stage: stage
 		output: output
-		status: ui2.rect(0, status_y, frame.width, ide_status_height)
 		form: ui2.rect(stage.x + (stage.width - form_width) / 2, stage.y + adaptive_height + (stage.height - adaptive_height - form_height) / 2, form_width, form_height)
 		scale: scale
 	}
@@ -669,19 +666,42 @@ fn build_output(layout IdeLayout, app &IdeApp) []ui2.Element {
 
 fn build_status(layout IdeLayout, app &IdeApp) ui2.Element {
 	selected := if component := app.selected_component() { component.name } else { app.form_name }
-	mut children := [
-		ui2.label('', app.status, ui2.rect(10, 4, layout.status.width - 300, 16), text_style(10, color_text, false)),
-		ui2.label('', '${selected}   Grid ${if app.show_grid { 'on' } else { 'off' }}   Snap ${if app.snap_to_grid {
-			'on'
-		} else {
-			'off'
-		}}', ui2.rect(layout.status.width - 286, 4, 276, 16), ui2.TextStyle{
+	return ui2.statusbar(
+		area: layout.frame
+		message: app.status
+		indicators: [
+			ui2.StatusIndicator{ id: 'selection', text: selected, tooltip: selected, width: 110 },
+			ui2.StatusIndicator{
+				id: 'grid'
+				text: 'Grid ${if app.show_grid { 'on' } else { 'off' }}'
+				tooltip: 'Show or hide the grid'
+				width: 76
+				action_id: 'toggle_grid'
+				toggle: true
+				pressed: app.show_grid
+			},
+			ui2.StatusIndicator{
+				id: 'snap'
+				text: 'Snap ${if app.snap_to_grid { 'on' } else { 'off' }}'
+				tooltip: 'Toggle snap to grid'
+				width: 76
+				action_id: 'toggle_snap'
+				toggle: true
+				pressed: app.snap_to_grid
+			},
+		]
+		box: ui2.BoxStyle{
+			bg: 0xe2e8f0
+			border_top: 1
+			border_color: color_border
+		}
+		message_style: text_style(10, color_text, false)
+		indicator_style: ui2.TextStyle{
 			size: 10
 			color: color_muted
-			align: .right
-		}),
-	]
-	return panel('status_bar', layout.status, 0xe2e8f0, children)
+			align: .center
+		}
+	)
 }
 
 fn build_ide(frame ui2.Rect, app &IdeApp) ui2.Element {
