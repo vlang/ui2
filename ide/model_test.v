@@ -241,19 +241,65 @@ fn test_source_mode_uses_monospace_and_toolbar_uses_icons() {
 	}
 }
 
-fn test_saved_form_and_generated_main_compile_together() {
+fn test_companion_main_source_escapes_names_and_replaces_placeholders_once() {
+	mut app := new_ide_app('.')
+	app.form_name = 'Mo\'s "Form" \\ @W@'
+	app.form_background = 0x123abc
+	source := companion_main_source(app, '@BG@.vml')
+	// The user-supplied names are double-quoted literals, so `'` passes through
+	// while `"` and `\` are escaped.
+	assert source.contains('ui2.run_window("Mo\'s \\"Form\\" \\\\ @W@", 760, 520, build_form, handle_form_event)'), source
+	// replace_each is single-pass: a placeholder token that arrives through a
+	// user value lands in the output verbatim instead of being expanded again.
+	assert source.contains(r'const form_source = $embed_file("@BG@.vml").to_string()'), source
+	assert source.contains('ui2.screen(0x123abc, [])'), source
+	// The generated program's own interpolations must survive as source text.
+	assert source.contains(r'eprintln("Could not load @BG@.vml: ${err}")'), source
+	assert source.contains(r'println("event: ${event}")'), source
+	for token in ['@CONST@', '@VML@', '@NAME@', '@H@'] {
+		assert !source.contains(token), source
+	}
+}
+
+fn check_generated_companion(vml_name string) {
 	test_dir := os.join_path(@VMODROOT, 'ide', '.generated_test_${os.getpid()}')
 	os.mkdir_all(test_dir) or { panic(err) }
 	defer {
 		os.rmdir_all(test_dir) or {}
 	}
 	mut app := new_ide_app(test_dir)
-	app.path_input = os.join_path(test_dir, 'form.vml')
+	app.form_name = vml_name.all_before_last('.vml')
+	app.path_input = os.join_path(test_dir, vml_name)
 	app.add_component('button', 40, 48)
 	app.components[0].event_handler = 'button_clicked'
 	app.sync_source()
 	app.save_document() or { panic(err) }
 	main_path := app.generate_companion(false) or { panic(err) }
 	result := os.execute('${os.quoted_path(@VEXE)} -check ${os.quoted_path(main_path)}')
+	assert result.exit_code == 0, '${vml_name}: ${result.output}'
+}
+
+fn test_saved_form_and_generated_main_compile_together() {
+	// The names cover an apostrophe, a space, and a placeholder-like token, all of
+	// which have to reach the generated `main.v` as valid string literals.
+	check_generated_companion('form.vml')
+	check_generated_companion("Mo's Form.vml")
+	check_generated_companion('@BG@.vml')
+}
+
+fn test_ide_builds_with_the_new_compiler() {
+	// The original regression only surfaced in the C stage of `-new-compiler`,
+	// which emitted the template's escaped `${err}` / `${event}` as live
+	// interpolations. `-check` stops before that stage, so this needs a full build.
+	out_path := os.join_path(os.temp_dir(), 'ui2_ide_new_compiler_${os.getpid()}')
+	defer {
+		os.rm(out_path) or {}
+	}
+	cmd := '${os.quoted_path(@VEXE)} -new-compiler -o ${os.quoted_path(out_path)} ${os.quoted_path(os.join_path(@VMODROOT, 'ide'))}'
+	result := os.execute(cmd)
+	if result.output.contains('Unknown argument `-new-compiler`') {
+		eprintln('skipping: this V does not support -new-compiler')
+		return
+	}
 	assert result.exit_code == 0, result.output
 }

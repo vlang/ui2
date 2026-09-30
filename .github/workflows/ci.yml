@@ -81,5 +81,10 @@ jobs:
           v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/ui_scroll_immediate_test.v
           v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/examples/scrollview
 
+      # Covers the generated companion program and, on a V with `-new-compiler`,
+      # a full new-compiler build of the IDE itself.
+      - name: Test IDE
+        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ide
+
       - name: Build all examples
         run: v run ui2/examples/build_examples.vsh ${{ matrix.custom && '-d ui2_custom_rendering' || '' }}
