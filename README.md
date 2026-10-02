@@ -225,6 +225,114 @@ Repeater {
 }
 ```
 
+## Custom buttons
+
+A `Button` can be styled directly in VML. Leave `native` unset when the
+application should own its colors and shape; `native: true` requests the
+standard native-style appearance instead.
+
+```vml
+Button {
+    id: save
+    text: "Save"
+    on_tap: app.save()
+    x: 20
+    y: 20
+    width: 120
+    height: 40
+    background: #2563EB
+    border_color: #1D4ED8
+    border_width: 1
+    corner_radius: 8
+    color: #FFFFFF
+    bold: true
+}
+```
+
+To reuse that style, put the defaults in a sibling VML module. `PrimaryButton`
+can live in `PrimaryButton.vml` or the conventional snake-case
+`primary_button.vml`:
+
+```vml
+module PrimaryButton
+
+Button {
+    height: 40
+    background: #2563EB
+    border_color: #1D4ED8
+    border_width: 1
+    corner_radius: 8
+    color: #FFFFFF
+    bold: true
+}
+```
+
+Import the module from `app.vml` and set the instance-specific properties.
+Properties on an instance override the module defaults:
+
+```vml
+import PrimaryButton
+
+Screen {
+    PrimaryButton {
+        id: save
+        text: "Save"
+        on_tap: app.save()
+        x: 20
+        y: 20
+        width: 120
+    }
+}
+```
+
+VML imports require a file path so they can resolve sibling modules. Use the
+file-backed runtime API instead of passing an embedded source string:
+
+```v
+ui2.run_vml_file[App](
+    source_path: os.join_path(os.dir(@FILE), 'app.vml')
+    model: App{}
+    title: 'My app'
+    width: 400
+    height: 300
+)!
+```
+
+The other file-backed entry points are `new_vml_app_file` and
+`element_from_vml_model_file`. Source-string `run_vml` and compile-time `$vml`
+do not expand imports. Imported VML files are read at runtime, so deploy them
+beside the document that imports them.
+
+In V code, the equivalent reusable control is an ordinary function returning
+an `Element`:
+
+```v
+fn primary_button(id string, title string, frame ui2.Rect) ui2.Element {
+    return ui2.button(
+        id,
+        title,
+        frame,
+        ui2.BoxStyle{
+            bg: 0x2563eb
+            radius: 8
+            border_color: 0x1d4ed8
+            border_left: 1
+            border_top: 1
+            border_right: 1
+            border_bottom: 1
+        },
+        ui2.TextStyle{
+            color: 0xffffff
+            bold: true
+        },
+    )
+}
+```
+
+A button emits its `id` by default. Wrap it with `with_action` when its lookup
+identity and action name should differ; `button_with_image`, `with_tooltip`, and
+`with_native_style` can be composed in the same way.
+
 ## Backend capabilities
 
 Call `control_support(kind)` to query support. macOS implements every shared
