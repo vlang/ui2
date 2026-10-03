@@ -1672,8 +1672,21 @@ static inline int ui2_win_scroll_message(void *hwnd_ptr, uintptr_t wparam, int h
 // How far a wheel message asks to scroll, positive towards the end of the content. A
 // wheel rolled away from the user is the positive one and scrolls back. A tilt wheel
 // reports a push to the right as positive, which scrolls on.
+//
+// A precision wheel or a touchpad reports steps smaller than WHEEL_DELTA, many to a
+// notch. The step is scaled before it is divided, and what the division leaves over
+// is kept for the next message, so those steps add up to the same distance a whole
+// notch covers instead of each rounding away to nothing.
 static inline int ui2_win_wheel_distance(uintptr_t wparam, int tilt) {
-	int distance = (GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA) * 48;
+	static int leftover[2];
+	int *rest = &leftover[tilt ? 1 : 0];
+	int delta = GET_WHEEL_DELTA_WPARAM(wparam);
+	// A wheel turned back the other way starts afresh rather than working off what
+	// the last direction left.
+	if ((*rest > 0 && delta < 0) || (*rest < 0 && delta > 0)) *rest = 0;
+	int scaled = delta * 48 + *rest;
+	int distance = scaled / WHEEL_DELTA;
+	*rest = scaled - distance * WHEEL_DELTA;
 	return tilt ? distance : -distance;
 }
 
