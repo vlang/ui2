@@ -586,6 +586,10 @@ static inline int ui2_win_is_window(void *hwnd) {
 	return hwnd != NULL && IsWindow((HWND)hwnd);
 }
 
+static inline int ui2_win_is_enabled(void *hwnd) {
+	return hwnd != NULL && IsWindowEnabled((HWND)hwnd);
+}
+
 static inline void *ui2_win_parent(void *hwnd) {
 	return hwnd == NULL ? NULL : GetParent((HWND)hwnd);
 }

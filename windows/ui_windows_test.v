@@ -88,6 +88,30 @@ $if !ui2_custom_rendering ? {
 		assert windows_content_height(children) == 115
 	}
 
+	fn test_windows_composite_button_release_requires_current_registration() {
+		captured := WindowsPointerBinding{
+			id:              'original'
+			button_behavior: true
+		}
+		current := WindowsPointerBinding{
+			id:              'replacement'
+			button_behavior: true
+		}
+		assert windows_button_behavior_action(captured, current, false, false, true) == 'original'
+		assert windows_button_behavior_action(captured, WindowsPointerBinding{}, false, false,
+			true) == ''
+		assert windows_button_behavior_action(captured, WindowsPointerBinding{
+			id:        'original'
+			clickable: true
+		}, false, false, true) == ''
+		assert windows_button_behavior_action(captured, WindowsPointerBinding{
+			button_behavior: true
+		}, false, false, true) == ''
+		assert windows_button_behavior_action(captured, current, true, false, true) == ''
+		assert windows_button_behavior_action(captured, current, false, true, true) == ''
+		assert windows_button_behavior_action(captured, current, false, false, false) == ''
+	}
+
 	fn test_windows_transparent_push_buttons_use_custom_painting() {
 		transparent := BoxStyle{
 			transparent: true

@@ -44,6 +44,8 @@ fn C.ui2_win_destroy(hwnd voidptr)
 
 fn C.ui2_win_is_window(hwnd voidptr) int
 
+fn C.ui2_win_is_enabled(hwnd voidptr) int
+
 fn C.ui2_win_parent(hwnd voidptr) voidptr
 
 fn C.ui2_win_set_parent(hwnd voidptr, parent voidptr)
@@ -1270,7 +1272,7 @@ fn windows_register_bindings(hwnd voidptr, el Element) {
 	if el.submit_id.len > 0 && el.kind == .text_field {
 		st.submit_ids[handle] = el.submit_id
 	}
-	if el.enabled
+	if el.enabled && !el.hidden
 		&& (el.clickable || (el.kind == .view && el.button_behavior) || el.draggable
 		|| el.long_press || el.swipe_left) {
 		st.pointer_bindings[handle] = WindowsPointerBinding{
@@ -1977,21 +1979,31 @@ fn ui2_windows_control_pointer(hwnd voidptr, message u32, local_x int, local_y i
 		gesture_event = 'long:' + binding.id
 		gesture = true
 	}
-	should_activate := binding.button_behavior && !gesture && !st.pointer_moved
-		&& C.ui2_win_is_window(target) != 0
-		&& C.ui2_win_root_point_in_client(st.root, target, x, y) != 0
+	current_binding := st.pointer_bindings[windows_handle_id(target)] or { WindowsPointerBinding{} }
+	button_action := windows_button_behavior_action(binding, current_binding, gesture,
+		st.pointer_moved, C.ui2_win_is_window(target) != 0
+		&& C.ui2_win_is_enabled(target) != 0
+		&& C.ui2_win_root_point_in_client(st.root, target, x, y) != 0)
 	if gesture_event.len > 0 {
 		windows_emit_action(gesture_event)
 	}
 	if binding.clickable || binding.draggable {
 		windows_emit_action('pointer:up:${binding.id}:${x}:${y}')
 	}
-	if should_activate {
-		windows_emit_action(binding.id)
+	if button_action.len > 0 {
+		windows_emit_action(button_action)
 	}
 	if gesture {
 		st.suppress_click[windows_handle_id(target)] = true
 	}
+}
+
+fn windows_button_behavior_action(captured WindowsPointerBinding, current WindowsPointerBinding, gesture bool, moved bool, target_available bool) string {
+	if captured.button_behavior && captured.id.len > 0 && current.button_behavior
+		&& current.id.len > 0 && !gesture && !moved && target_available {
+		return captured.id
+	}
+	return ''
 }
 
 fn windows_text_area_handle(id string) ?voidptr {
