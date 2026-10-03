@@ -54,10 +54,10 @@ jobs:
         run: v -check ui2/ide
 
       - name: Test layout geometry
-        run: v test ui2/ui/adaptive_layout_test.v
+          run: v test ui2/adaptive_layout_test.v
 
       - name: Test adaptive VML
-        run: v test ui2/ui/vml_adaptive_test.v
+          run: v test ui2/vml_adaptive_test.v
 
       - name: Test designer and generated companion
         run: v test ui2/ide

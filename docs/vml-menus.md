@@ -76,5 +76,5 @@ v run examples/vml_menu
 Run the focused tests:
 
 ```sh
-v test ui/vml_menu_test.v
+  v test vml_menu_test.v
 ```
