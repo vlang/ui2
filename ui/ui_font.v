@@ -114,6 +114,60 @@ fn wrap_text_lines_measured(text string, width f64, limit int, measure fn (strin
 	return lines
 }
 
+// Wrap using the same font measurement as drawing. Explicit blank lines
+// survive, and an unbroken word is split only at UTF-8 rune boundaries.
+fn wrap_text_area_lines(value string, width f64, measure fn (string) f64) []string {
+	if width <= 0 {
+		return []string{}
+	}
+	mut lines := []string{}
+	for paragraph in value.replace('\r\n', '\n').replace('\r', '\n').split('\n') {
+		if paragraph.len == 0 {
+			lines << ''
+			continue
+		}
+		runes := paragraph.runes()
+		mut start := 0
+		for start < runes.len {
+			rest := runes[start..].string()
+			if measure(rest) <= width {
+				lines << rest
+				break
+			}
+			mut low := 0
+			mut high := runes.len - start
+			for low < high {
+				mid := (low + high + 1) / 2
+				if measure(runes[start..start + mid].string()) <= width {
+					low = mid
+				} else {
+					high = mid - 1
+				}
+			}
+			// A glyph wider than the pane is clipped, but must still advance.
+			kept := if low > 0 { low } else { 1 }
+			mut end := start + kept
+			mut next := end
+			if end < runes.len {
+				mut space := end
+				for space > start && runes[space] != ` ` && runes[space] != `\t` {
+					space--
+				}
+				if space > start {
+					end = space
+					next = space + 1
+					for next < runes.len && (runes[next] == ` ` || runes[next] == `\t`) {
+						next++
+					}
+				}
+			}
+			lines << runes[start..end].string()
+			start = next
+		}
+	}
+	return lines
+}
+
 // text_with_overflow puts everything a label has no room left for onto its last line:
 // the words after `head` on that line, then the paragraphs after it. They are joined
 // with spaces because what comes back is one line, and drawing truncates it, which is

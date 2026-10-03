@@ -215,60 +215,6 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return ''
 	}
 
-	// Wrap using the same font measurement as drawing. Explicit blank lines
-	// survive, and an unbroken word is split only at UTF-8 rune boundaries.
-	fn wrap_text_area_lines(value string, width f64, measure fn (string) f64) []string {
-		if width <= 0 {
-			return []string{}
-		}
-		mut lines := []string{}
-		for paragraph in value.replace('\r\n', '\n').replace('\r', '\n').split('\n') {
-			if paragraph.len == 0 {
-				lines << ''
-				continue
-			}
-			runes := paragraph.runes()
-			mut start := 0
-			for start < runes.len {
-				rest := runes[start..].string()
-				if measure(rest) <= width {
-					lines << rest
-					break
-				}
-				mut low := 0
-				mut high := runes.len - start
-				for low < high {
-					mid := (low + high + 1) / 2
-					if measure(runes[start..start + mid].string()) <= width {
-						low = mid
-					} else {
-						high = mid - 1
-					}
-				}
-				// A glyph wider than the pane is clipped, but must still advance.
-				kept := if low > 0 { low } else { 1 }
-				mut end := start + kept
-				mut next := end
-				if end < runes.len {
-					mut space := end
-					for space > start && runes[space] != ` ` && runes[space] != `\t` {
-						space--
-					}
-					if space > start {
-						end = space
-						next = space + 1
-						for next < runes.len && (runes[next] == ` ` || runes[next] == `\t`) {
-							next++
-						}
-					}
-				}
-				lines << runes[start..end].string()
-				start = next
-			}
-		}
-		return lines
-	}
-
 	fn text_area_lines(id string, value string, width f64, style TextStyle, rendered_size int, measure fn (string) f64) []string {
 		if id.len > 0 {
 			if cached := g_text_area_layouts[id] {

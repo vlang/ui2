@@ -1,0 +1,96 @@
+Screen {
+    id: root
+    background: #F2F5FA
+
+    ScrollView {
+        id: viewport
+        width: root.width
+        height: root.height
+        background: #F2F5FA
+
+        FlexLayout {
+            id: page
+            width: root.width
+            height: root.height < 740 ? 740 : root.height
+            orientation: vertical
+            padding: 24
+            gap: 20
+            background: #F2F5FA
+
+            FlexLayout {
+                id: toolbar
+                gap: 12
+                line_gap: 12
+                wrap: true
+                align_items: center
+                transparent: true
+
+                Label { text: "UI2 Studio" font_size: 26 bold: true color: #17243D flex_grow: 1 min_width: 170 }
+                Button { id: create text: "New project" on_tap: app.create_project() background: #315EEB color: #FFFFFF corner_radius: 8 }
+                Button { id: settings text: "Settings" background: #FFFFFF color: #17243D corner_radius: 8 }
+            }
+
+            FlexLayout {
+                id: searchbar
+                gap: 12
+                wrap: true
+                align_items: center
+                transparent: true
+
+                TextField { id: search placeholder: "Search projects" width: 220 height: 38 flex_grow: 1 min_width: 150 background: #FFFFFF corner_radius: 8 }
+                Label { id: count text: "Created: " + app.created color: #52627D }
+            }
+
+            GridLayout {
+                id: projects
+                flex_grow: 1
+                auto_columns_min_width: 240
+                max_columns: 3
+                spacing: 16
+                transparent: true
+
+                FlexLayout {
+                    id: featured
+                    column_span: 2
+                    orientation: vertical
+                    padding: 20
+                    gap: 10
+                    background: #17243D
+                    corner_radius: 14
+
+                    Label { text: "A layout that adapts" font_size: 23 bold: true color: #FFFFFF height: 30 }
+                    Label { text: "Flex, grid and content sizing." color: #C8D7F3 height: 24 }
+                    View { flex_grow: 1 transparent: true }
+                    FlexLayout {
+                        justify: end
+                        transparent: true
+                        Button { text: "Create project" on_tap: app.create_project() background: #FFFFFF color: #17243D corner_radius: 8 }
+                    }
+                }
+
+                Repeater {
+                    model: app.projects
+                    key: item.id
+                    FlexLayout {
+                        orientation: vertical
+                        padding: 20
+                        gap: 10
+                        background: #FFFFFF
+                        corner_radius: 14
+
+                        Label { text: item.title font_size: 20 bold: true color: #17243D height: 26 }
+                        Label { text: item.description color: #52627D height: 24 }
+                        View { flex_grow: 1 transparent: true }
+                        FlexLayout {
+                            justify: end
+                            transparent: true
+                            Button { text: "Open project" background: #E9EFFD color: #244ECA corner_radius: 8 }
+                        }
+                    }
+                }
+            }
+
+            Label { text: "Resize the window. Your search stays in place." color: #52627D font_size: 12 height: 20 }
+        }
+    }
+}
