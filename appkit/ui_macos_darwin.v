@@ -3089,8 +3089,9 @@ fn ui2_scroll_view_scroll_wheel(self voidptr, _cmd voidptr, event voidptr) {
 	// it does elsewhere on macOS. AppKit follows a gesture from its beginning to its end,
 	// so handing the rest of one over would give the view around this one a gesture with
 	// no beginning and leave this one without the end that settles its rubber band.
-	if macos.msg_u64(wheel, 'phase') == ns_event_phase_began
-		|| (macos.msg_u64(wheel, 'phase') == 0 && macos.msg_u64(wheel, 'momentumPhase') == 0) {
+	phase := macos.msg_u64(wheel, 'phase')
+	click := phase == 0 && macos.msg_u64(wheel, 'momentumPhase') == 0
+	if phase == ns_event_phase_began || click {
 		dx := macos.msg_f64(wheel, 'scrollingDeltaX')
 		dy := macos.msg_f64(wheel, 'scrollingDeltaY')
 		sideways := dx * dx > dy * dy
@@ -3103,6 +3104,9 @@ fn ui2_scroll_view_scroll_wheel(self voidptr, _cmd voidptr, event voidptr) {
 			macos.msg_void1(next, 'scrollWheel:', wheel)
 		}
 		return
+	}
+	if click {
+		scroll_view_pass_on_unused(scroll_view, wheel)
 	}
 	C.ui2_macos_msg_super_void_id(self, voidptr(macos.get_class('NSScrollView')), voidptr(macos.sel('scrollWheel:')),
 		event)
@@ -3127,14 +3131,14 @@ fn scroll_view_scrolls_axis(scroll NativeView, horizontal bool) bool {
 	}
 }
 
-// scroll_view_can_move reports whether a scroll view can follow a wheel delta along an
-// axis: it has a range there, and is not already at the end the delta pushes towards.
-// A positive delta carries the content with it, back towards its start. Documents are
-// flipped views, so the vertical offset grows downwards the way the horizontal one
-// grows to the right.
-fn scroll_view_can_move(scroll NativeView, horizontal bool, delta f64) bool {
+// scroll_view_room is how much of a distance along an axis a scroll view has room for:
+// all of it, what is left before the end it heads for, or none. The distance is a
+// change in offset, positive towards the end of the content. Documents are flipped
+// views, so the vertical offset grows downwards the way the horizontal one grows to
+// the right.
+fn scroll_view_room(scroll NativeView, horizontal bool, distance f64) f64 {
 	if !scroll_view_scrolls_axis(scroll, horizontal) {
-		return false
+		return 0
 	}
 	document := macos.msg_rect(macos.msg_id(scroll, 'documentView'), 'frame')
 	visible := macos.msg_rect(macos.msg_id(scroll, 'contentView'), 'bounds')
@@ -3144,7 +3148,25 @@ fn scroll_view_can_move(scroll NativeView, horizontal bool, delta f64) bool {
 	} else {
 		document.height - visible.height
 	}
-	return if delta > 0 { offset > 0.5 } else { offset < maximum - 0.5 }
+	room := if distance > 0 { maximum - offset } else { offset }
+	if room <= 0.5 {
+		return 0
+	}
+	if distance > 0 {
+		return if distance < room { distance } else { room }
+	}
+	return if -distance < room { distance } else { -room }
+}
+
+// scroll_view_can_move reports whether a scroll view can follow a wheel delta along an
+// axis: it has a range there, and is not already at the end the delta pushes towards.
+// A positive delta carries the content with it, back towards its start.
+fn scroll_view_can_move(scroll NativeView, horizontal bool, delta f64) bool {
+	return scroll_view_room(scroll, horizontal, -delta) != 0
+}
+
+fn scroll_view_enclosing(scroll NativeView) NativeView {
+	return macos.msg_id(macos.msg_id(scroll, 'superview'), 'enclosingScrollView')
 }
 
 // scroll_view_passes_gesture reports whether a gesture starting on a scroll view
@@ -3157,14 +3179,55 @@ fn scroll_view_passes_gesture(scroll NativeView, horizontal bool, delta f64) boo
 	if scroll_view_can_move(scroll, horizontal, delta) {
 		return false
 	}
-	mut parent := macos.msg_id(macos.msg_id(scroll, 'superview'), 'enclosingScrollView')
+	mut parent := scroll_view_enclosing(scroll)
 	for !native_is_nil(parent) {
 		if scroll_view_can_move(parent, horizontal, delta) {
 			return true
 		}
-		parent = macos.msg_id(macos.msg_id(parent, 'superview'), 'enclosingScrollView')
+		parent = scroll_view_enclosing(parent)
 	}
 	return false
+}
+
+// scroll_view_pass_on_unused gives the views around a scroll view the part of a wheel
+// click that it has no room for. AppKit moves the view itself once the click is handed
+// to it, as far as its end, and the rest of the step would be dropped there. How far a
+// click goes is the distance the device reports, or that many of the view's own lines
+// when it reports lines. Each view around it that can still move takes what it has
+// room for in turn, the way the custom renderer walks its scroll chain.
+fn scroll_view_pass_on_unused(scroll NativeView, wheel macos.Id) {
+	precise := macos.msg_bool(wheel, 'hasPreciseScrollingDeltas')
+	for horizontal in [true, false] {
+		delta := macos.msg_f64(wheel, if horizontal { 'scrollingDeltaX' } else { 'scrollingDeltaY' })
+		if delta == 0 {
+			continue
+		}
+		line := if precise {
+			1.0
+		} else {
+			macos.msg_f64(scroll, if horizontal { 'horizontalLineScroll' } else { 'verticalLineScroll' })
+		}
+		// A positive delta carries the content with it, back towards its start.
+		mut remaining := -delta * line
+		remaining -= scroll_view_room(scroll, horizontal, remaining)
+		mut parent := scroll_view_enclosing(scroll)
+		for remaining != 0 && !native_is_nil(parent) {
+			taken := scroll_view_room(parent, horizontal, remaining)
+			if taken != 0 {
+				scroll_view_move(parent, horizontal, taken)
+				remaining -= taken
+			}
+			parent = scroll_view_enclosing(parent)
+		}
+	}
+}
+
+// scroll_view_move shifts a scroll view along an axis by a distance it has room for.
+fn scroll_view_move(scroll NativeView, horizontal bool, distance f64) {
+	visible := macos.msg_rect(macos.msg_id(scroll, 'contentView'), 'bounds')
+	macos.msg_void_rect(macos.msg_id(scroll, 'documentView'), 'scrollRectToVisible:', macos.rect(visible.x +
+		if horizontal { distance } else { 0.0 }, visible.y + if horizontal { 0.0 } else { distance },
+		visible.width, visible.height))
 }
 
 @[export: 'ui2_window_did_resize']

@@ -334,6 +334,18 @@ fn test_macos_scroll_gesture_passes_to_an_enclosing_view_only_when_it_cannot_be_
 	assert !scroll_view_passes_gesture(inner, true, 1)
 	// A view with nothing around it keeps even what it cannot use.
 	assert !scroll_view_passes_gesture(outer, true, 1)
+
+	// Ten short of its end, the inner strip has room for ten of a 48 point step and
+	// the strip around it for the other 38; the way back is all its own.
+	macos.msg_void_point(macos.msg_id(inner, 'contentView'), 'setBoundsOrigin:', macos.point(590,
+		0))
+	assert scroll_view_room(inner, true, 48) == 10
+	assert scroll_view_room(outer, true, 48 - 10) == 38
+	assert scroll_view_room(inner, true, -48) == -48
+	assert scroll_view_room(inner, true, -1000) == -590
+	// Neither has any along the axis it does not scroll, nor the outer back past its start.
+	assert scroll_view_room(inner, false, 48) == 0
+	assert scroll_view_room(outer, true, -48) == 0
 }
 
 fn test_macos_text_field_uses_native_bezel_without_layer_mask() {
