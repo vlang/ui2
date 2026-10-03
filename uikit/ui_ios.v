@@ -1297,12 +1297,23 @@ fn render_element(parent View, el Element, key string, mut active map[string]boo
 			height := if el.scroll_mode != .horizontal_only { content_h + 16 } else { el.frame.height }
 			macos.msg_void_rect(native, 'setContentSize:', macos.rect(width, height, 0, 0))
 			macos.msg_void_bool(native, 'setAlwaysBounceVertical:', el.scroll_mode != .horizontal_only)
+			// Where the view should be: where it is, or where it was before it was
+			// rebuilt. A view that is kept keeps its offset through a change of mode, and
+			// shrinking its content does not bring it back, so the part of either along an
+			// axis the mode no longer scrolls is dropped here.
+			current := scroll_content_offset(native)
+			mut wanted_x := current.x
+			mut wanted_y := current.y
 			if el.id.len > 0 {
 				if created && el.id in g_scroll_offsets {
-					set_scroll_content_offset(native, g_scroll_offsets_x[el.id] or { 0.0 },
-						g_scroll_offsets[el.id])
+					wanted_x = g_scroll_offsets_x[el.id] or { 0.0 }
+					wanted_y = g_scroll_offsets[el.id]
 				}
 				g_scroll_ids[el.id] = true
+			}
+			offset_x, offset_y := scroll_mode_offset(el.scroll_mode, wanted_x, wanted_y)
+			if offset_x != current.x || offset_y != current.y {
+				set_scroll_content_offset(native, offset_x, offset_y)
 			}
 		}
 		else {}

@@ -138,3 +138,17 @@ fn test_scroll_mode_defaults_to_vertical_and_content_width_follows_the_children(
 	assert scroll_mode('horizontal')! == .horizontal_only
 	assert scroll_mode('both')! == .both
 }
+
+fn test_scroll_mode_offset_keeps_only_the_axes_the_mode_scrolls() {
+	x, y := scroll_mode_offset(.both, 120, 80)
+	assert x == 120
+	assert y == 80
+	// A view scrolled both ways and then switched to one axis is brought back to the
+	// start of the other.
+	strip_x, strip_y := scroll_mode_offset(.horizontal_only, 120, 80)
+	assert strip_x == 120
+	assert strip_y == 0
+	list_x, list_y := scroll_mode_offset(.vertical_only, 120, 80)
+	assert list_x == 0
+	assert list_y == 80
+}
