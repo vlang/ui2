@@ -208,14 +208,19 @@ fn apply_accessibility_string(view View, raw string, getter string, setter strin
 	}
 }
 
-fn apply_accessibility_traits(view View, role string) {
+fn apply_accessibility_traits(view View, role string, enabled bool) {
 	key := voidptr(&g_accessibility_keys.role)
 	saved := macos.get_associated_object(view, key)
 	if role.len > 0 {
 		if objc_is_nil(saved) {
 			macos.set_associated_object(view, key, objc_number_u64(macos.msg_u64(view, 'accessibilityTraits')), macos.assoc_retain_nonatomic)
 		}
-		macos.msg_void_u64(view, 'setAccessibilityTraits:', accessibility_traits(role))
+		disabled_trait := if enabled {
+			u64(0)
+		} else {
+			extern_u64('UIAccessibilityTraitNotEnabled', 0x100)
+		}
+		macos.msg_void_u64(view, 'setAccessibilityTraits:', accessibility_traits(role) | disabled_trait)
 	} else if !objc_is_nil(saved) {
 		macos.msg_void_u64(view, 'setAccessibilityTraits:', macos.msg_u64(saved, 'unsignedLongLongValue'))
 		macos.set_associated_object(view, key, objc_nil(), macos.assoc_retain_nonatomic)
@@ -244,7 +249,7 @@ fn native_apply_common_view_state(view View, hidden bool, enabled bool, role str
 	macos.msg_void_bool(view, 'setHidden:', hidden)
 	apply_accessibility_string(view, label, 'accessibilityLabel', 'setAccessibilityLabel:', voidptr(&g_accessibility_keys.label))
 	apply_accessibility_string(view, value, 'accessibilityValue', 'setAccessibilityValue:', voidptr(&g_accessibility_keys.value))
-	apply_accessibility_traits(view, role)
+	apply_accessibility_traits(view, role, enabled)
 	apply_accessibility_element(view, role.len > 0 || label.len > 0 || value.len > 0)
 	if objc_is_kind_of(view, 'UIControl') {
 		macos.msg_void_bool(view, 'setEnabled:', enabled)

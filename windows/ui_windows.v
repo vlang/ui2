@@ -157,6 +157,8 @@ fn C.ui2_win_ticks() u64
 
 fn C.ui2_win_point_to_root(hwnd voidptr, root voidptr, x &int, y &int)
 
+fn C.ui2_win_root_point_in_client(root voidptr, target voidptr, x int, y int) int
+
 fn C.ui2_win_menu_create() voidptr
 
 fn C.ui2_win_menu_add(menu voidptr, command u32, title &u16, enabled int)
@@ -212,11 +214,12 @@ struct WindowsRunConfig {
 }
 
 struct WindowsPointerBinding {
-	id         string
-	clickable  bool
-	draggable  bool
-	long_press bool
-	swipe_left bool
+	id              string
+	clickable       bool
+	button_behavior bool
+	draggable       bool
+	long_press      bool
+	swipe_left      bool
 }
 
 @[heap]
@@ -271,6 +274,7 @@ mut:
 	rendering          bool
 	key_consumed       bool
 	pointer_handle     voidptr
+	pointer_binding    WindowsPointerBinding
 	pointer_start_x    int
 	pointer_start_y    int
 	pointer_started    u64
@@ -1266,13 +1270,16 @@ fn windows_register_bindings(hwnd voidptr, el Element) {
 	if el.submit_id.len > 0 && el.kind == .text_field {
 		st.submit_ids[handle] = el.submit_id
 	}
-	if el.clickable || el.draggable || el.long_press || el.swipe_left {
+	if el.enabled
+		&& (el.clickable || (el.kind == .view && el.button_behavior) || el.draggable
+		|| el.long_press || el.swipe_left) {
 		st.pointer_bindings[handle] = WindowsPointerBinding{
-			id: action_id
-			clickable: el.clickable
-			draggable: el.draggable
-			long_press: el.long_press
-			swipe_left: el.swipe_left
+			id:              action_id
+			clickable:       el.clickable
+			button_behavior: el.kind == .view && el.button_behavior
+			draggable:       el.draggable
+			long_press:      el.long_press
+			swipe_left:      el.swipe_left
 		}
 	}
 	if el.menu.len > 0 {
@@ -1311,6 +1318,11 @@ fn windows_reparent_direct_children(key string, new_parent voidptr) {
 
 fn windows_cleanup_node_resources(key string, hwnd voidptr, kind Kind) {
 	mut st := windows_state()
+	if st.pointer_handle == hwnd {
+		C.ui2_win_release_mouse()
+		st.pointer_handle = unsafe { nil }
+		st.pointer_binding = WindowsPointerBinding{}
+	}
 	if kind == .image {
 		bitmap := st.images[key] or { voidptr(unsafe { nil }) }
 		if hwnd != unsafe { nil } && C.ui2_win_is_window(hwnd) != 0 {
@@ -1893,23 +1905,33 @@ fn ui2_windows_cursor(hwnd voidptr) int {
 @[export: 'ui2_windows_control_pointer']
 fn ui2_windows_control_pointer(hwnd voidptr, message u32, local_x int, local_y int) {
 	mut st := windows_state()
-	mut target := hwnd
-	mut binding := WindowsPointerBinding{}
-	for target != unsafe { nil } {
-		binding = st.pointer_bindings[windows_handle_id(target)] or { WindowsPointerBinding{} }
-		if binding.id.len > 0 || target == st.root {
-			break
-		}
-		target = C.ui2_win_parent(target)
-	}
-	if binding.id.len == 0 {
-		return
-	}
 	mut x := local_x
 	mut y := local_y
 	C.ui2_win_point_to_root(hwnd, st.root, &x, &y)
 	if message == win_wm_lbutton_down {
+		mut target := voidptr(usize(hwnd))
+		mut binding := WindowsPointerBinding{}
+		for target != unsafe { nil } {
+			handle := windows_handle_id(target)
+			binding = st.pointer_bindings[handle] or { WindowsPointerBinding{} }
+			if binding.id.len > 0 || target == st.root {
+				break
+			}
+			key := st.handle_keys[handle] or { '' }
+			if key.len > 0 {
+				kind := st.node_kinds[key] or { Kind.screen }
+				if kind !in [.screen, .view, .label, .image] {
+					// A nested native control owns its pointer interaction.
+					return
+				}
+			}
+			target = C.ui2_win_parent(target)
+		}
+		if binding.id.len == 0 {
+			return
+		}
 		st.pointer_handle = target
+		st.pointer_binding = binding
 		st.pointer_start_x = x
 		st.pointer_start_y = y
 		st.pointer_started = C.ui2_win_ticks()
@@ -1920,9 +1942,11 @@ fn ui2_windows_control_pointer(hwnd voidptr, message u32, local_x int, local_y i
 		}
 		return
 	}
-	if st.pointer_handle != target {
+	if st.pointer_handle == unsafe { nil } {
 		return
 	}
+	target := st.pointer_handle
+	binding := st.pointer_binding
 	if message == win_wm_mouse_move {
 		move_x := x - st.pointer_start_x
 		move_y := y - st.pointer_start_y
@@ -1939,20 +1963,31 @@ fn ui2_windows_control_pointer(hwnd voidptr, message u32, local_x int, local_y i
 	}
 	C.ui2_win_release_mouse()
 	st.pointer_handle = unsafe { nil }
+	st.pointer_binding = WindowsPointerBinding{}
 	delta_x := x - st.pointer_start_x
 	delta_y := y - st.pointer_start_y
 	duration := C.ui2_win_ticks() - st.pointer_started
 	mut gesture := false
+	mut gesture_event := ''
 	if binding.swipe_left && delta_x <= -60 && delta_y >= -40 && delta_y <= 40 {
-		windows_emit_action('swipe_left:' + binding.id)
+		gesture_event = 'swipe_left:' + binding.id
 		gesture = true
 	} else if binding.long_press && !st.pointer_moved && duration >= 500 && delta_x >= -8 && delta_x <= 8
 		&& delta_y >= -8 && delta_y <= 8 {
-		windows_emit_action('long:' + binding.id)
+		gesture_event = 'long:' + binding.id
 		gesture = true
+	}
+	should_activate := binding.button_behavior && !gesture && !st.pointer_moved
+		&& C.ui2_win_is_window(target) != 0
+		&& C.ui2_win_root_point_in_client(st.root, target, x, y) != 0
+	if gesture_event.len > 0 {
+		windows_emit_action(gesture_event)
 	}
 	if binding.clickable || binding.draggable {
 		windows_emit_action('pointer:up:${binding.id}:${x}:${y}')
+	}
+	if should_activate {
+		windows_emit_action(binding.id)
 	}
 	if gesture {
 		st.suppress_click[windows_handle_id(target)] = true

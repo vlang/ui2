@@ -1389,6 +1389,15 @@ static inline void ui2_win_point_to_root(void *hwnd_ptr, void *root_ptr, int *x,
 	if (y != NULL) *y = point.y;
 }
 
+static inline int ui2_win_root_point_in_client(void *root_ptr, void *target_ptr, int x, int y) {
+	if (root_ptr == NULL || target_ptr == NULL) return 0;
+	POINT point = {x, y};
+	RECT bounds;
+	MapWindowPoints((HWND)root_ptr, (HWND)target_ptr, &point, 1);
+	if (!GetClientRect((HWND)target_ptr, &bounds)) return 0;
+	return PtInRect(&bounds, point) != 0;
+}
+
 static inline void *ui2_win_menu_create(void) {
 	return CreatePopupMenu();
 }

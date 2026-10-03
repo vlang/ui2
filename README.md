@@ -249,6 +249,56 @@ Button {
 }
 ```
 
+When the button needs arbitrary content rather than a single caption, compose
+it from a `Rectangle` (or `View`) and opt the container into button activation
+with `button_behavior: true`. The whole rectangle is the activation target;
+noninteractive children such as its `Label` do not block the tap:
+
+```vml
+Rectangle {
+    id: save_card
+    button_behavior: true
+    on_tap: app.save()
+    x: 20
+    y: 20
+    width: 180
+    height: 56
+    background: #2563EB
+    corner_radius: 8
+    cursor: "pointing_hand"
+
+    Label {
+        text: "Save changes"
+        x: 16
+        y: 16
+        width: 148
+        height: 24
+        align: center
+        color: #FFFFFF
+        bold: true
+    }
+}
+```
+
+`button_behavior` emits the ordinary `on_tap` action once when a press starts
+on the element and is released inside without becoming a drag or scroll
+gesture. It also gives the composite the default accessibility role `button`
+and derives its accessibility label from the first visible, noninteractive
+descendant with a label or text; set `accessibility_role` or
+`accessibility_label` explicitly to override those defaults.
+
+This adds activation semantics without requesting a native bezel, pressed
+visuals, or native keyboard focus treatment—the rectangle and its children
+remain application-drawn. Use `Button` when those native control behaviors
+are required.
+
+This is deliberately separate from `clickable: true`. A clickable view is a
+low-level pointer surface that reports `pointer:down:...` and `pointer:up:...`
+events (and can be combined with `draggable`) for code that needs coordinates
+or gesture phases. Use `button_behavior` for a normal action-bearing composite
+control. If both flags are set, the surface emits the raw pointer phases and
+then its ordinary action after a successful tap.
+
 To reuse that style, put the defaults in a sibling VML module. `PrimaryButton`
 can live in `PrimaryButton.vml` or the conventional snake-case
 `primary_button.vml`:
@@ -281,6 +331,49 @@ Screen {
         x: 20
         y: 20
         width: 120
+    }
+}
+```
+
+A reusable composite can put only the interactive surface in its module and
+accept its visible content as instance children. For example,
+`action_surface.vml` can contain:
+
+```vml
+module ActionSurface
+
+Rectangle {
+    button_behavior: true
+    height: 56
+    background: #2563EB
+    corner_radius: 8
+}
+```
+
+The importing document supplies the action and any combination of labels,
+images, or decorative rectangles:
+
+```vml
+import ActionSurface
+
+Screen {
+    ActionSurface {
+        id: save_card
+        on_tap: app.save()
+        x: 20
+        y: 20
+        width: 180
+
+        Label {
+            text: "Save changes"
+            x: 16
+            y: 16
+            width: save_card.width - 32
+            height: 24
+            align: center
+            color: #FFFFFF
+            bold: true
+        }
     }
 }
 ```
@@ -332,6 +425,33 @@ fn primary_button(id string, title string, frame ui2.Rect) ui2.Element {
 A button emits its `id` by default. Wrap it with `with_action` when its lookup
 identity and action name should differ; `button_with_image`, `with_tooltip`, and
 `with_native_style` can be composed in the same way.
+
+For arbitrary child elements, use `button_view` instead. Child frames are
+relative to the view, just as they are for an ordinary `view`:
+
+```v
+fn save_card(id string, action string, frame ui2.Rect) ui2.Element {
+    caption := ui2.label(
+        '${id}_caption',
+        'Save changes',
+        ui2.rect(16, 16, frame.width - 32, 24),
+        ui2.TextStyle{ color: 0xffffff, bold: true, align: .center },
+    )
+    return ui2.with_action(
+        ui2.button_view(
+            id,
+            frame,
+            ui2.BoxStyle{ bg: 0x2563eb, radius: 8 },
+            [caption],
+        ),
+        action,
+    )
+}
+```
+
+`with_button_behavior(existing_view)` is the modifier form when the composite
+already exists. `button_view` and `with_button_behavior` leave the raw
+`clickable` flag unset.
 
 ## Backend capabilities
 

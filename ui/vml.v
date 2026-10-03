@@ -781,13 +781,15 @@ fn node_to_element(node &VNode, frame Rect) !Element {
 	key := node.prop('key')
 	menu := v_menu(node)
 	secure := el.secure || node.prop_bool('secure') || node.prop_bool('password')
-	return Element{
+	result := Element{
 		...el
 		action_id:           if el.action_id.len > 0 { el.action_id } else { node.prop('on_tap') }
 		key:                 key
 		menu:                if menu.len > 0 { menu } else { el.menu }
 		secure:              secure
 		clickable:           node.prop_bool('clickable')
+		button_behavior:     el.kind == .view
+			&& (el.button_behavior || node.prop_bool('button_behavior'))
 		draggable:           node.prop_bool('draggable')
 		long_press:          node.prop_bool('long_press')
 		swipe_left:          node.prop_bool('swipe_left')
@@ -803,6 +805,7 @@ fn node_to_element(node &VNode, frame Rect) !Element {
 		autocorrect:         node.prop('autocorrect') != 'false'
 		padding_left:        node.prop_or('pad_left', el.padding_left.str()).f64()
 	}
+	return if result.button_behavior { with_button_behavior(result) } else { result }
 }
 
 // v_menu collects MenuItem children as a right-click context menu.

@@ -42,8 +42,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		dropdown_option bool
 		option_index    int
 		emit_change bool
-		clickable   bool
-		draggable   bool
+		clickable      bool
+		button_behavior bool
+		draggable      bool
 	}
 
 	struct TouchState {
@@ -816,9 +817,12 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if begin_scrollbar_drag(x, y) {
 			return
 		}
-		if target.action_id.len > 0 && (target.clickable || target.draggable) {
+		if target.action_id.len > 0
+			&& (target.clickable || target.button_behavior || target.draggable) {
 			g_touch.pointer_target = target
-			fire_event(pointer_event_id('down', target.action_id, x, y))
+			if target.clickable || target.draggable {
+				fire_event(pointer_event_id('down', target.action_id, x, y))
+			}
 		}
 	}
 
@@ -938,6 +942,14 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		if target.action_id.len > 0 && (target.clickable || target.draggable) {
 			fire_event(pointer_event_id('up', target.action_id, x, y))
+		}
+		if target.action_id.len > 0 && target.button_behavior {
+			if !g_touch.moved && hit_target_contains(target, x, y) {
+				fire_event(target.action_id)
+			}
+			return
+		}
+		if target.action_id.len > 0 && (target.clickable || target.draggable) {
 			return
 		}
 		if g_touch.moved {
@@ -990,7 +1002,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		x := g_touch.current_x
 		y := g_touch.current_y
 		g_touch = TouchState{}
-		if captured.action_id.len > 0 {
+		if captured.action_id.len > 0 && (captured.clickable || captured.draggable) {
 			fire_event(pointer_event_id('up', captured.action_id, x, y))
 		}
 	}
@@ -1018,6 +1030,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			}
 		}
 		return HitTarget{}
+	}
+
+	fn hit_target_contains(target HitTarget, x f64, y f64) bool {
+		return x >= target.x && x <= target.x + target.w && y >= target.y
+			&& y <= target.y + target.h
 	}
 
 	fn fire_event(id string) {
@@ -1988,7 +2005,8 @@ fn page_focused_text_area(direction int) {
 				}
 				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
 				if el.enabled && element_action_id(el).len > 0
-					&& (el.clickable || el.draggable || el.long_press || el.swipe_left) {
+					&& (el.clickable || el.button_behavior || el.draggable || el.long_press
+					|| el.swipe_left) {
 					add_hit_target(HitTarget{
 						id: el.id
 						action_id: element_action_id(el)
@@ -1999,6 +2017,7 @@ fn page_focused_text_area(direction int) {
 						long_press: el.long_press
 						swipe_left: el.swipe_left
 						clickable: el.clickable
+						button_behavior: el.button_behavior
 						draggable: el.draggable
 					}, clip)
 				}
@@ -2056,7 +2075,8 @@ fn page_focused_text_area(direction int) {
 					el.rotation) {
 					draw_rect(ctx, x, y, el.frame.width, el.frame.height, 0xe8ecef, 0)
 				}
-				if el.enabled && element_action_id(el).len > 0 && (el.clickable || el.draggable) {
+				if el.enabled && element_action_id(el).len > 0
+					&& (el.clickable || el.draggable) {
 					add_hit_target(HitTarget{
 						id: el.id
 						action_id: element_action_id(el)

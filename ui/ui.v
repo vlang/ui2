@@ -367,6 +367,7 @@ pub:
 	persistent_scrollbars bool // scroll: keep a legacy always-visible scroller instead of the auto-fading overlay one
 	secure                bool // text_field: native password entry
 	clickable             bool // view/image: emit pointer down/up events
+	button_behavior       bool // view: emit its ordinary action when released like a button
 	draggable             bool // view/image: emit pointer drag events
 	rotation              f64 // image: clockwise degrees
 	cursor                string // view/image: hover cursor hint
@@ -535,6 +536,69 @@ pub fn clickable_view(id string, frame Rect, box_ BoxStyle, children []Element) 
 		box: box_
 		clickable: true
 		children: children
+	}
+}
+
+// button_view is a container with ordinary button activation semantics. Unlike
+// clickable_view, which reports raw pointer phases, it emits its action once
+// when a press is released inside the view.
+pub fn button_view(id string, frame Rect, box_ BoxStyle, children []Element) Element {
+	return with_button_behavior(view(id, frame, box_, children))
+}
+
+// with_button_behavior turns a composed view into one semantic button without
+// discarding its children. Its id is the action unless with_action is applied
+// as well. Other element kinds are returned unchanged.
+pub fn with_button_behavior(el Element) Element {
+	if el.kind != .view {
+		return el
+	}
+	return Element{
+		...el
+		button_behavior: true
+		accessibility_role: if el.accessibility_role.len > 0 {
+			el.accessibility_role
+		} else {
+			'button'
+		}
+		accessibility_label: if el.accessibility_label.len > 0 {
+			el.accessibility_label
+		} else {
+			button_behavior_label(el)
+		}
+	}
+}
+
+fn button_behavior_label(el Element) string {
+	if el.text.trim_space().len > 0 {
+		return el.text
+	}
+	for child in el.children {
+		if !button_behavior_label_source(child) {
+			continue
+		}
+		if child.accessibility_label.trim_space().len > 0 {
+			return child.accessibility_label
+		}
+		child_label := button_behavior_label(child)
+		if child_label.len > 0 {
+			return child_label
+		}
+	}
+	return ''
+}
+
+fn button_behavior_label_source(el Element) bool {
+	if el.hidden {
+		return false
+	}
+	return match el.kind {
+		.label { true }
+		.view, .image {
+			!el.button_behavior && !el.clickable && !el.draggable && !el.long_press
+				&& !el.swipe_left && el.menu.len == 0
+		}
+		else { false }
 	}
 }
 

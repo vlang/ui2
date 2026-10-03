@@ -102,7 +102,14 @@ mut:
 	textview_action_ids map[u64]string // NSTextView pointer -> change event id
 	scroll_ids          map[u64]string // NSClipView pointer -> Scroll element id
 	pointer_ids         map[u64]string // NSView pointer -> element id
+	pointer_clickable   map[u64]bool
+	pointer_buttons     map[u64]bool
 	pointer_draggable   map[u64]bool
+	pointer_button_down u64
+	pointer_button_x    f64
+	pointer_button_y    f64
+	pointer_button_moved bool
+	pointer_button_id   string
 	cursor_ids          map[u64]string // NSView pointer -> cursor name
 	control_ids         map[u64]string // NSControl pointer -> action event id
 	checkbox_controls   map[u64]bool // NSButton pointers whose state is persistent
@@ -143,6 +150,8 @@ const runtime_state_singleton = &RuntimeState{
 	scroll_ids: map[u64]string{}
 	pending_scroll: map[string]f64{}
 	pointer_ids: map[u64]string{}
+	pointer_clickable: map[u64]bool{}
+	pointer_buttons: map[u64]bool{}
 	pointer_draggable: map[u64]bool{}
 	cursor_ids: map[u64]string{}
 	control_ids: map[u64]string{}
@@ -835,7 +844,16 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'mouseDown:', voidptr(ui2_pointer_mouse_down), 'v@:@')
 		macos.add_method(cls, 'mouseDragged:', voidptr(ui2_pointer_mouse_dragged), 'v@:@')
 		macos.add_method(cls, 'mouseUp:', voidptr(ui2_pointer_mouse_up), 'v@:@')
+		macos.add_method(cls, 'accessibilityPerformPress', voidptr(ui2_pointer_accessibility_press),
+			'B@:')
 		macos.add_method(cls, 'resetCursorRects', voidptr(ui2_pointer_reset_cursor_rects), 'v@:')
+		macos.register_class_pair(cls)
+	}
+	if macos.get_class('UI2PointerChildView') == unsafe { nil } {
+		cls := macos.allocate_class_pair(macos.get_class('UI2FlippedView'), 'UI2PointerChildView')
+		macos.add_method(cls, 'mouseDown:', voidptr(ui2_pointer_mouse_down), 'v@:@')
+		macos.add_method(cls, 'mouseDragged:', voidptr(ui2_pointer_mouse_dragged), 'v@:@')
+		macos.add_method(cls, 'mouseUp:', voidptr(ui2_pointer_mouse_up), 'v@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2PointerImageView') == unsafe { nil } {
@@ -844,6 +862,13 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'mouseDragged:', voidptr(ui2_pointer_mouse_dragged), 'v@:@')
 		macos.add_method(cls, 'mouseUp:', voidptr(ui2_pointer_mouse_up), 'v@:@')
 		macos.add_method(cls, 'resetCursorRects', voidptr(ui2_pointer_reset_cursor_rects), 'v@:')
+		macos.register_class_pair(cls)
+	}
+	if macos.get_class('UI2PointerLabel') == unsafe { nil } {
+		cls := macos.allocate_class_pair(macos.get_class('NSTextField'), 'UI2PointerLabel')
+		macos.add_method(cls, 'mouseDown:', voidptr(ui2_pointer_mouse_down), 'v@:@')
+		macos.add_method(cls, 'mouseDragged:', voidptr(ui2_pointer_mouse_dragged), 'v@:@')
+		macos.add_method(cls, 'mouseUp:', voidptr(ui2_pointer_mouse_up), 'v@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2AppDelegate') == unsafe { nil } {
@@ -902,6 +927,8 @@ fn render_root(declared Element) {
 	st.view_kinds = map[string]Kind{}
 	st.text_area_direct = map[string]bool{}
 	st.pointer_ids = map[u64]string{}
+	st.pointer_clickable = map[u64]bool{}
+	st.pointer_buttons = map[u64]bool{}
 	st.pointer_draggable = map[u64]bool{}
 	st.cursor_ids = map[u64]string{}
 	st.control_ids = map[u64]string{}
@@ -1337,17 +1364,23 @@ fn native_update_element(native NativeView, el Element, declared_text_changed bo
 }
 
 fn element_interactive(el Element) bool {
-	return el.clickable || el.draggable || el.cursor.len > 0
+	return el.clickable || (el.kind == .view && el.button_behavior) || el.draggable
+		|| el.cursor.len > 0
 }
 
 fn register_pointer(native NativeView, el Element) {
 	mut st := state()
 	key := u64(voidptr(native))
 	st.pointer_ids.delete(key)
+	st.pointer_clickable.delete(key)
+	st.pointer_buttons.delete(key)
 	st.pointer_draggable.delete(key)
 	st.cursor_ids.delete(key)
-	if el.enabled && element_action_id(el).len > 0 && (el.clickable || el.draggable) {
+	if el.enabled && !el.hidden && element_action_id(el).len > 0
+		&& (el.clickable || (el.kind == .view && el.button_behavior) || el.draggable) {
 		st.pointer_ids[key] = element_action_id(el)
+		st.pointer_clickable[key] = el.clickable
+		st.pointer_buttons[key] = el.kind == .view && el.button_behavior
 		st.pointer_draggable[key] = el.draggable
 	}
 	if el.cursor.len > 0 {
@@ -1465,7 +1498,14 @@ fn register_control(native NativeView, id string, submit_id string, emit_change 
 fn unregister_node(key string, native NativeView, kind Kind, text_direct bool) {
 	mut st := state()
 	pointer := u64(voidptr(native))
+	if st.pointer_button_down == pointer {
+		st.pointer_button_down = 0
+		st.pointer_button_moved = false
+		st.pointer_button_id = ''
+	}
 	st.pointer_ids.delete(pointer)
+	st.pointer_clickable.delete(pointer)
+	st.pointer_buttons.delete(pointer)
 	st.pointer_draggable.delete(pointer)
 	st.cursor_ids.delete(pointer)
 	st.control_ids.delete(pointer)
@@ -1800,7 +1840,13 @@ fn native_new_flipped_view(frame NativeRect, box BoxStyle) NativeView {
 }
 
 fn native_new_view(frame NativeRect, box BoxStyle, interactive bool) NativeView {
-	class_name := if interactive { 'UI2PointerView' } else { 'UI2FlippedView' }
+	class_name := if interactive {
+		'UI2PointerView'
+	} else if macos.get_class('UI2PointerChildView') == unsafe { nil } {
+		'UI2FlippedView'
+	} else {
+		'UI2PointerChildView'
+	}
 	native := macos.msg_id_rect(macos.alloc(class_name), 'initWithFrame:', appkit_rect(frame))
 	native_set_box_background(native, box)
 	native_set_corner_radius(native, box.radius)
@@ -1869,7 +1915,12 @@ fn native_new_label(frame NativeRect, text string, text_hex u32, size f64, bold 
 	} else {
 		frame
 	}
-	field := macos.msg_id_rect(macos.alloc('NSTextField'), 'initWithFrame:', appkit_rect(inner))
+	label_class := if macos.get_class('UI2PointerLabel') == unsafe { nil } {
+		'NSTextField'
+	} else {
+		'UI2PointerLabel'
+	}
+	field := macos.msg_id_rect(macos.alloc(label_class), 'initWithFrame:', appkit_rect(inner))
 	if !boxed {
 		native_update_label(field, frame, text, text_hex, size, bold, italic, underline,
 			align, lines, valign, boxed)
@@ -2136,10 +2187,10 @@ fn native_text_shortened(native NativeView, el Element) bool {
 }
 
 fn native_new_button(frame NativeRect, title string, box BoxStyle, text_hex u32, size f64, bold bool, italic bool, underline bool, lines int, image_name string, native_style bool) NativeView {
-	button_view := macos.msg_id_rect(macos.alloc('NSButton'), 'initWithFrame:', appkit_rect(frame))
-	native_update_button(button_view, frame, title, box, text_hex, size, bold, italic, underline,
+	native_button := macos.msg_id_rect(macos.alloc('NSButton'), 'initWithFrame:', appkit_rect(frame))
+	native_update_button(native_button, frame, title, box, text_hex, size, bold, italic, underline,
 		lines, image_name, native_style)
-	return button_view
+	return native_button
 }
 
 fn native_update_button(button_view NativeView, frame NativeRect, title string, box BoxStyle, text_hex u32, size f64, bold bool, italic bool, underline bool, lines int, image_name string, native_style bool) {
@@ -2622,11 +2673,19 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 }
 
 fn fire_pointer_event(native NativeView, phase string, event voidptr) {
-	st := state()
-	// A non-interactive child (e.g. an icon image) sits on top of its pointer
+	mut st := state()
+	pressed := st.pointer_button_down
+	button_moved := st.pointer_button_moved
+	pressed_id := st.pointer_button_id
+	if phase == 'up' {
+		st.pointer_button_down = 0
+		st.pointer_button_moved = false
+		st.pointer_button_id = ''
+	}
+	// A non-interactive child (e.g. a label or icon image) sits on top of its pointer
 	// view and receives the click first. Walk up the view hierarchy to the
 	// nearest registered pointer target so the enclosing button still fires.
-	mut target := native
+	mut target := NativeView(usize(native))
 	mut id := st.pointer_ids[u64(voidptr(target))] or { '' }
 	for id.len == 0 {
 		target = NativeView(macos.msg_id(target, 'superview'))
@@ -2635,14 +2694,50 @@ fn fire_pointer_event(native NativeView, phase string, event voidptr) {
 		}
 		id = st.pointer_ids[u64(voidptr(target))] or { '' }
 	}
-	if phase == 'drag' && !(st.pointer_draggable[u64(voidptr(target))] or { false }) {
+	target_key := u64(voidptr(target))
+	button_behavior := st.pointer_buttons[target_key] or { false }
+	if phase == 'down' {
+		st.pointer_button_down = if button_behavior { target_key } else { 0 }
+		st.pointer_button_moved = false
+		st.pointer_button_id = if button_behavior { id } else { '' }
+		if button_behavior {
+			start := native_event_point(st.root_view, event)
+			st.pointer_button_x = start.x
+			st.pointer_button_y = start.y
+		}
+	}
+	if phase == 'drag' && button_behavior && pressed == target_key {
+		current := native_event_point(st.root_view, event)
+		dx := current.x - st.pointer_button_x
+		dy := current.y - st.pointer_button_y
+		if dx * dx + dy * dy > 100 {
+			st.pointer_button_moved = true
+		}
+	}
+	if phase == 'drag' && !(st.pointer_draggable[target_key] or { false }) {
 		return
 	}
 	if voidptr(st.event_handler) == unsafe { nil } {
 		return
 	}
-	point := native_event_point(st.root_view, event)
-	st.event_handler('pointer:${phase}:${id}:${point.x}:${point.y}')
+	mut should_activate := false
+	if phase == 'up' && button_behavior && pressed == target_key && !button_moved {
+		point := native_event_point(target, event)
+		target_bounds := macos.msg_rect(target, 'bounds')
+		should_activate = point.x >= target_bounds.x
+			&& point.x <= target_bounds.x + target_bounds.width && point.y >= target_bounds.y
+			&& point.y <= target_bounds.y + target_bounds.height
+	}
+	handler := st.event_handler
+	emit_pointer := (st.pointer_clickable[target_key] or { false })
+		|| (st.pointer_draggable[target_key] or { false })
+	if emit_pointer {
+		point := native_event_point(st.root_view, event)
+		handler('pointer:${phase}:${id}:${point.x}:${point.y}')
+	}
+	if should_activate && pressed_id.len > 0 {
+		handler(pressed_id)
+	}
 }
 
 @[export: 'ui2_pointer_mouse_down']
@@ -2658,6 +2753,18 @@ fn ui2_pointer_mouse_dragged(self voidptr, _cmd voidptr, event voidptr) {
 @[export: 'ui2_pointer_mouse_up']
 fn ui2_pointer_mouse_up(self voidptr, _cmd voidptr, event voidptr) {
 	fire_pointer_event(NativeView(self), 'up', event)
+}
+
+@[export: 'ui2_pointer_accessibility_press']
+fn ui2_pointer_accessibility_press(self voidptr, _cmd voidptr) bool {
+	st := state()
+	pointer := u64(self)
+	if !(st.pointer_buttons[pointer] or { false }) || voidptr(st.event_handler) == unsafe { nil } {
+		return false
+	}
+	id := st.pointer_ids[pointer] or { return false }
+	st.event_handler(id)
+	return true
 }
 
 @[export: 'ui2_pointer_reset_cursor_rects']

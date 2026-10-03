@@ -688,6 +688,31 @@ fn test_vml_model_rejects_readonly_bindings_and_unknown_actions() {
 	}
 }
 
+fn test_vml_model_dispatches_a_composite_button_action() {
+	source := 'Rectangle {
+		id: clear_card
+		button_behavior: true
+		on_tap: app.clear()
+		width: 180
+		height: 56
+
+		Label { text: "Clear name" x: 16 y: 16 width: 148 height: 24 }
+	}'
+	mut app := new_vml_app(source, VmlTestApp{
+		name: 'Ada'
+	}) or { panic(err) }
+	built := app.build(rect(0, 0, 320, 200)) or { panic(err) }
+
+	assert built.kind == .view
+	assert built.button_behavior
+	assert !built.clickable
+	assert built.action_id.len > 0
+	assert built.children.len == 1
+	assert built.children[0].text == 'Clear name'
+	app.handle(built.action_id) or { panic(err) }
+	assert app.state().name == ''
+}
+
 fn test_vml_model_validates_an_initially_empty_repeater() {
 	source := 'Screen { Repeater { model: app.users key: item.id Label { text: item.typo } } }'
 	if _ := element_from_vml_model(source, VmlTestApp{}, rect(0, 0, 100, 30)) {

@@ -90,6 +90,97 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		assert !g_touch.down
 	}
 
+	fn test_button_behavior_emits_one_plain_action_on_release_inside() {
+		reset_pointer_capture_test()
+		g_hit_targets = [HitTarget{
+			action_id:      'save_card'
+			w:              120
+			h:              56
+			button_behavior: true
+		}]
+		handle_touch_down(20, 20)
+		handle_touch_up(20, 20)
+		assert pointer_capture_events == ['save_card']
+	}
+
+	fn test_button_behavior_keeps_the_pressed_target_across_a_rebuild() {
+		reset_pointer_capture_test()
+		g_hit_targets = [HitTarget{
+			action_id:      'original'
+			w:              120
+			h:              56
+			button_behavior: true
+		}]
+		handle_touch_down(20, 20)
+		g_hit_targets = [HitTarget{
+			action_id:      'replacement'
+			w:              120
+			h:              56
+			button_behavior: true
+		}]
+		handle_touch_up(20, 20)
+		assert pointer_capture_events == ['original']
+	}
+
+	fn test_button_behavior_cancels_outside_and_nested_button_wins() {
+		reset_pointer_capture_test()
+		g_hit_targets = [HitTarget{
+			action_id:      'card'
+			w:              120
+			h:              56
+			button_behavior: true
+		}]
+		handle_touch_down(20, 20)
+		handle_touch_up(160, 20)
+		assert pointer_capture_events.len == 0
+
+		// Children are registered after their parent and reverse hit testing
+		// gives a nested control ownership of the tap.
+		g_hit_targets = [
+			HitTarget{action_id: 'card', w: 120, h: 56, button_behavior: true},
+			HitTarget{action_id: 'child', x: 10, y: 10, w: 40, h: 30},
+		]
+		handle_touch_down(20, 20)
+		handle_touch_up(20, 20)
+		assert pointer_capture_events == ['child']
+	}
+
+	fn test_button_behavior_cancels_after_drag_or_focus_loss() {
+		reset_pointer_capture_test()
+		g_hit_targets = [HitTarget{
+			action_id:      'card'
+			w:              120
+			h:              56
+			button_behavior: true
+		}]
+		handle_touch_down(20, 20)
+		handle_touch_move(50, 20)
+		handle_touch_up(20, 20)
+		assert pointer_capture_events.len == 0
+
+		handle_touch_down(20, 20)
+		cancel_touch()
+		assert pointer_capture_events.len == 0
+	}
+
+	fn test_raw_clickable_and_button_behavior_emit_both_contracts() {
+		reset_pointer_capture_test()
+		g_hit_targets = [HitTarget{
+			action_id:      'surface'
+			w:              120
+			h:              56
+			clickable:      true
+			button_behavior: true
+		}]
+		handle_touch_down(20, 20)
+		handle_touch_up(20, 20)
+		assert pointer_capture_events == [
+			pointer_event_id('down', 'surface', 20, 20),
+			pointer_event_id('up', 'surface', 20, 20),
+			'surface',
+		]
+	}
+
 	fn test_scrollbar_drag_takes_precedence_over_view_capture() {
 		reset_pointer_capture_test()
 		frame := rect(0, 0, 100, 100)

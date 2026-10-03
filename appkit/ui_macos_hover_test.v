@@ -65,4 +65,43 @@ fn test_macos_shortened_text_shows_whole_text_on_hover() {
 	}
 	assert native_hover_text('dropdown', dropdown_view, dropdown_el) == options[0]
 }
+
+fn test_macos_composite_button_uses_pointer_view_and_passive_child_classes() {
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	ensure_runtime_classes()
+	el := button_view('save_card', rect(0, 0, 160, 48), BoxStyle{}, [
+		label('save_card_label', 'Save changes', rect(12, 12, 136, 24), TextStyle{}),
+	])
+	native := native_create_element(el)
+	label_native := native_create_element(el.children[0])
+	decorative_native := native_create_element(view('decoration', rect(0, 0, 20, 20),
+		BoxStyle{}, []Element{}))
+	defer {
+		macos.release(native)
+		macos.release(label_native)
+		macos.release(decorative_native)
+	}
+
+	assert macos.msg_bool_id(native, 'isKindOfClass:', macos.get_class('UI2PointerView'))
+	assert macos.msg_bool_id(label_native, 'isKindOfClass:', macos.get_class('UI2PointerLabel'))
+	assert macos.msg_bool_id(decorative_native, 'isKindOfClass:',
+		macos.get_class('UI2PointerChildView'))
+	assert macos.responds_to(native, 'accessibilityPerformPress')
+	register_pointer(native, el)
+	pointer := u64(voidptr(native))
+	mut st := state()
+	assert (st.pointer_buttons[pointer] or { false })
+	assert (st.pointer_ids[pointer] or { '' }) == 'save_card'
+
+	disabled := Element{
+		...el
+		enabled: false
+	}
+	register_pointer(native, disabled)
+	assert pointer !in st.pointer_buttons
+	assert pointer !in st.pointer_ids
+}
 }

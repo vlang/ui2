@@ -7,6 +7,12 @@ fn C.vui_app_did_finish_launching(self voidptr, cmd voidptr, application voidptr
 
 fn C.vui_button_tap(self voidptr, cmd voidptr, sender voidptr)
 
+fn C.vui_view_tap(self voidptr, cmd voidptr, sender voidptr)
+
+fn C.vui_view_tap_should_receive(self voidptr, cmd voidptr, sender voidptr, touch voidptr) bool
+
+fn C.vui_button_behavior_accessibility_activate(self voidptr, cmd voidptr) bool
+
 fn C.vui_text_field_changed(self voidptr, cmd voidptr, sender voidptr)
 
 fn C.vui_text_field_submitted(self voidptr, cmd voidptr, sender voidptr)
@@ -72,6 +78,7 @@ __global g_node_gestures = map[string]string{}
 __global g_node_label_boxed = map[string]bool{}
 __global g_node_declared_text = map[string]string{}
 __global g_action_ids = map[u64]string{}
+__global g_button_behavior_views = map[u64]bool{}
 __global g_text_change_ids = map[u64]string{}
 __global g_text_submit_ids = map[u64]string{}
 __global g_text_area_ids = map[u64]string{}
@@ -389,6 +396,15 @@ fn add_button_target(btn View, target View) {
 	macos.msg_void3(btn, 'addTarget:action:forControlEvents:', target, macos.sel('handleTap:'), macos.Id(usize(64)))
 }
 
+fn add_view_tap_target(view View, target View) {
+	recognizer := macos.msg_id2(macos.alloc('UITapGestureRecognizer'), 'initWithTarget:action:',
+		target, macos.sel('handleViewTap:'))
+	macos.msg_void_bool(recognizer, 'setCancelsTouchesInView:', false)
+	macos.msg_void1(recognizer, 'setDelegate:', target)
+	macos.msg_void1(view, 'addGestureRecognizer:', recognizer)
+	macos.release(recognizer)
+}
+
 fn add_control_target_action(control View, target View, action string, event_mask u64) {
 	macos.msg_void3(control, 'addTarget:action:forControlEvents:', target, macos.sel(action), macos.Id(usize(event_mask)))
 }
@@ -495,8 +511,9 @@ fn set_scroll_content_offset_y(scroll View, y f64) {
 	sender(voidptr(scroll), voidptr(macos.sel('setContentOffset:animated:')), offset, false)
 }
 
-fn new_native_view(frame Rect, box BoxStyle) View {
-	view := macos.msg_id_rect(macos.alloc('UIView'), 'initWithFrame:', native_rect(frame))
+fn new_native_view(frame Rect, box BoxStyle, button_behavior bool) View {
+	class_name := if button_behavior { 'VuiButtonBehaviorView' } else { 'UIView' }
+	view := macos.msg_id_rect(macos.alloc(class_name), 'initWithFrame:', native_rect(frame))
 	set_box_background(view, box)
 	set_corner_radius(view, box.radius)
 	return view
@@ -856,12 +873,22 @@ fn ensure_runtime_classes() {
 	}
 	if macos.get_class('VuiButtonHandler') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSObject'), 'VuiButtonHandler')
+		macos.add_protocol(cls, macos.get_protocol('UIGestureRecognizerDelegate'))
 		macos.add_method(cls, 'handleTap:', voidptr(C.vui_button_tap), 'v@:@')
+		macos.add_method(cls, 'handleViewTap:', voidptr(C.vui_view_tap), 'v@:@')
+		macos.add_method(cls, 'gestureRecognizer:shouldReceiveTouch:',
+			voidptr(C.vui_view_tap_should_receive), 'B@:@@')
 		macos.add_method(cls, 'handleTextChange:', voidptr(C.vui_text_field_changed), 'v@:@')
 		macos.add_method(cls, 'handleTextSubmit:', voidptr(C.vui_text_field_submitted), 'v@:@')
 		macos.add_method(cls, 'textViewDidChange:', voidptr(C.vui_text_view_changed), 'v@:@')
 		macos.add_method(cls, 'vuiPresentScanner:', voidptr(C.vui_scanner_present), 'v@:@')
 		macos.add_method(cls, 'vuiRefresh:', voidptr(C.vui_request_refresh), 'v@:@')
+		macos.register_class_pair(cls)
+	}
+	if macos.get_class('VuiButtonBehaviorView') == unsafe { nil } {
+		cls := macos.allocate_class_pair(macos.get_class('UIView'), 'VuiButtonBehaviorView')
+		macos.add_method(cls, 'accessibilityActivate',
+			voidptr(C.vui_button_behavior_accessibility_activate), 'B@:')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('VuiLongPressHandler') == unsafe { nil } {
@@ -931,6 +958,7 @@ fn render_root(declared Element) {
 	g_view_kinds = map[string]Kind{}
 	g_label_places = map[string]LabelPlacement{}
 	g_action_ids = map[u64]string{}
+	g_button_behavior_views = map[u64]bool{}
 	g_text_change_ids = map[u64]string{}
 	g_text_submit_ids = map[u64]string{}
 	g_text_area_ids = map[u64]string{}
@@ -957,14 +985,22 @@ fn render_root(declared Element) {
 }
 
 fn gesture_signature(el Element) string {
-	return '${el.long_press}:${el.swipe_left}'
+	button_behavior := el.kind == .view && el.button_behavior
+	has_gesture := button_behavior || el.long_press || el.swipe_left
+	return '${has_gesture && element_action_id(el).len > 0}:${button_behavior}:${el.long_press}:${el.swipe_left}'
 }
 
-fn attach_view_gestures(native View, id string, long_press bool, swipe_left bool) {
+fn attach_view_gestures(native View, id string, button_behavior bool, long_press bool, swipe_left bool) {
 	if id.len == 0 {
 		return
 	}
 	g_action_ids[u64(native)] = id
+	if button_behavior {
+		g_button_behavior_views[u64(native)] = true
+		add_view_tap_target(native, g_button_handler)
+		macos.set_associated_object(native, assoc_handler_key(), g_button_handler,
+			macos.assoc_retain_nonatomic)
+	}
 	if long_press {
 		add_long_press_target(native, g_long_press_handler)
 		macos.set_associated_object(native, assoc_long_handler_key(), g_long_press_handler, macos.assoc_retain_nonatomic)
@@ -989,7 +1025,7 @@ fn render_children(parent View, children []Element, parent_key string, mut activ
 fn native_create_element(el Element) View {
 	return match el.kind {
 		.screen { View(unsafe { nil }) }
-		.view { new_native_view(el.frame, el.box) }
+		.view { new_native_view(el.frame, el.box, el.button_behavior) }
 		.scroll { new_scroll_view(el.frame, el.box) }
 		.label {
 			new_label_view(el.frame, el.text, el.text_style.color, el.text_style.size, el.text_style.bold, align_value(el.text_style.align), el.text_style.lines, el.text_style.valign, label_needs_container(el))
@@ -1085,8 +1121,12 @@ fn forget_descendant_nodes(key string) {
 fn register_native_handlers(native View, el Element) {
 	pointer := u64(native)
 	action_id := element_action_id(el)
-	if action_id.len > 0 && el.kind in [.view, .button] && (el.long_press || el.swipe_left) {
+	if action_id.len > 0 && el.kind in [.view, .button]
+		&& (el.button_behavior || el.long_press || el.swipe_left) {
 		g_action_ids[pointer] = action_id
+		if el.kind == .view && el.button_behavior {
+			g_button_behavior_views[pointer] = true
+		}
 	}
 	if el.kind == .slider {
 		remove_control_target_action(native, g_button_handler, 'handleTap:', 131072)
@@ -1204,8 +1244,9 @@ fn render_element(parent View, el Element, key string, mut active map[string]boo
 			g_view_translation_x.delete(voidptr(old_native))
 			macos.msg_void(old_native, 'removeFromSuperview')
 		}
-		if el.long_press || el.swipe_left {
-			attach_view_gestures(native, element_action_id(el), el.long_press, el.swipe_left)
+		if (el.kind == .view && el.button_behavior) || el.long_press || el.swipe_left {
+			attach_view_gestures(native, element_action_id(el), el.kind == .view
+				&& el.button_behavior, el.long_press, el.swipe_left)
 		}
 	} else {
 		native_update_element(native, el, declared_text_changed)
@@ -1343,6 +1384,44 @@ fn vui_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
 	}
 	id := g_action_ids[pointer] or { return }
 	g_event_handler(id)
+}
+
+@[export: 'vui_view_tap']
+fn vui_view_tap(_self voidptr, _cmd voidptr, sender voidptr) {
+	if gesture_state(View(sender)) != gesture_state_ended
+		|| voidptr(g_event_handler) == unsafe { nil } {
+		return
+	}
+	view := gesture_view(View(sender))
+	id := g_action_ids[u64(view)] or { return }
+	g_event_handler(id)
+}
+
+@[export: 'vui_view_tap_should_receive']
+fn vui_view_tap_should_receive(_self voidptr, _cmd voidptr, sender voidptr, touch voidptr) bool {
+	owner := gesture_view(View(sender))
+	mut target := macos.msg_id(View(touch), 'view')
+	for target != unsafe { nil } && target != owner {
+		if macos.msg_bool_id(target, 'isKindOfClass:', macos.get_class('UIControl'))
+			|| macos.msg_bool_id(target, 'isKindOfClass:', macos.get_class('UIScrollView'))
+			|| (g_button_behavior_views[u64(target)] or { false }) {
+			return false
+		}
+		target = macos.msg_id(target, 'superview')
+	}
+	return true
+}
+
+@[export: 'vui_button_behavior_accessibility_activate']
+fn vui_button_behavior_accessibility_activate(self voidptr, _cmd voidptr) bool {
+	if voidptr(g_event_handler) == unsafe { nil }
+		|| !macos.msg_bool(View(self), 'isUserInteractionEnabled')
+		|| macos.msg_bool(View(self), 'isHidden') {
+		return false
+	}
+	id := g_action_ids[u64(self)] or { return false }
+	g_event_handler(id)
+	return true
 }
 
 @[export: 'vui_request_refresh']

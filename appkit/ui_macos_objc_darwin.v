@@ -289,6 +289,9 @@ fn native_apply_common_view_state(view macos.Id, hidden bool, enabled bool, role
 	if macos.responds_to(view, 'setEnabled:') {
 		macos.msg_void_bool(view, 'setEnabled:', enabled)
 	}
+	if macos.responds_to(view, 'setAccessibilityEnabled:') {
+		macos.msg_void_bool(view, 'setAccessibilityEnabled:', enabled)
+	}
 	mut helpers := native_macos_helpers()
 	role_key := voidptr(&helpers.accessibility_role_key)
 	saved_role := macos.get_associated_object(view, role_key)
