@@ -266,6 +266,41 @@ fn test_macos_scroll_mode_selects_scrollers_and_document_size() {
 	assert macos.msg_bool(scroll_view, 'hasHorizontalScroller')
 }
 
+fn test_macos_scroll_gesture_passes_to_an_enclosing_view_only_without_range_of_its_own() {
+	ensure_runtime_classes()
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	outer := native_new_scroll(native_rect(0, 0, 400, 300), BoxStyle{}, false, .horizontal_only)
+	defer {
+		macos.release(outer)
+	}
+	outer_document := native_new_flipped_view(native_rect(0, 0, 1200, 300), BoxStyle{})
+	native_set_document_view(outer, outer_document)
+	macos.release(outer_document)
+	inner := native_new_scroll(native_rect(0, 0, 200, 150), BoxStyle{}, false, .horizontal_only)
+	inner_document := native_new_flipped_view(native_rect(0, 0, 200, 150), BoxStyle{})
+	native_set_document_view(inner, inner_document)
+	macos.release(inner_document)
+	native_add_subview(outer_document, inner)
+	macos.release(inner)
+
+	assert scroll_view_scrolls_axis(outer, true)
+	assert !scroll_view_scrolls_axis(outer, false)
+	// Content that fits leaves the inner strip nowhere to go, so a sideways gesture
+	// over it belongs to the strip around it.
+	assert !scroll_view_scrolls_axis(inner, true)
+	assert scroll_view_passes_axis(inner, true)
+	// Nothing around it scrolls vertically, so there is no one to hand that to.
+	assert !scroll_view_passes_axis(inner, false)
+	// Once its content overflows it keeps the gesture itself.
+	native_set_frame(inner_document, native_rect(0, 0, 800, 150))
+	assert scroll_view_scrolls_axis(inner, true)
+	assert !scroll_view_passes_axis(inner, true)
+	assert !scroll_view_passes_axis(outer, true)
+}
+
 fn test_macos_text_field_uses_native_bezel_without_layer_mask() {
 	pool := macos.autorelease_pool_new()
 	defer {

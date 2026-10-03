@@ -257,6 +257,24 @@ static inline DWORD ui2_win_wheel_scroll_style(UINT message, WPARAM wparam) {
 	return WS_VSCROLL;
 }
 
+// Hands a wheel message to the nearest window above this one that shows the bar the
+// wheel moves, and says whether there was one. A window with nothing to scroll that
+// way passes the message on like this, and so does a Scroll element whose bar is
+// already at the end the wheel is turning towards.
+static inline int ui2_win_forward_wheel(void *hwnd_ptr, UINT message, uintptr_t wparam,
+		intptr_t lparam) {
+	DWORD bar = ui2_win_wheel_scroll_style(message, (WPARAM)wparam);
+	HWND parent = GetParent((HWND)hwnd_ptr);
+	while (parent != NULL) {
+		if ((GetWindowLongPtrW(parent, GWL_STYLE) & bar) != 0) {
+			SendMessageW(parent, message, (WPARAM)wparam, (LPARAM)lparam);
+			return 1;
+		}
+		parent = GetParent(parent);
+	}
+	return 0;
+}
+
 static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM wparam,
 		LPARAM lparam, UINT_PTR subclass_id, DWORD_PTR reference_data) {
 	(void)subclass_id;
@@ -340,18 +358,10 @@ static LRESULT CALLBACK ui2_win_window_proc(HWND hwnd, UINT message, WPARAM wpar
 		&& ui2_win_is_accessible_button(hwnd)) {
 		InvalidateRect(hwnd, NULL, FALSE);
 	}
-	if (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL) {
-		DWORD bar = ui2_win_wheel_scroll_style(message, wparam);
-		if ((GetWindowLongPtrW(hwnd, GWL_STYLE) & bar) == 0) {
-			HWND parent = GetParent(hwnd);
-			while (parent != NULL) {
-				if ((GetWindowLongPtrW(parent, GWL_STYLE) & bar) != 0) {
-					SendMessageW(parent, message, wparam, lparam);
-					return 0;
-				}
-				parent = GetParent(parent);
-			}
-		}
+	if ((message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL)
+		&& (GetWindowLongPtrW(hwnd, GWL_STYLE) & ui2_win_wheel_scroll_style(message, wparam)) == 0
+		&& ui2_win_forward_wheel(hwnd, message, wparam, lparam)) {
+		return 0;
 	}
 	if (message == WM_CONTEXTMENU
 		&& ui2_windows_context_menu(hwnd, GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam))) {

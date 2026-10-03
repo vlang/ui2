@@ -3049,16 +3049,37 @@ fn ui2_scroll_view_scroll_wheel(self voidptr, _cmd voidptr, event voidptr) {
 		event)
 }
 
-// scroll_view_passes_axis reports whether a scroll view has nothing to scroll along
-// an axis that a scroll view around it does.
-fn scroll_view_passes_axis(scroll NativeView, horizontal bool) bool {
+// scroll_view_scrolls_axis reports whether a scroll view has anywhere to go along an
+// axis: its mode scrolls that axis, and its document is longer than what shows of it.
+fn scroll_view_scrolls_axis(scroll NativeView, horizontal bool) bool {
 	scroller := if horizontal { 'hasHorizontalScroller' } else { 'hasVerticalScroller' }
-	if macos.msg_bool(scroll, scroller) {
+	if !macos.msg_bool(scroll, scroller) {
+		return false
+	}
+	document_view := macos.msg_id(scroll, 'documentView')
+	if native_is_nil(document_view) {
+		return false
+	}
+	document := macos.msg_rect(document_view, 'frame')
+	visible := macos.msg_rect(macos.msg_id(scroll, 'contentView'), 'bounds')
+	return if horizontal {
+		document.width > visible.width + 0.5
+	} else {
+		document.height > visible.height + 0.5
+	}
+}
+
+// scroll_view_passes_axis reports whether a scroll view has nowhere to go along an
+// axis that a scroll view around it does. Content that fits counts as nowhere to go,
+// the same as an axis the mode leaves out, so a pane that happens not to overflow
+// does not hold on to a gesture the pane around it could use.
+fn scroll_view_passes_axis(scroll NativeView, horizontal bool) bool {
+	if scroll_view_scrolls_axis(scroll, horizontal) {
 		return false
 	}
 	mut parent := macos.msg_id(macos.msg_id(scroll, 'superview'), 'enclosingScrollView')
 	for !native_is_nil(parent) {
-		if macos.msg_bool(parent, scroller) {
+		if scroll_view_scrolls_axis(parent, horizontal) {
 			return true
 		}
 		parent = macos.msg_id(macos.msg_id(parent, 'superview'), 'enclosingScrollView')

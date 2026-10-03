@@ -178,6 +178,8 @@ fn C.ui2_win_scroll_wheel(hwnd voidptr, wparam usize, horizontal int, tilt int) 
 
 fn C.ui2_win_wheel_is_shifted(wparam usize) int
 
+fn C.ui2_win_forward_wheel(hwnd voidptr, message u32, wparam usize, lparam isize) int
+
 fn C.ui2_win_scroll_to_rect(hwnd voidptr, start int, end int, horizontal int) int
 fn C.ui2_win_set_scroll_position(hwnd voidptr, position int, horizontal int) int
 
@@ -1557,15 +1559,29 @@ enum WindowsScrollSource {
 	tilt_wheel
 }
 
-fn windows_handle_scroll(hwnd voidptr, wparam usize, source WindowsScrollSource, horizontal bool) {
+// windows_handle_wheel scrolls the Scroll element a wheel message reached. One already
+// at the end the wheel is turning towards leaves the message to the pane around it,
+// the way the custom renderer passes the distance a pane cannot use up its chain.
+fn windows_handle_wheel(hwnd voidptr, message u32, wparam usize, lparam isize) {
+	tilt := message == win_wm_mouse_hwheel
+	// Shift turns a plain wheel sideways.
+	horizontal := tilt || C.ui2_win_wheel_is_shifted(wparam) != 0
+	source := if tilt { WindowsScrollSource.tilt_wheel } else { WindowsScrollSource.wheel }
+	if !windows_handle_scroll(hwnd, wparam, source, horizontal) {
+		C.ui2_win_forward_wheel(hwnd, message, wparam, lparam)
+	}
+}
+
+// windows_handle_scroll reports whether the message moved the element.
+fn windows_handle_scroll(hwnd voidptr, wparam usize, source WindowsScrollSource, horizontal bool) bool {
 	mut st := windows_state()
-	key := st.handle_keys[windows_handle_id(hwnd)] or { return }
+	key := st.handle_keys[windows_handle_id(hwnd)] or { return false }
 	if (st.node_kinds[key] or { Kind.view }) != .scroll {
-		return
+		return false
 	}
 	// An element that does not scroll sideways has no horizontal bar to read or move.
 	if horizontal && key !in st.scroll_positions_x {
-		return
+		return false
 	}
 	old_position := if horizontal {
 		st.scroll_positions_x[key] or { 0 }
@@ -1579,7 +1595,7 @@ fn windows_handle_scroll(hwnd voidptr, wparam usize, source WindowsScrollSource,
 		C.ui2_win_scroll_wheel(hwnd, wparam, axis, windows_bool(source == .tilt_wheel))
 	}
 	if position == old_position {
-		return
+		return false
 	}
 	if horizontal {
 		st.scroll_positions_x[key] = position
@@ -1591,6 +1607,7 @@ fn windows_handle_scroll(hwnd voidptr, wparam usize, source WindowsScrollSource,
 	if id.len > 0 && voidptr(st.scroll_handler) != unsafe { nil } {
 		st.scroll_handler(id)
 	}
+	return true
 }
 
 fn windows_emit_action(id string) {
@@ -1929,13 +1946,8 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 			windows_handle_scroll(hwnd, wparam, .bar, message == win_wm_hscroll)
 			return 0
 		}
-		win_wm_mouse_wheel {
-			// Shift turns a plain wheel sideways.
-			windows_handle_scroll(hwnd, wparam, .wheel, C.ui2_win_wheel_is_shifted(wparam) != 0)
-			return 0
-		}
-		win_wm_mouse_hwheel {
-			windows_handle_scroll(hwnd, wparam, .tilt_wheel, true)
+		win_wm_mouse_wheel, win_wm_mouse_hwheel {
+			windows_handle_wheel(hwnd, message, wparam, lparam)
 			return 0
 		}
 		win_wm_key_down {
