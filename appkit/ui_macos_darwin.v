@@ -1823,24 +1823,18 @@ fn (document ScrollDocument) autoresizing_mask() u64 {
 // is held to what shows, so there is nothing along it to scroll to. What shows is
 // measured from the scroll view rather than taken from the frame, because a scroller
 // that takes room of its own makes it less, and a document sized to the frame would
-// then have a range the width of that scroller. A plain vertical list keeps the
-// frame's width, as it always has.
+// then have a range the width of that scroller: one a wheel could push the element
+// into along an axis it is not meant to scroll.
 fn scroll_document_size(el Element, visible_width f64, visible_height f64) ScrollDocument {
 	shown_width := if visible_width > 0 { visible_width } else { el.frame.width }
 	shown_height := if visible_height > 0 { visible_height } else { el.frame.height }
+	scrolls_x := el.scroll_mode != .vertical_only
 	scrolls_y := el.scroll_mode != .horizontal_only
-	height := if scrolls_y { content_height(el.children) + 16 } else { shown_height }
-	if el.scroll_mode == .vertical_only {
-		return ScrollDocument{
-			width:  el.frame.width
-			height: height
-		}
-	}
-	content_width := scroll_content_width(el.children)
+	content_width := if scrolls_x { scroll_content_width(el.children) } else { 0.0 }
 	fits_across := content_width <= shown_width
 	return ScrollDocument{
 		width:          if fits_across { shown_width } else { content_width }
-		height:         height
+		height:         if scrolls_y { content_height(el.children) + 16 } else { shown_height }
 		follows_width:  fits_across
 		follows_height: !scrolls_y
 	}

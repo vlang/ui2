@@ -258,13 +258,15 @@ fn test_macos_scroll_mode_selects_scrollers_and_document_size() {
 		width:  400
 		height: 316
 	}
-	// A plain vertical list keeps the width of its frame.
+	// A vertical list is held to the width that shows, however far its children reach,
+	// so a scroller taking room of its own leaves no sideways range behind it.
 	assert scroll_document_size(Element{
 		...columns
 		scroll_mode: .vertical_only
 	}, 105, 80) == ScrollDocument{
-		width:  120
-		height: 316
+		width:         105
+		height:        316
+		follows_width: true
 	}
 	// Content that fits across is held to the width that shows, which a scroller
 	// taking room of its own makes less than the frame, so no sideways range is left.
