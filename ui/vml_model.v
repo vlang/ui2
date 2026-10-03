@@ -1525,6 +1525,8 @@ pub:
 	height int    = 800
 	min_width  int
 	min_height int
+	// Custom renderer only; native backends keep their refresh contract.
+	render_policy RenderPolicy = .continuous
 }
 
 @[heap]
@@ -1645,6 +1647,9 @@ pub fn run_vml[T](config VmlRunConfig[T]) ! {
 	}
 	mut runtime := vml_runtime()
 	runtime.controller = voidptr(controller)
+	$if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
+		set_render_policy(config.render_policy)
+	}
 	$if macos || windows || linux {
 		run_window_with_min_size(config.title, config.width, config.height, config.min_width,
 			config.min_height, vml_controller_build[T], vml_controller_handle[T])

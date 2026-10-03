@@ -62,10 +62,9 @@ fn native_tray_supported() bool {
 
 fn native_set_menu_bar(menus []Menu) {
 	$if ui2_custom_rendering ? {
-		// The drawn bar is rebuilt from the declaration every frame; all that
-		// has to happen is that a menu left open by the previous one cannot
-		// outlive it.
+		// Rebuild bounds and paint after replacing the menu declaration.
 		close_menu_bar()
+		refresh()
 	} $else {
 		macos_install_menu_bar(menu_app_name(), menus)
 	}

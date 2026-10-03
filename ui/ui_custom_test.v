@@ -47,8 +47,8 @@ $if ui2_custom_rendering ? {
 		g_focused_field = 'field'
 		replace_text_value('field', 'abc')
 		replace_text_editor('field', text_editor('abc'.clone()))
-		handle_key_down(.left)
-		handle_key_down(.backspace)
+		handle_key_down(.left, 0)
+		handle_key_down(.backspace, 0)
 		handle_char_input(`x`)
 		assert text('field') == 'axc'
 		forget_text_state('field')
