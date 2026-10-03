@@ -1676,18 +1676,21 @@ static inline int ui2_win_scroll_message(void *hwnd_ptr, uintptr_t wparam, int h
 // A precision wheel or a touchpad reports steps smaller than WHEEL_DELTA, many to a
 // notch. The step is scaled before it is divided, and what the division leaves over
 // is kept for the next message, so those steps add up to the same distance a whole
-// notch covers instead of each rounding away to nothing.
-static inline int ui2_win_wheel_distance(uintptr_t wparam, int tilt) {
+// notch covers instead of each rounding away to nothing. What is left over belongs to
+// the axis being scrolled, not to the kind of message: a plain wheel scrolls
+// sideways with Shift held, and must not finish there a step it began vertically.
+static inline int ui2_win_wheel_distance(uintptr_t wparam, int tilt, int horizontal) {
 	static int leftover[2];
-	int *rest = &leftover[tilt ? 1 : 0];
+	int *rest = &leftover[horizontal ? 1 : 0];
 	int delta = GET_WHEEL_DELTA_WPARAM(wparam);
+	int step = (tilt ? delta : -delta) * 48;
 	// A wheel turned back the other way starts afresh rather than working off what
 	// the last direction left.
-	if ((*rest > 0 && delta < 0) || (*rest < 0 && delta > 0)) *rest = 0;
-	int scaled = delta * 48 + *rest;
+	if ((*rest > 0 && step < 0) || (*rest < 0 && step > 0)) *rest = 0;
+	int scaled = step + *rest;
 	int distance = scaled / WHEEL_DELTA;
 	*rest = scaled - distance * WHEEL_DELTA;
-	return tilt ? distance : -distance;
+	return distance;
 }
 
 // Moves a scroll bar by a distance and reports where it settled, which is short of

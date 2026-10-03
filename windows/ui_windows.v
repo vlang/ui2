@@ -178,7 +178,7 @@ fn C.ui2_win_scroll_position(hwnd voidptr, horizontal int) int
 
 fn C.ui2_win_scroll_message(hwnd voidptr, wparam usize, horizontal int) int
 
-fn C.ui2_win_wheel_distance(wparam usize, tilt int) int
+fn C.ui2_win_wheel_distance(wparam usize, tilt int, horizontal int) int
 
 fn C.ui2_win_scroll_by(hwnd voidptr, distance int, horizontal int) int
 
@@ -1570,7 +1570,7 @@ fn windows_handle_wheel(hwnd voidptr, message u32, wparam usize) {
 	tilt := message == win_wm_mouse_hwheel
 	// Shift turns a plain wheel sideways.
 	horizontal := tilt || C.ui2_win_wheel_is_shifted(wparam) != 0
-	distance := C.ui2_win_wheel_distance(wparam, windows_bool(tilt))
+	distance := C.ui2_win_wheel_distance(wparam, windows_bool(tilt), windows_bool(horizontal))
 	mut remaining := distance - windows_scroll_by(hwnd, distance, horizontal)
 	mut pane := C.ui2_win_scroll_parent(hwnd, windows_bool(horizontal))
 	for remaining != 0 && pane != unsafe { nil } {
