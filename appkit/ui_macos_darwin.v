@@ -353,11 +353,16 @@ pub fn scroll_offset(id string) f64 {
 pub fn scroll_horizontal_offset(id string) f64 {
 	st := state()
 	scrollv := st.views[id] or { return 0 }
+	if !scroll_view_has_axis(scrollv, true) {
+		return 0
+	}
 	r := macos.msg_rect(scrollv, 'documentVisibleRect')
 	return r.x
 }
 
-// scroll_to_rect scrolls a Scroll element so the given document rect is visible.
+// scroll_to_rect scrolls a Scroll element so the given document rect is visible. Along
+// an axis the element does not scroll, the rect is taken to be what already shows from
+// the start, so bringing it into view never moves the element that way.
 pub fn scroll_to_rect(id string, x f64, y f64, width f64, height f64) {
 	st := state()
 	scrollv := st.views[id] or { return }
@@ -365,7 +370,23 @@ pub fn scroll_to_rect(id string, x f64, y f64, width f64, height f64) {
 	if native_is_nil(doc) {
 		return
 	}
-	macos.msg_void_rect(doc, 'scrollRectToVisible:', macos.rect(x, y, width, height))
+	visible := macos.msg_rect(macos.msg_id(scrollv, 'contentView'), 'bounds')
+	across := scroll_view_has_axis(scrollv, true)
+	down := scroll_view_has_axis(scrollv, false)
+	macos.msg_void_rect(doc, 'scrollRectToVisible:', macos.rect(if across { x } else { 0.0 },
+		if down { y } else { 0.0 }, if across { width } else { visible.width }, if down {
+		height
+	} else {
+		visible.height
+	}))
+}
+
+// scroll_view_has_axis reports whether a scroll view's mode scrolls an axis. One it
+// leaves out can still have a range in AppKit's eyes: a scroller that takes room of
+// its own leaves the document that much longer than what shows of it. That is not
+// somewhere to scroll to, so no position along such an axis is reported or asked for.
+fn scroll_view_has_axis(scroll NativeView, horizontal bool) bool {
+	return macos.msg_bool(scroll, if horizontal { 'hasHorizontalScroller' } else { 'hasVerticalScroller' })
 }
 
 // scroll_to_offset puts a Scroll element at the given vertical offset. Asking for a
@@ -406,9 +427,10 @@ fn apply_scroll_offset(mut st RuntimeState, id string) {
 	// A rect the size of the visible area lands its corner at the corner of the view,
 	// which is the offset that was asked for. The scroll view clamps it to the
 	// document, so an offset past the end settles at the end. An axis nothing was
-	// asked of keeps the position it is at.
-	x := st.pending_scroll_x[id] or { visible.x }
-	y := st.pending_scroll[id] or { visible.y }
+	// asked of keeps the position it is at, and one the element does not scroll stays
+	// at its start whatever was asked.
+	x := if scroll_view_has_axis(scrollv, true) { st.pending_scroll_x[id] or { visible.x } } else { 0.0 }
+	y := if scroll_view_has_axis(scrollv, false) { st.pending_scroll[id] or { visible.y } } else { 0.0 }
 	macos.msg_void_rect(doc, 'scrollRectToVisible:', macos.rect(x, y, visible.width, visible.height))
 	st.pending_scroll.delete(id)
 	st.pending_scroll_x.delete(id)
@@ -3091,8 +3113,7 @@ fn ui2_scroll_view_scroll_wheel(self voidptr, _cmd voidptr, event voidptr) {
 // scroll_view_scrolls_axis reports whether a scroll view has anywhere to go along an
 // axis: its mode scrolls that axis, and its document is longer than what shows of it.
 fn scroll_view_scrolls_axis(scroll NativeView, horizontal bool) bool {
-	scroller := if horizontal { 'hasHorizontalScroller' } else { 'hasVerticalScroller' }
-	if !macos.msg_bool(scroll, scroller) {
+	if !scroll_view_has_axis(scroll, horizontal) {
 		return false
 	}
 	document_view := macos.msg_id(scroll, 'documentView')
