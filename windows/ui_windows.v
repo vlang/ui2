@@ -172,6 +172,10 @@ fn C.ui2_win_clear_bitmap(hwnd voidptr)
 
 fn C.ui2_win_set_scroll(hwnd voidptr, content int, position int, horizontal int) int
 
+fn C.ui2_win_set_scroll_both(hwnd voidptr, content_width int, content_height int, position_x int, position_y int)
+
+fn C.ui2_win_scroll_position(hwnd voidptr, horizontal int) int
+
 fn C.ui2_win_scroll_message(hwnd voidptr, wparam usize, horizontal int) int
 
 fn C.ui2_win_wheel_distance(wparam usize, tilt int) int
@@ -1049,18 +1053,22 @@ fn windows_layout_scroll(hwnd voidptr, el Element, key string) (int, int) {
 			st.pending_scroll_x.delete(el.id)
 		}
 	}
-	mut position := C.ui2_win_set_scroll(hwnd, content_height, requested, 0)
+	mut position := 0
 	mut x_position := 0
 	if scrolls_x || key in st.scroll_positions_x {
+		// Each bar takes room from the axis the other pages over, so the two are
+		// settled together rather than one from what the other happened to leave.
 		content_width := if scrolls_x { int(scroll_content_width(el.children)) } else { 0 }
-		x_position = C.ui2_win_set_scroll(hwnd, content_width, requested_x, 1)
-		// A bar that appeared or went away changed how much of the other axis shows.
-		position = C.ui2_win_set_scroll(hwnd, content_height, position, 0)
+		C.ui2_win_set_scroll_both(hwnd, content_width, content_height, requested_x, requested)
+		x_position = C.ui2_win_scroll_position(hwnd, 1)
+		position = C.ui2_win_scroll_position(hwnd, 0)
 		if scrolls_x {
 			st.scroll_positions_x[key] = x_position
 		} else {
 			st.scroll_positions_x.delete(key)
 		}
+	} else {
+		position = C.ui2_win_set_scroll(hwnd, content_height, requested, 0)
 	}
 	st.scroll_positions[key] = position
 	return x_position, position

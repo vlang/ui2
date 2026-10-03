@@ -1562,22 +1562,70 @@ static inline int ui2_win_scroll_bar(int horizontal) {
 	return horizontal ? SB_HORZ : SB_VERT;
 }
 
-static inline int ui2_win_set_scroll(void *hwnd_ptr, int content, int position, int horizontal) {
-	HWND hwnd = (HWND)hwnd_ptr;
-	int bar = ui2_win_scroll_bar(horizontal);
-	RECT rect;
-	GetClientRect(hwnd, &rect);
+static inline int ui2_win_set_scroll_page(HWND hwnd, int bar, int content, int page, int position) {
 	SCROLLINFO info;
 	ZeroMemory(&info, sizeof(info));
 	info.cbSize = sizeof(info);
 	info.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
 	info.nMin = 0;
 	info.nMax = content > 0 ? content - 1 : 0;
-	info.nPage = (UINT)(horizontal ? rect.right - rect.left : rect.bottom - rect.top);
+	info.nPage = (UINT)(page > 0 ? page : 0);
 	info.nPos = position;
 	SetScrollInfo(hwnd, bar, &info, TRUE);
 	info.fMask = SIF_POS;
 	GetScrollInfo(hwnd, bar, &info);
+	return info.nPos;
+}
+
+static inline int ui2_win_set_scroll(void *hwnd_ptr, int content, int position, int horizontal) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	RECT rect;
+	GetClientRect(hwnd, &rect);
+	return ui2_win_set_scroll_page(hwnd, ui2_win_scroll_bar(horizontal), content,
+		horizontal ? rect.right - rect.left : rect.bottom - rect.top, position);
+}
+
+// Settles how much of each axis a Scroll element shows once its bars are in place.
+// Each bar takes room from the axis the other one pages over, so neither page can be
+// read off the client area while the other bar may still come or go. Which bars are
+// needed follows from the area the window has with neither: a vertical bar when the
+// content is taller than that, a horizontal one when it is wider than what the
+// vertical bar leaves, and a vertical one after all when the horizontal bar is what
+// makes the content too tall.
+static inline void ui2_win_scroll_pages(int width, int height, int content_width,
+		int content_height, int bar_width, int bar_height, int *page_width, int *page_height) {
+	int vertical = content_height > height;
+	int horizontal = content_width > width - (vertical ? bar_width : 0);
+	if (horizontal && !vertical) vertical = content_height > height - bar_height;
+	*page_width = width - (vertical ? bar_width : 0);
+	*page_height = height - (horizontal ? bar_height : 0);
+}
+
+// Sets both bars of a Scroll element together, for one that scrolls sideways. Setting
+// them one after the other leaves whichever went first paging over room the other bar
+// has since taken, and the content under that bar out of reach.
+static inline void ui2_win_set_scroll_both(void *hwnd_ptr, int content_width, int content_height,
+		int position_x, int position_y) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	RECT rect;
+	// The window has no border, so its own rectangle is the client area together
+	// with whichever bars are showing.
+	GetWindowRect(hwnd, &rect);
+	int page_width = 0;
+	int page_height = 0;
+	ui2_win_scroll_pages(rect.right - rect.left, rect.bottom - rect.top, content_width,
+		content_height, GetSystemMetrics(SM_CXVSCROLL), GetSystemMetrics(SM_CYHSCROLL),
+		&page_width, &page_height);
+	ui2_win_set_scroll_page(hwnd, SB_VERT, content_height, page_height, position_y);
+	ui2_win_set_scroll_page(hwnd, SB_HORZ, content_width, page_width, position_x);
+}
+
+static inline int ui2_win_scroll_position(void *hwnd_ptr, int horizontal) {
+	SCROLLINFO info;
+	ZeroMemory(&info, sizeof(info));
+	info.cbSize = sizeof(info);
+	info.fMask = SIF_POS;
+	GetScrollInfo((HWND)hwnd_ptr, ui2_win_scroll_bar(horizontal), &info);
 	return info.nPos;
 }
 
