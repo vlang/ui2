@@ -77,6 +77,7 @@ mut:
 	text_key_consumed   bool
 	scroll_handler      ScrollFn = ScrollFn(unsafe { nil })
 	drop_handler        DropFn = DropFn(unsafe { nil })
+	window_ready_handler WindowReadyFn = WindowReadyFn(unsafe { nil })
 	window              NativeView
 	root_view           NativeView
 	button_handler      NativeView
@@ -313,6 +314,25 @@ pub fn on_scroll(handler ScrollFn) {
 pub fn on_drop(handler DropFn) {
 	mut st := state()
 	st.drop_handler = handler
+}
+
+// on_window_ready registers a handler called with the NSWindow after the
+// application has finished launching, the window has been ordered front and
+// the first frame has been rendered. An embedder creates its child view
+// inside it.
+pub fn on_window_ready(handler WindowReadyFn) {
+	mut st := state()
+	st.window_ready_handler = handler
+}
+
+// fire_window_ready notifies the embedder registered through on_window_ready,
+// if any.
+fn fire_window_ready() {
+	st := state()
+	if voidptr(st.window_ready_handler) == unsafe { nil } {
+		return
+	}
+	st.window_ready_handler(st.window)
 }
 
 // set_window_title updates the current AppKit window title.
@@ -2653,6 +2673,10 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 	install_declared_menus()
 	frame := native_rect(120, 120, f64(st.run_config.width), f64(st.run_config.height))
 	st.window = native_new_window(frame, st.run_config.title)
+	// The handle published by run_window is nil on macOS because the window
+	// only exists once the app has finished launching; publish the real
+	// NSWindow now so native_window_handle() reports it to embedders.
+	menu_update_window(st.window)
 	native_set_content_min_size(st.window, f64(st.run_config.min_width),
 		f64(st.run_config.min_height))
 	// The app delegate doubles as window delegate for windowDidResize:
@@ -2670,6 +2694,7 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 	native_make_key_and_order_front(st.window)
 	native_activate()
 	refresh()
+	fire_window_ready()
 }
 
 fn fire_pointer_event(native NativeView, phase string, event voidptr) {

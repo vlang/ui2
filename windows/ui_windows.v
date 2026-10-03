@@ -261,6 +261,7 @@ mut:
 	key_event_handler  KeyEventFn = KeyEventFn(unsafe { nil })
 	scroll_handler     ScrollFn = ScrollFn(unsafe { nil })
 	drop_handler       DropFn = DropFn(unsafe { nil })
+	window_ready_handler WindowReadyFn = WindowReadyFn(unsafe { nil })
 	root               voidptr
 	nodes              map[string]voidptr
 	node_kinds         map[string]Kind
@@ -512,6 +513,7 @@ fn run_window_with_min_size(title string, width int, height int, min_width int, 
 	install_declared_menus()
 	refresh()
 	C.ui2_win_show_main_window(root)
+	windows_fire_window_ready()
 	C.ui2_win_message_loop()
 	native_remove_tray()
 	windows_dispose_all()
@@ -585,6 +587,24 @@ pub fn on_scroll(handler ScrollFn) {
 pub fn on_drop(handler DropFn) {
 	mut st := windows_state()
 	st.drop_handler = handler
+}
+
+// on_window_ready registers a handler called with the main HWND after the
+// window has been created and shown, before the message loop starts. An
+// embedder creates its child window (e.g. a webview) inside it.
+pub fn on_window_ready(handler WindowReadyFn) {
+	mut st := windows_state()
+	st.window_ready_handler = handler
+}
+
+// windows_fire_window_ready notifies the embedder registered through
+// on_window_ready, if any.
+fn windows_fire_window_ready() {
+	st := windows_state()
+	if voidptr(st.window_ready_handler) == unsafe { nil } {
+		return
+	}
+	st.window_ready_handler(st.root)
 }
 
 // set_window_title updates the current Win32 window title.

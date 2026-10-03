@@ -190,6 +190,12 @@ pub type ScrollFn = fn (string)
 // window, plus the pointer location in root-view coordinates.
 pub type DropFn = fn (DropEvent)
 
+// WindowReadyFn receives the main window's native handle once the window has
+// been created and shown, before the event loop starts. It lets an embedder
+// (e.g. a webview child) attach to the window. The handle is nil on backends
+// without a native window (custom renderer).
+pub type WindowReadyFn = fn (handle voidptr)
+
 pub struct DropEvent {
 pub:
 	paths []string

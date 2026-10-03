@@ -149,6 +149,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_key_event_handler = KeyEventFn(unsafe { nil })
 	__global g_scroll_handler = ScrollFn(unsafe { nil })
 	__global g_drop_handler = DropFn(unsafe { nil })
+	__global g_window_ready_handler = WindowReadyFn(unsafe { nil })
 	__global g_key_consumed = false
 	__global g_gg_app = &GgApp{}
 	__global g_text_values = map[string]string{}
@@ -350,6 +351,23 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	pub fn on_drop(handler DropFn) {
 		g_drop_handler = handler
+	}
+
+	// on_window_ready registers a handler called with nil once the window
+	// exists: the custom renderer draws inside its own window and has no
+	// native handle to embed into. The call keeps embedder code uniform
+	// across backends.
+	pub fn on_window_ready(handler WindowReadyFn) {
+		g_window_ready_handler = handler
+	}
+
+	// custom_fire_window_ready notifies the embedder registered through
+	// on_window_ready, if any.
+	fn custom_fire_window_ready() {
+		if voidptr(g_window_ready_handler) == unsafe { nil } {
+			return
+		}
+		g_window_ready_handler(unsafe { nil })
 	}
 
 	pub fn text(id string) string {
@@ -611,11 +629,13 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	fn on_init(_ &GgApp) {
 		if voidptr(g_build_screen) == unsafe { nil } {
+			custom_fire_window_ready()
 			return
 		}
 		// gg/Sokol must receive images during initialization to make their GPU
 		// textures available for the first rendered frame.
 		preload_images(g_build_screen())
+		custom_fire_window_ready()
 	}
 
 	fn on_frame(app &GgApp) {
