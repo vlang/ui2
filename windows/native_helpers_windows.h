@@ -1601,6 +1601,16 @@ static inline void ui2_win_scroll_pages(int width, int height, int content_width
 	*page_height = height - (horizontal ? bar_height : 0);
 }
 
+// Makes a standard bar show exactly when it is needed. A range that outgrows its page
+// brings the bar in and one that fits takes it away, so this normally finds nothing to
+// do. Asking outright keeps the horizontal bar from resting on that alone: the window
+// is created with the style for the vertical bar only.
+static inline void ui2_win_ensure_scroll_bar(HWND hwnd, int bar, int needed) {
+	DWORD style = bar == SB_HORZ ? WS_HSCROLL : WS_VSCROLL;
+	int showing = (GetWindowLongPtrW(hwnd, GWL_STYLE) & style) != 0;
+	if (showing != (needed != 0)) ShowScrollBar(hwnd, bar, needed ? TRUE : FALSE);
+}
+
 // Sets both bars of a Scroll element together, for one that scrolls sideways. Setting
 // them one after the other leaves whichever went first paging over room the other bar
 // has since taken, and the content under that bar out of reach.
@@ -1618,6 +1628,8 @@ static inline void ui2_win_set_scroll_both(void *hwnd_ptr, int content_width, in
 		&page_width, &page_height);
 	ui2_win_set_scroll_page(hwnd, SB_VERT, content_height, page_height, position_y);
 	ui2_win_set_scroll_page(hwnd, SB_HORZ, content_width, page_width, position_x);
+	ui2_win_ensure_scroll_bar(hwnd, SB_VERT, content_height > page_height);
+	ui2_win_ensure_scroll_bar(hwnd, SB_HORZ, content_width > page_width);
 }
 
 static inline int ui2_win_scroll_position(void *hwnd_ptr, int horizontal) {
