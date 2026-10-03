@@ -174,11 +174,13 @@ fn C.ui2_win_set_scroll(hwnd voidptr, content int, position int, horizontal int)
 
 fn C.ui2_win_scroll_message(hwnd voidptr, wparam usize, horizontal int) int
 
-fn C.ui2_win_scroll_wheel(hwnd voidptr, wparam usize, horizontal int, tilt int) int
+fn C.ui2_win_wheel_distance(wparam usize, tilt int) int
+
+fn C.ui2_win_scroll_by(hwnd voidptr, distance int, horizontal int) int
+
+fn C.ui2_win_scroll_parent(hwnd voidptr, horizontal int) voidptr
 
 fn C.ui2_win_wheel_is_shifted(wparam usize) int
-
-fn C.ui2_win_forward_wheel(hwnd voidptr, message u32, wparam usize, lparam isize) int
 
 fn C.ui2_win_scroll_to_rect(hwnd voidptr, start int, end int, horizontal int) int
 fn C.ui2_win_set_scroll_position(hwnd voidptr, position int, horizontal int) int
@@ -1551,51 +1553,64 @@ fn windows_reposition_scroll_children(scroll_key string) {
 	C.ui2_win_invalidate(st.nodes[scroll_key] or { return })
 }
 
-// How a scroll message reached a Scroll element: from one of its bars, from a wheel
-// rolled back and forth, or from one tilted to the side.
-enum WindowsScrollSource {
-	bar
-	wheel
-	tilt_wheel
-}
-
-// windows_handle_wheel scrolls the Scroll element a wheel message reached. One already
-// at the end the wheel is turning towards leaves the message to the pane around it,
-// the way the custom renderer passes the distance a pane cannot use up its chain.
-fn windows_handle_wheel(hwnd voidptr, message u32, wparam usize, lparam isize) {
+// windows_handle_wheel scrolls the Scroll element a wheel message reached, then gives
+// whatever distance it could not use to each pane around it in turn, the way the
+// custom renderer walks its scroll chain. A pane ten pixels from its end takes those
+// ten and the pane around it the rest of the step, so nested panes scroll through a
+// boundary instead of stopping short at it.
+fn windows_handle_wheel(hwnd voidptr, message u32, wparam usize) {
 	tilt := message == win_wm_mouse_hwheel
 	// Shift turns a plain wheel sideways.
 	horizontal := tilt || C.ui2_win_wheel_is_shifted(wparam) != 0
-	source := if tilt { WindowsScrollSource.tilt_wheel } else { WindowsScrollSource.wheel }
-	if !windows_handle_scroll(hwnd, wparam, source, horizontal) {
-		C.ui2_win_forward_wheel(hwnd, message, wparam, lparam)
+	distance := C.ui2_win_wheel_distance(wparam, windows_bool(tilt))
+	mut remaining := distance - windows_scroll_by(hwnd, distance, horizontal)
+	mut pane := C.ui2_win_scroll_parent(hwnd, windows_bool(horizontal))
+	for remaining != 0 && pane != unsafe { nil } {
+		remaining -= windows_scroll_by(pane, remaining, horizontal)
+		pane = C.ui2_win_scroll_parent(pane, windows_bool(horizontal))
 	}
 }
 
-// windows_handle_scroll reports whether the message moved the element.
-fn windows_handle_scroll(hwnd voidptr, wparam usize, source WindowsScrollSource, horizontal bool) bool {
-	mut st := windows_state()
-	key := st.handle_keys[windows_handle_id(hwnd)] or { return false }
+// windows_scroll_key is the key of the Scroll element behind a window, when it is one
+// and scrolls along the axis.
+fn windows_scroll_key(hwnd voidptr, horizontal bool) ?string {
+	st := windows_state()
+	key := st.handle_keys[windows_handle_id(hwnd)] or { return none }
 	if (st.node_kinds[key] or { Kind.view }) != .scroll {
-		return false
+		return none
 	}
 	// An element that does not scroll sideways has no horizontal bar to read or move.
 	if horizontal && key !in st.scroll_positions_x {
-		return false
+		return none
 	}
+	return key
+}
+
+// windows_scroll_by moves a Scroll element along an axis and returns how far it went.
+fn windows_scroll_by(hwnd voidptr, distance int, horizontal bool) int {
+	key := windows_scroll_key(hwnd, horizontal) or { return 0 }
+	return windows_record_scroll(hwnd, key, C.ui2_win_scroll_by(hwnd, distance, windows_bool(horizontal)),
+		horizontal)
+}
+
+// windows_handle_scroll follows one of a Scroll element's own bars.
+fn windows_handle_scroll(hwnd voidptr, wparam usize, horizontal bool) {
+	key := windows_scroll_key(hwnd, horizontal) or { return }
+	windows_record_scroll(hwnd, key, C.ui2_win_scroll_message(hwnd, wparam, windows_bool(horizontal)),
+		horizontal)
+}
+
+// windows_record_scroll takes up the position a Scroll element's bar settled at: it
+// moves the children to match, reports the change, and returns how far that was.
+fn windows_record_scroll(hwnd voidptr, key string, position int, horizontal bool) int {
+	mut st := windows_state()
 	old_position := if horizontal {
 		st.scroll_positions_x[key] or { 0 }
 	} else {
 		st.scroll_positions[key] or { 0 }
 	}
-	axis := windows_bool(horizontal)
-	position := if source == .bar {
-		C.ui2_win_scroll_message(hwnd, wparam, axis)
-	} else {
-		C.ui2_win_scroll_wheel(hwnd, wparam, axis, windows_bool(source == .tilt_wheel))
-	}
 	if position == old_position {
-		return false
+		return 0
 	}
 	if horizontal {
 		st.scroll_positions_x[key] = position
@@ -1607,7 +1622,7 @@ fn windows_handle_scroll(hwnd voidptr, wparam usize, source WindowsScrollSource,
 	if id.len > 0 && voidptr(st.scroll_handler) != unsafe { nil } {
 		st.scroll_handler(id)
 	}
-	return true
+	return position - old_position
 }
 
 fn windows_emit_action(id string) {
@@ -1943,11 +1958,11 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 			if message == win_wm_hscroll && child != unsafe { nil } {
 				return C.ui2_win_default_proc(hwnd, message, wparam, lparam)
 			}
-			windows_handle_scroll(hwnd, wparam, .bar, message == win_wm_hscroll)
+			windows_handle_scroll(hwnd, wparam, message == win_wm_hscroll)
 			return 0
 		}
 		win_wm_mouse_wheel, win_wm_mouse_hwheel {
-			windows_handle_wheel(hwnd, message, wparam, lparam)
+			windows_handle_wheel(hwnd, message, wparam)
 			return 0
 		}
 		win_wm_key_down {

@@ -1149,25 +1149,21 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			}
 			doc_key := key + '/document'
 			active[doc_key] = true
-			doc_w, doc_h := scroll_document_size(el, macos.msg_rect(clip, 'bounds').height)
 			mut doc := st.nodes[doc_key] or { native_nil_view() }
 			if native_is_nil(doc) {
-				doc = native_new_flipped_view(native_rect(0, 0, doc_w, doc_h), el.box)
+				doc = native_new_flipped_view(native_rect(0, 0, el.frame.width, el.frame.height),
+					el.box)
 				st.nodes[doc_key] = doc
 				st.node_kinds[doc_key] = .view
+				native_size_scroll_document(native, doc, el)
 				native_set_document_view(native, doc)
 				macos.release(doc)
 			} else {
-				native_set_frame(doc, native_rect(0, 0, doc_w, doc_h))
 				native_set_box_background(doc, el.box)
 			}
-			// A scroller that takes room of its own comes and goes with the width of the
-			// document, and a strip held to the height that shows has to follow it.
-			macos.msg_void_u64(doc, 'setAutoresizingMask:', if el.scroll_mode == .horizontal_only {
-				ns_view_height_sizable
-			} else {
-				u64(0)
-			})
+			// Attaching a document lays the scrollers out, so what shows of a new one is
+			// only settled from here.
+			native_size_scroll_document(native, doc, el)
 			render_children(doc, el.children, doc_key, mut active)
 		}
 		.button {
@@ -1769,23 +1765,63 @@ fn content_height(children []Element) f64 {
 	return h
 }
 
-// scroll_document_size is the size of the view a Scroll element scrolls over. An axis
-// its mode scrolls covers the content; one it leaves out is held to the visible area,
-// so there is nothing along it to scroll to. visible_height is the height the scroll
-// view shows, which a scroller that takes room of its own makes less than the frame.
-fn scroll_document_size(el Element, visible_height f64) (f64, f64) {
-	height := if el.scroll_mode != .horizontal_only {
-		content_height(el.children) + 16
-	} else if visible_height > 0 {
-		visible_height
-	} else {
-		el.frame.height
+// native_size_scroll_document gives a Scroll element's document the size its content
+// and what shows of it call for. The mask goes on first: sizing the document can bring
+// a scroller in or take one away, which changes what shows, and a side held to that
+// has to follow it rather than keep the length measured a moment earlier.
+fn native_size_scroll_document(scroll NativeView, doc NativeView, el Element) {
+	shown := macos.msg_rect(macos.msg_id(scroll, 'contentView'), 'bounds')
+	document := scroll_document_size(el, shown.width, shown.height)
+	macos.msg_void_u64(doc, 'setAutoresizingMask:', document.autoresizing_mask())
+	native_set_frame(doc, native_rect(0, 0, document.width, document.height))
+}
+
+// ScrollDocument is the size of the view a Scroll element scrolls over, and which of
+// its sides are as long as what shows rather than as long as the content.
+struct ScrollDocument {
+	width          f64
+	height         f64
+	follows_width  bool
+	follows_height bool
+}
+
+fn (document ScrollDocument) autoresizing_mask() u64 {
+	mut mask := u64(0)
+	if document.follows_width {
+		mask |= ns_view_width_sizable
 	}
+	if document.follows_height {
+		mask |= ns_view_height_sizable
+	}
+	return mask
+}
+
+// scroll_document_size sizes the view a Scroll element scrolls over. An axis its mode
+// scrolls covers the content and is never shorter than what shows; one it leaves out
+// is held to what shows, so there is nothing along it to scroll to. What shows is
+// measured from the scroll view rather than taken from the frame, because a scroller
+// that takes room of its own makes it less, and a document sized to the frame would
+// then have a range the width of that scroller. A plain vertical list keeps the
+// frame's width, as it always has.
+fn scroll_document_size(el Element, visible_width f64, visible_height f64) ScrollDocument {
+	shown_width := if visible_width > 0 { visible_width } else { el.frame.width }
+	shown_height := if visible_height > 0 { visible_height } else { el.frame.height }
+	scrolls_y := el.scroll_mode != .horizontal_only
+	height := if scrolls_y { content_height(el.children) + 16 } else { shown_height }
 	if el.scroll_mode == .vertical_only {
-		return el.frame.width, height
+		return ScrollDocument{
+			width:  el.frame.width
+			height: height
+		}
 	}
 	content_width := scroll_content_width(el.children)
-	return if content_width > el.frame.width { content_width } else { el.frame.width }, height
+	fits_across := content_width <= shown_width
+	return ScrollDocument{
+		width:          if fits_across { shown_width } else { content_width }
+		height:         height
+		follows_width:  fits_across
+		follows_height: !scrolls_y
+	}
 }
 
 fn assoc_handler_key() voidptr {
@@ -3015,6 +3051,7 @@ fn ui2_bounds_changed(_self voidptr, _cmd voidptr, notification voidptr) {
 }
 
 const ns_event_phase_began = u64(1)
+const ns_view_width_sizable = u64(2)
 const ns_view_height_sizable = u64(16)
 
 // A scroll view takes every wheel event it is under, including one along an axis it

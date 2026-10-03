@@ -245,21 +245,43 @@ fn test_macos_scroll_mode_selects_scrollers_and_document_size() {
 	assert !macos.msg_bool(scroll_view, 'hasVerticalScroller')
 
 	// A sideways strip is as wide as its columns and no taller than what shows.
-	width, height := scroll_document_size(columns, 80)
-	assert width == 400
-	assert height == 80
-	both_width, both_height := scroll_document_size(Element{
+	assert scroll_document_size(columns, 120, 80) == ScrollDocument{
+		width:          400
+		height:         80
+		follows_height: true
+	}
+	canvas := Element{
 		...columns
 		scroll_mode: .both
-	}, 80)
-	assert both_width == 400
-	assert both_height == 316
-	list_width, list_height := scroll_document_size(Element{
+	}
+	assert scroll_document_size(canvas, 120, 80) == ScrollDocument{
+		width:  400
+		height: 316
+	}
+	// A plain vertical list keeps the width of its frame.
+	assert scroll_document_size(Element{
 		...columns
 		scroll_mode: .vertical_only
-	}, 80)
-	assert list_width == 120
-	assert list_height == 316
+	}, 105, 80) == ScrollDocument{
+		width:  120
+		height: 316
+	}
+	// Content that fits across is held to the width that shows, which a scroller
+	// taking room of its own makes less than the frame, so no sideways range is left.
+	narrow := Element{
+		...canvas
+		children: [view('', rect(0, 0, 100, 300), BoxStyle{}, [])]
+	}
+	fitted := scroll_document_size(narrow, 105, 65)
+	assert fitted == ScrollDocument{
+		width:         105
+		height:        316
+		follows_width: true
+	}
+	assert fitted.autoresizing_mask() == ns_view_width_sizable
+	assert scroll_document_size(columns, 120, 65).autoresizing_mask() == ns_view_height_sizable
+	// Before the scroll view has been laid out there is only the frame to go by.
+	assert scroll_document_size(narrow, 0, 0).width == 120
 
 	native_set_scroll_axes(scroll_view, .both)
 	assert macos.msg_bool(scroll_view, 'hasVerticalScroller')

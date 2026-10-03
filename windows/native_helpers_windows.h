@@ -257,22 +257,26 @@ static inline DWORD ui2_win_wheel_scroll_style(UINT message, WPARAM wparam) {
 	return WS_VSCROLL;
 }
 
-// Hands a wheel message to the nearest window above this one that shows the bar the
-// wheel moves, and says whether there was one. A window with nothing to scroll that
-// way passes the message on like this, and so does a Scroll element whose bar is
-// already at the end the wheel is turning towards.
-static inline int ui2_win_forward_wheel(void *hwnd_ptr, UINT message, uintptr_t wparam,
-		intptr_t lparam) {
-	DWORD bar = ui2_win_wheel_scroll_style(message, (WPARAM)wparam);
+// The nearest window above this one that shows the bar for an axis: the pane that
+// takes a scroll along it which this one has no use for.
+static inline void *ui2_win_scroll_parent(void *hwnd_ptr, int horizontal) {
+	DWORD bar = horizontal ? WS_HSCROLL : WS_VSCROLL;
 	HWND parent = GetParent((HWND)hwnd_ptr);
 	while (parent != NULL) {
-		if ((GetWindowLongPtrW(parent, GWL_STYLE) & bar) != 0) {
-			SendMessageW(parent, message, (WPARAM)wparam, (LPARAM)lparam);
-			return 1;
-		}
+		if ((GetWindowLongPtrW(parent, GWL_STYLE) & bar) != 0) return parent;
 		parent = GetParent(parent);
 	}
-	return 0;
+	return NULL;
+}
+
+// Hands a wheel message from a window with nothing to scroll that way to the nearest
+// one above it that has, and says whether there was one.
+static inline int ui2_win_forward_wheel(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+	HWND parent = (HWND)ui2_win_scroll_parent(hwnd,
+		ui2_win_wheel_scroll_style(message, wparam) == WS_HSCROLL);
+	if (parent == NULL) return 0;
+	SendMessageW(parent, message, wparam, lparam);
+	return 1;
 }
 
 static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM wparam,
@@ -1605,9 +1609,17 @@ static inline int ui2_win_scroll_message(void *hwnd_ptr, uintptr_t wparam, int h
 	return info.nPos;
 }
 
-// A wheel rolled away from the user is the positive one and scrolls back. A tilt
-// wheel reports a push to the right as positive, which scrolls on.
-static inline int ui2_win_scroll_wheel(void *hwnd_ptr, uintptr_t wparam, int horizontal, int tilt) {
+// How far a wheel message asks to scroll, positive towards the end of the content. A
+// wheel rolled away from the user is the positive one and scrolls back. A tilt wheel
+// reports a push to the right as positive, which scrolls on.
+static inline int ui2_win_wheel_distance(uintptr_t wparam, int tilt) {
+	int distance = (GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA) * 48;
+	return tilt ? distance : -distance;
+}
+
+// Moves a scroll bar by a distance and reports where it settled, which is short of
+// what was asked at either end of its range.
+static inline int ui2_win_scroll_by(void *hwnd_ptr, int distance, int horizontal) {
 	HWND hwnd = (HWND)hwnd_ptr;
 	int bar = ui2_win_scroll_bar(horizontal);
 	SCROLLINFO info;
@@ -1615,9 +1627,8 @@ static inline int ui2_win_scroll_wheel(void *hwnd_ptr, uintptr_t wparam, int hor
 	info.cbSize = sizeof(info);
 	info.fMask = SIF_ALL;
 	GetScrollInfo(hwnd, bar, &info);
-	int distance = (GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA) * 48;
 	info.fMask = SIF_POS;
-	info.nPos += tilt ? distance : -distance;
+	info.nPos += distance;
 	SetScrollInfo(hwnd, bar, &info, TRUE);
 	GetScrollInfo(hwnd, bar, &info);
 	return info.nPos;
