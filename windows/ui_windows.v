@@ -170,14 +170,16 @@ fn C.ui2_win_set_bitmap(hwnd voidptr, path &u16, width int, height int) voidptr
 
 fn C.ui2_win_clear_bitmap(hwnd voidptr)
 
-fn C.ui2_win_set_scroll(hwnd voidptr, content_height int, position int) int
+fn C.ui2_win_set_scroll(hwnd voidptr, content int, position int, horizontal int) int
 
-fn C.ui2_win_scroll_message(hwnd voidptr, wparam usize) int
+fn C.ui2_win_scroll_message(hwnd voidptr, wparam usize, horizontal int) int
 
-fn C.ui2_win_scroll_wheel(hwnd voidptr, wparam usize) int
+fn C.ui2_win_scroll_wheel(hwnd voidptr, wparam usize, horizontal int, tilt int) int
 
-fn C.ui2_win_scroll_to_rect(hwnd voidptr, top int, bottom int) int
-fn C.ui2_win_set_scroll_position(hwnd voidptr, position int) int
+fn C.ui2_win_wheel_is_shifted(wparam usize) int
+
+fn C.ui2_win_scroll_to_rect(hwnd voidptr, start int, end int, horizontal int) int
+fn C.ui2_win_set_scroll_position(hwnd voidptr, position int, horizontal int) int
 
 fn C.ui2_win_capture_mouse(hwnd voidptr)
 
@@ -226,6 +228,7 @@ const win_wm_mouse_move = u32(0x0200)
 const win_wm_lbutton_down = u32(0x0201)
 const win_wm_lbutton_up = u32(0x0202)
 const win_wm_mouse_wheel = u32(0x020a)
+const win_wm_mouse_hwheel = u32(0x020e)
 const win_wm_dropfiles = u32(0x0233)
 const win_wm_refresh = u32(0x8000 + 77)
 const win_wm_paint_background = u32(0x8000 + 79)
@@ -298,8 +301,10 @@ mut:
 	toggle_ids         map[u64]string
 	toggle_views       map[u64]voidptr
 	scroll_positions   map[string]int
+	scroll_positions_x map[string]int // only the Scroll elements whose mode scrolls sideways
 	node_label_boxed   map[string]bool
 	pending_scroll     map[string]int // Scroll element id -> offset to apply when it renders
+	pending_scroll_x   map[string]int
 	run_config         WindowsRunConfig
 	rendering          bool
 	key_consumed       bool
@@ -348,8 +353,10 @@ const windows_state_singleton = &WindowsState{
 	toggle_ids: map[u64]string{}
 	toggle_views: map[u64]voidptr{}
 	scroll_positions: map[string]int{}
+	scroll_positions_x: map[string]int{}
 	node_label_boxed: map[string]bool{}
 	pending_scroll: map[string]int{}
+	pending_scroll_x: map[string]int{}
 	suppress_click: map[u64]bool{}
 }
 
@@ -387,7 +394,7 @@ fn windows_draws_no_background(kind Kind, box BoxStyle) bool {
 //
 // The measured rectangle is what gets remembered, so scrolling the pane it sits in
 // takes the label with it rather than putting it back where it was laid out.
-fn windows_place_label(key string, hwnd voidptr, el Element, y_offset int) {
+fn windows_place_label(key string, hwnd voidptr, el Element, x_offset int, y_offset int) {
 	mut st := windows_state()
 	if C.ui2_win_label_text_hwnd(hwnd) != hwnd {
 		windows_place_held_label(hwnd, el)
@@ -406,8 +413,8 @@ fn windows_place_label(key string, hwnd voidptr, el Element, y_offset int) {
 		}
 	}
 	st.node_frames[key] = placed
-	C.ui2_win_set_widget_frame(hwnd, windows_widget_kind(el.kind), int(placed.x), int(placed.y) +
-		y_offset, int(placed.width), int(placed.height))
+	C.ui2_win_set_widget_frame(hwnd, windows_widget_kind(el.kind), int(placed.x) + x_offset,
+		int(placed.y) + y_offset, int(placed.width), int(placed.height))
 }
 
 // Setting a label's text has to place it again. The label sits on the rectangle the
@@ -418,8 +425,10 @@ fn windows_place_label_text(id string, hwnd voidptr, value string) {
 	key := st.view_keys[id] or { return }
 	frame := st.label_frames[id] or { return }
 	parent_key := st.node_parents[key] or { '' }
+	mut x_offset := 0
 	mut y_offset := 0
 	if (st.node_kinds[parent_key] or { Kind.view }) == .scroll {
+		x_offset = -(st.scroll_positions_x[parent_key] or { 0 })
 		y_offset = -(st.scroll_positions[parent_key] or { 0 })
 	}
 	windows_place_label(key, hwnd, Element{
@@ -428,7 +437,7 @@ fn windows_place_label_text(id string, hwnd voidptr, value string) {
 		frame:      frame
 		box:        st.node_boxes[key] or { BoxStyle{} }
 		text_style: st.node_text_styles[key] or { TextStyle{} }
-	}, y_offset)
+	}, x_offset, y_offset)
 }
 
 fn windows_align(align Align) int {
@@ -550,10 +559,10 @@ pub fn refresh() {
 	mut active := map[string]bool{}
 	if root.kind == .screen {
 		st.node_boxes[''] = root.box
-		windows_render_children(st.root, root.children, '', 0, mut active)
+		windows_render_children(st.root, root.children, '', 0, 0, mut active)
 	} else {
 		st.node_boxes[''] = BoxStyle{}
-		windows_render_element(st.root, root, reconciliation_child_key('', 0, root), '', 0, mut active)
+		windows_render_element(st.root, root, reconciliation_child_key('', 0, root), '', 0, 0, mut active)
 	}
 	windows_remove_stale(active)
 	st.rendering = false
@@ -817,6 +826,14 @@ pub fn scroll_offset(id string) f64 {
 	return f64(st.scroll_positions[key] or { 0 })
 }
 
+// scroll_horizontal_offset returns how far a Scroll element is scrolled sideways. It
+// stays zero for one whose scroll_mode leaves the horizontal axis out.
+pub fn scroll_horizontal_offset(id string) f64 {
+	st := windows_state()
+	key := st.view_keys[id] or { return 0 }
+	return f64(st.scroll_positions_x[key] or { 0 })
+}
+
 // scroll_to_offset puts a Scroll element at the given vertical offset. An element on
 // screen moves at once. One that does not exist yet has no range to clamp against, so
 // the request is kept and taken up the next time the element is laid out — that is
@@ -831,9 +848,8 @@ pub fn scroll_to_offset(id string, offset f64) {
 		key := st.view_keys[id] or { '' }
 		if key.len > 0 {
 			if hwnd := st.views[id] {
-				position := C.ui2_win_set_scroll_position(hwnd, wanted)
-				st.scroll_positions[key] = position
-				windows_reposition_scroll_children(key, position)
+				st.scroll_positions[key] = C.ui2_win_set_scroll_position(hwnd, wanted, 0)
+				windows_reposition_scroll_children(key)
 				st.pending_scroll.delete(id)
 				return
 			}
@@ -842,23 +858,50 @@ pub fn scroll_to_offset(id string, offset f64) {
 	st.pending_scroll[id] = wanted
 }
 
-pub fn scroll_to_rect(id string, _x f64, y f64, _width f64, height f64) {
+// scroll_to_horizontal_offset is scroll_to_offset for the sideways axis, with the same
+// promise: an offset asked for before the element exists is kept until it does. An
+// element that does not scroll sideways has no horizontal bar to move.
+pub fn scroll_to_horizontal_offset(id string, offset f64) {
+	mut st := windows_state()
+	if id.len == 0 {
+		return
+	}
+	wanted := if offset < 0 { 0 } else { int(offset) }
+	if (st.view_kinds[id] or { Kind.view }) == .scroll {
+		key := st.view_keys[id] or { '' }
+		if key.len > 0 {
+			if hwnd := st.views[id] {
+				if key in st.scroll_positions_x {
+					st.scroll_positions_x[key] = C.ui2_win_set_scroll_position(hwnd, wanted, 1)
+					windows_reposition_scroll_children(key)
+				}
+				st.pending_scroll_x.delete(id)
+				return
+			}
+		}
+	}
+	st.pending_scroll_x[id] = wanted
+}
+
+pub fn scroll_to_rect(id string, x f64, y f64, width f64, height f64) {
 	mut st := windows_state()
 	key := st.view_keys[id] or { return }
 	if (st.view_kinds[id] or { Kind.view }) != .scroll {
 		return
 	}
 	hwnd := st.views[id] or { return }
-	position := C.ui2_win_scroll_to_rect(hwnd, int(y), int(y + height))
-	st.scroll_positions[key] = position
-	windows_reposition_scroll_children(key, position)
+	st.scroll_positions[key] = C.ui2_win_scroll_to_rect(hwnd, int(y), int(y + height), 0)
+	if key in st.scroll_positions_x {
+		st.scroll_positions_x[key] = C.ui2_win_scroll_to_rect(hwnd, int(x), int(x + width), 1)
+	}
+	windows_reposition_scroll_children(key)
 }
 
-fn windows_render_children(parent voidptr, children []Element, parent_key string, y_offset int, mut active map[string]bool) {
+fn windows_render_children(parent voidptr, children []Element, parent_key string, x_offset int, y_offset int, mut active map[string]bool) {
 	mut previous := voidptr(unsafe { nil })
 	for index, child in children {
 		key := reconciliation_child_key(parent_key, index, child)
-		hwnd := windows_render_element(parent, child, key, parent_key, y_offset, mut active)
+		hwnd := windows_render_element(parent, child, key, parent_key, x_offset, y_offset, mut active)
 		if hwnd != unsafe { nil } {
 			C.ui2_win_place_after(hwnd, previous)
 			previous = hwnd
@@ -866,7 +909,7 @@ fn windows_render_children(parent voidptr, children []Element, parent_key string
 	}
 }
 
-fn windows_render_element(parent voidptr, el Element, key string, parent_key string, y_offset int, mut active map[string]bool) voidptr {
+fn windows_render_element(parent voidptr, el Element, key string, parent_key string, x_offset int, y_offset int, mut active map[string]bool) voidptr {
 	mut st := windows_state()
 	active[key] = true
 	structural := windows_structural_signature(el)
@@ -890,7 +933,7 @@ fn windows_render_element(parent voidptr, el Element, key string, parent_key str
 		}
 	}
 	if must_create {
-		created := windows_create_element(parent, el, y_offset)
+		created := windows_create_element(parent, el, x_offset, y_offset)
 		if created == unsafe { nil } {
 			eprintln('ui2: failed to create native Windows control `${el.id}` (${el.kind})')
 			return hwnd
@@ -947,12 +990,12 @@ fn windows_render_element(parent voidptr, el Element, key string, parent_key str
 		...el
 		box: visual_box
 		text_style: visual_text_style
-	}, y_offset, must_create)
+	}, x_offset, y_offset, must_create)
 	if el.kind == .label {
 		windows_place_label(key, hwnd, Element{
 			...el
 			text_style: visual_text_style
-		}, y_offset)
+		}, x_offset, y_offset)
 	}
 	windows_register_bindings(hwnd, el)
 	if el.kind == .view {
@@ -964,31 +1007,66 @@ fn windows_render_element(parent voidptr, el Element, key string, parent_key str
 	}
 	if el.children.len > 0 {
 		if el.kind == .scroll {
-			content_height := windows_content_height(el.children)
-			mut requested := st.scroll_positions[key] or { 0 }
-			if el.id.len > 0 {
-				if pending := st.pending_scroll[el.id] {
-					requested = pending
-					st.pending_scroll.delete(el.id)
-				}
-			}
-			position := C.ui2_win_set_scroll(hwnd, content_height, requested)
-			st.scroll_positions[key] = position
-			windows_render_children(hwnd, el.children, key, -position, mut active)
+			x_position, position := windows_layout_scroll(hwnd, el, key)
+			windows_render_children(hwnd, el.children, key, -x_position, -position, mut active)
 		} else {
-			windows_render_children(hwnd, el.children, key, 0, mut active)
+			windows_render_children(hwnd, el.children, key, 0, 0, mut active)
 		}
 	} else if el.kind == .scroll {
-		st.scroll_positions[key] = C.ui2_win_set_scroll(hwnd, 0, 0)
+		st.scroll_positions[key] = C.ui2_win_set_scroll(hwnd, 0, 0, 0)
+		if key in st.scroll_positions_x {
+			st.scroll_positions_x[key] = C.ui2_win_set_scroll(hwnd, 0, 0, 1)
+		}
 	}
 	return hwnd
 }
 
-fn windows_create_element(parent voidptr, el Element, y_offset int) voidptr {
+// windows_layout_scroll sets a Scroll element's bars to cover its children along the
+// axes its mode scrolls, taking up a position asked for before it was laid out, and
+// returns where each bar settled. The horizontal bar is left alone on an element that
+// has never scrolled sideways.
+fn windows_layout_scroll(hwnd voidptr, el Element, key string) (int, int) {
+	mut st := windows_state()
+	scrolls_x := el.scroll_mode != .vertical_only
+	content_height := if el.scroll_mode != .horizontal_only {
+		windows_content_height(el.children)
+	} else {
+		0
+	}
+	mut requested := st.scroll_positions[key] or { 0 }
+	mut requested_x := st.scroll_positions_x[key] or { 0 }
+	if el.id.len > 0 {
+		if pending := st.pending_scroll[el.id] {
+			requested = pending
+			st.pending_scroll.delete(el.id)
+		}
+		if pending := st.pending_scroll_x[el.id] {
+			requested_x = pending
+			st.pending_scroll_x.delete(el.id)
+		}
+	}
+	mut position := C.ui2_win_set_scroll(hwnd, content_height, requested, 0)
+	mut x_position := 0
+	if scrolls_x || key in st.scroll_positions_x {
+		content_width := if scrolls_x { int(scroll_content_width(el.children)) } else { 0 }
+		x_position = C.ui2_win_set_scroll(hwnd, content_width, requested_x, 1)
+		// A bar that appeared or went away changed how much of the other axis shows.
+		position = C.ui2_win_set_scroll(hwnd, content_height, position, 0)
+		if scrolls_x {
+			st.scroll_positions_x[key] = x_position
+		} else {
+			st.scroll_positions_x.delete(key)
+		}
+	}
+	st.scroll_positions[key] = position
+	return x_position, position
+}
+
+fn windows_create_element(parent voidptr, el Element, x_offset int, y_offset int) voidptr {
 	wide := el.text.to_wide()
 	boxed := label_needs_container(el)
 	mut host := parent
-	mut x := int(el.frame.x)
+	mut x := int(el.frame.x) + x_offset
 	mut y := int(el.frame.y) + y_offset
 	mut container := voidptr(unsafe { nil })
 	if boxed {
@@ -1104,9 +1182,9 @@ fn windows_button_accessibility_caption(label string) string {
 	return label.replace('&', '&&')
 }
 
-fn windows_update_element(key string, hwnd voidptr, el Element, y_offset int, created bool) {
+fn windows_update_element(key string, hwnd voidptr, el Element, x_offset int, y_offset int, created bool) {
 	mut st := windows_state()
-	C.ui2_win_set_widget_frame(hwnd, windows_widget_kind(el.kind), int(el.frame.x), int(el.frame.y) + y_offset, int(el.frame.width), int(el.frame.height))
+	C.ui2_win_set_widget_frame(hwnd, windows_widget_kind(el.kind), int(el.frame.x) + x_offset, int(el.frame.y) + y_offset, int(el.frame.width), int(el.frame.height))
 	C.ui2_win_show(hwnd, windows_bool(!el.hidden))
 	C.ui2_win_enable(hwnd, windows_bool(el.enabled))
 	declared_changed := (st.node_declared_text[key] or { '' }) != el.text
@@ -1436,6 +1514,7 @@ fn windows_remove_stale(active map[string]bool) {
 		st.node_label_boxed.delete(key)
 		st.node_text_styles.delete(key)
 		st.scroll_positions.delete(key)
+		st.scroll_positions_x.delete(key)
 	}
 }
 
@@ -1453,8 +1532,10 @@ fn windows_release_all_node_resources() {
 	}
 }
 
-fn windows_reposition_scroll_children(scroll_key string, position int) {
+fn windows_reposition_scroll_children(scroll_key string) {
 	st := windows_state()
+	x_position := st.scroll_positions_x[scroll_key] or { 0 }
+	position := st.scroll_positions[scroll_key] or { 0 }
 	for child_key, parent_key in st.node_parents {
 		if parent_key != scroll_key {
 			continue
@@ -1462,28 +1543,50 @@ fn windows_reposition_scroll_children(scroll_key string, position int) {
 		hwnd := st.nodes[child_key] or { continue }
 		frame := st.node_frames[child_key] or { continue }
 		kind := st.node_kinds[child_key] or { Kind.view }
-		C.ui2_win_set_widget_frame(hwnd, windows_widget_kind(kind), int(frame.x), int(frame.y) - position, int(frame.width), int(frame.height))
+		C.ui2_win_set_widget_frame(hwnd, windows_widget_kind(kind), int(frame.x) - x_position,
+			int(frame.y) - position, int(frame.width), int(frame.height))
 	}
 	C.ui2_win_invalidate(st.nodes[scroll_key] or { return })
 }
 
-fn windows_handle_scroll(hwnd voidptr, wparam usize, wheel bool) {
+// How a scroll message reached a Scroll element: from one of its bars, from a wheel
+// rolled back and forth, or from one tilted to the side.
+enum WindowsScrollSource {
+	bar
+	wheel
+	tilt_wheel
+}
+
+fn windows_handle_scroll(hwnd voidptr, wparam usize, source WindowsScrollSource, horizontal bool) {
 	mut st := windows_state()
 	key := st.handle_keys[windows_handle_id(hwnd)] or { return }
 	if (st.node_kinds[key] or { Kind.view }) != .scroll {
 		return
 	}
-	old_position := st.scroll_positions[key] or { 0 }
-	position := if wheel {
-		C.ui2_win_scroll_wheel(hwnd, wparam)
+	// An element that does not scroll sideways has no horizontal bar to read or move.
+	if horizontal && key !in st.scroll_positions_x {
+		return
+	}
+	old_position := if horizontal {
+		st.scroll_positions_x[key] or { 0 }
 	} else {
-		C.ui2_win_scroll_message(hwnd, wparam)
+		st.scroll_positions[key] or { 0 }
+	}
+	axis := windows_bool(horizontal)
+	position := if source == .bar {
+		C.ui2_win_scroll_message(hwnd, wparam, axis)
+	} else {
+		C.ui2_win_scroll_wheel(hwnd, wparam, axis, windows_bool(source == .tilt_wheel))
 	}
 	if position == old_position {
 		return
 	}
-	st.scroll_positions[key] = position
-	windows_reposition_scroll_children(key, position)
+	if horizontal {
+		st.scroll_positions_x[key] = position
+	} else {
+		st.scroll_positions[key] = position
+	}
+	windows_reposition_scroll_children(key)
 	id := st.scroll_ids[windows_handle_id(hwnd)] or { '' }
 	if id.len > 0 && voidptr(st.scroll_handler) != unsafe { nil } {
 		st.scroll_handler(id)
@@ -1818,14 +1921,21 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 					return 0
 				}
 			}
-			if message == win_wm_hscroll {
+			// A control's own bar is the control's to handle; one with no control behind
+			// it is the standard bar of a Scroll element.
+			if message == win_wm_hscroll && child != unsafe { nil } {
 				return C.ui2_win_default_proc(hwnd, message, wparam, lparam)
 			}
-			windows_handle_scroll(hwnd, wparam, false)
+			windows_handle_scroll(hwnd, wparam, .bar, message == win_wm_hscroll)
 			return 0
 		}
 		win_wm_mouse_wheel {
-			windows_handle_scroll(hwnd, wparam, true)
+			// Shift turns a plain wheel sideways.
+			windows_handle_scroll(hwnd, wparam, .wheel, C.ui2_win_wheel_is_shifted(wparam) != 0)
+			return 0
+		}
+		win_wm_mouse_hwheel {
+			windows_handle_scroll(hwnd, wparam, .tilt_wheel, true)
 			return 0
 		}
 		win_wm_key_down {

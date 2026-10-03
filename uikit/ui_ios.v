@@ -90,6 +90,7 @@ __global g_toggle_ids = map[u64]string{}
 __global g_toggle_views = map[u64]View{}
 __global g_scroll_ids = map[string]bool{}
 __global g_scroll_offsets = map[string]f64{}
+__global g_scroll_offsets_x = map[string]f64{}
 __global g_view_translation_x = map[voidptr]f64{}
 
 // ── Public API ─────────────────────────────────────────────────────
@@ -505,15 +506,16 @@ fn point_message0(view View, selector string) ObjcPoint {
 	return sender(voidptr(view), voidptr(macos.sel(selector)))
 }
 
-fn scroll_content_offset_y(scroll View) f64 {
-	return point_message0(scroll, 'contentOffset').y
+fn scroll_content_offset(scroll View) ObjcPoint {
+	return point_message0(scroll, 'contentOffset')
 }
 
-fn set_scroll_content_offset_y(scroll View, y f64) {
+fn set_scroll_content_offset(scroll View, x f64, y f64) {
 	if scroll == unsafe { nil } {
 		return
 	}
 	mut offset := point_message0(scroll, 'contentOffset')
+	offset.x = x
 	offset.y = y
 	sender := unsafe { ObjcVoidPointBoolMsg(C.objc_msgSend) }
 	sender(voidptr(scroll), voidptr(macos.sel('setContentOffset:animated:')), offset, false)
@@ -955,7 +957,9 @@ fn remember(id string, native View) {
 fn remember_scroll_offsets() {
 	for id, _ in g_scroll_ids {
 		view := g_views[id] or { continue }
-		g_scroll_offsets[id] = scroll_content_offset_y(view)
+		offset := scroll_content_offset(view)
+		g_scroll_offsets[id] = offset.y
+		g_scroll_offsets_x[id] = offset.x
 	}
 }
 
@@ -993,6 +997,7 @@ fn render_root(declared Element) {
 	}
 	for id in removed_scrolls {
 		g_scroll_offsets.delete(id)
+		g_scroll_offsets_x.delete(id)
 	}
 }
 
@@ -1282,10 +1287,20 @@ fn render_element(parent View, el Element, key string, mut active map[string]boo
 					content_h = bottom
 				}
 			}
-			macos.msg_void_rect(native, 'setContentSize:', macos.rect(el.frame.width, content_h + 16, 0, 0))
+			// An axis the mode leaves out is held to the frame, so nothing along it scrolls.
+			content_w := scroll_content_width(el.children)
+			width := if el.scroll_mode != .vertical_only && content_w > el.frame.width {
+				content_w
+			} else {
+				el.frame.width
+			}
+			height := if el.scroll_mode != .horizontal_only { content_h + 16 } else { el.frame.height }
+			macos.msg_void_rect(native, 'setContentSize:', macos.rect(width, height, 0, 0))
+			macos.msg_void_bool(native, 'setAlwaysBounceVertical:', el.scroll_mode != .horizontal_only)
 			if el.id.len > 0 {
 				if created && el.id in g_scroll_offsets {
-					set_scroll_content_offset_y(native, g_scroll_offsets[el.id])
+					set_scroll_content_offset(native, g_scroll_offsets_x[el.id] or { 0.0 },
+						g_scroll_offsets[el.id])
 				}
 				g_scroll_ids[el.id] = true
 			}

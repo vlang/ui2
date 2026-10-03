@@ -176,6 +176,7 @@ fn test_macos_native_style_button_keeps_appkit_bezel_and_press_state() {
 }
 
 fn test_macos_transparent_box_controls_disable_native_backgrounds() {
+	ensure_runtime_classes()
 	pool := macos.autorelease_pool_new()
 	defer {
 		macos.release(pool)
@@ -186,7 +187,8 @@ fn test_macos_transparent_box_controls_disable_native_backgrounds() {
 	}
 	button_view := native_new_button(native_rect(0, 0, 96, 40), 'Clear', BoxStyle{},
 		0xffffff, 15, false, false, false, 0, '', true)
-	scroll_view := native_new_scroll(native_rect(0, 0, 120, 80), BoxStyle{}, false)
+	scroll_view := native_new_scroll(native_rect(0, 0, 120, 80), BoxStyle{}, false,
+		.vertical_only)
 	toggle_view := native_new_toggle_button(toggle_button(
 		title: 'Clear toggle'
 		box: transparent_box
@@ -222,6 +224,46 @@ fn test_macos_transparent_box_controls_disable_native_backgrounds() {
 	assert !macos.msg_bool(text_area_view, 'drawsBackground')
 	text_view := text_area_text_view(text_area_view, false)
 	assert !macos.msg_bool(text_view, 'drawsBackground')
+}
+
+fn test_macos_scroll_mode_selects_scrollers_and_document_size() {
+	ensure_runtime_classes()
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	columns := scroll_with_mode('test-columns', rect(0, 0, 120, 80), 0xffffff, .horizontal_only, [
+		view('', rect(0, 0, 200, 80), BoxStyle{}, []),
+		view('', rect(200, 0, 200, 300), BoxStyle{}, []),
+	])
+	scroll_view := native_new_scroll(element_rect(columns.frame), columns.box, false,
+		columns.scroll_mode)
+	defer {
+		macos.release(scroll_view)
+	}
+	assert macos.msg_bool(scroll_view, 'hasHorizontalScroller')
+	assert !macos.msg_bool(scroll_view, 'hasVerticalScroller')
+
+	// A sideways strip is as wide as its columns and no taller than what shows.
+	width, height := scroll_document_size(columns, 80)
+	assert width == 400
+	assert height == 80
+	both_width, both_height := scroll_document_size(Element{
+		...columns
+		scroll_mode: .both
+	}, 80)
+	assert both_width == 400
+	assert both_height == 316
+	list_width, list_height := scroll_document_size(Element{
+		...columns
+		scroll_mode: .vertical_only
+	}, 80)
+	assert list_width == 120
+	assert list_height == 316
+
+	native_set_scroll_axes(scroll_view, .both)
+	assert macos.msg_bool(scroll_view, 'hasVerticalScroller')
+	assert macos.msg_bool(scroll_view, 'hasHorizontalScroller')
 }
 
 fn test_macos_text_field_uses_native_bezel_without_layer_mask() {

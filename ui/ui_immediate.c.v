@@ -64,6 +64,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		long_press_fired   bool
 		scrollbar_drag     bool
 		scrollbar_grab_y   f64
+		// Which scroller a scrollbar drag holds: the one along the bottom when set.
+		scrollbar_horizontal bool
+		scrollbar_grab_x     f64
 	}
 
 	struct GgApp {
@@ -542,7 +545,34 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		g_pending_scroll[id] = wanted
 	}
 
-	pub fn scroll_to_rect(id string, _x f64, y f64, _width f64, height f64) {
+	// scroll_horizontal_offset returns how far a Scroll element is scrolled sideways.
+	// It stays zero for one whose scroll_mode leaves the horizontal axis out.
+	pub fn scroll_horizontal_offset(id string) f64 {
+		return g_scroll_offsets_x[id] or { 0.0 }
+	}
+
+	// scroll_to_horizontal_offset is scroll_to_offset for the sideways axis, with the
+	// same promise: an offset asked for before the element is laid out is kept and
+	// clamped once its range is known. An offset past the end of an element already on
+	// screen is kept as well, since the frame that lays out a column added by the
+	// event being handled has not been drawn yet.
+	pub fn scroll_to_horizontal_offset(id string, offset f64) {
+		if id.len == 0 {
+			return
+		}
+		wanted := if offset < 0 { 0.0 } else { offset }
+		g_pending_scroll_x.delete(id)
+		if id in g_scroll_viewports {
+			maximum := scroll_maximum_x(id)
+			set_scroll_offset_x(id, wanted, maximum)
+			if wanted <= maximum {
+				return
+			}
+		}
+		g_pending_scroll_x[id] = wanted
+	}
+
+	pub fn scroll_to_rect(id string, x f64, y f64, width f64, height f64) {
 		area := g_scroll_viewports[id] or { return }
 		current := scroll_offset(id)
 		mut next := current
@@ -552,6 +582,15 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			next = y + height - area.height
 		}
 		set_scroll_offset(id, next, scroll_maximum(id))
+		// A pane with no sideways range clamps this to where it already is.
+		current_x := scroll_horizontal_offset(id)
+		mut next_x := current_x
+		if x < current_x {
+			next_x = x
+		} else if x + width > current_x + area.width {
+			next_x = x + width - area.width
+		}
+		set_scroll_offset_x(id, next_x, scroll_maximum_x(id))
 	}
 
 	pub fn clipboard_has_image() bool {
@@ -723,7 +762,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 				if menu_bar_open() {
 					return
 				}
-				handle_mouse_scroll(f64(e.mouse_x), f64(e.mouse_y), f64(e.scroll_y))
+				mut delta_x := f64(e.scroll_x)
+				mut delta_y := f64(e.scroll_y)
+				// Shift turns a plain wheel sideways, for a mouse with nothing
+				// that reports a horizontal delta of its own.
+				if delta_x == 0 && e.modifiers & u32(gg.Modifier.shift) != 0 {
+					delta_x = delta_y
+					delta_y = 0
+				}
+				handle_mouse_scroll(f64(e.mouse_x), f64(e.mouse_y), delta_y)
+				handle_mouse_scroll_horizontal(f64(e.mouse_x), f64(e.mouse_y), delta_x)
 			}
 			.mouse_leave {
 				g_tooltip.pointer_left()
@@ -830,6 +878,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if !g_touch.down {
 			return
 		}
+		previous_x := g_touch.current_x
 		previous_y := g_touch.current_y
 		dx := x - g_touch.start_x
 		dy := y - g_touch.start_y
@@ -852,11 +901,12 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return
 		}
 		if g_touch.scrollbar_drag {
-			drag_scrollbar(y)
+			drag_scrollbar(x, y)
 			return
 		}
 		if g_touch.scroll_chain.len > 0 {
-			apply_scroll_chain(g_touch.scroll_chain, previous_y - y)
+			apply_scroll_chain(g_touch.scroll_chain, previous_y - y, false)
+			apply_scroll_chain(g_touch.scroll_chain, previous_x - x, true)
 		}
 		if target.action_id.len > 0 && target.draggable {
 			fire_event(pointer_event_id('drag', target.action_id, x, y))
@@ -873,20 +923,44 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		if id.len == 0 {
 			return
 		}
-		apply_scroll_chain(scroll_ancestor_chain(id), -delta_y * 48)
+		apply_scroll_chain(scroll_ancestor_chain(id), -delta_y * 48, false)
 	}
 
-	fn set_scroll_offset(id string, requested f64, maximum f64) {
+	fn handle_mouse_scroll_horizontal(x f64, y f64, delta_x f64) {
+		if delta_x == 0 || g_open_dropdown.len > 0 {
+			return
+		}
+		id := scroll_hit_test(x, y)
+		if id.len == 0 {
+			return
+		}
+		apply_scroll_chain(scroll_ancestor_chain(id), -delta_x * 48, true)
+	}
+
+	fn clamped_scroll_offset(requested f64, maximum f64) f64 {
 		max_scroll := if maximum > 0 { maximum } else { 0.0 }
-		next := if requested < 0 {
+		return if requested < 0 {
 			0.0
 		} else if requested > max_scroll {
 			max_scroll
 		} else {
 			requested
 		}
+	}
+
+	fn set_scroll_offset(id string, requested f64, maximum f64) {
+		next := clamped_scroll_offset(requested, maximum)
 		previous := g_scroll_offsets[id] or { 0.0 }
 		g_scroll_offsets[id] = next
+		if next != previous && voidptr(g_scroll_handler) != unsafe { nil } {
+			g_scroll_handler(id)
+		}
+	}
+
+	fn set_scroll_offset_x(id string, requested f64, maximum f64) {
+		next := clamped_scroll_offset(requested, maximum)
+		previous := g_scroll_offsets_x[id] or { 0.0 }
+		g_scroll_offsets_x[id] = next
 		if next != previous && voidptr(g_scroll_handler) != unsafe { nil } {
 			g_scroll_handler(id)
 		}
@@ -1991,6 +2065,8 @@ fn page_focused_text_area(direction int) {
 		for id in stale_scrolls {
 			g_scroll_offsets.delete(id)
 			g_scroll_content_h.delete(id)
+			g_scroll_offsets_x.delete(id)
+			g_scroll_content_w.delete(id)
 		}
 		for id in g_text_area_layouts.keys() {
 			if id !in g_active_fields || (g_text_kinds[id] or { Kind.screen }) != .text_area {
@@ -2081,18 +2157,28 @@ fn page_focused_text_area(direction int) {
 				frame := rect(x, y, el.frame.width, el.frame.height)
 				draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, 0)
 				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
+				// An axis the mode leaves out has no content to cover, and so no range.
+				scrolls_x := el.scroll_mode != .vertical_only
+				scrolls_y := el.scroll_mode != .horizontal_only
 				mut content_h := 0.0
-				for child in el.children {
-					if !child.hidden && child.frame.y + child.frame.height > content_h {
-						content_h = child.frame.y + child.frame.height
+				if scrolls_y {
+					for child in el.children {
+						if !child.hidden && child.frame.y + child.frame.height > content_h {
+							content_h = child.frame.y + child.frame.height
+						}
+					}
+					// Include the bottom inset in both the scroll range and thumb geometry.
+					if content_h > 0 {
+						content_h += 16
 					}
 				}
-				// Include the bottom inset in both the scroll range and thumb geometry.
-				if content_h > 0 {
-					content_h += 16
-				}
+				content_w := if scrolls_x { scroll_content_width(el.children) } else { 0.0 }
 				scroll_y := register_scroll_view_in_parent(el.id, scroll_parent_id, frame, clip, content_h, el.enabled,
-					true, el.persistent_scrollbars)
+					scrolls_y, el.persistent_scrollbars)
+				beside_vertical := scrolls_y && scrollbar_geometry(frame, content_h, scroll_y,
+					el.persistent_scrollbars).track.height > 0
+				scroll_x := register_scroll_view_width(el.id, content_w, scrolls_x, el.persistent_scrollbars,
+					beside_vertical)
 				child_scroll_parent_id := if el.id.len > 0 { el.id } else { scroll_parent_id }
 				child_clip := intersect_rect(frame, clip)
 				for child in el.children {
@@ -2101,12 +2187,25 @@ fn page_focused_text_area(direction int) {
 						retain_culled_scroll_state(child)
 						continue
 					}
-					 render_element(ctx, child, x, y - scroll_y, child_clip, child_scroll_parent_id)
+					if scrolls_x {
+						child_screen_x := child.frame.x - scroll_x
+						if child_screen_x + child.frame.width < 0 || child_screen_x > el.frame.width {
+							retain_culled_scroll_state(child)
+							continue
+						}
+					}
+					 render_element(ctx, child, x - scroll_x, y - scroll_y, child_clip, child_scroll_parent_id)
 				}
 				if child_clip.width > 0 && child_clip.height > 0 {
 					apply_clip(ctx, child_clip)
-					draw_scrollbar(ctx, x, y, el.frame.width, el.frame.height, content_h, scroll_y,
-						el.persistent_scrollbars)
+					if scrolls_y {
+						draw_scrollbar(ctx, x, y, el.frame.width, el.frame.height, content_h, scroll_y,
+							el.persistent_scrollbars)
+					}
+					if scrolls_x {
+						draw_scrollbar_x(ctx, frame, content_w, scroll_x, el.persistent_scrollbars,
+							beside_vertical)
+					}
 				}
 				apply_clip(ctx, clip)
 			}
@@ -2939,6 +3038,15 @@ fn page_focused_text_area(direction int) {
 
 	fn draw_scrollbar(ctx &gg.Context, x f64, y f64, width f64, height f64, content_height f64, offset f64, persistent bool) {
 		bar := scrollbar_geometry(rect(x, y, width, height), content_height, offset, persistent)
+		if bar.track.width <= 0 || bar.track.height <= 0 {
+			return
+		}
+		draw_rect(ctx, bar.track.x, bar.track.y, bar.track.width, bar.track.height, 0xf1f5f9, 2.5)
+		draw_rect(ctx, bar.thumb.x, bar.thumb.y, bar.thumb.width, bar.thumb.height, 0xcbd5e1, 2.5)
+	}
+
+	fn draw_scrollbar_x(ctx &gg.Context, frame Rect, content_width f64, offset f64, persistent bool, beside_vertical bool) {
+		bar := scrollbar_geometry_x(frame, content_width, offset, persistent, beside_vertical)
 		if bar.track.width <= 0 || bar.track.height <= 0 {
 			return
 		}

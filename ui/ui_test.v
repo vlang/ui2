@@ -119,3 +119,22 @@ fn test_button_behavior_only_decorates_views_and_skips_interactive_child_labels(
 	])
 	assert composite.accessibility_label == 'Card action'
 }
+
+fn test_scroll_mode_defaults_to_vertical_and_content_width_follows_the_children() {
+	assert scroll('list', rect(0, 0, 100, 100), 0xffffff, []).scroll_mode == .vertical_only
+	columns := scroll_with_mode('columns', rect(0, 0, 100, 100), 0xffffff, .horizontal_only, [
+		view('', rect(0, 0, 180, 100), BoxStyle{}, []),
+		view('', rect(180, 0, 180, 100), BoxStyle{}, []),
+		Element{
+			kind: .view
+			frame: rect(360, 0, 180, 100)
+			hidden: true
+		},
+	])
+	assert columns.kind == .scroll
+	assert columns.scroll_mode == .horizontal_only
+	assert scroll_content_width(columns.children) == 360
+	assert scroll_content_width([]) == 0
+	assert scroll_mode('horizontal')! == .horizontal_only
+	assert scroll_mode('both')! == .both
+}

@@ -21,3 +21,14 @@ static inline ui2_macos_rect ui2_macos_msg_rect_rect(void* obj, void* sel, ui2_m
 	return ((ui2_macos_rect (*)(void*, void*, ui2_macos_rect))objc_msgSend)(obj, sel, rect);
 #endif
 }
+
+// A class built at runtime has no `super` to send to, so reaching the method it
+// overrides means naming the class the lookup should start from. objc_super is a
+// receiver followed by that class; plain pointers keep this free of ownership casts.
+static inline void ui2_macos_msg_super_void_id(void* obj, void* superclass, void* sel, void* arg) {
+	struct {
+		void* receiver;
+		void* super_class;
+	} target = { obj, superclass };
+	((void (*)(void*, void*, void*))objc_msgSendSuper)(&target, sel, arg);
+}

@@ -25,6 +25,8 @@ struct C.ui2_macos_rect {
 
 fn C.ui2_macos_msg_rect_rect(obj voidptr, sel voidptr, rect C.ui2_macos_rect) C.ui2_macos_rect
 
+fn C.ui2_macos_msg_super_void_id(obj voidptr, superclass voidptr, sel voidptr, arg voidptr)
+
 const ns_window_style_titled = u64(1)
 const ns_window_style_closable = u64(2)
 const ns_window_style_miniaturizable = u64(4)
@@ -121,6 +123,8 @@ mut:
 	control_change_ids  map[u64]string // NSTextField pointer -> change event id
 	observed            map[u64]bool // clip views we already observe for scroll changes
 	pending_scroll      map[string]f64 // Scroll element id -> offset to apply once it exists
+	pending_scroll_x    map[string]f64 // the same, for the sideways axis
+	scroll_forwarding   map[u64]bool // NSScrollView pointer -> the gesture under way belongs to an enclosing Scroll
 	run_config          RunConfig
 	screenshot_pending  bool
 	screenshot_captured bool
@@ -149,6 +153,8 @@ const runtime_state_singleton = &RuntimeState{
 	textview_action_ids: map[u64]string{}
 	scroll_ids: map[u64]string{}
 	pending_scroll: map[string]f64{}
+	pending_scroll_x: map[string]f64{}
+	scroll_forwarding: map[u64]bool{}
 	pointer_ids: map[u64]string{}
 	pointer_clickable: map[u64]bool{}
 	pointer_buttons: map[u64]bool{}
@@ -342,6 +348,15 @@ pub fn scroll_offset(id string) f64 {
 	return r.y
 }
 
+// scroll_horizontal_offset returns how far a Scroll element is scrolled sideways. It
+// stays zero for one whose scroll_mode leaves the horizontal axis out.
+pub fn scroll_horizontal_offset(id string) f64 {
+	st := state()
+	scrollv := st.views[id] or { return 0 }
+	r := macos.msg_rect(scrollv, 'documentVisibleRect')
+	return r.x
+}
+
 // scroll_to_rect scrolls a Scroll element so the given document rect is visible.
 pub fn scroll_to_rect(id string, x f64, y f64, width f64, height f64) {
 	st := state()
@@ -366,20 +381,37 @@ pub fn scroll_to_offset(id string, offset f64) {
 	apply_scroll_offset(mut st, id)
 }
 
+// scroll_to_horizontal_offset is scroll_to_offset for the sideways axis, with the same
+// promise: an offset asked for before the element exists is kept until it does.
+pub fn scroll_to_horizontal_offset(id string, offset f64) {
+	mut st := state()
+	if id.len == 0 {
+		return
+	}
+	st.pending_scroll_x[id] = offset
+	apply_scroll_offset(mut st, id)
+}
+
 fn apply_scroll_offset(mut st RuntimeState, id string) {
-	offset := st.pending_scroll[id] or { return }
+	if id !in st.pending_scroll && id !in st.pending_scroll_x {
+		return
+	}
 	scrollv := st.views[id] or { return }
 	doc := macos.msg_id(scrollv, 'documentView')
 	if native_is_nil(doc) {
 		return
 	}
 	clip := macos.msg_id(scrollv, 'contentView')
-	height := macos.msg_rect(clip, 'bounds').height
-	// A rect as tall as the visible area lands its top edge at the top of the view,
+	visible := macos.msg_rect(clip, 'bounds')
+	// A rect the size of the visible area lands its corner at the corner of the view,
 	// which is the offset that was asked for. The scroll view clamps it to the
-	// document, so an offset past the end settles at the end.
-	macos.msg_void_rect(doc, 'scrollRectToVisible:', macos.rect(0, offset, 1, height))
+	// document, so an offset past the end settles at the end. An axis nothing was
+	// asked of keeps the position it is at.
+	x := st.pending_scroll_x[id] or { visible.x }
+	y := st.pending_scroll[id] or { visible.y }
+	macos.msg_void_rect(doc, 'scrollRectToVisible:', macos.rect(x, y, visible.width, visible.height))
 	st.pending_scroll.delete(id)
+	st.pending_scroll_x.delete(id)
 }
 
 pub fn text(id string) string {
@@ -838,6 +870,11 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'performDragOperation:', voidptr(ui2_perform_drag_operation), 'B@:@')
 		macos.register_class_pair(cls)
 	}
+	if macos.get_class('UI2ScrollView') == unsafe { nil } {
+		cls := macos.allocate_class_pair(macos.get_class('NSScrollView'), 'UI2ScrollView')
+		macos.add_method(cls, 'scrollWheel:', voidptr(ui2_scroll_view_scroll_wheel), 'v@:@')
+		macos.register_class_pair(cls)
+	}
 	if macos.get_class('UI2PointerView') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSView'), 'UI2PointerView')
 		macos.add_method(cls, 'isFlipped', voidptr(ui2_view_is_flipped), 'B@:')
@@ -1112,18 +1149,25 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			}
 			doc_key := key + '/document'
 			active[doc_key] = true
-			doc_h := content_height(el.children) + 16
+			doc_w, doc_h := scroll_document_size(el, macos.msg_rect(clip, 'bounds').height)
 			mut doc := st.nodes[doc_key] or { native_nil_view() }
 			if native_is_nil(doc) {
-				doc = native_new_flipped_view(native_rect(0, 0, el.frame.width, doc_h), el.box)
+				doc = native_new_flipped_view(native_rect(0, 0, doc_w, doc_h), el.box)
 				st.nodes[doc_key] = doc
 				st.node_kinds[doc_key] = .view
 				native_set_document_view(native, doc)
 				macos.release(doc)
 			} else {
-				native_set_frame(doc, native_rect(0, 0, el.frame.width, doc_h))
+				native_set_frame(doc, native_rect(0, 0, doc_w, doc_h))
 				native_set_box_background(doc, el.box)
 			}
+			// A scroller that takes room of its own comes and goes with the width of the
+			// document, and a strip held to the height that shows has to follow it.
+			macos.msg_void_u64(doc, 'setAutoresizingMask:', if el.scroll_mode == .horizontal_only {
+				ns_view_height_sizable
+			} else {
+				u64(0)
+			})
 			render_children(doc, el.children, doc_key, mut active)
 		}
 		.button {
@@ -1280,7 +1324,8 @@ fn native_create_element(el Element) NativeView {
 			native_new_view(element_rect(el.frame), el.box, element_interactive(el))
 		}
 		.scroll {
-			native_new_scroll(element_rect(el.frame), el.box, el.persistent_scrollbars)
+			native_new_scroll(element_rect(el.frame), el.box, el.persistent_scrollbars,
+				el.scroll_mode)
 		}
 		.label {
 			native_new_label(element_rect(el.frame), el.text, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, align_value(el.text_style.align), el.text_style.lines, el.text_style.valign, label_needs_container(el))
@@ -1326,6 +1371,7 @@ fn native_update_element(native NativeView, el Element, declared_text_changed bo
 		.scroll {
 			native_set_frame(native, element_rect(el.frame))
 			native_set_scroll_background(native, el.box)
+			native_set_scroll_axes(native, el.scroll_mode)
 			native_set_scrollbar_mode(native, el.persistent_scrollbars)
 		}
 		.label {
@@ -1529,6 +1575,7 @@ fn unregister_node(key string, native NativeView, kind Kind, text_direct bool) {
 		}
 	}
 	if kind == .scroll {
+		st.scroll_forwarding.delete(u64(voidptr(native)))
 		clip := macos.msg_id(native, 'contentView')
 		clip_pointer := u64(voidptr(clip))
 		st.scroll_ids.delete(clip_pointer)
@@ -1722,6 +1769,25 @@ fn content_height(children []Element) f64 {
 	return h
 }
 
+// scroll_document_size is the size of the view a Scroll element scrolls over. An axis
+// its mode scrolls covers the content; one it leaves out is held to the visible area,
+// so there is nothing along it to scroll to. visible_height is the height the scroll
+// view shows, which a scroller that takes room of its own makes less than the frame.
+fn scroll_document_size(el Element, visible_height f64) (f64, f64) {
+	height := if el.scroll_mode != .horizontal_only {
+		content_height(el.children) + 16
+	} else if visible_height > 0 {
+		visible_height
+	} else {
+		el.frame.height
+	}
+	if el.scroll_mode == .vertical_only {
+		return el.frame.width, height
+	}
+	content_width := scroll_content_width(el.children)
+	return if content_width > el.frame.width { content_width } else { el.frame.width }, height
+}
+
 fn assoc_handler_key() voidptr {
 	return voidptr(macos.sel('ui2_button_handler_assoc'))
 }
@@ -1853,12 +1919,18 @@ fn native_new_view(frame NativeRect, box BoxStyle, interactive bool) NativeView 
 	return native
 }
 
-fn native_new_scroll(frame NativeRect, box BoxStyle, persistent_scrollbars bool) NativeView {
-	scroll_view := macos.msg_id_rect(macos.alloc('NSScrollView'), 'initWithFrame:', appkit_rect(frame))
-	macos.msg_void_bool(scroll_view, 'setHasVerticalScroller:', true)
+fn native_new_scroll(frame NativeRect, box BoxStyle, persistent_scrollbars bool, mode ScrollMode) NativeView {
+	scroll_view := macos.msg_id_rect(macos.alloc('UI2ScrollView'), 'initWithFrame:', appkit_rect(frame))
+	native_set_scroll_axes(scroll_view, mode)
 	native_set_scrollbar_mode(scroll_view, persistent_scrollbars)
 	native_set_scroll_background(scroll_view, box)
 	return scroll_view
+}
+
+// native_set_scroll_axes gives a scroll view a scroller for each axis its mode scrolls.
+fn native_set_scroll_axes(scroll NativeView, mode ScrollMode) {
+	macos.msg_void_bool(scroll, 'setHasVerticalScroller:', mode != .horizontal_only)
+	macos.msg_void_bool(scroll, 'setHasHorizontalScroller:', mode != .vertical_only)
 }
 
 fn native_set_scrollbar_mode(scroll NativeView, persistent bool) {
@@ -2940,6 +3012,58 @@ fn ui2_bounds_changed(_self voidptr, _cmd voidptr, notification voidptr) {
 	clip := macos.msg_id(macos.Id(notification), 'object')
 	id := st.scroll_ids[u64(voidptr(clip))] or { return }
 	st.scroll_handler(id)
+}
+
+const ns_event_phase_began = u64(1)
+const ns_view_height_sizable = u64(16)
+
+// A scroll view takes every wheel event it is under, including one along an axis it
+// has nothing to scroll on, which leaves a strip of columns stuck whenever the pointer
+// is over a column that scrolls the other way. The view a gesture starts on therefore
+// decides once, from the direction the gesture sets off in, whether an enclosing
+// Scroll element is the one to move, and hands it the whole gesture if so.
+@[export: 'ui2_scroll_view_scroll_wheel']
+fn ui2_scroll_view_scroll_wheel(self voidptr, _cmd voidptr, event voidptr) {
+	mut st := state()
+	scroll_view := NativeView(self)
+	wheel := macos.Id(event)
+	handle := u64(self)
+	// A wheel click stands alone. A trackpad gesture is decided where it begins and
+	// keeps that answer through the momentum that follows it.
+	if macos.msg_u64(wheel, 'phase') == ns_event_phase_began
+		|| (macos.msg_u64(wheel, 'phase') == 0 && macos.msg_u64(wheel, 'momentumPhase') == 0) {
+		dx := macos.msg_f64(wheel, 'scrollingDeltaX')
+		dy := macos.msg_f64(wheel, 'scrollingDeltaY')
+		sideways := dx * dx > dy * dy
+		st.scroll_forwarding[handle] = dx * dx != dy * dy
+			&& scroll_view_passes_axis(scroll_view, sideways)
+	}
+	if st.scroll_forwarding[handle] or { false } {
+		next := macos.msg_id(scroll_view, 'nextResponder')
+		if !native_is_nil(next) {
+			macos.msg_void1(next, 'scrollWheel:', wheel)
+		}
+		return
+	}
+	C.ui2_macos_msg_super_void_id(self, voidptr(macos.get_class('NSScrollView')), voidptr(macos.sel('scrollWheel:')),
+		event)
+}
+
+// scroll_view_passes_axis reports whether a scroll view has nothing to scroll along
+// an axis that a scroll view around it does.
+fn scroll_view_passes_axis(scroll NativeView, horizontal bool) bool {
+	scroller := if horizontal { 'hasHorizontalScroller' } else { 'hasVerticalScroller' }
+	if macos.msg_bool(scroll, scroller) {
+		return false
+	}
+	mut parent := macos.msg_id(macos.msg_id(scroll, 'superview'), 'enclosingScrollView')
+	for !native_is_nil(parent) {
+		if macos.msg_bool(parent, scroller) {
+			return true
+		}
+		parent = macos.msg_id(macos.msg_id(parent, 'superview'), 'enclosingScrollView')
+	}
+	return false
 }
 
 @[export: 'ui2_window_did_resize']

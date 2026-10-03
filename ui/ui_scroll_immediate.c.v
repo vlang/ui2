@@ -21,6 +21,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		g_scroll_order = []string{}
 		g_scroll_parents = map[string]string{}
 		g_scrollbar_geometries = map[string]ScrollbarGeometry{}
+		g_scrollbar_geometries_x = map[string]ScrollbarGeometry{}
 	}
 
 	fn scroll_maximum(id string) f64 {
@@ -30,6 +31,15 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		}
 		content_height := g_scroll_content_h[id] or { 0.0 }
 		return if content_height > frame.height { content_height - frame.height } else { 0.0 }
+	}
+
+	fn scroll_maximum_x(id string) f64 {
+		frame := g_scroll_viewports[id] or { return 0.0 }
+		if frame.width <= 0 || frame.height <= 0 {
+			return 0.0
+		}
+		content_width := g_scroll_content_w[id] or { 0.0 }
+		return if content_width > frame.width { content_width - frame.width } else { 0.0 }
 	}
 
 	fn register_scroll_view(id string, frame Rect, clip Rect, content_height f64, enabled bool, show_scrollbar bool, persistent bool) f64 {
@@ -70,6 +80,30 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return offset
 	}
 
+	// register_scroll_view_width gives a registered pane its sideways range. It
+	// follows register_scroll_view_in_parent, which is what makes the viewport known,
+	// and a pane that does not scroll sideways passes no width, so a mode changed
+	// between rebuilds leaves no offset behind.
+	fn register_scroll_view_width(id string, content_width f64, show_scrollbar bool, persistent bool, beside_vertical bool) f64 {
+		if id.len == 0 {
+			return 0.0
+		}
+		frame := g_scroll_viewports[id] or { return 0.0 }
+		g_scroll_content_w[id] = content_width
+		mut requested := scroll_horizontal_offset(id)
+		if pending := g_pending_scroll_x[id] {
+			requested = pending
+			g_pending_scroll_x.delete(id)
+		}
+		set_scroll_offset_x(id, requested, scroll_maximum_x(id))
+		offset := scroll_horizontal_offset(id)
+		if show_scrollbar && id in g_scroll_areas {
+			g_scrollbar_geometries_x[id] = scrollbar_geometry_x(frame, content_width, offset,
+				persistent, beside_vertical)
+		}
+		return offset
+	}
+
 	// Rendering skips subtrees outside a scroll viewport, but those elements are
 	// still mounted. Keep their scroll-backed state active so unmount cleanup
 	// does not discard positions that must be restored when they re-enter view.
@@ -104,7 +138,8 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			area := g_scroll_areas[id] or { continue }
 			// A fitted child has nowhere to scroll. Let its scrollable parent
 			// receive the wheel or drag instead of trapping the gesture here.
-			if scroll_maximum(id) > 0 && scroll_rect_contains(area, x, y) {
+			if (scroll_maximum(id) > 0 || scroll_maximum_x(id) > 0)
+				&& scroll_rect_contains(area, x, y) {
 				return id
 			}
 		}
@@ -127,7 +162,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// Apply a scroll delta to the innermost available pane first, then pass any
 	// distance left at its boundary to each available ancestor. Touch input
 	// captures this chain on pointer-down so frame culling cannot sever it.
-	fn apply_scroll_chain(chain []string, delta f64) {
+	// Each axis walks the chain on its own, so a sideways strip inside a vertical
+	// list hands the list every vertical distance it cannot use itself.
+	fn apply_scroll_chain(chain []string, delta f64, horizontal bool) {
 		mut remaining := delta
 		for id in chain {
 			if math.abs(remaining) < 0.000001 {
@@ -136,9 +173,40 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			if id !in g_scroll_areas {
 				continue
 			}
-			before := scroll_offset(id)
-			set_scroll_offset(id, before + remaining, scroll_maximum(id))
-			remaining -= scroll_offset(id) - before
+			if horizontal {
+				before := scroll_horizontal_offset(id)
+				set_scroll_offset_x(id, before + remaining, scroll_maximum_x(id))
+				remaining -= scroll_horizontal_offset(id) - before
+			} else {
+				before := scroll_offset(id)
+				set_scroll_offset(id, before + remaining, scroll_maximum(id))
+				remaining -= scroll_offset(id) - before
+			}
+		}
+	}
+
+	// scrollbar_geometry_x is the scroller along the bottom edge. Beside a vertical
+	// scroller it stops short of the corner the two would otherwise share.
+	fn scrollbar_geometry_x(frame Rect, content_width f64, offset f64, persistent bool, beside_vertical bool) ScrollbarGeometry {
+		if frame.width < 16 || frame.height < 12 {
+			return ScrollbarGeometry{}
+		}
+		maximum := if content_width > frame.width { content_width - frame.width } else { 0.0 }
+		if !persistent && maximum <= 0 {
+			return ScrollbarGeometry{}
+		}
+		corner := if beside_vertical { 9.0 } else { 0.0 }
+		track := rect(frame.x + 4, frame.y + frame.height - 9, frame.width - 8 - corner, 5)
+		if track.width <= 0 {
+			return ScrollbarGeometry{}
+		}
+		content := if content_width > frame.width { content_width } else { frame.width }
+		thumb_width := math.min(track.width, math.max(28.0, track.width * frame.width / content))
+		progress := if maximum > 0 { math.max(0.0, math.min(offset, maximum)) / maximum } else { 0.0 }
+		return ScrollbarGeometry{
+			track: track
+			thumb: rect(track.x + (track.width - thumb_width) * progress, track.y, thumb_width,
+				track.height)
 		}
 	}
 
@@ -162,7 +230,19 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn begin_scrollbar_drag(x f64, y f64) bool {
-		id := g_touch.scroll_id
+		// A pane's scrollers are drawn over its children, so where a column reaches
+		// under the scroller of the strip it sits in, the strip's is the one the
+		// pointer is on. Try the panes from the outside in.
+		for index := g_touch.scroll_chain.len - 1; index >= 0; index-- {
+			id := g_touch.scroll_chain[index]
+			if begin_horizontal_scrollbar_drag(id, x, y) || begin_vertical_scrollbar_drag(id, x, y) {
+				return true
+			}
+		}
+		return false
+	}
+
+	fn begin_vertical_scrollbar_drag(id string, x f64, y f64) bool {
 		bar := g_scrollbar_geometries[id] or { return false }
 		// Give the narrow drawn track a slightly wider pointer target.
 		target := rect(bar.track.x - 3, bar.track.y, 12, bar.track.height)
@@ -170,18 +250,49 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			|| bar.track.height <= bar.thumb.height {
 			return false
 		}
+		g_touch.scroll_id = id
 		g_touch.scrollbar_drag = true
 		if y >= bar.thumb.y && y < bar.thumb.y + bar.thumb.height {
 			g_touch.scrollbar_grab_y = y - bar.thumb.y
 		} else {
 			g_touch.scrollbar_grab_y = bar.thumb.height / 2
-			drag_scrollbar(y)
+			drag_scrollbar(x, y)
 		}
 		return true
 	}
 
-	fn drag_scrollbar(y f64) {
+	fn begin_horizontal_scrollbar_drag(id string, x f64, y f64) bool {
+		bar := g_scrollbar_geometries_x[id] or { return false }
+		target := rect(bar.track.x, bar.track.y - 3, bar.track.width, 12)
+		if !scroll_rect_contains(target, x, y) || scroll_maximum_x(id) <= 0
+			|| bar.track.width <= bar.thumb.width {
+			return false
+		}
+		g_touch.scroll_id = id
+		g_touch.scrollbar_drag = true
+		g_touch.scrollbar_horizontal = true
+		if x >= bar.thumb.x && x < bar.thumb.x + bar.thumb.width {
+			g_touch.scrollbar_grab_x = x - bar.thumb.x
+		} else {
+			g_touch.scrollbar_grab_x = bar.thumb.width / 2
+			drag_scrollbar(x, y)
+		}
+		return true
+	}
+
+	fn drag_scrollbar(x f64, y f64) {
 		id := g_touch.scroll_id
+		if g_touch.scrollbar_horizontal {
+			bar := g_scrollbar_geometries_x[id] or { return }
+			travel := bar.track.width - bar.thumb.width
+			if travel <= 0 {
+				return
+			}
+			maximum := scroll_maximum_x(id)
+			set_scroll_offset_x(id, (x - bar.track.x - g_touch.scrollbar_grab_x) / travel * maximum,
+				maximum)
+			return
+		}
 		bar := g_scrollbar_geometries[id] or { return }
 		travel := bar.track.height - bar.thumb.height
 		if travel <= 0 {
