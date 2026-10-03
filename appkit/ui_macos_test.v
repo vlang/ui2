@@ -288,7 +288,7 @@ fn test_macos_scroll_mode_selects_scrollers_and_document_size() {
 	assert macos.msg_bool(scroll_view, 'hasHorizontalScroller')
 }
 
-fn test_macos_scroll_gesture_passes_to_an_enclosing_view_only_without_range_of_its_own() {
+fn test_macos_scroll_gesture_passes_to_an_enclosing_view_only_when_it_cannot_be_followed() {
 	ensure_runtime_classes()
 	pool := macos.autorelease_pool_new()
 	defer {
@@ -313,14 +313,25 @@ fn test_macos_scroll_gesture_passes_to_an_enclosing_view_only_without_range_of_i
 	// Content that fits leaves the inner strip nowhere to go, so a sideways gesture
 	// over it belongs to the strip around it.
 	assert !scroll_view_scrolls_axis(inner, true)
-	assert scroll_view_passes_axis(inner, true)
-	// Nothing around it scrolls vertically, so there is no one to hand that to.
-	assert !scroll_view_passes_axis(inner, false)
-	// Once its content overflows it keeps the gesture itself.
+	assert scroll_view_passes_gesture(inner, true, -1)
+	// Both strips are at their start, so no one can take a gesture heading back that
+	// way, and nothing here scrolls vertically at all.
+	assert !scroll_view_passes_gesture(inner, true, 1)
+	assert !scroll_view_passes_gesture(inner, false, -1)
+	// Once its content overflows it keeps the gesture itself...
 	native_set_frame(inner_document, native_rect(0, 0, 800, 150))
-	assert scroll_view_scrolls_axis(inner, true)
-	assert !scroll_view_passes_axis(inner, true)
-	assert !scroll_view_passes_axis(outer, true)
+	assert scroll_view_can_move(inner, true, -1)
+	assert !scroll_view_passes_gesture(inner, true, -1)
+	// ...until it has run out, where further the same way is the outer strip's again,
+	// while the way back is still its own.
+	macos.msg_void_point(macos.msg_id(inner, 'contentView'), 'setBoundsOrigin:', macos.point(600,
+		0))
+	assert !scroll_view_can_move(inner, true, -1)
+	assert scroll_view_passes_gesture(inner, true, -1)
+	assert scroll_view_can_move(inner, true, 1)
+	assert !scroll_view_passes_gesture(inner, true, 1)
+	// A view with nothing around it keeps even what it cannot use.
+	assert !scroll_view_passes_gesture(outer, true, 1)
 }
 
 fn test_macos_text_field_uses_native_bezel_without_layer_mask() {

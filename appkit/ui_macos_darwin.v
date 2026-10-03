@@ -3054,11 +3054,13 @@ const ns_event_phase_began = u64(1)
 const ns_view_width_sizable = u64(2)
 const ns_view_height_sizable = u64(16)
 
-// A scroll view takes every wheel event it is under, including one along an axis it
-// has nothing to scroll on, which leaves a strip of columns stuck whenever the pointer
-// is over a column that scrolls the other way. The view a gesture starts on therefore
-// decides once, from the direction the gesture sets off in, whether an enclosing
-// Scroll element is the one to move, and hands it the whole gesture if so.
+// A scroll view takes every wheel event it is under, including one it has no way to
+// follow: along an axis it does not scroll, or further in a direction it is already at
+// the end of. That leaves a strip of columns stuck whenever the pointer is over a
+// column that scrolls the other way, and a list stalled wherever a list inside it has
+// run out. The view a gesture starts on therefore decides once, from the direction the
+// gesture sets off in, whether an enclosing Scroll element is the one to move, and
+// hands it the whole gesture if so.
 @[export: 'ui2_scroll_view_scroll_wheel']
 fn ui2_scroll_view_scroll_wheel(self voidptr, _cmd voidptr, event voidptr) {
 	mut st := state()
@@ -3073,7 +3075,7 @@ fn ui2_scroll_view_scroll_wheel(self voidptr, _cmd voidptr, event voidptr) {
 		dy := macos.msg_f64(wheel, 'scrollingDeltaY')
 		sideways := dx * dx > dy * dy
 		st.scroll_forwarding[handle] = dx * dx != dy * dy
-			&& scroll_view_passes_axis(scroll_view, sideways)
+			&& scroll_view_passes_gesture(scroll_view, sideways, if sideways { dx } else { dy })
 	}
 	if st.scroll_forwarding[handle] or { false } {
 		next := macos.msg_id(scroll_view, 'nextResponder')
@@ -3106,17 +3108,39 @@ fn scroll_view_scrolls_axis(scroll NativeView, horizontal bool) bool {
 	}
 }
 
-// scroll_view_passes_axis reports whether a scroll view has nowhere to go along an
-// axis that a scroll view around it does. Content that fits counts as nowhere to go,
-// the same as an axis the mode leaves out, so a pane that happens not to overflow
-// does not hold on to a gesture the pane around it could use.
-fn scroll_view_passes_axis(scroll NativeView, horizontal bool) bool {
-	if scroll_view_scrolls_axis(scroll, horizontal) {
+// scroll_view_can_move reports whether a scroll view can follow a wheel delta along an
+// axis: it has a range there, and is not already at the end the delta pushes towards.
+// A positive delta carries the content with it, back towards its start. Documents are
+// flipped views, so the vertical offset grows downwards the way the horizontal one
+// grows to the right.
+fn scroll_view_can_move(scroll NativeView, horizontal bool, delta f64) bool {
+	if !scroll_view_scrolls_axis(scroll, horizontal) {
+		return false
+	}
+	document := macos.msg_rect(macos.msg_id(scroll, 'documentView'), 'frame')
+	visible := macos.msg_rect(macos.msg_id(scroll, 'contentView'), 'bounds')
+	offset := if horizontal { visible.x } else { visible.y }
+	maximum := if horizontal {
+		document.width - visible.width
+	} else {
+		document.height - visible.height
+	}
+	return if delta > 0 { offset > 0.5 } else { offset < maximum - 0.5 }
+}
+
+// scroll_view_passes_gesture reports whether a gesture starting on a scroll view
+// belongs to a scroll view around it: this one cannot follow it and one of those can.
+// Content that fits counts as unable to follow, the same as an axis the mode leaves
+// out, and so does a view already at the end the gesture heads for, so a pane does
+// not hold on to a gesture the pane around it could use. With no one to take it the
+// gesture stays where it began.
+fn scroll_view_passes_gesture(scroll NativeView, horizontal bool, delta f64) bool {
+	if scroll_view_can_move(scroll, horizontal, delta) {
 		return false
 	}
 	mut parent := macos.msg_id(macos.msg_id(scroll, 'superview'), 'enclosingScrollView')
 	for !native_is_nil(parent) {
-		if scroll_view_scrolls_axis(parent, horizontal) {
+		if scroll_view_can_move(parent, horizontal, delta) {
 			return true
 		}
 		parent = macos.msg_id(macos.msg_id(parent, 'superview'), 'enclosingScrollView')
