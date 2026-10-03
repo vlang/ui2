@@ -3083,8 +3083,12 @@ fn ui2_scroll_view_scroll_wheel(self voidptr, _cmd voidptr, event voidptr) {
 	scroll_view := NativeView(self)
 	wheel := macos.Id(event)
 	handle := u64(self)
-	// A wheel click stands alone. A trackpad gesture is decided where it begins and
-	// keeps that answer through the momentum that follows it.
+	// A wheel click stands alone and is decided each time. A trackpad gesture is decided
+	// where it begins and keeps that answer through the momentum that follows it, even
+	// once this view has run out partway: scrolling stays with the view it began on, as
+	// it does elsewhere on macOS. AppKit follows a gesture from its beginning to its end,
+	// so handing the rest of one over would give the view around this one a gesture with
+	// no beginning and leave this one without the end that settles its rubber band.
 	if macos.msg_u64(wheel, 'phase') == ns_event_phase_began
 		|| (macos.msg_u64(wheel, 'phase') == 0 && macos.msg_u64(wheel, 'momentumPhase') == 0) {
 		dx := macos.msg_f64(wheel, 'scrollingDeltaX')
