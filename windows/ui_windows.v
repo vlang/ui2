@@ -261,6 +261,8 @@ mut:
 	key_event_handler  KeyEventFn = KeyEventFn(unsafe { nil })
 	scroll_handler     ScrollFn = ScrollFn(unsafe { nil })
 	drop_handler       DropFn = DropFn(unsafe { nil })
+	window_ready_handler WindowReadyFn = WindowReadyFn(unsafe { nil })
+	window_resize_handler WindowResizeFn = WindowResizeFn(unsafe { nil })
 	root               voidptr
 	nodes              map[string]voidptr
 	node_kinds         map[string]Kind
@@ -512,6 +514,7 @@ fn run_window_with_min_size(title string, width int, height int, min_width int, 
 	install_declared_menus()
 	refresh()
 	C.ui2_win_show_main_window(root)
+	windows_fire_window_ready()
 	C.ui2_win_message_loop()
 	native_remove_tray()
 	windows_dispose_all()
@@ -585,6 +588,42 @@ pub fn on_scroll(handler ScrollFn) {
 pub fn on_drop(handler DropFn) {
 	mut st := windows_state()
 	st.drop_handler = handler
+}
+
+// on_window_ready registers a handler called with the main HWND after the
+// window has been created and shown, before the message loop starts. An
+// embedder creates its child window (e.g. a webview) inside it.
+pub fn on_window_ready(handler WindowReadyFn) {
+	mut st := windows_state()
+	st.window_ready_handler = handler
+}
+
+// windows_fire_window_ready notifies the embedder registered through
+// on_window_ready, if any.
+fn windows_fire_window_ready() {
+	st := windows_state()
+	if voidptr(st.window_ready_handler) == unsafe { nil } {
+		return
+	}
+	st.window_ready_handler(st.root)
+}
+
+// on_window_resize registers a handler called with the client size in pixels
+// whenever the main window is resized, so an embedder can size its child
+// window (e.g. a webview) to match.
+pub fn on_window_resize(handler WindowResizeFn) {
+	mut st := windows_state()
+	st.window_resize_handler = handler
+}
+
+// windows_fire_window_resize notifies the embedder registered through
+// on_window_resize, if any.
+fn windows_fire_window_resize(width int, height int) {
+	st := windows_state()
+	if voidptr(st.window_resize_handler) == unsafe { nil } {
+		return
+	}
+	st.window_resize_handler(width, height)
 }
 
 // set_window_title updates the current Win32 window title.
@@ -1855,8 +1894,11 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 			return 0
 		}
 		win_wm_size {
-			if hwnd == st.root && !st.rendering {
-				refresh()
+			if hwnd == st.root {
+				if !st.rendering {
+					refresh()
+				}
+				windows_fire_window_resize(C.ui2_win_client_width(hwnd), C.ui2_win_client_height(hwnd))
 			}
 			return 0
 		}
