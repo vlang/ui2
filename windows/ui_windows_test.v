@@ -7,6 +7,12 @@ $if !ui2_custom_rendering ? {
 	// the ui2_win_destroy(voidptr) wrapper instead.
 	import clipboard
 
+	__global windows_accessibility_events = []string{}
+
+	fn capture_windows_accessibility_event(id string) {
+		windows_accessibility_events << id
+	}
+
 	fn test_windows_backend_compiles_with_clipboard() {
 		mut system_clipboard := clipboard.new()
 		assert system_clipboard != unsafe { nil }
@@ -110,6 +116,103 @@ $if !ui2_custom_rendering ? {
 		assert windows_button_behavior_action(captured, current, true, false, true) == ''
 		assert windows_button_behavior_action(captured, current, false, true, true) == ''
 		assert windows_button_behavior_action(captured, current, false, false, false) == ''
+		assert windows_button_behavior_accessibility_action(current, true) == 'replacement'
+		assert windows_button_behavior_accessibility_action(WindowsPointerBinding{}, true) == ''
+		assert windows_button_behavior_accessibility_action(WindowsPointerBinding{
+			id:        'replacement'
+			clickable: true
+		}, true) == ''
+		assert windows_button_behavior_accessibility_action(current, false) == ''
+		assert windows_button_accessibility_caption('Save & close') == 'Save && close'
+	}
+
+	fn test_windows_composite_button_exposes_native_accessibility_and_invoke() {
+		assert C.ui2_win_register_classes() != 0
+		title := 'accessibility test'.to_wide()
+		root := C.ui2_win_create_main_window(title, 320, 200)
+		unsafe { free(title) }
+		assert root != unsafe { nil }
+		empty := ''.to_wide()
+		button := C.ui2_win_create_widget(windows_widget_kind(.view), root, 0, 0, 200,
+			48, empty, 0, 0, 0, 0, 0)
+		field := C.ui2_win_create_widget(windows_widget_kind(.text_field), root, 0, 56,
+			200, 32, empty, 0, 0, 0, 0, 0)
+		child_label := C.ui2_win_create_widget(windows_widget_kind(.label), button, 8, 8,
+			184, 32, empty, 0, 0, 0, 0, 0)
+		unsafe { free(empty) }
+		assert button != unsafe { nil }
+		assert field != unsafe { nil }
+		assert child_label != unsafe { nil }
+
+		mut st := windows_state()
+		old_handler := st.event_handler
+		old_bindings := st.pointer_bindings.clone()
+		defer {
+			st.event_handler = old_handler
+			st.pointer_bindings = old_bindings
+			windows_accessibility_events = []string{}
+			C.ui2_win_destroy(root)
+			C.ui2_win_shutdown_accessibility()
+		}
+
+		label := 'Save & close'
+		caption := windows_button_accessibility_caption(label).to_wide()
+		C.ui2_win_configure_accessible_button(button, caption, 1)
+		unsafe { free(caption) }
+		assert C.ui2_win_is_accessible_button(button) != 0
+		assert C.ui2_win_widget_style(button) & usize(0x00010000) != 0
+
+		expected_name := label.to_wide()
+		info := C.ui2_win_accessible_button_info(button, expected_name)
+		unsafe { free(expected_name) }
+		assert info & u32(1) != 0 // ROLE_SYSTEM_PUSHBUTTON
+		assert info & u32(2) != 0 // literal accessible name
+		assert info & u32(4) != 0 // Press/default action
+		assert info & u32(8) != 0 // keyboard focusable
+
+		// A composite remains in the flattened tab order even though its container
+		// also exposes children through WS_EX_CONTROLPARENT.
+		C.ui2_win_show(root, 1)
+		assert C.ui2_win_focus_next(field, 0) != 0
+		assert C.ui2_win_focus_handle() == button
+		assert C.ui2_win_focus_next(button, 0) != 0
+		assert C.ui2_win_focus_handle() == field
+		C.ui2_win_show(root, 0)
+
+		windows_accessibility_events = []string{}
+		st.event_handler = capture_windows_accessibility_event
+		st.pointer_bindings[windows_handle_id(button)] = WindowsPointerBinding{
+			id:              'save'
+			button_behavior: true
+		}
+		st.event_handler = EventFn(unsafe { nil })
+		assert ui2_windows_accessibility_activate(button) == 0
+		st.event_handler = capture_windows_accessibility_event
+		assert C.ui2_win_accessible_button_invoke(button) != 0
+		C.ui2_win_dispatch_pending_messages()
+		assert windows_accessibility_events == ['save']
+
+		st.pointer_bindings[windows_handle_id(button)] = WindowsPointerBinding{
+			id:              'replacement'
+			button_behavior: true
+		}
+		C.ui2_win_click(button)
+		assert windows_accessibility_events == ['save', 'replacement']
+
+		st.pointer_bindings.delete(windows_handle_id(button))
+		C.ui2_win_enable(button, 0)
+		disabled_name := label.to_wide()
+		disabled_info := C.ui2_win_accessible_button_info(button, disabled_name)
+		unsafe { free(disabled_name) }
+		assert disabled_info & u32(16) != 0 // STATE_SYSTEM_UNAVAILABLE
+		C.ui2_win_click(button)
+		assert windows_accessibility_events == ['save', 'replacement']
+
+		empty_caption := ''.to_wide()
+		C.ui2_win_configure_accessible_button(button, empty_caption, 0)
+		unsafe { free(empty_caption) }
+		assert C.ui2_win_is_accessible_button(button) == 0
+		assert C.ui2_win_widget_style(button) & usize(0x00010000) == 0
 	}
 
 	fn test_windows_transparent_push_buttons_use_custom_painting() {
@@ -216,6 +319,7 @@ $if !ui2_custom_rendering ? {
 		assert root != unsafe { nil }
 		defer {
 			C.ui2_win_destroy(root)
+			C.ui2_win_shutdown_accessibility()
 		}
 
 		plain := 'Bond, James'.to_wide()
@@ -246,6 +350,7 @@ $if !ui2_custom_rendering ? {
 		assert root != unsafe { nil }
 		defer {
 			C.ui2_win_destroy(root)
+			C.ui2_win_shutdown_accessibility()
 		}
 
 		empty := ''.to_wide()

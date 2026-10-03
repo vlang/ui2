@@ -23,6 +23,8 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
+#include <oleacc.h>
+#include <oleauto.h>
 #include <shellapi.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -57,6 +59,7 @@ extern void ui2_windows_control_pointer(void *hwnd, unsigned int message, int x,
 extern void ui2_windows_control_border(void *hwnd);
 extern int ui2_windows_is_transparent_button(void *hwnd);
 extern int ui2_windows_paint_transparent_button(void *hwnd);
+extern int ui2_windows_accessibility_activate(void *hwnd);
 
 static inline void ui2_win_refresh_text_font(HWND hwnd);
 
@@ -125,6 +128,126 @@ static inline int ui2_win_apply_cursor(void *hwnd) {
 	return 1;
 }
 
+typedef struct ui2_win_tab_order {
+	HWND current;
+	HWND first;
+	HWND last;
+	HWND previous;
+	HWND next;
+	int found;
+} ui2_win_tab_order;
+
+static void ui2_win_visit_tab_order(HWND candidate, ui2_win_tab_order *order) {
+	if (order->first == NULL) order->first = candidate;
+	if (order->found && order->next == NULL) order->next = candidate;
+	if (candidate == order->current) {
+		order->found = 1;
+		order->previous = order->last;
+	}
+	order->last = candidate;
+}
+
+static void ui2_win_collect_tab_order(HWND parent, ui2_win_tab_order *order) {
+	for (HWND child = GetWindow(parent, GW_CHILD); child != NULL;
+			child = GetWindow(child, GW_HWNDNEXT)) {
+		if (!IsWindowVisible(child) || !IsWindowEnabled(child)) continue;
+		LONG_PTR style = GetWindowLongPtrW(child, GWL_STYLE);
+		LONG_PTR ex_style = GetWindowLongPtrW(child, GWL_EXSTYLE);
+		if ((style & WS_TABSTOP) != 0) ui2_win_visit_tab_order(child, order);
+		if ((ex_style & WS_EX_CONTROLPARENT) != 0) {
+			ui2_win_collect_tab_order(child, order);
+		}
+	}
+}
+
+static inline int ui2_win_focus_next(void *hwnd_ptr, int backwards) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	if (hwnd == NULL) return 0;
+	HWND root = GetAncestor(hwnd, GA_ROOT);
+	if (root == NULL) return 0;
+	ui2_win_tab_order order;
+	ZeroMemory(&order, sizeof(order));
+	order.current = hwnd;
+	ui2_win_collect_tab_order(root, &order);
+	HWND next = backwards
+		? (order.found && order.previous != NULL ? order.previous : order.last)
+		: (order.found && order.next != NULL ? order.next : order.first);
+	if (next == NULL || next == hwnd) return 0;
+	SetFocus(next);
+	return GetFocus() == next;
+}
+
+static const wchar_t *ui2_win_accessible_button_property(void) {
+	return L"ui2.accessible_button";
+}
+
+static inline int ui2_win_is_accessible_button(void *hwnd_ptr) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	return hwnd != NULL
+		&& GetPropW(hwnd, ui2_win_accessible_button_property()) != NULL;
+}
+
+static inline int ui2_win_text_matches(HWND hwnd, const wchar_t *expected) {
+	const wchar_t *text = expected == NULL ? L"" : expected;
+	int length = GetWindowTextLengthW(hwnd);
+	if (length != (int)wcslen(text)) return 0;
+	wchar_t *actual = (wchar_t *)malloc((size_t)(length + 1) * sizeof(wchar_t));
+	if (actual == NULL) return length == 0;
+	GetWindowTextW(hwnd, actual, length + 1);
+	int matches = wcscmp(actual, text) == 0;
+	free(actual);
+	return matches;
+}
+
+static inline void ui2_win_configure_accessible_button(void *hwnd_ptr,
+		const wchar_t *label, int active) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	if (hwnd == NULL) return;
+	int was_active = ui2_win_is_accessible_button(hwnd);
+	if (was_active && !active) {
+		NotifyWinEvent(EVENT_OBJECT_DESTROY, hwnd, OBJID_CLIENT, CHILDID_SELF);
+	}
+	if (active) {
+		SetPropW(hwnd, ui2_win_accessible_button_property(), (HANDLE)1);
+	} else {
+		RemovePropW(hwnd, ui2_win_accessible_button_property());
+	}
+	LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+	LONG_PTR next_style = active ? style | WS_TABSTOP : style & ~((LONG_PTR)WS_TABSTOP);
+	if (style != next_style) {
+		SetWindowLongPtrW(hwnd, GWL_STYLE, next_style);
+		SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
+			SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+	}
+	const wchar_t *caption = active && label != NULL ? label : L"";
+	int name_changed = !ui2_win_text_matches(hwnd, caption);
+	if (name_changed) {
+		SetWindowTextW(hwnd, caption);
+	}
+	if (!was_active && active) {
+		NotifyWinEvent(EVENT_OBJECT_CREATE, hwnd, OBJID_CLIENT, CHILDID_SELF);
+	} else if (active && name_changed) {
+		NotifyWinEvent(EVENT_OBJECT_NAMECHANGE, hwnd, OBJID_CLIENT, CHILDID_SELF);
+	}
+}
+
+static inline void ui2_win_notify_invoked(void *hwnd_ptr) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	if (hwnd != NULL && IsWindow(hwnd)) {
+		NotifyWinEvent(EVENT_OBJECT_INVOKED, hwnd, OBJID_CLIENT, CHILDID_SELF);
+	}
+}
+
+static inline LRESULT ui2_win_accessible_button_object(HWND hwnd, WPARAM wparam) {
+	IAccessible *accessible = NULL;
+	HRESULT result = CreateStdAccessibleProxyW(hwnd, L"BUTTON", OBJID_CLIENT,
+		&IID_IAccessible, (void **)&accessible);
+	if (FAILED(result) || accessible == NULL) return 0;
+	LRESULT object = LresultFromObject(&IID_IAccessible, wparam, (IUnknown *)accessible);
+	accessible->lpVtbl->Release(accessible);
+	return object;
+}
+
 static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM wparam,
 		LPARAM lparam, UINT_PTR subclass_id, DWORD_PTR reference_data) {
 	(void)subclass_id;
@@ -136,6 +259,10 @@ static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM
 		return 0;
 	}
 	if (message == WM_KEYDOWN && !IsWindow(hwnd)) return 0;
+	if (message == WM_KEYDOWN && wparam == VK_TAB && ui2_win_focus_next(hwnd,
+			(GetKeyState(VK_SHIFT) & 0x8000) != 0)) {
+		return 0;
+	}
 	if (message == WM_SETCURSOR && LOWORD(lparam) == HTCLIENT && ui2_win_apply_cursor(hwnd)) {
 		return TRUE;
 	}
@@ -191,6 +318,18 @@ static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM
 
 static LRESULT CALLBACK ui2_win_window_proc(HWND hwnd, UINT message, WPARAM wparam,
 		LPARAM lparam) {
+	if (message == WM_GETOBJECT && ui2_win_is_accessible_button(hwnd)
+		&& (DWORD)lparam == (DWORD)OBJID_CLIENT) {
+		return ui2_win_accessible_button_object(hwnd, wparam);
+	}
+	if (message == BM_CLICK && ui2_win_is_accessible_button(hwnd)) {
+		ui2_windows_accessibility_activate(hwnd);
+		return 0;
+	}
+	if ((message == WM_SETFOCUS || message == WM_KILLFOCUS)
+		&& ui2_win_is_accessible_button(hwnd)) {
+		InvalidateRect(hwnd, NULL, FALSE);
+	}
 	if (message == WM_MOUSEWHEEL
 		&& (GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_VSCROLL) == 0) {
 		HWND parent = GetParent(hwnd);
@@ -212,6 +351,9 @@ static LRESULT CALLBACK ui2_win_window_proc(HWND hwnd, UINT message, WPARAM wpar
 	if (message == WM_LBUTTONDOWN || message == WM_MOUSEMOVE || message == WM_LBUTTONUP) {
 		ui2_windows_control_pointer(hwnd, message, GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
 		if (!IsWindow(hwnd)) return 0;
+	}
+	if (message == WM_NCDESTROY) {
+		RemovePropW(hwnd, ui2_win_accessible_button_property());
 	}
 	return (LRESULT)ui2_windows_window_proc(hwnd, message, (uintptr_t)wparam,
 		(intptr_t)lparam);
@@ -299,7 +441,24 @@ static inline HFONT ui2_win_system_font(void) {
 	return font == NULL ? (HFONT)GetStockObject(DEFAULT_GUI_FONT) : font;
 }
 
+static int ui2_win_accessibility_com_attempted = 0;
+static int ui2_win_accessibility_com_owned = 0;
+
+static inline void ui2_win_initialize_accessibility(void) {
+	if (ui2_win_accessibility_com_attempted) return;
+	ui2_win_accessibility_com_attempted = 1;
+	HRESULT result = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+	ui2_win_accessibility_com_owned = SUCCEEDED(result);
+}
+
+static inline void ui2_win_shutdown_accessibility(void) {
+	if (ui2_win_accessibility_com_owned) CoUninitialize();
+	ui2_win_accessibility_com_attempted = 0;
+	ui2_win_accessibility_com_owned = 0;
+}
+
 static inline int ui2_win_register_classes(void) {
+	ui2_win_initialize_accessibility();
 	// Common Controls v6 supplies the current Windows button bezel and native
 	// hover/pressed states. Activate it before registering or creating controls.
 	ui2_win_enable_visual_styles();
@@ -701,6 +860,19 @@ static inline void ui2_win_focus(void *hwnd) {
 	if (hwnd != NULL) SetFocus((HWND)hwnd);
 }
 
+static inline void ui2_win_draw_focus_rect(void *hwnd_ptr) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	if (hwnd == NULL || GetFocus() != hwnd) return;
+	RECT rect;
+	if (!GetClientRect(hwnd, &rect)) return;
+	InflateRect(&rect, -3, -3);
+	if (rect.right <= rect.left || rect.bottom <= rect.top) return;
+	HDC dc = GetDC(hwnd);
+	if (dc == NULL) return;
+	DrawFocusRect(dc, &rect);
+	ReleaseDC(hwnd, dc);
+}
+
 static inline void *ui2_win_focus_handle(void) {
 	return GetFocus();
 }
@@ -759,6 +931,92 @@ static inline int ui2_win_placeholder_matches(void *hwnd, const wchar_t *expecte
 
 static inline uintptr_t ui2_win_widget_style(void *hwnd) {
 	return hwnd == NULL ? 0 : (uintptr_t)GetWindowLongPtrW((HWND)hwnd, GWL_STYLE);
+}
+
+static inline void ui2_win_click(void *hwnd) {
+	if (hwnd != NULL) SendMessageW((HWND)hwnd, BM_CLICK, 0, 0);
+}
+
+enum {
+	UI2_WIN_ACCESSIBLE_ROLE_BUTTON = 1,
+	UI2_WIN_ACCESSIBLE_NAME = 2,
+	UI2_WIN_ACCESSIBLE_DEFAULT_ACTION = 4,
+	UI2_WIN_ACCESSIBLE_FOCUSABLE = 8,
+	UI2_WIN_ACCESSIBLE_UNAVAILABLE = 16
+};
+
+static inline unsigned int ui2_win_accessible_button_info(void *hwnd_ptr,
+		const wchar_t *expected_name) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	if (hwnd == NULL) return 0;
+	IAccessible *accessible = NULL;
+	if (FAILED(AccessibleObjectFromWindow(hwnd, OBJID_CLIENT, &IID_IAccessible,
+			(void **)&accessible)) || accessible == NULL) {
+		return 0;
+	}
+	VARIANT child;
+	VARIANT role;
+	VARIANT state;
+	VariantInit(&child);
+	VariantInit(&role);
+	VariantInit(&state);
+	child.vt = VT_I4;
+	child.lVal = CHILDID_SELF;
+	BSTR name = NULL;
+	BSTR action = NULL;
+	unsigned int info = 0;
+	if (SUCCEEDED(accessible->lpVtbl->get_accRole(accessible, child, &role))
+		&& role.vt == VT_I4 && role.lVal == ROLE_SYSTEM_PUSHBUTTON) {
+		info |= UI2_WIN_ACCESSIBLE_ROLE_BUTTON;
+	}
+	if (SUCCEEDED(accessible->lpVtbl->get_accName(accessible, child, &name))
+		&& name != NULL && expected_name != NULL && wcscmp(name, expected_name) == 0) {
+		info |= UI2_WIN_ACCESSIBLE_NAME;
+	}
+	if (SUCCEEDED(accessible->lpVtbl->get_accDefaultAction(accessible, child, &action))
+		&& action != NULL && SysStringLen(action) > 0) {
+		info |= UI2_WIN_ACCESSIBLE_DEFAULT_ACTION;
+	}
+	if (SUCCEEDED(accessible->lpVtbl->get_accState(accessible, child, &state))
+		&& state.vt == VT_I4) {
+		if ((state.lVal & STATE_SYSTEM_FOCUSABLE) != 0) {
+			info |= UI2_WIN_ACCESSIBLE_FOCUSABLE;
+		}
+		if ((state.lVal & STATE_SYSTEM_UNAVAILABLE) != 0) {
+			info |= UI2_WIN_ACCESSIBLE_UNAVAILABLE;
+		}
+	}
+	if (name != NULL) SysFreeString(name);
+	if (action != NULL) SysFreeString(action);
+	VariantClear(&role);
+	VariantClear(&state);
+	accessible->lpVtbl->Release(accessible);
+	return info;
+}
+
+static inline int ui2_win_accessible_button_invoke(void *hwnd_ptr) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	if (hwnd == NULL) return 0;
+	IAccessible *accessible = NULL;
+	if (FAILED(AccessibleObjectFromWindow(hwnd, OBJID_CLIENT, &IID_IAccessible,
+			(void **)&accessible)) || accessible == NULL) {
+		return 0;
+	}
+	VARIANT child;
+	VariantInit(&child);
+	child.vt = VT_I4;
+	child.lVal = CHILDID_SELF;
+	HRESULT result = accessible->lpVtbl->accDoDefaultAction(accessible, child);
+	accessible->lpVtbl->Release(accessible);
+	return SUCCEEDED(result);
+}
+
+static inline void ui2_win_dispatch_pending_messages(void) {
+	MSG message;
+	while (PeekMessageW(&message, NULL, 0, 0, PM_REMOVE)) {
+		TranslateMessage(&message);
+		DispatchMessageW(&message);
+	}
 }
 
 static inline void ui2_win_get_selection(void *hwnd, unsigned int *start, unsigned int *end) {

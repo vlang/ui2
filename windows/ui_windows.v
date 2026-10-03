@@ -12,9 +12,19 @@ $if !ui2_custom_rendering ? {
 
 #flag windows -lshell32
 
+#flag windows -loleacc
+
+#flag windows -lole32
+
+#flag windows -loleaut32
+
+#flag windows -luuid
+
 #insert "@VMODROOT/windows/native_helpers_windows.h"
 
 fn C.ui2_win_register_classes() int
+
+fn C.ui2_win_shutdown_accessibility()
 
 fn C.ui2_win_visual_styles_enabled() int
 
@@ -58,6 +68,10 @@ fn C.ui2_win_show(hwnd voidptr, visible int)
 
 fn C.ui2_win_enable(hwnd voidptr, enabled int)
 
+fn C.ui2_win_configure_accessible_button(hwnd voidptr, label &u16, active int)
+
+fn C.ui2_win_is_accessible_button(hwnd voidptr) int
+
 fn C.ui2_win_create_tooltip(hwnd voidptr, text &u16) voidptr
 
 fn C.ui2_win_tooltip_add_target(tooltip voidptr, target voidptr) int
@@ -67,6 +81,10 @@ fn C.ui2_win_border_width(width f64, extent int) int
 fn C.ui2_win_destroy_tooltip(tooltip voidptr)
 
 fn C.ui2_win_focus(hwnd voidptr)
+
+fn C.ui2_win_focus_next(hwnd voidptr, backwards int) int
+
+fn C.ui2_win_draw_focus_rect(hwnd voidptr)
 
 fn C.ui2_win_focus_handle() voidptr
 
@@ -95,6 +113,16 @@ fn C.ui2_win_set_edit_options(hwnd voidptr, placeholder &u16, readonly int, padd
 fn C.ui2_win_placeholder_matches(hwnd voidptr, expected &u16) int
 
 fn C.ui2_win_widget_style(hwnd voidptr) usize
+
+fn C.ui2_win_click(hwnd voidptr)
+
+fn C.ui2_win_notify_invoked(hwnd voidptr)
+
+fn C.ui2_win_accessible_button_info(hwnd voidptr, expected_name &u16) u32
+
+fn C.ui2_win_accessible_button_invoke(hwnd voidptr) int
+
+fn C.ui2_win_dispatch_pending_messages()
 
 fn C.ui2_win_get_selection(hwnd voidptr, start &u32, end &u32)
 
@@ -466,6 +494,7 @@ fn run_window_with_min_size(title string, width int, height int, min_width int, 
 	}
 	if C.ui2_win_register_classes() == 0 {
 		eprintln('ui2: failed to register Win32 window classes')
+		C.ui2_win_shutdown_accessibility()
 		return
 	}
 	wide_title := title.to_wide()
@@ -473,6 +502,7 @@ fn run_window_with_min_size(title string, width int, height int, min_width int, 
 	unsafe { free(wide_title) }
 	if root == unsafe { nil } {
 		eprintln('ui2: failed to create the Win32 window')
+		C.ui2_win_shutdown_accessibility()
 		return
 	}
 	st.root = root
@@ -485,6 +515,7 @@ fn run_window_with_min_size(title string, width int, height int, min_width int, 
 	C.ui2_win_message_loop()
 	native_remove_tray()
 	windows_dispose_all()
+	C.ui2_win_shutdown_accessibility()
 }
 
 pub fn refresh() {
@@ -924,6 +955,13 @@ fn windows_render_element(parent voidptr, el Element, key string, parent_key str
 		}, y_offset)
 	}
 	windows_register_bindings(hwnd, el)
+	if el.kind == .view {
+		caption := windows_button_accessibility_caption(el.accessibility_label)
+		wide_caption := caption.to_wide()
+		C.ui2_win_configure_accessible_button(hwnd, wide_caption,
+			windows_bool(el.button_behavior))
+		unsafe { free(wide_caption) }
+	}
 	if el.children.len > 0 {
 		if el.kind == .scroll {
 			content_height := windows_content_height(el.children)
@@ -1058,6 +1096,12 @@ fn windows_options_signature(entries []MenuEntry) string {
 		parts << entry.id.bytes().hex() + ':' + entry.title.bytes().hex()
 	}
 	return parts.join('|')
+}
+
+fn windows_button_accessibility_caption(label string) string {
+	// The standard BUTTON proxy treats ampersands as access-key markers.
+	// Escape them so an accessibility label remains literal text.
+	return label.replace('&', '&&')
 }
 
 fn windows_update_element(key string, hwnd voidptr, el Element, y_offset int, created bool) {
@@ -1453,6 +1497,33 @@ fn windows_emit_action(id string) {
 	}
 }
 
+fn windows_emit_button_behavior_action(hwnd voidptr, id string) bool {
+	st := windows_state()
+	if id.len == 0 || voidptr(st.event_handler) == unsafe { nil } {
+		return false
+	}
+	C.ui2_win_notify_invoked(hwnd)
+	st.event_handler(id)
+	return true
+}
+
+fn windows_button_behavior_accessibility_action(current WindowsPointerBinding, target_available bool) string {
+	if current.button_behavior && current.id.len > 0 && target_available {
+		return current.id
+	}
+	return ''
+}
+
+@[export: 'ui2_windows_accessibility_activate']
+fn ui2_windows_accessibility_activate(hwnd voidptr) int {
+	st := windows_state()
+	current := st.pointer_bindings[windows_handle_id(hwnd)] or { WindowsPointerBinding{} }
+	action := windows_button_behavior_accessibility_action(current,
+		C.ui2_win_is_window(hwnd) != 0 && C.ui2_win_is_enabled(hwnd) != 0
+		&& C.ui2_win_is_accessible_button(hwnd) != 0)
+	return windows_bool(windows_emit_button_behavior_action(hwnd, action))
+}
+
 fn windows_snap_slider_value(hwnd voidptr, spec SliderSpec) f64 {
 	raw_normalized := C.ui2_win_slider_normalized(hwnd,
 		windows_bool(spec.orientation == .vertical))
@@ -1716,6 +1787,14 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 				C.ui2_win_paint_background(hwnd, box.bg, box.radius, transparent,
 					box.border_color, box.border_left, box.border_top, box.border_right,
 					box.border_bottom)
+				if kind == .view {
+					binding := st.pointer_bindings[windows_handle_id(hwnd)] or {
+						WindowsPointerBinding{}
+					}
+					if binding.button_behavior {
+						C.ui2_win_draw_focus_rect(hwnd)
+					}
+				}
 				return 0
 			}
 		}
@@ -1752,6 +1831,23 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam usize, lparam isize
 		win_wm_key_down {
 			if windows_dispatch_key(u32(wparam)) {
 				return 0
+			}
+			if wparam == 0x09
+				&& C.ui2_win_focus_next(hwnd, windows_bool(C.ui2_win_key_down(0x10) != 0)) != 0 {
+				return 0
+			}
+			if wparam in [usize(0x0d), usize(0x20)]
+				&& (usize(lparam) & (usize(1) << 30)) == 0 {
+				binding := st.pointer_bindings[windows_handle_id(hwnd)] or {
+					WindowsPointerBinding{}
+				}
+				action := windows_button_behavior_accessibility_action(binding,
+					C.ui2_win_is_window(hwnd) != 0 && C.ui2_win_is_enabled(hwnd) != 0
+					&& C.ui2_win_is_accessible_button(hwnd) != 0)
+				if action.len > 0 {
+					C.ui2_win_click(hwnd)
+					return 0
+				}
 			}
 		}
 		win_wm_dropfiles {
@@ -1932,6 +2028,9 @@ fn ui2_windows_control_pointer(hwnd voidptr, message u32, local_x int, local_y i
 		if binding.id.len == 0 {
 			return
 		}
+		if binding.button_behavior {
+			C.ui2_win_focus(target)
+		}
 		st.pointer_handle = target
 		st.pointer_binding = binding
 		st.pointer_start_x = x
@@ -1991,7 +2090,7 @@ fn ui2_windows_control_pointer(hwnd voidptr, message u32, local_x int, local_y i
 		windows_emit_action('pointer:up:${binding.id}:${x}:${y}')
 	}
 	if button_action.len > 0 {
-		windows_emit_action(button_action)
+		windows_emit_button_behavior_action(target, button_action)
 	}
 	if gesture {
 		st.suppress_click[windows_handle_id(target)] = true

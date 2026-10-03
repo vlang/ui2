@@ -287,10 +287,12 @@ and derives its accessibility label from the first visible, noninteractive
 descendant with a label or text; set `accessibility_role` or
 `accessibility_label` explicitly to override those defaults.
 
-This adds activation semantics without requesting a native bezel, pressed
-visuals, or native keyboard focus treatment—the rectangle and its children
-remain application-drawn. Use `Button` when those native control behaviors
-are required.
+This adds activation semantics without requesting a native bezel or pressed
+visuals—the rectangle and its children remain application-drawn. The native
+Windows backend exposes the composite as a focusable button to accessibility
+tools and supports Enter/Space activation; the other renderers do not add
+native keyboard focus treatment. Use `Button` when a platform-drawn bezel and
+pressed state are required.
 
 This is deliberately separate from `clickable: true`. A clickable view is a
 low-level pointer surface that reports `pointer:down:...` and `pointer:up:...`
@@ -503,7 +505,9 @@ its text area is plain-text, so those two controls report `partial` support.
 Shared state includes `hidden`, `enabled`, `accessibility_role`,
 `accessibility_label`, and `accessibility_value`. Native backends expose these
 through AppKit/UIKit. Standard Windows controls expose their native name and
-value; explicit Windows accessibility overrides are not yet implemented.
+value; `button_behavior` views also expose a native button role, generated
+label, keyboard focus, and accessibility activation. Other explicit Windows
+accessibility role/value overrides are not yet implemented.
 `autocorrect` and `padding_left` configure applicable mobile text inputs.
 
 ## Visual IDE

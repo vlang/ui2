@@ -436,6 +436,14 @@ fn gesture_view(gesture View) View {
 	return macos.msg_id(gesture, 'view')
 }
 
+fn gesture_location(gesture View, view View) ObjcPoint {
+	if gesture == unsafe { nil } || view == unsafe { nil } {
+		return ObjcPoint{}
+	}
+	sender := unsafe { ObjcPointMsg1(C.objc_msgSend) }
+	return sender(voidptr(gesture), voidptr(macos.sel('locationInView:')), voidptr(view))
+}
+
 fn pan_base_view(view View) View {
 	superview := macos.msg_id(view, 'superview')
 	if superview == unsafe { nil } {
@@ -916,6 +924,10 @@ fn assoc_handler_key() voidptr {
 	return voidptr(C.vui_button_tap)
 }
 
+fn assoc_view_tap_action_key() voidptr {
+	return voidptr(C.vui_view_tap_should_receive)
+}
+
 fn assoc_long_handler_key() voidptr {
 	return voidptr(C.vui_button_long_press)
 }
@@ -1388,28 +1400,74 @@ fn vui_button_tap(_self voidptr, _cmd voidptr, sender voidptr) {
 
 @[export: 'vui_view_tap']
 fn vui_view_tap(_self voidptr, _cmd voidptr, sender voidptr) {
-	if gesture_state(View(sender)) != gesture_state_ended
+	gesture := View(sender)
+	captured := macos.get_associated_object(gesture, assoc_view_tap_action_key())
+	captured_id := if objc_is_nil(captured) { '' } else { macos.utf8_string(captured) }
+	macos.set_associated_object(gesture, assoc_view_tap_action_key(), objc_nil(),
+		macos.assoc_retain_nonatomic)
+	if gesture_state(gesture) != gesture_state_ended || captured_id.len == 0
 		|| voidptr(g_event_handler) == unsafe { nil } {
 		return
 	}
-	view := gesture_view(View(sender))
-	id := g_action_ids[u64(view)] or { return }
-	g_event_handler(id)
+	view := gesture_view(gesture)
+	pointer := u64(view)
+	current_id := g_action_ids[pointer] or { '' }
+	view_bounds := macos.msg_rect(view, 'bounds')
+	location := gesture_location(gesture, view)
+	inside := location.x >= view_bounds.x && location.x <= view_bounds.x + view_bounds.width
+		&& location.y >= view_bounds.y && location.y <= view_bounds.y + view_bounds.height
+	action := ios_button_behavior_release_action(captured_id, current_id,
+		g_button_behavior_views[pointer] or { false },
+		macos.msg_bool(view, 'isUserInteractionEnabled'), macos.msg_bool(view, 'isHidden'),
+		inside)
+	if action.len == 0 {
+		return
+	}
+	g_event_handler(action)
+}
+
+fn ios_button_behavior_release_action(captured string, current string, registered bool, enabled bool, hidden bool, inside bool) string {
+	if captured.len > 0 && current.len > 0 && registered && enabled && !hidden && inside {
+		return captured
+	}
+	return ''
+}
+
+fn ios_button_behavior_capture_action(captured string, current string, active_touches u64, accepted bool) string {
+	if active_touches > 0 {
+		return captured
+	}
+	return if accepted { current } else { '' }
 }
 
 @[export: 'vui_view_tap_should_receive']
 fn vui_view_tap_should_receive(_self voidptr, _cmd voidptr, sender voidptr, touch voidptr) bool {
-	owner := gesture_view(View(sender))
+	gesture := View(sender)
+	active_touches := macos.msg_u64(gesture, 'numberOfTouches')
+	owner := gesture_view(gesture)
+	mut accepted := true
 	mut target := macos.msg_id(View(touch), 'view')
 	for target != unsafe { nil } && target != owner {
 		if macos.msg_bool_id(target, 'isKindOfClass:', macos.get_class('UIControl'))
 			|| macos.msg_bool_id(target, 'isKindOfClass:', macos.get_class('UIScrollView'))
 			|| (g_button_behavior_views[u64(target)] or { false }) {
-			return false
+			accepted = false
+			break
 		}
 		target = macos.msg_id(target, 'superview')
 	}
-	return true
+	pointer := u64(owner)
+	id := g_action_ids[pointer] or { '' }
+	if id.len == 0 || !(g_button_behavior_views[pointer] or { false }) {
+		accepted = false
+	}
+	stored := macos.get_associated_object(gesture, assoc_view_tap_action_key())
+	captured := if objc_is_nil(stored) { '' } else { macos.utf8_string(stored) }
+	next := ios_button_behavior_capture_action(captured, id, active_touches, accepted)
+	value := if next.len == 0 { objc_nil() } else { macos.nsstring(next) }
+	macos.set_associated_object(gesture, assoc_view_tap_action_key(), value,
+		macos.assoc_retain_nonatomic)
+	return accepted
 }
 
 @[export: 'vui_button_behavior_accessibility_activate']
