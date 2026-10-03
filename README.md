@@ -719,6 +719,39 @@ drawn in the same text still work. `ClickCounter` and `text_word_range` cover
 double-click word selection, and `text_column_at_x` maps an x offset to a
 column given a prefix-width function.
 
+## Scrolling
+
+A `Scroll` element scrolls over its children, vertically unless told otherwise.
+`scroll_mode`, named after vlang/gui's setting, chooses the axes:
+`vertical_only` (the default), `horizontal_only`, or `both`. The content is as
+wide as its rightmost child reaches and as tall as its lowest, and whatever
+overflows along an axis the mode leaves out is clipped.
+
+```v
+ui2.scroll_with_mode('columns', frame, 0xffffff, .horizontal_only, columns)
+```
+
+```vml
+Scroll {
+    id: columns
+    scroll_mode: horizontal_only
+}
+```
+
+The horizontal scroller runs along the bottom edge. A trackpad or a tilt wheel
+scrolls sideways directly, and Shift turns a plain wheel sideways. Scroll
+elements nest: a gesture along an axis the element under the pointer does not
+scroll moves the nearest enclosing one that does, so a strip of columns that
+each scroll vertically still scrolls sideways with the pointer over a column.
+
+`scroll_offset(id)` and `scroll_horizontal_offset(id)` read the position,
+`scroll_to_offset`, `scroll_to_horizontal_offset` and `scroll_to_rect` set it,
+and `on_scroll` reports a change along either axis. An offset asked for before
+the element exists is taken up when it is first laid out. To scroll to content
+the event being handled has just added, call `refresh()` first so the element
+has its new range. The iOS backend scrolls the same modes but does not expose
+these functions.
+
 ## Fonts and text sizes
 
 `TextStyle.size` is in points. Win32 and the Linux desktops resolve a point at
@@ -920,6 +953,8 @@ Typed-VML ports from `v-ui` include:
   scrollable multiline text areas.
 - `v run examples/scrollview/main.v` — two independently scrollable read-only
   text panes with generated content.
+- `v run examples/horizontal_scroll/main.v` — a column browser whose strip of
+  columns scrolls sideways while each column scrolls its own rows.
 - `v run examples/box_layout_with_textbox/main.v` — fixed and proportional box
   layout with an editable multiline text area.
 - `v run examples/files_dropped/main.v` — collect dropped files and plain text

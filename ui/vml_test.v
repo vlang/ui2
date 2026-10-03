@@ -497,6 +497,23 @@ fn test_parse_submit_only_text_field() {
 	assert !el.emit_change
 }
 
+fn test_vml_scroll_mode_selects_the_scrolled_axes() {
+	assert element_from_vml('Scroll { id: list }', rect(0, 0, 300, 200))!.scroll_mode == .vertical_only
+	columns := element_from_vml('Scroll {
+		id: columns
+		scroll_mode: horizontal_only
+		persistent: true
+	}', rect(0, 0, 300, 200))!
+	assert columns.scroll_mode == .horizontal_only
+	assert columns.persistent_scrollbars
+	assert element_from_vml('Scroll { scroll_mode: both }', rect(0, 0, 300, 200))!.scroll_mode == .both
+	element_from_vml('Scroll { scroll_mode: diagonal }', rect(0, 0, 300, 200)) or {
+		assert err.msg().contains('unknown scroll mode `diagonal`')
+		return
+	}
+	assert false
+}
+
 fn test_vml_dropdown_options_persistent_scroll_and_tooltip() {
 	source := 'Scroll {
 		id: users

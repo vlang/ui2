@@ -28,5 +28,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	__global g_scroll_order = []string{}
 	__global g_scroll_parents = map[string]string{}
 	__global g_scrollbar_geometries = map[string]ScrollbarGeometry{}
+	// The sideways axis of a Scroll element keeps the same state as the vertical
+	// one, in maps of its own so a pane that only scrolls vertically pays nothing.
+	__global g_scroll_offsets_x = map[string]f64{}
+	__global g_scroll_content_w = map[string]f64{}
+	__global g_pending_scroll_x = map[string]f64{}
+	__global g_scrollbar_geometries_x = map[string]ScrollbarGeometry{}
 	__global g_text_area_layouts = map[string]TextAreaLayout{}
 }

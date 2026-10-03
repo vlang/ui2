@@ -878,16 +878,19 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 		}
 		'Scroll' {
 			children := v_children(node, local)!
+			mode := scroll_mode(node.prop_or('scroll_mode', ''))!
 			if node.prop_bool('persistent') {
 				return Element{
 					...scroll_persistent(node.id, frame, v_color(node, 'background', 0xffffff),
 						children)
 					box: v_box(node)
+					scroll_mode: mode
 				}
 			}
 			return Element{
 				...scroll(node.id, frame, v_color(node, 'background', 0xffffff), children)
 				box: v_box(node)
+				scroll_mode: mode
 			}
 		}
 		'View', 'Rectangle' {

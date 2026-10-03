@@ -248,6 +248,37 @@ static inline LRESULT ui2_win_accessible_button_object(HWND hwnd, WPARAM wparam)
 	return object;
 }
 
+// The scroll bar a wheel message moves: the horizontal one for a tilt wheel, and for a
+// plain wheel turned with Shift held. A window showing that bar is the one to scroll.
+static inline DWORD ui2_win_wheel_scroll_style(UINT message, WPARAM wparam) {
+	if (message == WM_MOUSEHWHEEL || (GET_KEYSTATE_WPARAM(wparam) & MK_SHIFT) != 0) {
+		return WS_HSCROLL;
+	}
+	return WS_VSCROLL;
+}
+
+// The nearest window above this one that shows the bar for an axis: the pane that
+// takes a scroll along it which this one has no use for.
+static inline void *ui2_win_scroll_parent(void *hwnd_ptr, int horizontal) {
+	DWORD bar = horizontal ? WS_HSCROLL : WS_VSCROLL;
+	HWND parent = GetParent((HWND)hwnd_ptr);
+	while (parent != NULL) {
+		if ((GetWindowLongPtrW(parent, GWL_STYLE) & bar) != 0) return parent;
+		parent = GetParent(parent);
+	}
+	return NULL;
+}
+
+// Hands a wheel message from a window with nothing to scroll that way to the nearest
+// one above it that has, and says whether there was one.
+static inline int ui2_win_forward_wheel(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+	HWND parent = (HWND)ui2_win_scroll_parent(hwnd,
+		ui2_win_wheel_scroll_style(message, wparam) == WS_HSCROLL);
+	if (parent == NULL) return 0;
+	SendMessageW(parent, message, wparam, lparam);
+	return 1;
+}
+
 static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM wparam,
 		LPARAM lparam, UINT_PTR subclass_id, DWORD_PTR reference_data) {
 	(void)subclass_id;
@@ -295,14 +326,15 @@ static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM
 		if (IsWindow(hwnd)) ui2_win_refresh_text_font(hwnd);
 		return result;
 	}
-	if (message == WM_MOUSEWHEEL) {
+	if (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL) {
+		DWORD bar = ui2_win_wheel_scroll_style(message, wparam);
 		HWND parent = GetParent(hwnd);
 		wchar_t class_name[64];
 		while (parent != NULL) {
 			class_name[0] = 0;
 			GetClassNameW(parent, class_name, 64);
 			if (wcscmp(class_name, L"UI2Container") == 0
-				&& (GetWindowLongPtrW(parent, GWL_STYLE) & WS_VSCROLL) != 0) {
+				&& (GetWindowLongPtrW(parent, GWL_STYLE) & bar) != 0) {
 				SendMessageW(parent, message, wparam, lparam);
 				return 0;
 			}
@@ -330,16 +362,10 @@ static LRESULT CALLBACK ui2_win_window_proc(HWND hwnd, UINT message, WPARAM wpar
 		&& ui2_win_is_accessible_button(hwnd)) {
 		InvalidateRect(hwnd, NULL, FALSE);
 	}
-	if (message == WM_MOUSEWHEEL
-		&& (GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_VSCROLL) == 0) {
-		HWND parent = GetParent(hwnd);
-		while (parent != NULL) {
-			if ((GetWindowLongPtrW(parent, GWL_STYLE) & WS_VSCROLL) != 0) {
-				SendMessageW(parent, message, wparam, lparam);
-				return 0;
-			}
-			parent = GetParent(parent);
-		}
+	if ((message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL)
+		&& (GetWindowLongPtrW(hwnd, GWL_STYLE) & ui2_win_wheel_scroll_style(message, wparam)) == 0
+		&& ui2_win_forward_wheel(hwnd, message, wparam, lparam)) {
+		return 0;
 	}
 	if (message == WM_CONTEXTMENU
 		&& ui2_windows_context_menu(hwnd, GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam))) {
@@ -1530,31 +1556,100 @@ static inline void ui2_win_clear_bitmap(void *hwnd_ptr) {
 	if (old != NULL) DeleteObject(old);
 }
 
-static inline int ui2_win_set_scroll(void *hwnd_ptr, int content_height, int position) {
-	HWND hwnd = (HWND)hwnd_ptr;
-	RECT rect;
-	GetClientRect(hwnd, &rect);
+// Each axis of a Scroll element is kept on a standard scroll bar of its window, which
+// the system shows while the content is longer than what the window shows of it.
+static inline int ui2_win_scroll_bar(int horizontal) {
+	return horizontal ? SB_HORZ : SB_VERT;
+}
+
+static inline int ui2_win_set_scroll_page(HWND hwnd, int bar, int content, int page, int position) {
 	SCROLLINFO info;
 	ZeroMemory(&info, sizeof(info));
 	info.cbSize = sizeof(info);
 	info.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
 	info.nMin = 0;
-	info.nMax = content_height > 0 ? content_height - 1 : 0;
-	info.nPage = (UINT)(rect.bottom - rect.top);
+	info.nMax = content > 0 ? content - 1 : 0;
+	info.nPage = (UINT)(page > 0 ? page : 0);
 	info.nPos = position;
-	SetScrollInfo(hwnd, SB_VERT, &info, TRUE);
+	SetScrollInfo(hwnd, bar, &info, TRUE);
 	info.fMask = SIF_POS;
-	GetScrollInfo(hwnd, SB_VERT, &info);
+	GetScrollInfo(hwnd, bar, &info);
 	return info.nPos;
 }
 
-static inline int ui2_win_scroll_message(void *hwnd_ptr, uintptr_t wparam) {
+static inline int ui2_win_set_scroll(void *hwnd_ptr, int content, int position, int horizontal) {
 	HWND hwnd = (HWND)hwnd_ptr;
+	RECT rect;
+	GetClientRect(hwnd, &rect);
+	return ui2_win_set_scroll_page(hwnd, ui2_win_scroll_bar(horizontal), content,
+		horizontal ? rect.right - rect.left : rect.bottom - rect.top, position);
+}
+
+// Settles how much of each axis a Scroll element shows once its bars are in place.
+// Each bar takes room from the axis the other one pages over, so neither page can be
+// read off the client area while the other bar may still come or go. Which bars are
+// needed follows from the area the window has with neither: a vertical bar when the
+// content is taller than that, a horizontal one when it is wider than what the
+// vertical bar leaves, and a vertical one after all when the horizontal bar is what
+// makes the content too tall.
+static inline void ui2_win_scroll_pages(int width, int height, int content_width,
+		int content_height, int bar_width, int bar_height, int *page_width, int *page_height) {
+	int vertical = content_height > height;
+	int horizontal = content_width > width - (vertical ? bar_width : 0);
+	if (horizontal && !vertical) vertical = content_height > height - bar_height;
+	*page_width = width - (vertical ? bar_width : 0);
+	*page_height = height - (horizontal ? bar_height : 0);
+}
+
+// Makes a standard bar show exactly when it is needed. A range that outgrows its page
+// brings the bar in and one that fits takes it away, so this normally finds nothing to
+// do. Asking outright keeps the horizontal bar from resting on that alone: the window
+// is created with the style for the vertical bar only.
+static inline void ui2_win_ensure_scroll_bar(HWND hwnd, int bar, int needed) {
+	DWORD style = bar == SB_HORZ ? WS_HSCROLL : WS_VSCROLL;
+	int showing = (GetWindowLongPtrW(hwnd, GWL_STYLE) & style) != 0;
+	if (showing != (needed != 0)) ShowScrollBar(hwnd, bar, needed ? TRUE : FALSE);
+}
+
+// Sets both bars of a Scroll element together, for one that scrolls sideways. Setting
+// them one after the other leaves whichever went first paging over room the other bar
+// has since taken, and the content under that bar out of reach.
+static inline void ui2_win_set_scroll_both(void *hwnd_ptr, int content_width, int content_height,
+		int position_x, int position_y) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	RECT rect;
+	// The window has no border, so its own rectangle is the client area together
+	// with whichever bars are showing.
+	GetWindowRect(hwnd, &rect);
+	int page_width = 0;
+	int page_height = 0;
+	ui2_win_scroll_pages(rect.right - rect.left, rect.bottom - rect.top, content_width,
+		content_height, GetSystemMetrics(SM_CXVSCROLL), GetSystemMetrics(SM_CYHSCROLL),
+		&page_width, &page_height);
+	ui2_win_set_scroll_page(hwnd, SB_VERT, content_height, page_height, position_y);
+	ui2_win_set_scroll_page(hwnd, SB_HORZ, content_width, page_width, position_x);
+	ui2_win_ensure_scroll_bar(hwnd, SB_VERT, content_height > page_height);
+	ui2_win_ensure_scroll_bar(hwnd, SB_HORZ, content_width > page_width);
+}
+
+static inline int ui2_win_scroll_position(void *hwnd_ptr, int horizontal) {
+	SCROLLINFO info;
+	ZeroMemory(&info, sizeof(info));
+	info.cbSize = sizeof(info);
+	info.fMask = SIF_POS;
+	GetScrollInfo((HWND)hwnd_ptr, ui2_win_scroll_bar(horizontal), &info);
+	return info.nPos;
+}
+
+// The line, page and end codes of WM_HSCROLL share their values with WM_VSCROLL's.
+static inline int ui2_win_scroll_message(void *hwnd_ptr, uintptr_t wparam, int horizontal) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	int bar = ui2_win_scroll_bar(horizontal);
 	SCROLLINFO info;
 	ZeroMemory(&info, sizeof(info));
 	info.cbSize = sizeof(info);
 	info.fMask = SIF_ALL;
-	GetScrollInfo(hwnd, SB_VERT, &info);
+	GetScrollInfo(hwnd, bar, &info);
 	int position = info.nPos;
 	switch (LOWORD(wparam)) {
 	case SB_TOP: position = info.nMin; break;
@@ -1569,55 +1664,88 @@ static inline int ui2_win_scroll_message(void *hwnd_ptr, uintptr_t wparam) {
 	}
 	info.fMask = SIF_POS;
 	info.nPos = position;
-	SetScrollInfo(hwnd, SB_VERT, &info, TRUE);
-	GetScrollInfo(hwnd, SB_VERT, &info);
+	SetScrollInfo(hwnd, bar, &info, TRUE);
+	GetScrollInfo(hwnd, bar, &info);
 	return info.nPos;
 }
 
-static inline int ui2_win_scroll_wheel(void *hwnd_ptr, uintptr_t wparam) {
-	HWND hwnd = (HWND)hwnd_ptr;
-	SCROLLINFO info;
-	ZeroMemory(&info, sizeof(info));
-	info.cbSize = sizeof(info);
-	info.fMask = SIF_ALL;
-	GetScrollInfo(hwnd, SB_VERT, &info);
+// How far a wheel message asks to scroll, positive towards the end of the content. A
+// wheel rolled away from the user is the positive one and scrolls back. A tilt wheel
+// reports a push to the right as positive, which scrolls on.
+//
+// A precision wheel or a touchpad reports steps smaller than WHEEL_DELTA, many to a
+// notch. The step is scaled before it is divided, and what the division leaves over
+// is kept for the next message, so those steps add up to the same distance a whole
+// notch covers instead of each rounding away to nothing. What is left over belongs to
+// the axis being scrolled, not to the kind of message: a plain wheel scrolls
+// sideways with Shift held, and must not finish there a step it began vertically.
+static inline int ui2_win_wheel_distance(uintptr_t wparam, int tilt, int horizontal) {
+	static int leftover[2];
+	int *rest = &leftover[horizontal ? 1 : 0];
 	int delta = GET_WHEEL_DELTA_WPARAM(wparam);
-	info.fMask = SIF_POS;
-	info.nPos -= (delta / WHEEL_DELTA) * 48;
-	SetScrollInfo(hwnd, SB_VERT, &info, TRUE);
-	GetScrollInfo(hwnd, SB_VERT, &info);
-	return info.nPos;
+	int step = (tilt ? delta : -delta) * 48;
+	// A wheel turned back the other way starts afresh rather than working off what
+	// the last direction left.
+	if ((*rest > 0 && step < 0) || (*rest < 0 && step > 0)) *rest = 0;
+	int scaled = step + *rest;
+	int distance = scaled / WHEEL_DELTA;
+	*rest = scaled - distance * WHEEL_DELTA;
+	return distance;
 }
 
-static inline int ui2_win_scroll_to_rect(void *hwnd_ptr, int top, int bottom) {
+// Moves a scroll bar by a distance and reports where it settled, which is short of
+// what was asked at either end of its range.
+static inline int ui2_win_scroll_by(void *hwnd_ptr, int distance, int horizontal) {
 	HWND hwnd = (HWND)hwnd_ptr;
+	int bar = ui2_win_scroll_bar(horizontal);
 	SCROLLINFO info;
 	ZeroMemory(&info, sizeof(info));
 	info.cbSize = sizeof(info);
 	info.fMask = SIF_ALL;
-	GetScrollInfo(hwnd, SB_VERT, &info);
+	GetScrollInfo(hwnd, bar, &info);
+	info.fMask = SIF_POS;
+	info.nPos += distance;
+	SetScrollInfo(hwnd, bar, &info, TRUE);
+	GetScrollInfo(hwnd, bar, &info);
+	return info.nPos;
+}
+
+static inline int ui2_win_wheel_is_shifted(uintptr_t wparam) {
+	return (GET_KEYSTATE_WPARAM(wparam) & MK_SHIFT) != 0;
+}
+
+// Scrolls the least distance that brings the span from start to end into view.
+static inline int ui2_win_scroll_to_rect(void *hwnd_ptr, int start, int end, int horizontal) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	int bar = ui2_win_scroll_bar(horizontal);
+	SCROLLINFO info;
+	ZeroMemory(&info, sizeof(info));
+	info.cbSize = sizeof(info);
+	info.fMask = SIF_ALL;
+	GetScrollInfo(hwnd, bar, &info);
 	int position = info.nPos;
-	if (top < position) position = top;
-	if (bottom > position + (int)info.nPage) position = bottom - (int)info.nPage;
+	if (start < position) position = start;
+	if (end > position + (int)info.nPage) position = end - (int)info.nPage;
 	info.fMask = SIF_POS;
 	info.nPos = position;
-	SetScrollInfo(hwnd, SB_VERT, &info, TRUE);
-	GetScrollInfo(hwnd, SB_VERT, &info);
+	SetScrollInfo(hwnd, bar, &info, TRUE);
+	GetScrollInfo(hwnd, bar, &info);
 	return info.nPos;
 }
 
 // Put a scroll bar at a position rather than scrolling the least amount that brings
 // a rect into view. SetScrollInfo clamps to the range the element currently has, and
 // reading back reports where it settled.
-static inline int ui2_win_set_scroll_position(void *hwnd_ptr, int position) {
+static inline int ui2_win_set_scroll_position(void *hwnd_ptr, int position, int horizontal) {
 	HWND hwnd = (HWND)hwnd_ptr;
+	int bar = ui2_win_scroll_bar(horizontal);
 	SCROLLINFO info;
 	ZeroMemory(&info, sizeof(info));
 	info.cbSize = sizeof(info);
 	info.fMask = SIF_POS;
 	info.nPos = position;
-	SetScrollInfo(hwnd, SB_VERT, &info, TRUE);
-	GetScrollInfo(hwnd, SB_VERT, &info);
+	SetScrollInfo(hwnd, bar, &info, TRUE);
+	GetScrollInfo(hwnd, bar, &info);
 	return info.nPos;
 }
 

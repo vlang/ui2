@@ -176,6 +176,7 @@ fn test_macos_native_style_button_keeps_appkit_bezel_and_press_state() {
 }
 
 fn test_macos_transparent_box_controls_disable_native_backgrounds() {
+	ensure_runtime_classes()
 	pool := macos.autorelease_pool_new()
 	defer {
 		macos.release(pool)
@@ -186,7 +187,8 @@ fn test_macos_transparent_box_controls_disable_native_backgrounds() {
 	}
 	button_view := native_new_button(native_rect(0, 0, 96, 40), 'Clear', BoxStyle{},
 		0xffffff, 15, false, false, false, 0, '', true)
-	scroll_view := native_new_scroll(native_rect(0, 0, 120, 80), BoxStyle{}, false)
+	scroll_view := native_new_scroll(native_rect(0, 0, 120, 80), BoxStyle{}, false,
+		.vertical_only)
 	toggle_view := native_new_toggle_button(toggle_button(
 		title: 'Clear toggle'
 		box: transparent_box
@@ -222,6 +224,128 @@ fn test_macos_transparent_box_controls_disable_native_backgrounds() {
 	assert !macos.msg_bool(text_area_view, 'drawsBackground')
 	text_view := text_area_text_view(text_area_view, false)
 	assert !macos.msg_bool(text_view, 'drawsBackground')
+}
+
+fn test_macos_scroll_mode_selects_scrollers_and_document_size() {
+	ensure_runtime_classes()
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	columns := scroll_with_mode('test-columns', rect(0, 0, 120, 80), 0xffffff, .horizontal_only, [
+		view('', rect(0, 0, 200, 80), BoxStyle{}, []),
+		view('', rect(200, 0, 200, 300), BoxStyle{}, []),
+	])
+	scroll_view := native_new_scroll(element_rect(columns.frame), columns.box, false,
+		columns.scroll_mode)
+	defer {
+		macos.release(scroll_view)
+	}
+	assert macos.msg_bool(scroll_view, 'hasHorizontalScroller')
+	assert !macos.msg_bool(scroll_view, 'hasVerticalScroller')
+
+	// A sideways strip is as wide as its columns and no taller than what shows.
+	assert scroll_document_size(columns, 120, 80) == ScrollDocument{
+		width:          400
+		height:         80
+		follows_height: true
+	}
+	canvas := Element{
+		...columns
+		scroll_mode: .both
+	}
+	assert scroll_document_size(canvas, 120, 80) == ScrollDocument{
+		width:  400
+		height: 316
+	}
+	// A vertical list is held to the width that shows, however far its children reach,
+	// so a scroller taking room of its own leaves no sideways range behind it.
+	assert scroll_document_size(Element{
+		...columns
+		scroll_mode: .vertical_only
+	}, 105, 80) == ScrollDocument{
+		width:         105
+		height:        316
+		follows_width: true
+	}
+	// Content that fits across is held to the width that shows, which a scroller
+	// taking room of its own makes less than the frame, so no sideways range is left.
+	narrow := Element{
+		...canvas
+		children: [view('', rect(0, 0, 100, 300), BoxStyle{}, [])]
+	}
+	fitted := scroll_document_size(narrow, 105, 65)
+	assert fitted == ScrollDocument{
+		width:         105
+		height:        316
+		follows_width: true
+	}
+	assert fitted.autoresizing_mask() == ns_view_width_sizable
+	assert scroll_document_size(columns, 120, 65).autoresizing_mask() == ns_view_height_sizable
+	// Before the scroll view has been laid out there is only the frame to go by.
+	assert scroll_document_size(narrow, 0, 0).width == 120
+
+	native_set_scroll_axes(scroll_view, .both)
+	assert macos.msg_bool(scroll_view, 'hasVerticalScroller')
+	assert macos.msg_bool(scroll_view, 'hasHorizontalScroller')
+}
+
+fn test_macos_scroll_gesture_passes_to_an_enclosing_view_only_when_it_cannot_be_followed() {
+	ensure_runtime_classes()
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	outer := native_new_scroll(native_rect(0, 0, 400, 300), BoxStyle{}, false, .horizontal_only)
+	defer {
+		macos.release(outer)
+	}
+	outer_document := native_new_flipped_view(native_rect(0, 0, 1200, 300), BoxStyle{})
+	native_set_document_view(outer, outer_document)
+	macos.release(outer_document)
+	inner := native_new_scroll(native_rect(0, 0, 200, 150), BoxStyle{}, false, .horizontal_only)
+	inner_document := native_new_flipped_view(native_rect(0, 0, 200, 150), BoxStyle{})
+	native_set_document_view(inner, inner_document)
+	macos.release(inner_document)
+	native_add_subview(outer_document, inner)
+	macos.release(inner)
+
+	assert scroll_view_scrolls_axis(outer, true)
+	assert !scroll_view_scrolls_axis(outer, false)
+	// Content that fits leaves the inner strip nowhere to go, so a sideways gesture
+	// over it belongs to the strip around it.
+	assert !scroll_view_scrolls_axis(inner, true)
+	assert scroll_view_passes_gesture(inner, true, -1)
+	// Both strips are at their start, so no one can take a gesture heading back that
+	// way, and nothing here scrolls vertically at all.
+	assert !scroll_view_passes_gesture(inner, true, 1)
+	assert !scroll_view_passes_gesture(inner, false, -1)
+	// Once its content overflows it keeps the gesture itself...
+	native_set_frame(inner_document, native_rect(0, 0, 800, 150))
+	assert scroll_view_can_move(inner, true, -1)
+	assert !scroll_view_passes_gesture(inner, true, -1)
+	// ...until it has run out, where further the same way is the outer strip's again,
+	// while the way back is still its own.
+	macos.msg_void_point(macos.msg_id(inner, 'contentView'), 'setBoundsOrigin:', macos.point(600,
+		0))
+	assert !scroll_view_can_move(inner, true, -1)
+	assert scroll_view_passes_gesture(inner, true, -1)
+	assert scroll_view_can_move(inner, true, 1)
+	assert !scroll_view_passes_gesture(inner, true, 1)
+	// A view with nothing around it keeps even what it cannot use.
+	assert !scroll_view_passes_gesture(outer, true, 1)
+
+	// Ten short of its end, the inner strip has room for ten of a 48 point step and
+	// the strip around it for the other 38; the way back is all its own.
+	macos.msg_void_point(macos.msg_id(inner, 'contentView'), 'setBoundsOrigin:', macos.point(590,
+		0))
+	assert scroll_view_room(inner, true, 48) == 10
+	assert scroll_view_room(outer, true, 48 - 10) == 38
+	assert scroll_view_room(inner, true, -48) == -48
+	assert scroll_view_room(inner, true, -1000) == -590
+	// Neither has any along the axis it does not scroll, nor the outer back past its start.
+	assert scroll_view_room(inner, false, 48) == 0
+	assert scroll_view_room(outer, true, -48) == 0
 }
 
 fn test_macos_text_field_uses_native_bezel_without_layer_mask() {
