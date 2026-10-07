@@ -2,12 +2,16 @@ name: CI
 
 on:
   push:
+    branches: [master]
   pull_request:
+  workflow_dispatch:
   schedule:
     - cron: '31 1,12 * * *'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Keep each master commit and manual run; cancel in-progress runs only for PRs.
+  # Scheduled runs have their own group so they do not block push runs.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
