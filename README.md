@@ -13,6 +13,10 @@ and Android.
 The Linux backend draws and handles widgets directly through `gg`/Sokol; it has
 no GTK dependency.
 
+The V API includes responsive Flex and Grid placement with intrinsic text
+measurement. See the [layout guide](docs/modern-layout.md) and
+[responsive example](examples/responsive_layout/main.v).
+
 macOS and Windows use native widgets by default. Pass the compile-time define
 `-d ui2_custom_rendering` to use the same custom `gg` renderer there instead:
 

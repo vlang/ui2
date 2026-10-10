@@ -714,7 +714,7 @@ fn v_child_layout(node &VNode, actual Rect, metrics []VLayoutChildMetrics) !VChi
 		'Row' { VChildLayoutKind.row }
 		'BoxLayout' { VChildLayoutKind.box }
 		'FloatLayout', 'RelativeLayout' { VChildLayoutKind.float }
-		'GridLayout' { VChildLayoutKind.grid }
+		'Grid' { VChildLayoutKind.grid }
 		'AnchorLayout' { VChildLayoutKind.anchor }
 		'StackLayout' { VChildLayoutKind.stack }
 		'PageLayout' { VChildLayoutKind.page }
@@ -768,7 +768,7 @@ fn v_child_layout(node &VNode, actual Rect, metrics []VLayoutChildMetrics) !VChi
 	}
 	mut cells := []Rect{}
 	if kind == .grid {
-		cells = grid_layout_frames(v_grid_config(node, local)!, child_sizes.len)!
+		cells = grid_frames(v_grid_config(node, local)!, child_sizes.len)!
 	} else if kind == .box {
 		cells = box_layout_frames(v_box_layout_config(node, local, box_children)!)!
 	} else if kind == .float {

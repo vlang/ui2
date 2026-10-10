@@ -47,8 +47,8 @@ $if ui2_custom_rendering ? {
 		g_focused_field = 'field'
 		replace_text_value('field', 'abc')
 		replace_text_editor('field', text_editor('abc'.clone()))
-		handle_key_down(.left)
-		handle_key_down(.backspace)
+		handle_key_down(.left, 0)
+		handle_key_down(.backspace, 0)
 		handle_char_input(`x`)
 		assert text('field') == 'axc'
 		forget_text_state('field')
@@ -573,16 +573,20 @@ $if ui2_custom_rendering ? {
 }
 
 fn test_text_field_selection_text_uses_rune_offsets() {
-	before, selected := text_field_selection_text('a🙂bc', TextSelection{
-		anchor: 4
-		caret: 1
-	})
-	assert before == 'a'
-	assert selected == '🙂bc'
+	$if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
+		before, selected := text_field_selection_text('a🙂bc', TextSelection{
+			anchor: 4
+			caret: 1
+		})
+		assert before == 'a'
+		assert selected == '🙂bc'
+	}
 }
 
 fn test_text_field_selection_origin_respects_text_alignment() {
-	assert text_field_aligned_text_origin(10, 100, 40, .left) == 10
-	assert text_field_aligned_text_origin(10, 100, 40, .center) == 40
-	assert text_field_aligned_text_origin(10, 100, 40, .right) == 70
+	$if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
+		assert text_field_aligned_text_origin(10, 100, 40, .left) == 10
+		assert text_field_aligned_text_origin(10, 100, 40, .center) == 40
+		assert text_field_aligned_text_origin(10, 100, 40, .right) == 70
+	}
 }

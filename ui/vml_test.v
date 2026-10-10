@@ -757,7 +757,7 @@ fn test_vml_relative_layout_keeps_child_frames_local() {
 }
 
 fn test_vml_grid_layout_assigns_cells_in_the_requested_orientation() {
-	el := element_from_vml('GridLayout {
+	el := element_from_vml('Grid {
 		id: tools
 		columns: 2
 		orientation: rl-bt
@@ -776,7 +776,7 @@ fn test_vml_grid_layout_assigns_cells_in_the_requested_orientation() {
 }
 
 fn test_vml_grid_layout_requires_a_constraint() {
-	if _ := element_from_vml('GridLayout { Button { text: "Missing constraint" } }', rect(0, 0, 200, 100)) {
+	if _ := element_from_vml('Grid { Button { text: "Missing constraint" } }', rect(0, 0, 200, 100)) {
 		assert false, 'an unconstrained VML grid must fail'
 	} else {
 		assert err.msg().contains('requires columns or rows')

@@ -279,7 +279,7 @@ fn test_vml_model_toggle_button_groups_update_all_bound_fields() {
 }
 
 fn test_vml_model_grid_layout_counts_repeater_children() {
-	source := 'GridLayout {
+	source := 'Grid {
 		columns: 2
 		padding: 10
 		spacing: 10

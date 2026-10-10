@@ -1,22 +1,9 @@
 module ui2
 
-pub enum BoxOrientation {
-	horizontal
-	vertical
-}
-
 pub enum BoxAlignment {
 	start
 	center
 	end
-}
-
-pub struct BoxPadding {
-pub:
-	left   f64
-	top    f64
-	right  f64
-	bottom f64
 }
 
 // BoxLayoutChild combines an element with the sizing hints used by its parent.
@@ -39,20 +26,10 @@ pub:
 	id          string
 	frame       Rect
 	box         BoxStyle
-	orientation BoxOrientation
-	padding     BoxPadding
+	orientation LayoutOrientation
+	padding     LayoutPadding
 	spacing     f64
 	children    []BoxLayoutChild
-}
-
-pub fn box_orientation(value string) !BoxOrientation {
-	return match value {
-		'', 'horizontal' { .horizontal }
-		'vertical' { .vertical }
-		else {
-			return error('unknown box orientation `${value}`')
-		}
-	}
 }
 
 pub fn box_alignment(value string) !BoxAlignment {
@@ -64,21 +41,6 @@ pub fn box_alignment(value string) !BoxAlignment {
 			return error('unknown box alignment `${value}`')
 		}
 	}
-}
-
-fn box_bound(value f64, minimum f64, maximum f64) f64 {
-	mut bounded := if value < 0 { 0.0 } else { value }
-	if minimum >= 0 && bounded < minimum {
-		bounded = minimum
-	}
-	if maximum >= 0 && bounded > maximum {
-		bounded = maximum
-	}
-	return bounded
-}
-
-fn box_max(left f64, right f64) f64 {
-	return if left > right { left } else { right }
 }
 
 fn box_validate(config BoxLayoutConfig) ! {
@@ -116,7 +78,7 @@ fn box_axis_sizes(available f64, declared []f64, hints []f64, minimums []f64, ma
 	mut remaining := available
 	for index, declared_size in declared {
 		if hints[index] < 0 {
-			sizes[index] = box_bound(declared_size, minimums[index], maximums[index])
+			sizes[index] = layout_bound(declared_size, minimums[index], maximums[index])
 			remaining -= sizes[index]
 		} else {
 			flexible[index] = true
@@ -143,7 +105,7 @@ fn box_axis_sizes(available f64, declared []f64, hints []f64, minimums []f64, ma
 				continue
 			}
 			candidate := if weight > 0 { remaining * hints[index] / weight } else { 0.0 }
-			bounded := box_bound(candidate, minimums[index], maximums[index])
+			bounded := layout_bound(candidate, minimums[index], maximums[index])
 			if bounded != candidate {
 				sizes[index] = bounded
 				remaining -= bounded
@@ -217,7 +179,7 @@ pub fn box_layout_frames(config BoxLayoutConfig) ![]Rect {
 	for index, child in config.children {
 		if config.orientation == .horizontal {
 			cross_available := config.frame.height - config.padding.top - config.padding.bottom
-			cross_size := box_bound(if child.size_hint_y < 0 {
+			cross_size := layout_bound(if child.size_hint_y < 0 {
 				child.element.frame.height
 			} else {
 				cross_available * child.size_hint_y
@@ -226,7 +188,7 @@ pub fn box_layout_frames(config BoxLayoutConfig) ![]Rect {
 			frames << rect(cursor, y, main_sizes[index], cross_size)
 		} else {
 			cross_available := config.frame.width - config.padding.left - config.padding.right
-			cross_size := box_bound(if child.size_hint_x < 0 {
+			cross_size := layout_bound(if child.size_hint_x < 0 {
 				child.element.frame.width
 			} else {
 				cross_available * child.size_hint_x
@@ -253,14 +215,14 @@ pub fn box_layout_minimum_size(config BoxLayoutConfig) !Rect {
 	for child in config.children {
 		if config.orientation == .horizontal {
 			main += if child.size_hint_x < 0 {
-				box_bound(child.element.frame.width, child.minimum_width, child.maximum_width)
+				layout_bound(child.element.frame.width, child.minimum_width, child.maximum_width)
 			} else if child.minimum_width >= 0 {
 				child.minimum_width
 			} else {
 				0
 			}
-			cross = box_max(cross, if child.size_hint_y < 0 {
-				box_bound(child.element.frame.height, child.minimum_height, child.maximum_height)
+			cross = layout_max(cross, if child.size_hint_y < 0 {
+				layout_bound(child.element.frame.height, child.minimum_height, child.maximum_height)
 			} else if child.minimum_height >= 0 {
 				child.minimum_height
 			} else {
@@ -268,14 +230,14 @@ pub fn box_layout_minimum_size(config BoxLayoutConfig) !Rect {
 			})
 		} else {
 			main += if child.size_hint_y < 0 {
-				box_bound(child.element.frame.height, child.minimum_height, child.maximum_height)
+				layout_bound(child.element.frame.height, child.minimum_height, child.maximum_height)
 			} else if child.minimum_height >= 0 {
 				child.minimum_height
 			} else {
 				0
 			}
-			cross = box_max(cross, if child.size_hint_x < 0 {
-				box_bound(child.element.frame.width, child.minimum_width, child.maximum_width)
+			cross = layout_max(cross, if child.size_hint_x < 0 {
+				layout_bound(child.element.frame.width, child.minimum_width, child.maximum_width)
 			} else if child.minimum_width >= 0 {
 				child.minimum_width
 			} else {
