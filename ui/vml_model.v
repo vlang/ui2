@@ -1055,7 +1055,8 @@ fn v_eval_node(node &VNode, incoming_scope map[string]VValue, frame Rect, mut ev
 	mut binding := ?VmlBinding(none)
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
-			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit', 'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
+			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
+				'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 			continue
 		}
 		resolved.props[key] = v_eval(expr, scope)!.string_value()
@@ -1326,7 +1327,8 @@ fn v_validate_node_schema[T](node &VNode, incoming_scope map[string]VSchema) ! {
 	}
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
-			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit', 'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
+			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
+				'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 			continue
 		}
 		v_schema_expression(expr, scope)!
@@ -1457,17 +1459,17 @@ fn type_check_action[T](name string, args []VSchema, line int) ! {
 		if method.name == name {
 			$if !method.is_pub {
 				return error('app action `${name}` is not public')
-			} $else $if method.typ is fn () {
+			} $else $if method.typ is fn() {
 				if args.len != 0 {
 					return error('app action `${name}` expects no arguments at line ${line}')
 				}
 				return
-			} $else $if method.typ is fn (int) {
+			} $else $if method.typ is fn(int) {
 				if args.len != 1 || args[0].kind != .number {
 					return error('app action `${name}` expects one int argument at line ${line}')
 				}
 				return
-			} $else $if method.typ is fn (string) {
+			} $else $if method.typ is fn(string) {
 				if args.len != 1 || args[0].kind != .string_ {
 					return error('app action `${name}` expects one string argument at line ${line}')
 				}
@@ -1495,13 +1497,13 @@ fn vml_dispatch[T](mut model T, invocation VmlInvocation) ! {
 	}
 	$for method in T.methods {
 		if method.name == invocation.name {
-			$if method.is_pub && method.typ is fn () {
+			$if method.is_pub && method.typ is fn() {
 				model.$method()
 				return
-			} $else $if method.is_pub && method.typ is fn (int) {
+			} $else $if method.is_pub && method.typ is fn(int) {
 				model.$method(int(args[0].numeric(invocation.line)!))
 				return
-			} $else $if method.is_pub && method.typ is fn (string) {
+			} $else $if method.is_pub && method.typ is fn(string) {
 				model.$method(args[0].string_value())
 				return
 			}
@@ -1518,11 +1520,11 @@ fn vml_apply_assignment[T](mut model T, assignment VmlAssignment) ! {
 
 pub struct VmlRunConfig[T] {
 pub:
-	source string
-	model  T
-	title  string = 'App'
-	width  int    = 400
-	height int    = 800
+	source     string
+	model      T
+	title      string = 'App'
+	width      int    = 400
+	height     int    = 800
 	min_width  int
 	min_height int
 }

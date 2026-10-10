@@ -85,19 +85,19 @@ fn vml_decode_hex(value string) !string {
 fn vml_dispatch_compiled[T](mut model T, name string, arguments []string) ! {
 	$for method in T.methods {
 		if method.name == name {
-			$if method.is_pub && method.typ is fn ( ) {
+			$if method.is_pub && method.typ is fn() {
 				if arguments.len != 0 {
 					return error('app action `${name}` expects no arguments')
 				}
 				model.$method()
 				return
-			} $else $if method.is_pub && method.typ is fn ( int ) {
+			} $else $if method.is_pub && method.typ is fn(int) {
 				if arguments.len != 1 {
 					return error('app action `${name}` expects one int argument')
 				}
 				model.$method(arguments[0].int())
 				return
-			} $else $if method.is_pub && method.typ is fn ( string ) {
+			} $else $if method.is_pub && method.typ is fn(string) {
 				if arguments.len != 1 {
 					return error('app action `${name}` expects one string argument')
 				}
@@ -182,11 +182,11 @@ pub fn handle_compiled_vml_event[T](mut model T, event_id string) !bool {
 // CompiledVmlRunConfig configures a window backed by a typed model and a `$vml()` build function.
 pub struct CompiledVmlRunConfig[T] {
 pub:
-	model  T
-	build  fn (&T) Element = unsafe { nil }
-	title  string = 'App'
-	width  int = 400
-	height int = 800
+	model      T
+	build      fn (&T) Element = unsafe { nil }
+	title      string          = 'App'
+	width      int             = 400
+	height     int             = 800
 	min_width  int
 	min_height int
 }

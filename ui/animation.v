@@ -321,7 +321,7 @@ pub fn (definition Animation) animated_properties() []string {
 // is already animated, the new definition starts at its currently displayed
 // values.
 pub fn (definition Animation) start(id string) {
-	start_widget_animation_at(id, definition, time.ticks(), true)
+	start_widget_animation_at(id, definition, animation_now_ms(), true)
 }
 
 pub fn (definition Animation) cancel(id string) {
@@ -661,7 +661,7 @@ fn schedule_animation_frames() {
 fn animation_frame_driver() {
 	for {
 		time.sleep(16 * time.millisecond)
-		if !animations_need_frames(time.ticks()) {
+		if !animations_need_frames(animation_now_ms()) {
 			// The first trailing refresh completes an animation whose deadline was
 			// crossed; the second reflects any application state its callback changed.
 			request_animation_refresh()
@@ -710,25 +710,78 @@ fn animations_need_frames(now i64) bool {
 	return active
 }
 
+// Animation timestamps share a monotonic clock across starts, presentation
+// callbacks and the native driver. Wall-clock changes must not jump a tween.
+fn animation_now_ms() i64 {
+	return i64(time.sys_mono_now() / u64(time.millisecond))
+}
+
+// The custom renderer schedules at its presentation cadence, without a second
+// animation timer. A running mounted animation needs a frame until evaluation
+// marks it complete, even when suspension has carried it past its deadline.
+// Hidden and unmounted animations retain their state but cannot keep drawing.
+fn custom_animations_need_frame(root Element) bool {
+	runtime := g_animation_runtime
+	runtime.mutex.lock()
+	active := animation_tree_needs_frame(root, runtime.runs)
+	runtime.mutex.unlock()
+	return active
+}
+
+fn animation_tree_needs_frame(root Element, runs map[string]AnimationRun) bool {
+	if root.hidden {
+		return false
+	}
+	if animation_run := runs[root.id] {
+		if animation_run.status == .running {
+			return true
+		}
+	}
+	for child in root.children {
+		if animation_tree_needs_frame(child, runs) {
+			return true
+		}
+	}
+	return false
+}
+
 fn apply_widget_animations(root Element) Element {
-	return apply_widget_animations_at(root, time.ticks())
+	return apply_widget_animations_at(root, animation_now_ms())
 }
 
 fn apply_widget_animations_at(root Element, now i64) Element {
+	return apply_widget_animations_for_visibility(root, now, false)
+}
+
+fn apply_custom_widget_animations(root Element) Element {
+	return apply_custom_widget_animations_at(root, animation_now_ms())
+}
+
+fn apply_custom_widget_animations_at(root Element, now i64) Element {
+	return apply_widget_animations_for_visibility(root, now, true)
+}
+
+fn apply_widget_animations_for_visibility(root Element, now i64, visible_only bool) Element {
 	mut runtime := g_animation_runtime
 	mut pending := []PendingAnimationEvent{}
 	runtime.mutex.lock()
-	result := apply_widget_animation_node(root, now, mut pending)
+	result := apply_widget_animation_node(root, now, visible_only, mut pending)
 	runtime.mutex.unlock()
 	dispatch_animation_events(pending)
 	return result
 }
 
-fn apply_widget_animation_node(declared Element, now i64, mut pending []PendingAnimationEvent) Element {
+fn apply_widget_animation_node(declared Element, now i64, visible_only bool, mut pending []PendingAnimationEvent) Element {
+	// Hidden custom subtrees retain their animation timeline without evaluating
+	// it. Otherwise progress callbacks could repeatedly invalidate the model and
+	// keep an invisible repeating animation drawing despite zero frame demand.
+	if visible_only && declared.hidden {
+		return declared
+	}
 	mut runtime := g_animation_runtime
 	mut children := []Element{cap: declared.children.len}
 	for child in declared.children {
-		children << apply_widget_animation_node(child, now, mut pending)
+		children << apply_widget_animation_node(child, now, visible_only, mut pending)
 	}
 	mut result := Element{
 		...declared
@@ -823,6 +876,12 @@ fn apply_widget_animation_node(declared Element, now i64, mut pending []PendingA
 fn dispatch_animation_events(pending []PendingAnimationEvent) {
 	for item in pending {
 		item.callback(item.event)
+	}
+	// Callbacks may change the application model after this frame's build.
+	// In particular, completion must schedule one more build after the final
+	// animated values have stopped requesting presentation frames.
+	if pending.len > 0 {
+		request_animation_refresh()
 	}
 }
 

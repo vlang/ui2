@@ -48,12 +48,16 @@ applies that value, while a refresh with the same declaration preserves the
 current native/local edit, selection, focus, and (on native controls) input
 method composition. Use `set_text` for an explicit imperative replacement.
 
+The custom renderer builds on demand and reuses its tree while idle. See
+[render scheduling](docs/render-scheduling.md) for invalidation, worker delivery,
+window lifecycle and the acceptance fixture.
+
 ## Widget animations
 
 Animations target a mounted element by `id` and are applied after each
 declarative build, so they work with both V-built and VML-built trees. The
-native backends schedule redraws for the duration; the custom renderer already
-builds every frame.
+native and custom backends schedule frames while the animation is active. The
+custom renderer returns to idle when the animation completes.
 
 ```v
 move := ui2.animation(
