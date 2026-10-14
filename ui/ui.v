@@ -190,6 +190,18 @@ pub type ScrollFn = fn (string)
 // window, plus the pointer location in root-view coordinates.
 pub type DropFn = fn (DropEvent)
 
+// WindowReadyFn receives the main window's native handle once the window has
+// been created and shown, before the event loop starts. It lets an embedder
+// (e.g. a webview child) attach to the window. The handle is nil on backends
+// without a native window (custom renderer).
+pub type WindowReadyFn = fn (handle voidptr)
+
+// WindowResizeFn receives the main window's client size in pixels whenever it
+// changes, so an embedder can resize its child (e.g. a webview) to match.
+// ui2 never manages the child itself. The custom renderer documents this hook
+// as a no-op: it draws inside its own window and has no native child to size.
+pub type WindowResizeFn = fn (width int, height int)
+
 pub struct DropEvent {
 pub:
 	paths []string
