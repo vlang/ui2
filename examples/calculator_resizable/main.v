@@ -82,9 +82,8 @@ fn apply_operator(left f64, right f64, operator string) ?f64 {
 		'÷' {
 			if right == 0 {
 				return none
-			} else {
-				left / right
 			}
+			left / right
 		}
 		'^' { math.pow(left, right) }
 		else {
