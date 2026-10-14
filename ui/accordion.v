@@ -15,7 +15,7 @@ pub:
 	frame                    Rect
 	box                      BoxStyle
 	current                  int
-	orientation              BoxOrientation
+	orientation              LayoutOrientation
 	min_space                f64 = 44.0
 	header_box               BoxStyle
 	active_header_box        BoxStyle

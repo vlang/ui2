@@ -235,7 +235,7 @@ fn assert_adaptive_container_metadata_is_nonvisual(tag string, first string, sec
 }
 
 fn test_adaptive_vml_metadata_never_occupies_container_layout_slots() {
-	for tag in ['Column', 'Row', 'BoxLayout', 'FloatLayout', 'RelativeLayout', 'GridLayout',
+	for tag in ['Column', 'Row', 'BoxLayout', 'FloatLayout', 'RelativeLayout', 'Grid',
 		'AnchorLayout', 'StackLayout', 'PageLayout', 'Carousel', 'View', 'Rectangle', 'Scroll'] {
 		assert_adaptive_container_metadata_is_nonvisual(tag,
 			'Label { id: first text: "First" width: 40 height: 24 }',
@@ -244,7 +244,7 @@ fn test_adaptive_vml_metadata_never_occupies_container_layout_slots() {
 }
 
 fn test_adaptive_vml_metadata_is_inert_in_empty_layouts() {
-	for tag in ['Column', 'Row', 'BoxLayout', 'FloatLayout', 'RelativeLayout', 'GridLayout',
+	for tag in ['Column', 'Row', 'BoxLayout', 'FloatLayout', 'RelativeLayout', 'Grid',
 		'AnchorLayout', 'StackLayout', 'PageLayout', 'Carousel', 'View', 'Rectangle', 'Scroll'] {
 		assert_adaptive_container_metadata_is_nonvisual(tag, '', '')!
 	}

@@ -69,12 +69,12 @@ pub fn float_layout_frames(config FloatLayoutConfig) ![]Rect {
 	float_validate(config)!
 	mut frames := []Rect{cap: config.children.len}
 	for child in config.children {
-		width := box_bound(if child.size_hint_x < 0 {
+		width := layout_bound(if child.size_hint_x < 0 {
 			child.element.frame.width
 		} else {
 			config.frame.width * child.size_hint_x
 		}, child.minimum_width, child.maximum_width)
-		height := box_bound(if child.size_hint_y < 0 {
+		height := layout_bound(if child.size_hint_y < 0 {
 			child.element.frame.height
 		} else {
 			config.frame.height * child.size_hint_y

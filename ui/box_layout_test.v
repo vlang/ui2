@@ -7,7 +7,7 @@ fn box_test_child(id string, width f64, height f64) Element {
 fn test_box_layout_distributes_space_after_fixed_children() {
 	config := BoxLayoutConfig{
 		frame: rect(0, 0, 330, 80)
-		padding: BoxPadding{ left: 10, top: 5, right: 10, bottom: 5 }
+		padding: LayoutPadding{ left: 10, top: 5, right: 10, bottom: 5 }
 		spacing: 10
 		children: [
 			BoxLayoutChild{ element: box_test_child('fixed', 80, 20), size_hint_x: -1 },
@@ -36,7 +36,7 @@ fn test_vertical_box_layout_supports_fixed_cross_size_and_alignment() {
 	config := BoxLayoutConfig{
 		frame: rect(0, 0, 200, 120)
 		orientation: .vertical
-		padding: BoxPadding{ left: 10, top: 10, right: 10, bottom: 10 }
+		padding: LayoutPadding{ left: 10, top: 10, right: 10, bottom: 10 }
 		spacing: 4
 		children: [
 			BoxLayoutChild{
@@ -55,7 +55,7 @@ fn test_vertical_box_layout_supports_fixed_cross_size_and_alignment() {
 fn test_box_layout_reports_minimum_size_and_preserves_content() {
 	config := BoxLayoutConfig{
 		frame: rect(0, 0, 200, 80)
-		padding: BoxPadding{ left: 5, top: 6, right: 7, bottom: 8 }
+		padding: LayoutPadding{ left: 5, top: 6, right: 7, bottom: 8 }
 		spacing: 4
 		children: [
 			BoxLayoutChild{

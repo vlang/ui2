@@ -13,6 +13,10 @@ and Android.
 The Linux backend draws and handles widgets directly through `gg`/Sokol; it has
 no GTK dependency.
 
+The V API includes responsive Flex and Grid placement with intrinsic text
+measurement. See the [layout guide](docs/modern-layout.md) and
+[responsive example](examples/responsive_layout/main.v).
+
 You can also build desktop ui2 apps in C or any language with a C FFI. Build
 the shared library and the C counter with `make c-example`; the standalone
 header is [`c/ui2.h`](c/ui2.h). See the [C API guide](c/README.md) for the build
