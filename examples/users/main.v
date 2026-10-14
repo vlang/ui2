@@ -1,6 +1,6 @@
 module main
 
-import json2
+import x.json2
 import os
 import ui2
 
