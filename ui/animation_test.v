@@ -4,9 +4,17 @@ module ui2
 import math
 
 __global g_animation_test_events = []AnimationEvent{}
+__global g_animation_test_clear_refreshes = 0
 
 fn animation_test_event_handler(event AnimationEvent) {
 	g_animation_test_events << event
+}
+
+fn animation_test_clear_refresh_handler() {
+	// A refresh callback may inspect animation state, so it must run outside
+	// the runtime mutex and after the retained values have been removed.
+	assert animation_info('tile').status == .idle
+	g_animation_test_clear_refreshes++
 }
 
 fn animation_test_element() Element {
@@ -242,4 +250,79 @@ fn test_animation_events_and_stop_cancel_semantics() {
 	stop_animation('tile')
 	assert animation_info('tile').status == .stopped
 	assert g_animation_test_events.last().kind == .complete
+}
+
+fn test_custom_animation_requests_terminal_frame_after_suspension() {
+	reset_widget_animations()
+	g_animation_test_events = []AnimationEvent{}
+	root := animation_test_root(animation_test_element())
+	definition := animation(AnimationConfig{
+		duration: 1
+		x: 110
+		on_event: animation_test_event_handler
+	})
+	start_widget_animation_at('tile', definition, 1_000, false)
+	apply_custom_widget_animations_at(root, 1_500)
+	assert custom_animations_need_frame(root)
+
+	// No presentation ran while the window was suspended. The first resumed
+	// presentation still has to apply the final values and emit complete.
+	resumed := apply_custom_widget_animations_at(root, 30_000)
+	assert animation_test_find(resumed, 'tile').frame.x == 110
+	assert g_animation_test_events.last().kind == .complete
+	assert !custom_animations_need_frame(resumed)
+	apply_custom_widget_animations_at(root, 30_016)
+	assert g_animation_test_events.filter(it.kind == .complete).len == 1
+}
+
+fn test_custom_repeating_animation_does_not_draw_hidden_or_unmounted_nodes() {
+	reset_widget_animations()
+	definition := animation(AnimationConfig{
+		duration: 1
+		x: 110
+		repeat: true
+	})
+	start_widget_animation_at('tile', definition, 1_000, false)
+	root := animation_test_root(animation_test_element())
+	apply_custom_widget_animations_at(root, 1_500)
+	assert custom_animations_need_frame(root)
+	assert !custom_animations_need_frame(screen(0xffffff, []))
+	assert !custom_animations_need_frame(animation_test_root(Element{
+		...animation_test_element()
+		hidden: true
+	}))
+	assert !custom_animations_need_frame(Element{
+		...root
+		hidden: true
+	})
+	assert animation_info('tile').status == .running
+
+	// Visibility pauses frame demand without cancelling the animation. A later
+	// mount continues on the same timeline, and cancellation returns to idle.
+	assert custom_animations_need_frame(root)
+	resumed := apply_custom_widget_animations_at(root, 30_500)
+	assert math.close(animation_test_find(resumed, 'tile').frame.x, 110)
+	cancel_animation('tile')
+	assert !custom_animations_need_frame(root)
+}
+
+fn test_clearing_retained_animation_requests_refresh_outside_runtime_lock() {
+	reset_widget_animations()
+	runtime := g_animation_runtime
+	runtime.mutex.lock()
+	previous_callback := runtime.refresh_callback
+	previous_drive_frames := runtime.drive_frames
+	runtime.mutex.unlock()
+	defer { configure_animation_driver(previous_callback, previous_drive_frames) }
+	root := animation_test_root(animation_test_element())
+	start_widget_animation_at('tile', animation(AnimationConfig{duration: 1, x: 110}), 1_000, false)
+	completed := apply_widget_animations_at(root, 2_000)
+	assert animation_test_find(completed, 'tile').frame.x == 110
+	assert !custom_animations_need_frame(completed)
+	g_animation_test_clear_refreshes = 0
+	configure_animation_driver(animation_test_clear_refresh_handler, false)
+	clear_animation('tile')
+	assert g_animation_test_clear_refreshes == 1
+	refreshed := apply_widget_animations_at(root, 3_000)
+	assert animation_test_find(refreshed, 'tile').frame == animation_test_element().frame
 }

@@ -4,7 +4,6 @@ module ui2
 
 $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
 	import gg
-	import time
 
 	fn reset_tooltip_test() {
 		g_tooltip = TooltipState{}
@@ -171,11 +170,11 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// The event handlers stamp moves with the real clock, so each new target is
 	// settled at the current time before the rest is measured from it.
 	fn settle_tooltip() {
-		update_tooltip(time.ticks())
+		update_tooltip(renderer_now_ms())
 	}
 
 	fn rest_tooltip() {
-		update_tooltip(time.ticks() + tooltip_delay_ms)
+		update_tooltip(renderer_now_ms() + tooltip_delay_ms)
 	}
 
 	fn test_tooltip_follows_window_events() {
@@ -190,7 +189,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		// A key press closes it until the pointer moves to another target.
 		on_event(&gg.Event{typ: .key_down, key_code: .a}, &GgApp{})
 		assert !g_tooltip.visible
-		update_tooltip(time.ticks() + 10 * tooltip_delay_ms)
+		update_tooltip(renderer_now_ms() + 10 * tooltip_delay_ms)
 		assert !g_tooltip.visible
 		on_event(&gg.Event{typ: .mouse_move, mouse_x: 10, mouse_y: 50}, &GgApp{})
 		settle_tooltip()
@@ -215,7 +214,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		assert g_tooltip.visible
 		// Leaving the window hides it.
 		on_event(&gg.Event{typ: .mouse_leave}, &GgApp{})
-		update_tooltip(time.ticks() + 10 * tooltip_delay_ms)
+		update_tooltip(renderer_now_ms() + 10 * tooltip_delay_ms)
 		assert !g_tooltip.visible
 		reset_tooltip_test()
 	}
@@ -223,7 +222,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	fn test_tooltip_is_held_back_while_a_dropdown_list_is_open() {
 		reset_tooltip_test()
 		g_tooltip_targets = [tooltip_target('button', 'Save', 0, 0, 100, 20)]
-		mut clock := time.ticks()
+		mut clock := renderer_now_ms()
 		on_event(&gg.Event{typ: .mouse_move, mouse_x: 10, mouse_y: 10}, &GgApp{})
 		g_open_dropdown = 'country'
 		update_tooltip(clock)

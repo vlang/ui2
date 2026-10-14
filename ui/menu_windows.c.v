@@ -20,6 +20,7 @@ fn native_tray_supported() bool {
 fn native_set_menu_bar(menus []Menu) {
 	$if ui2_custom_rendering ? {
 		close_menu_bar()
+		refresh()
 	} $else {
 		menu_win32_set_menu_bar(menus)
 	}
