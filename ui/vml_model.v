@@ -874,7 +874,7 @@ fn (layout &VChildLayout) fallback(child &VNode, scope map[string]VValue) !Rect 
 }
 
 fn (mut layout VChildLayout) advance(child &VNode) {
-	if child.tag in ['MenuItem', 'Option'] {
+	if child.tag in ['MenuItem', 'Option', 'StatusIndicator'] {
 		return
 	}
 	match layout.kind {
@@ -983,7 +983,7 @@ fn v_layout_child_metrics(node &VNode, scope map[string]VValue) ![]VLayoutChildM
 	box := node.tag == 'BoxLayout'
 	floating := node.tag in ['FloatLayout', 'RelativeLayout']
 	for child in node.children {
-		if child.tag in ['MenuItem', 'Option'] {
+		if child.tag in ['MenuItem', 'Option', 'StatusIndicator'] {
 			continue
 		}
 		if node.tag == 'TabbedPanel' && child.tag != 'Tab' {
@@ -1008,7 +1008,7 @@ fn v_layout_child_metrics(node &VNode, scope map[string]VValue) ![]VLayoutChildM
 			item_scope['item'] = item
 			item_scope['index'] = v_number(f64(index), index.str())
 			for repeated in child.children {
-				if repeated.tag in ['MenuItem', 'Option'] {
+				if repeated.tag in ['MenuItem', 'Option', 'StatusIndicator'] {
 					continue
 				}
 				metrics << v_layout_child_metric(repeated, item_scope, box, floating)!

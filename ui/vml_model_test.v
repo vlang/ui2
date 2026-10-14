@@ -45,6 +45,50 @@ fn vml_test_spinner_text(_id string) string {
 	return 'Work'
 }
 
+fn test_vml_status_bar_tracks_window_size_and_model_text() {
+	source := 'Screen {
+		id: root
+		StatusBar {
+			id: status
+			text: app.name
+			StatusIndicator { id: mode text: app.selected toggle: true pressed: app.tree_open on_tap: app.toggle_tree() }
+		}
+	}'
+	initial := element_from_vml_model(source, VmlTestApp{ name: 'Ready', selected: 'Edit' }, rect(0, 0, 320,
+		240)) or { panic(err) }
+	assert initial.children[0].frame == rect(0, 212, 320, 28)
+	assert initial.children[0].children[0].text == 'Ready'
+	assert initial.children[0].children[1].children[0].text == 'Edit'
+	assert initial.children[0].children[1].children[0].kind == .toggle_button
+	assert !initial.children[0].children[1].children[0].checked
+	assert initial.children[0].children[1].children[0].action_id.len > 0
+
+	updated := element_from_vml_model(source, VmlTestApp{ name: 'Saved', selected: 'View', tree_open: true }, rect(0, 0,
+		640, 400)) or { panic(err) }
+	assert updated.children[0].frame == rect(0, 372, 640, 28)
+	assert updated.children[0].children[0].text == 'Saved'
+	assert updated.children[0].children[1].children[0].text == 'View'
+	assert updated.children[0].children[1].children[0].checked
+}
+
+fn test_vml_status_indicator_dispatches_its_action() {
+	source := 'Screen {
+		StatusBar {
+			text: "Ready"
+			StatusIndicator { id: grid text: "Grid" toggle: true pressed: app.tree_open on_tap: app.toggle_tree() }
+		}
+	}'
+	mut app := new_vml_app(source, VmlTestApp{}) or { panic(err) }
+	initial := app.build(rect(0, 0, 400, 300)) or { panic(err) }
+	control := initial.children[0].children[1].children[0]
+	assert control.kind == .toggle_button
+	assert !control.checked
+	app.handle(control.action_id) or { panic(err) }
+	assert app.state().tree_open
+	rebuilt := app.build(rect(0, 0, 400, 300)) or { panic(err) }
+	assert rebuilt.children[0].children[1].children[0].checked
+}
+
 pub fn (mut app VmlTestApp) clear() {
 	app.name = ''
 }
