@@ -62,6 +62,7 @@ jobs:
       # `import ui2` resolves through the checkout directory name, so the
       # repository has to land in a directory called `ui2`.
       - uses: actions/checkout@v4
+        id: uses_checkout_v4
         with:
           path: ui2
 
@@ -76,6 +77,8 @@ jobs:
         run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/component_catalog_test.v
 
       - name: Test VML menu declarations
+        id: test_vml_menu_declarations
+        if: ${{ success() && !cancelled() && steps.uses_checkout_v4.outcome == 'success' }}
         run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/vml_menu_test.v
 
       - name: Test immediate scrolling
@@ -92,4 +95,6 @@ jobs:
           v run ui2/c/build.vsh example ${{ matrix.custom && '-d ui2_custom_rendering' || '' }}
 
       - name: Build all examples
+        id: build_all_examples
+        if: ${{ success() && !cancelled() && steps.test_vml_menu_declarations.outcome == 'success' }}
         run: v run ui2/examples/build_examples.vsh ${{ matrix.custom && '-d ui2_custom_rendering' || '' }}

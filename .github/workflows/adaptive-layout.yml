@@ -25,15 +25,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
+      # Stop a failing test session at its first failure instead of
+      # running the whole suite to completion; the remaining files
+      # add no signal.
+      VTEST_FAIL_FAST: '1'
       VJOBS: '1'
     steps:
       # The checkout directory name is used to resolve `import ui2`.
       - uses: actions/checkout@v4
+        id: uses_checkout_v4
         with:
           path: ui2
           persist-credentials: false
 
       - name: Install V 0.5.2
+        id: install_v_0_5_2
+        if: ${{ success() && !cancelled() && steps.uses_checkout_v4.outcome == 'success' }}
         shell: bash
         run: |
           curl --fail --location --retry 3 \
@@ -44,6 +51,8 @@ jobs:
           "$RUNNER_TEMP/v/v" version
 
       - name: Install Linux development dependencies
+        id: install_linux_development_dependencies
+        if: ${{ success() && !cancelled() && steps.install_v_0_5_2.outcome == 'success' }}
         run: |
           sudo apt-get update -qq
           sudo apt-get install --quiet -y --no-install-recommends \
@@ -51,13 +60,21 @@ jobs:
             libxfixes-dev libgl1-mesa-dev libegl-dev libasound2-dev
 
       - name: Check the IDE
+        id: check_the_ide
+        if: ${{ success() && !cancelled() && steps.install_linux_development_dependencies.outcome == 'success' }}
         run: v -check ui2/ide
 
       - name: Test layout geometry
+        id: test_layout_geometry
+        if: ${{ success() && !cancelled() && steps.check_the_ide.outcome == 'success' }}
         run: v test ui2/ui/adaptive_layout_test.v
 
       - name: Test adaptive VML
+        id: test_adaptive_vml
+        if: ${{ success() && !cancelled() && steps.test_layout_geometry.outcome == 'success' }}
         run: v test ui2/ui/vml_adaptive_test.v
 
       - name: Test designer and generated companion
+        id: test_designer_and_generated_companion
+        if: ${{ success() && !cancelled() && steps.test_adaptive_vml.outcome == 'success' }}
         run: v test ui2/ide
