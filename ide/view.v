@@ -204,6 +204,19 @@ fn build_palette(layout IdeLayout, app &IdeApp) ui2.Element {
 		['dropdown', 'Dropdown'],
 		['rectangle', 'Rectangle'],
 		['image', 'Image'],
+		['card', 'Card'],
+		['chip', 'Chip'],
+		['badge', 'Badge'],
+		['fab', 'FAB'],
+		['app_bar', 'App bar'],
+		['list_tile', 'List tile'],
+		['divider', 'Divider'],
+		['icon_button', 'Icon btn'],
+		['radio', 'Radio'],
+		['icon', 'Icon'],
+		['spacer', 'Spacer'],
+		['alert_dialog', 'Alert'],
+		['bottom_sheet', 'Sheet'],
 	]
 	mut children := [
 		ui2.label('', 'STANDARD', ui2.rect(14, 7, 82, 16), text_style(9, color_muted, true)),
@@ -708,5 +721,32 @@ fn build_ide(frame ui2.Rect, app &IdeApp) ui2.Element {
 	if app.palette_drag_kind.len > 0 && app.palette_drag_moved {
 		children << palette_drag_preview(layout, app)
 	}
+	if app.show_debug_overlay {
+		children << build_debug_overlay(layout, app)
+	}
 	return ui2.screen(color_window, children)
+}
+
+fn build_debug_overlay(layout IdeLayout, app &IdeApp) ui2.Element {
+	mut children := []ui2.Element{}
+	scale := layout.scale
+	for component in app.components {
+		frame := ui2.rect(layout.form.x + component.x * scale, layout.form.y + component.y * scale,
+			component.width * scale, component.height * scale)
+		children << ui2.view('debug_${component.id}', frame, ui2.BoxStyle{
+			transparent:   true
+			border_color:  0xef4444
+			border_left:   1
+			border_top:    1
+			border_right:  1
+			border_bottom: 1
+			radius:        0
+		}, [
+			ui2.label('debug_label_${component.id}', '${component.kind} #${component.id}', ui2.rect(2, 2, frame.width - 4, 14), ui2.TextStyle{
+				color: 0xef4444
+				size:  9
+			}),
+		])
+	}
+	return ui2.view('debug_overlay', layout.form, ui2.BoxStyle{ transparent: true }, children)
 }

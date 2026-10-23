@@ -8,7 +8,7 @@ fn build_charts() ui2.Element {
 }
 
 fn charts_screen(bounds ui2.Rect) ui2.Element {
-	width := math.max(360, bounds.width)
+	width := math.max(360.0, bounds.width)
 	columns := if width >= 1000 {
 		3
 	} else if width >= 680 {

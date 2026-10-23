@@ -907,6 +907,82 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 		'Image' {
 			return image(node.id, node.prop_or('source', node.prop('path')), frame)
 		}
+		'Card' {
+			return view(node.id, frame, v_box(node), v_children(node, local)!)
+		}
+		'Divider' {
+			h := if node.prop_or('thickness', '1').f64() > 0 {
+				node.prop_or('thickness', '1').f64()
+			} else {
+				1.0
+			}
+			return view(node.id, rect(frame.x, frame.y, frame.width, h), BoxStyle{ bg: v_color(node, 'color', 0xcbd5e1) }, [])
+		}
+		'Chip' {
+			return Element{
+				...button(node.id, node.prop('text'), frame, v_box(node), v_text_style(node))
+				action_id: node.prop('on_tap')
+			}
+		}
+		'Badge' {
+			return view(node.id, frame, v_box(node), [label('${node.id}_text', node.prop('text'), rect(0, 0, frame.width, frame.height), v_text_style(node))])
+		}
+		'FloatingActionButton' {
+			return Element{
+				...button(node.id, node.prop_or('icon', node.prop('text')), frame, v_box(node), v_text_style(node))
+				action_id: node.prop('on_tap')
+			}
+		}
+		'AppBar' {
+			return view(node.id, frame, v_box(node), [label('${node.id}_title', node.prop('title'), rect(16, 0, frame.width - 32, frame.height), v_text_style(node))])
+		}
+		'SnackBar' {
+			return view(node.id, frame, v_box(node), [label('${node.id}_text', node.prop('text'), rect(16, 0, frame.width - 32, frame.height), v_text_style(node))])
+		}
+		'IconButton' {
+			return Element{
+				...button(node.id, node.prop_or('icon', node.prop('text')), frame, v_box(node), v_text_style(node))
+				action_id: node.prop('on_tap')
+			}
+		}
+		'Radio' {
+			return button(node.id, node.prop('text'), frame, v_box(node), v_text_style(node))
+		}
+		'Icon' {
+			return label(node.id, node.prop_or('icon', node.prop('text')), frame, v_text_style(node))
+		}
+		'Spacer' {
+			return view(node.id, frame, BoxStyle{ transparent: true }, [])
+		}
+		'AlertDialog' {
+			return view(node.id, frame, v_box(node), [
+				label('${node.id}_title', node.prop('title'), rect(16, 16, frame.width - 32, 24), v_text_style(node)),
+				label('${node.id}_text', node.prop('text'), rect(16, 44, frame.width - 32, frame.height - 60), v_text_style(node)),
+			])
+		}
+		'BottomSheet' {
+			return if node.prop_bool('open') {
+				view(node.id, frame, v_box(node), v_children(node, local)!)
+			} else {
+				view(node.id, rect(0, 0, 0, 0), BoxStyle{ transparent: true }, [])
+			}
+		}
+		'BottomNavigationBar' {
+			return view(node.id, frame, v_box(node), [])
+		}
+		'Drawer' {
+			return if node.prop_bool('open') {
+				view(node.id, frame, v_box(node), v_children(node, local)!)
+			} else {
+				view(node.id, rect(0, 0, 0, 0), BoxStyle{ transparent: true }, [])
+			}
+		}
+		'ListTile' {
+			return view(node.id, frame, v_box(node), [label('${node.id}_title', node.prop_or('title', node.prop('text')), rect(12, 8, frame.width - 24, 20), v_text_style(node))])
+		}
+		'Scaffold' {
+			return view(node.id, frame, v_box(node), v_children(node, local)!)
+		}
 		'ProgressBar' {
 			return progress_bar(
 				id:         node.id
