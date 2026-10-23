@@ -864,6 +864,22 @@ both calls are accepted and ignored; check `menu_bar_supported()` and
 duplicated id, a submenu that also emits, and a decorated separator, so a
 declaration can be checked in a test without a window.
 
+In the custom renderer, every colour of the drawn menu bar can be recoloured to
+match the host application's theme:
+
+```v
+ui2.set_menu_bar_background_color(0x2c3e50)
+ui2.set_menu_bar_border_color(0x34495e)
+ui2.set_menu_bar_title_color(0xecf0f1)
+ui2.set_menu_bar_text_color(0xecf0f1)
+ui2.set_menu_bar_disabled_text_color(0x7f8c8d)
+ui2.set_menu_bar_highlight_color(0x3498db)
+ui2.set_menu_bar_panel_background_color(0x34495e)
+ui2.set_menu_bar_panel_shadow_color(0x2c3e50)
+ui2.set_menu_bar_shortcut_text_color(0xbdc3c7)
+ui2.set_menu_bar_separator_color(0x95a5a6)
+```
+
 ## Layout and text offsets
 
 The VML layer provides fixed frames plus `Row` and `Column` layout. Child frames
