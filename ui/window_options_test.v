@@ -5,7 +5,7 @@ module ui2
 
 fn test_window_options_default_to_the_run_window_behaviour() {
 	opts := WindowOptions{}
-	assert opts.sample_count == 4
+	assert opts.sample_count == 1
 	assert opts.title == ''
 	assert opts.width == 0
 	assert opts.height == 0

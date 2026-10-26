@@ -88,6 +88,7 @@ jobs:
         if: runner.os == 'Linux' || matrix.custom
         run: |
           v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/ui_scroll_immediate_test.v
+          v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/window_options_test.v
           v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/examples/scrollview
 
       - name: Test custom renderer pipeline

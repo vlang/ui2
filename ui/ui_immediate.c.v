@@ -408,7 +408,14 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || ((macos ||
 	// sample_count is Sokol's antialiasing level for the window's framebuffer.
 	// Flat immediate-mode geometry gains nothing visible from 4x, and weak GPUs
 	// pay the fill rate for it; 1 turns antialiasing off.
-		sample_count int = 4
+	//
+	// NOTE: gg's pure-V render backend bakes sample_count 1 into every
+	// pipeline and V never forwards Config.sample_count to it, so any other
+	// value aborts debug builds with VALIDATE_APIP_SAMPLE_COUNT (the
+	// pipeline no longer matches the pass attachments). Keep this at 1
+	// until gg forwards the sample count; run_window_with_options enforces
+	// it regardless of what is stored here.
+		sample_count int = 1
 		refresh    RefreshMode = .on_demand
 		gl_load    GlLoad = .auto
 	}
@@ -456,7 +463,11 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || ((macos ||
 			height: opts.height
 			min_width: opts.min_width
 			min_height: opts.min_height
-			sample_count: opts.sample_count
+			// Forced to 1: gg's render backend builds every pipeline with
+			// sample_count 1 (V never forwards Config.sample_count), so a
+			// multisampled framebuffer would fail sg_apply_pipeline
+			// validation and abort. See WindowOptions.sample_count.
+			sample_count: 1
 			// Manual mode suppresses the frame callback between asks; the
 			// scheduler's wake hook revives it. The other modes keep the
 			// callback flowing and gate builds/draws in the coordinator —
