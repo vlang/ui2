@@ -11,7 +11,6 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || ((macos ||
 	import os
 	import sokol.gfx
 	import sokol.sapp
-	import sokol.sgl
 	import time
 
 	struct HitTarget {
@@ -2892,7 +2891,7 @@ fn page_focused_text_area(direction int) {
 				// the element appears — the surface draws nothing, the way native
 				// backends show it.
 				if tex := g_gl_surface_textures[el.id] {
-					draw_gl_surface_quad(tex, x, y, el.frame.width, el.frame.height)
+					draw_gl_surface_quad(ctx, tex, x, y, el.frame.width, el.frame.height)
 				}
 				if el.id.len > 0 {
 					register_gl_surface(el.id, x, y, el.frame.width, el.frame.height)
@@ -3461,16 +3460,16 @@ fn page_focused_text_area(direction int) {
 
 	// draw_gl_surface_quad draws the texture over the element's frame. Texture rows run
 	// bottom-up, so the top edge of the frame takes the texture's top row at v = 1.
-	fn draw_gl_surface_quad(tex GlSurfaceTexture, x f64, y f64, w f64, h f64) {
-		sgl.enable_texture()
-		sgl.texture(tex.image, tex.sampler)
-		sgl.begin_quads()
-		sgl.v2f_t2f_c4f(f32(x), f32(y), 0, 1, 1, 1, 1, 1)
-		sgl.v2f_t2f_c4f(f32(x + w), f32(y), 1, 1, 1, 1, 1, 1)
-		sgl.v2f_t2f_c4f(f32(x + w), f32(y + h), 1, 0, 1, 1, 1, 1)
-		sgl.v2f_t2f_c4f(f32(x), f32(y + h), 0, 0, 1, 1, 1, 1)
-		sgl.end()
-		sgl.disable_texture()
+	fn draw_gl_surface_quad(ctx &gg.Context, tex GlSurfaceTexture, x f64, y f64, w f64, h f64) {
+		ctx.r.enable_texture()
+		ctx.r.texture(tex.image, tex.sampler)
+		ctx.r.begin_quads()
+		ctx.r.v2f_t2f_c4f(f32(x), f32(y), 0, 1, 1, 1, 1, 1)
+		ctx.r.v2f_t2f_c4f(f32(x + w), f32(y), 1, 1, 1, 1, 1, 1)
+		ctx.r.v2f_t2f_c4f(f32(x + w), f32(y + h), 1, 0, 1, 1, 1, 1)
+		ctx.r.v2f_t2f_c4f(f32(x), f32(y + h), 0, 0, 1, 1, 1, 1)
+		ctx.r.end()
+		ctx.r.disable_texture()
 	}
 
 	fn draw_cached_image(ctx &gg.Context, path string, x f64, y f64, width f64, height f64, rotation f64) bool {
@@ -3654,20 +3653,20 @@ fn page_focused_text_area(direction int) {
 			g_outline_points = points
 		}
 		if c.a != 255 {
-			sgl.load_pipeline(ctx.pipeline.alpha)
+			ctx.r.load_pipeline(ctx.pipeline.alpha)
 		}
-		sgl.c4b(c.r, c.g, c.b, c.a)
+		ctx.r.c4b(c.r, c.g, c.b, c.a)
 		cx := f32((x + w / 2) * scale)
 		cy := f32((y + h / 2) * scale)
-		sgl.begin_triangles()
+		ctx.r.begin_triangles()
 		count := points.len / 2
 		for i in 0 .. count {
 			j := (i + 1) % count
-			sgl.v2f(cx, cy)
-			sgl.v2f(f32(points[2 * i] * scale), f32(points[2 * i + 1] * scale))
-			sgl.v2f(f32(points[2 * j] * scale), f32(points[2 * j + 1] * scale))
+			ctx.r.v2f(cx, cy)
+			ctx.r.v2f(f32(points[2 * i] * scale), f32(points[2 * i + 1] * scale))
+			ctx.r.v2f(f32(points[2 * j] * scale), f32(points[2 * j + 1] * scale))
 		}
-		sgl.end()
+		ctx.r.end()
 	}
 
 	fn draw_rect_alpha(ctx &gg.Context, x f64, y f64, w f64, h f64, color_hex u32, alpha f64, radius f64) {
@@ -3784,8 +3783,8 @@ fn page_focused_text_area(direction int) {
 		} else {
 			rows << h
 		}
-		sgl.load_pipeline(ctx.pipeline.alpha)
-		sgl.begin_quads()
+		ctx.r.load_pipeline(ctx.pipeline.alpha)
+		ctx.r.begin_quads()
 		for i in 1 .. rows.len {
 			top := rows[i - 1]
 			bottom := math.min(rows[i], h)
@@ -3802,13 +3801,13 @@ fn page_focused_text_area(direction int) {
 				xt1 := inset_top + (w - 2 * inset_top) * f1
 				xb0 := inset_bottom + (w - 2 * inset_bottom) * f0
 				xb1 := inset_bottom + (w - 2 * inset_bottom) * f1
-				gradient_vertex(line, stops, opacity, x, y, xt0, top, scale)
-				gradient_vertex(line, stops, opacity, x, y, xt1, top, scale)
-				gradient_vertex(line, stops, opacity, x, y, xb1, bottom, scale)
-				gradient_vertex(line, stops, opacity, x, y, xb0, bottom, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, xt0, top, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, xt1, top, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, xb1, bottom, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, xb0, bottom, scale)
 			}
 		}
-		sgl.end()
+		ctx.r.end()
 	}
 
 	// draw_square_gradient draws the exact gradient of a square-cornered box from a
@@ -3818,13 +3817,13 @@ fn page_focused_text_area(direction int) {
 	fn draw_square_gradient(ctx &gg.Context, x f64, y f64, w f64, h f64, line GradientLine, stops []GradientStop, angle f64, opacity f64) bool {
 		scale := f64(ctx.scale)
 		if stops.len == 2 {
-			sgl.load_pipeline(ctx.pipeline.alpha)
-			sgl.begin_quads()
-			gradient_vertex(line, stops, opacity, x, y, 0, 0, scale)
-			gradient_vertex(line, stops, opacity, x, y, w, 0, scale)
-			gradient_vertex(line, stops, opacity, x, y, w, h, scale)
-			gradient_vertex(line, stops, opacity, x, y, 0, h, scale)
-			sgl.end()
+			ctx.r.load_pipeline(ctx.pipeline.alpha)
+			ctx.r.begin_quads()
+			gradient_vertex(ctx, line, stops, opacity, x, y, 0, 0, scale)
+			gradient_vertex(ctx, line, stops, opacity, x, y, w, 0, scale)
+			gradient_vertex(ctx, line, stops, opacity, x, y, w, h, scale)
+			gradient_vertex(ctx, line, stops, opacity, x, y, 0, h, scale)
+			ctx.r.end()
 			return true
 		}
 		turn := math.fmod(math.fmod(angle, 360) + 360, 360)
@@ -3838,8 +3837,8 @@ fn page_focused_text_area(direction int) {
 			cuts << stop.position
 		}
 		cuts.sort()
-		sgl.load_pipeline(ctx.pipeline.alpha)
-		sgl.begin_quads()
+		ctx.r.load_pipeline(ctx.pipeline.alpha)
+		ctx.r.begin_quads()
 		for i in 1 .. cuts.len {
 			// Positions run along the gradient, which may point back along the axis.
 			a := if turn == 180 || turn == 270 { 1 - cuts[i] } else { cuts[i - 1] }
@@ -3848,25 +3847,25 @@ fn page_focused_text_area(direction int) {
 				continue
 			}
 			if horizontal {
-				gradient_vertex(line, stops, opacity, x, y, a * extent, 0, scale)
-				gradient_vertex(line, stops, opacity, x, y, b * extent, 0, scale)
-				gradient_vertex(line, stops, opacity, x, y, b * extent, h, scale)
-				gradient_vertex(line, stops, opacity, x, y, a * extent, h, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, a * extent, 0, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, b * extent, 0, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, b * extent, h, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, a * extent, h, scale)
 			} else {
-				gradient_vertex(line, stops, opacity, x, y, 0, a * extent, scale)
-				gradient_vertex(line, stops, opacity, x, y, w, a * extent, scale)
-				gradient_vertex(line, stops, opacity, x, y, w, b * extent, scale)
-				gradient_vertex(line, stops, opacity, x, y, 0, b * extent, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, 0, a * extent, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, w, a * extent, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, w, b * extent, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, 0, b * extent, scale)
 			}
 		}
-		sgl.end()
+		ctx.r.end()
 		return true
 	}
 
-	fn gradient_vertex(line GradientLine, stops []GradientStop, opacity f64, ox f64, oy f64, lx f64, ly f64, scale f64) {
+	fn gradient_vertex(ctx &gg.Context, line GradientLine, stops []GradientStop, opacity f64, ox f64, oy f64, lx f64, ly f64, scale f64) {
 		color, alpha := gradient_color_at(stops, gradient_position(line, lx, ly))
-		sgl.c4b(u8((color >> 16) & 0xff), u8((color >> 8) & 0xff), u8(color & 0xff), u8(math.round(alpha * opacity * 255)))
-		sgl.v2f(f32((ox + lx) * scale), f32((oy + ly) * scale))
+		ctx.r.c4b(u8((color >> 16) & 0xff), u8((color >> 8) & 0xff), u8(color & 0xff), u8(math.round(alpha * opacity * 255)))
+		ctx.r.v2f(f32((ox + lx) * scale), f32((oy + ly) * scale))
 	}
 
 	fn draw_outline(ctx &gg.Context, x f64, y f64, w f64, h f64, color_hex u32, radius f64) {
@@ -3946,15 +3945,15 @@ fn page_focused_text_area(direction int) {
 		count := outer.len / 2
 		c := hex_color(color_hex)
 		scale := f64(ctx.scale)
-		sgl.load_pipeline(ctx.pipeline.alpha)
-		sgl.c4b(c.r, c.g, c.b, c.a)
-		sgl.begin_triangle_strip()
+		ctx.r.load_pipeline(ctx.pipeline.alpha)
+		ctx.r.c4b(c.r, c.g, c.b, c.a)
+		ctx.r.begin_triangle_strip()
 		for i in 0 .. count + 1 {
 			k := i % count
-			sgl.v2f(f32(outer[2 * k] * scale), f32(outer[2 * k + 1] * scale))
-			sgl.v2f(f32(inner[2 * k] * scale), f32(inner[2 * k + 1] * scale))
+			ctx.r.v2f(f32(outer[2 * k] * scale), f32(outer[2 * k + 1] * scale))
+			ctx.r.v2f(f32(inner[2 * k] * scale), f32(inner[2 * k + 1] * scale))
 		}
-		sgl.end()
+		ctx.r.end()
 	}
 
 	fn draw_control_surface(ctx &gg.Context, x f64, y f64, w f64, h f64, box BoxStyle, focused bool, enabled bool) {
