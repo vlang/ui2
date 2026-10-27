@@ -2809,7 +2809,7 @@ fn fire_pointer_event(native NativeView, phase string, event voidptr) {
 	// A non-interactive child (e.g. a label or icon image) sits on top of its pointer
 	// view and receives the click first. Walk up the view hierarchy to the
 	// nearest registered pointer target so the enclosing button still fires.
-	mut target := NativeView(usize(native))
+	mut target := NativeView(voidptr(native))
 	mut id := st.pointer_ids[u64(voidptr(target))] or { '' }
 	for id.len == 0 {
 		target = NativeView(macos.msg_id(target, 'superview'))
