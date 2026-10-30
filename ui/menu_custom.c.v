@@ -196,7 +196,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if menus.len == 0 {
 			return
 		}
-		window := rect(0, 0, f64(ctx.width), f64(ctx.height))
+		window := rect(0, 0, layout_window_width(ctx), layout_window_height(ctx))
 		apply_clip(ctx, window)
 		draw_rect(ctx, 0, 0, window.width, menubar_height, g_menubar_background, 0)
 		draw_rect(ctx, 0, menubar_height - 1, window.width, 1, g_menubar_border, 0)

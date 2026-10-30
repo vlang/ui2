@@ -343,10 +343,25 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		}
 		// The drawn menu bar owns the top strip of the window, so the screen
 		// an app lays out is the rest of it.
+		ctx := g_gg_app.ctx
 		return Rect{
-			width: f64(g_gg_app.ctx.width)
-			height: f64(g_gg_app.ctx.height) - menu_bar_height()
+			width: layout_window_width(ctx)
+			height: layout_window_height(ctx) - menu_bar_height()
 		}
+	}
+
+	// gg keeps window dimensions as whole logical pixels. Dividing the
+	// framebuffer by a fractional scale can produce a fractional layout size;
+	// using ctx.width/height loses the remainder and leaves a physical edge
+	// outside full-window elements and clips.
+	fn layout_window_width(ctx &gg.Context) f64 {
+		s := f64(ctx.scale)
+		return if s > 0 { f64(sapp.width()) / s } else { f64(sapp.width()) }
+	}
+
+	fn layout_window_height(ctx &gg.Context) f64 {
+		s := f64(ctx.scale)
+		return if s > 0 { f64(sapp.height()) / s } else { f64(sapp.height()) }
 	}
 
 	// scale is the factor between framebuffer pixels and layout pixels: framebuffer
@@ -1234,7 +1249,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		preload_images(root)
 		if voidptr(g_gl_surface_renderer) != unsafe { nil } {
 			for id, frame in g_opengl_surface_frames {
-				g_gl_surface_renderer(id, frame, f64(ctx.scale), f64(ctx.height))
+				g_gl_surface_renderer(id, frame, f64(ctx.scale), layout_window_height(ctx))
 			}
 		}
 		sync_gl_surface_textures()
@@ -1263,7 +1278,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if app.has_root {
 			g_dropdown_popup.mounted = false
 			top := menu_bar_height()
-			render_element(ctx, root, 0, top, rect(0, top, f64(ctx.width), f64(ctx.height) - top), '')
+			render_element(ctx, root, 0, top, rect(0, top, layout_window_width(ctx),
+				layout_window_height(ctx) - top), '')
 			if g_open_dropdown.len > 0 {
 				if g_dropdown_popup.mounted {
 					draw_dropdown_popup(ctx)
@@ -2486,7 +2502,7 @@ fn page_focused_text_area(direction int) {
 		}
 		row_height := dropdown_row_height(el.text_style)
 		anchor := rect(x, y, el.frame.width, el.frame.height)
-		window := rect(0, 0, f64(ctx.width), f64(ctx.height))
+		window := rect(0, 0, layout_window_width(ctx), layout_window_height(ctx))
 		frame := dropdown_popup_frame(anchor, options.len, row_height, window)
 		content_height := f64(options.len) * row_height
 		view_height := frame.height - dropdown_popup_padding * 2
@@ -2521,7 +2537,7 @@ fn page_focused_text_area(direction int) {
 			|| dropdown_state.height <= 0 {
 			return
 		}
-		window := rect(0, 0, f64(ctx.width), f64(ctx.height))
+		window := rect(0, 0, layout_window_width(ctx), layout_window_height(ctx))
 		apply_clip(ctx, window)
 		draw_rect(ctx, dropdown_state.x + 1, dropdown_state.y + 2, dropdown_state.width,
 			dropdown_state.height, 0xdbe2ea, dropdown_state.radius)
@@ -2746,7 +2762,8 @@ fn page_focused_text_area(direction int) {
 	// fills the window below its offset, whatever its frame says.
 	fn element_area(ctx &gg.Context, el Element, off_x f64, off_y f64) Rect {
 		if el.kind == .screen {
-			return rect(off_x, off_y, f64(ctx.width) - off_x, f64(ctx.height) - off_y)
+			return rect(off_x, off_y, layout_window_width(ctx) - off_x,
+				layout_window_height(ctx) - off_y)
 		}
 		return rect(el.frame.x + off_x, el.frame.y + off_y, el.frame.width, el.frame.height)
 	}
@@ -2823,7 +2840,7 @@ fn page_focused_text_area(direction int) {
 			return
 		}
 		line_h := font_line_height(style.size)
-		window := rect(0, 0, f64(ctx.width), f64(ctx.height))
+		window := rect(0, 0, layout_window_width(ctx), layout_window_height(ctx))
 		frame := tooltip_frame(g_tooltip.anchor_x, g_tooltip.anchor_y,
 			text_width + tooltip_padding * 2, f64(lines.len) * line_h + tooltip_padding * 2, window)
 		apply_clip(ctx, window)
@@ -2994,8 +3011,8 @@ fn page_focused_text_area(direction int) {
 		}
 		match el.kind {
 			.screen {
-				w := f64(ctx.width)
-				h := f64(ctx.height)
+				w := layout_window_width(ctx)
+				h := layout_window_height(ctx)
 				if !el.box.transparent {
 					draw_rect(ctx, off_x, off_y, w - off_x, h - off_y, el.box.bg, 0)
 				}
@@ -3598,7 +3615,10 @@ fn page_focused_text_area(direction int) {
 	}
 
 	fn apply_clip(ctx &gg.Context, clip Rect) {
-		ctx.scissor_rect(int(clip.x), int(clip.y), int(clip.width), int(clip.height))
+		// Round the physical clip edges outward as a pair. Casting the logical
+		// origin and extent separately, then scaling both in gg, can drop up to
+		// two pixels at fractional scales because the two truncations compound.
+		ctx.scissor_rectf(clip.x, clip.y, clip.width, clip.height)
 	}
 
 	fn add_hit_target(target HitTarget, clip Rect) {
