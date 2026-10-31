@@ -65,6 +65,7 @@ pub fn confirm(title string, text string) bool {
 
 // message_box_button_titles lists the button labels in platform order: the
 // affirmative answer first, the dismissal last.
+@[markused]
 fn message_box_button_titles(buttons MessageBoxButtons) []string {
 	return match buttons {
 		.ok { ['OK'] }
@@ -97,6 +98,7 @@ fn message_box_default_result(buttons MessageBoxButtons) MessageBoxResult {
 	}
 }
 
+@[markused]
 fn message_box_result_at(buttons MessageBoxButtons, index int) MessageBoxResult {
 	results := message_box_results(buttons)
 	if index < 0 || index >= results.len {

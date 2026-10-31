@@ -82,6 +82,7 @@ fn vml_decode_hex(value string) !string {
 	return decoded.bytestr()
 }
 
+@[markused]
 fn vml_dispatch_compiled[T](mut model T, name string, arguments []string) ! {
 	$for method in T.methods {
 		if method.name == name {

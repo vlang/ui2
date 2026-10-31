@@ -22,8 +22,9 @@
 
 #include <windows.h>
 #include <windowsx.h>
-#ifdef __TINYC__
-// V's bundled tcc has no commctrl.h or oleacc.h: the names used are declared there.
+#if defined(__TINYC__) && !(defined(__has_include) && __has_include(<commctrl.h>) && __has_include(<oleacc.h>))
+// A tcc whose winapi set has no commctrl.h or oleacc.h (V's bundled tcc before vlang/tccbin's
+// Win32 GUI series): the names used are declared there. A tcc that has them reads them below.
 #include "tcc_compat_windows.h"
 #else
 #include <commctrl.h>

@@ -26,6 +26,7 @@ jobs:
     timeout-minutes: 15
     env:
       VJOBS: '1'
+      V_COMMIT: e650ae91defd1a771d43e27eb0b02c09108d7f09
     steps:
       # The checkout directory name is used to resolve `import ui2`.
       - uses: actions/checkout@v4
@@ -33,13 +34,16 @@ jobs:
           path: ui2
           persist-credentials: false
 
-      - name: Install V 0.5.2
+      # ui2 master needs a V newer than 0.5.2 (0.5.2 rejects it: see ci.yml). The commit is
+      # pinned, not "latest", so that a V regression cannot fail ui2's CI unannounced; move it
+      # on purpose, in its own commit, after building ui2 with the new one.
+      - name: Install V (pinned master commit)
         shell: bash
         run: |
-          curl --fail --location --retry 3 \
-            --output "$RUNNER_TEMP/v.zip" \
-            https://github.com/vlang/v/releases/download/0.5.2/v_linux.zip
-          unzip -q "$RUNNER_TEMP/v.zip" -d "$RUNNER_TEMP"
+          git init --quiet "$RUNNER_TEMP/v"
+          git -C "$RUNNER_TEMP/v" fetch --quiet --depth 1 https://github.com/vlang/v "$V_COMMIT"
+          git -C "$RUNNER_TEMP/v" checkout --quiet FETCH_HEAD
+          make -C "$RUNNER_TEMP/v"
           echo "$RUNNER_TEMP/v" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/v/v" version
 

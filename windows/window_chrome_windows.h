@@ -18,8 +18,9 @@
 #endif
 
 #include <windows.h>
-#ifdef __TINYC__
-// V's bundled tcc has no commctrl.h, and its winuser.h predates a metric used below.
+#if defined(__TINYC__) && !(defined(__has_include) && __has_include(<commctrl.h>))
+// A tcc whose winapi set has no commctrl.h (V's bundled tcc before vlang/tccbin's Win32 GUI
+// series), and whose winuser.h predates a metric used below: the names used are declared there.
 #include "tcc_compat_windows.h"
 #else
 #include <commctrl.h>
