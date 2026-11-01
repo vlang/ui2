@@ -74,7 +74,16 @@ fn settings_text(content string, frame Rect, color u32, size f64, bold bool, wra
 	})
 }
 
+// settings_fill is one of the view's surfaces, painted unless it is transparent.
+fn settings_fill(config SettingsConfig, color u32) BoxStyle {
+	return if config.transparent { BoxStyle{ transparent: true } } else { BoxStyle{ bg: color } }
+}
+
 fn settings_symbol(name string, frame Rect, color u32) Element {
+	// A page icon may be an image path, which draws as it is.
+	if name.contains('/') {
+		return image('', name, frame)
+	}
 	return Element{
 		...image('', 'symbol:' + name, frame)
 		text_style: TextStyle{
@@ -408,10 +417,23 @@ fn settings_group_element(config SettingsConfig, page SettingPage, box SettingsG
 	match box.variant {
 		.normal {}
 		.outline {
-			panel, fill := popover_panel(component_local(surface), theme.background, theme.border,
-				m.radius, false)
-			surface_box = panel
-			surface_kids << fill
+			if config.transparent {
+				// A filled panel behind the rows would stop them showing through.
+				surface_box = BoxStyle{
+					transparent:   true
+					radius:        m.radius
+					border_color:  theme.border
+					border_left:   1
+					border_top:    1
+					border_right:  1
+					border_bottom: 1
+				}
+			} else {
+				panel, fill := popover_panel(component_local(surface), theme.background,
+					theme.border, m.radius, false)
+				surface_box = panel
+				surface_kids << fill
+			}
 		}
 		.fill {
 			surface_box = BoxStyle{
@@ -519,7 +541,7 @@ fn settings_header_element(config SettingsConfig, page_ix int, frame Rect) !Elem
 		key: 'divider'
 	}
 	return Element{
-		...view('', frame, BoxStyle{ bg: theme.background }, kids)
+		...view('', frame, settings_fill(config, theme.background), kids)
 		key: 'header'
 	}
 }
@@ -570,6 +592,7 @@ fn settings_body_element(config SettingsConfig, page_ix int, frame Rect) !Elemen
 	}
 	return Element{
 		...scroll(settings_scroll_id(config.id, pid), frame, config.theme.background, kids)
+		box:                 settings_fill(config, config.theme.background)
 		key:                 'content:' + settings_hex(pid)
 		accessibility_label: page.title
 	}
@@ -583,7 +606,7 @@ fn settings_empty_element(config SettingsConfig, frame Rect) Element {
 	w := math.max(frame.width - 2 * m.pad, 0)
 	desc_lines := math.max(settings_text_lines(config.empty_description, m.small, w), 1)
 	return Element{
-		...view('', frame, BoxStyle{ bg: theme.background }, [
+		...view('', frame, settings_fill(config, theme.background), [
 			settings_symbol('magnifyingglass', rect((frame.width - icon) / 2, top, icon, icon),
 				theme.muted_foreground),
 			label('', config.empty_title, rect(m.pad, top + icon + m.base.padding, w, m.line + 4),
@@ -752,13 +775,14 @@ fn settings_nav_element(config SettingsConfig) !Element {
 	}
 	search := input_group(settings_search_config(config, layout.search))!
 	return Element{
-		...view('', rect(0, 0, nav_w, config.frame.height), BoxStyle{ bg: colors.nav }, [
+		...view('', rect(0, 0, nav_w, config.frame.height), settings_fill(config, colors.nav), [
 			Element{
 				...search
 				key: 'search'
 			},
 			Element{
 				...scroll(settings_nav_scroll_id(config.id), layout.list, colors.nav, rows)
+				box: settings_fill(config, colors.nav)
 				key: 'pages'
 			},
 			Element{
@@ -808,7 +832,7 @@ pub fn settings(config SettingsConfig) !Element {
 		kids << settings_nav_element(resolved)!
 	}
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{ bg: config.theme.background }, kids)
+		...view(config.id, config.frame, settings_fill(config, config.theme.background), kids)
 		accessibility_role:  'group'
 		accessibility_label: config.accessibility_label
 	})

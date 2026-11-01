@@ -3897,7 +3897,9 @@ fn page_focused_text_area(direction int) {
 		draw_text_centered(ctx, symbol_glyph(name), x, y, width, height, TextStyle{
 			color:       color
 			font_family: 'Material Icons'
-			size:        size
+			// TextStyle sizes are points. The frame is in pixels, and a glyph
+			// wider than it would be cut down to an ellipsis this font lacks.
+			size:        size / font_pixels_per_point()
 		})
 	}
 
