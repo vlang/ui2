@@ -17,3 +17,11 @@ fn native_set_clipboard_text(_ string) bool {
 fn native_clipboard_text() ?string {
 	return none
 }
+
+fn native_set_primary_text(_ string) bool {
+	return false
+}
+
+fn native_primary_text() ?string {
+	return none
+}
