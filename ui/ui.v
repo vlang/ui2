@@ -784,6 +784,7 @@ pub fn scroll_with_mode(id string, frame Rect, bg u32, mode ScrollMode, children
 // scroll_mode_offset holds a scroll position to the axes a mode scrolls. Along an axis
 // the mode leaves out the position is the start: anything else would keep the content
 // shifted with no way to scroll it back.
+@[markused]
 fn scroll_mode_offset(mode ScrollMode, x f64, y f64) (f64, f64) {
 	return if mode == .vertical_only { 0.0 } else { x }, if mode == .horizontal_only {
 		0.0

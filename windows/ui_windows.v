@@ -327,9 +327,9 @@ fn C.ui2_win_release_mouse()
 
 fn C.ui2_win_ticks() u64
 
-fn C.ui2_win_point_to_root(hwnd voidptr, root voidptr, x &int, y &int)
+fn C.ui2_win_point_to_root(hwnd voidptr, root voidptr, x &i32, y &i32)
 
-fn C.ui2_win_hover_target(root voidptr, x &int, y &int) voidptr
+fn C.ui2_win_hover_target(root voidptr, x &i32, y &i32) voidptr
 
 fn C.ui2_win_root_point_in_client(root voidptr, target voidptr, x int, y int) int
 
@@ -347,7 +347,7 @@ fn C.ui2_win_drop_path_length(drop voidptr, index u32) u32
 
 fn C.ui2_win_drop_path(drop voidptr, index u32, buffer &u16, capacity u32)
 
-fn C.ui2_win_drop_point(drop voidptr, x &int, y &int)
+fn C.ui2_win_drop_point(drop voidptr, x &i32, y &i32)
 
 fn C.ui2_win_drop_finish(drop voidptr)
 
@@ -1941,8 +1941,8 @@ fn windows_update_hover() {
 	if st.root == unsafe { nil } || st.rendering {
 		return
 	}
-	mut x := 0
-	mut y := 0
+	mut x := i32(0)
+	mut y := i32(0)
 	mut current := []string{}
 	if st.hover_bindings.len > 0 {
 		mut target := C.ui2_win_hover_target(st.root, &x, &y)
@@ -2170,8 +2170,8 @@ fn windows_handle_drop(drop voidptr) {
 		C.ui2_win_drop_path(drop, index, unsafe { &buffer[0] }, length + 1)
 		paths << unsafe { string_from_wide2(&buffer[0], int(length)) }
 	}
-	mut x := 0
-	mut y := 0
+	mut x := i32(0)
+	mut y := i32(0)
 	C.ui2_win_drop_point(drop, &x, &y)
 	C.ui2_win_drop_finish(drop)
 	st.drop_handler(DropEvent{
@@ -2482,8 +2482,8 @@ fn ui2_windows_cursor(hwnd voidptr) int {
 @[export: 'ui2_windows_control_pointer']
 fn ui2_windows_control_pointer(hwnd voidptr, message u32, local_x int, local_y int) {
 	mut st := windows_state()
-	mut x := local_x
-	mut y := local_y
+	mut x := i32(local_x)
+	mut y := i32(local_y)
 	C.ui2_win_point_to_root(hwnd, st.root, &x, &y)
 	if message == win_wm_lbutton_down {
 		mut target := voidptr(uint(hwnd))
