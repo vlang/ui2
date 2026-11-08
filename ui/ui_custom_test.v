@@ -73,11 +73,11 @@ $if ui2_custom_rendering ? {
 	}
 
 	fn test_custom_renderer_has_portable_system_symbol_fallbacks() {
-		assert system_symbol_fallback('arrow.uturn.backward') == ''
-		assert system_symbol_fallback('gearshape') == ''
-		assert system_symbol_fallback('magnifyingglass') == ''
-		assert system_symbol_fallback('xmark') == ''
-		assert system_symbol_fallback('future.symbol') == ''
+		assert symbol_glyph('arrow.uturn.backward') == ''
+		assert symbol_glyph('gearshape') == ''
+		assert symbol_glyph('magnifyingglass') == ''
+		assert symbol_glyph('xmark') == ''
+		assert symbol_glyph('future.symbol') == ''
 	}
 
 	fn test_custom_text_navigation_uses_the_platform_primary_modifier() {
