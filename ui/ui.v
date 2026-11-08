@@ -404,6 +404,8 @@ fn box_border_width(width f64, extent f64) f64 {
 
 pub struct Element {
 pub:
+	vector            VectorPath
+	button_image_size f64
 	// kind is readable from outside the module so a renderer can live in
 	// another package: dispatching on it is the first thing any backend does.
 	kind         Kind

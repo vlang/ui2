@@ -2,6 +2,14 @@
 #include <objc/runtime.h>
 #include <dlfcn.h>
 
+static inline void* ui2_macos_superclass(void* obj) {
+#if __has_feature(objc_arc)
+	return (__bridge void*)class_getSuperclass(object_getClass((__bridge id)obj));
+#else
+	return (void*)class_getSuperclass(object_getClass((id)obj));
+#endif
+}
+
 // A message that takes a rectangle and answers one, which vlib's macos bridge has no
 // entry for: -[NSCell titleRectForBounds:] is how a control says where its title is
 // drawn once its image, bezel and arrows have had their share of the frame.
@@ -49,7 +57,13 @@ static inline void* ui2_macos_msg_id_point(void* obj, void* sel, double x, doubl
 static inline void ui2_macos_add_tracking_area(void* view) {
 	const unsigned long entered_and_exited = 0x01, moved = 0x02, active_in_app = 0x40,
 		in_visible_rect = 0x200;
-	void* area = ((void* (*)(void*, void*))objc_msgSend)((void*)objc_getClass("NSTrackingArea"),
+	void* tracking_class;
+#if __has_feature(objc_arc)
+	tracking_class = (__bridge void*)objc_getClass("NSTrackingArea");
+#else
+	tracking_class = (void*)objc_getClass("NSTrackingArea");
+#endif
+	void* area = ((void* (*)(void*, void*))objc_msgSend)(tracking_class,
 		sel_registerName("alloc"));
 	ui2_macos_rect zero = { 0, 0, 0, 0 };
 	area = ((void* (*)(void*, void*, ui2_macos_rect, unsigned long, void*, void*))objc_msgSend)(area,

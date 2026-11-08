@@ -197,6 +197,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	__global g_text_editors = map[string]TextEditor{}
 	__global g_text_kinds = map[string]Kind{}
 	__global g_text_secure = map[string]bool{}
+	__global g_text_readonly = map[string]bool{}
 	__global g_slider_values = map[string]f64{}
 	__global g_slider_declared = map[string]f64{}
 	__global g_slider_specs = map[string]SliderSpec{}
@@ -323,6 +324,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		g_text_editors.delete(id)
 		g_text_kinds.delete(id)
 		g_text_secure.delete(id)
+		g_text_readonly.delete(id)
 	}
 
 	// ── Public API ─────────────────────────────────────────────────────
@@ -2120,6 +2122,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	}
 
 	fn handle_char_input(ch u32, modifiers u32) {
+		if (g_text_readonly[g_focused_field] or { false }) { return }
 		if g_focused_field.len == 0 {
 			return
 		}
@@ -2148,6 +2151,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	}
 
 	fn handle_key_down(key gg.KeyCode, modifiers u32) {
+		if (g_text_readonly[g_focused_field] or { false }) && key in [.backspace, .delete] { return }
 		if g_focused_field.len == 0 {
 			return
 		}
@@ -2234,6 +2238,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if key == .enter || key == .kp_enter {
 			for target in g_hit_targets {
 				if target.id == g_focused_field && target.text_area {
+					if (g_text_readonly[g_focused_field] or { false }) { return }
 					editor.insert_text('\n')
 					replace_text_value(g_focused_field, editor.text)
 					replace_text_editor(g_focused_field, editor)
@@ -2265,6 +2270,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			return false
 		}
 		id := g_focused_field
+		if (g_text_readonly[id] or { false }) && key in [.x, .v] { return true }
 		// A secure field keeps its plaintext in the editor and only masks at draw
 		// time, so exporting the selection would publish the password. Consume the
 		// chord without touching the clipboard, the text or the selection. Paste
@@ -3062,12 +3068,14 @@ fn page_focused_text_area(direction int) {
 
 	// ── Rendering ──────────────────────────────────────────────────────
 
-	fn render_element(ctx &gg.Context, el Element, off_x f64, off_y f64, clip Rect, scroll_parent_id string) {
+	fn render_element(ctx &gg.Context, source Element, off_x f64, off_y f64, clip Rect, scroll_parent_id string) {
+		el := embedded_button_image_element(source)
 		if el.hidden {
 			return
 		}
 		apply_clip(ctx, clip)
 		area := element_area(ctx, el, off_x, off_y)
+		draw_embedded_vector_path(ctx, el.vector, off_x + el.frame.x, off_y + el.frame.y)
 		// A chain is never changed once built — a hoverable element gets a new one —
 		// so regions and the stack share them without copying.
 		outer_hover_chain := g_hover_chain
@@ -3261,7 +3269,13 @@ fn page_focused_text_area(direction int) {
 			.button {
 				x := el.frame.x + off_x
 				y := el.frame.y + off_y
-				if el.native_style && el.box.bg == unstyled_box_bg {
+				if el.native_style && el.box.transparent {
+					if (g_tooltip.pointer_in && g_tooltip.pointer_x >= x && g_tooltip.pointer_x < x + el.frame.width
+						&& g_tooltip.pointer_y >= y && g_tooltip.pointer_y < y + el.frame.height)
+						|| (g_touch.down && g_touch.pointer_target.id == el.id) {
+						draw_rect(ctx, x, y, el.frame.width, el.frame.height, el.box.bg, el.box.radius)
+					}
+				} else if el.native_style && el.box.bg == unstyled_box_bg {
 					draw_button_bezel(ctx, x, y, el.frame.width, el.frame.height, el.box.radius,
 						el.enabled)
 				} else {
@@ -3272,8 +3286,7 @@ fn page_focused_text_area(direction int) {
 					})
 				}
 				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
-				image_layout := button_image_layout(el.frame.width, el.frame.height, el.text,
-					el.image_path)
+				image_layout := embedded_button_image_layout(el)
 				if image_layout.visible {
 					draw_button_image(ctx, el.image_path, x + image_layout.image.x,
 						y + image_layout.image.y, image_layout.image.width, image_layout.image.height,
@@ -3468,6 +3481,7 @@ fn page_focused_text_area(direction int) {
 				}
 				g_text_kinds[el.id] = el.kind
 				g_text_secure[el.id] = el.secure
+				g_text_readonly[el.id] = el.readonly
 				g_active_fields[el.id] = true
 				current_text := g_text_values[el.id] or { el.text }
 				mut editor := g_text_editors[el.id] or { text_editor(current_text.clone()) }
@@ -3511,7 +3525,7 @@ fn page_focused_text_area(direction int) {
 					}
 					apply_clip(ctx, clip)
 				}
-				if el.enabled && !el.readonly {
+				if el.enabled {
 					add_hit_target(HitTarget{
 						id: el.id
 						action_id: element_action_id(el)
@@ -3539,6 +3553,7 @@ fn page_focused_text_area(direction int) {
 				}
 				g_text_kinds[el.id] = el.kind
 				g_text_secure[el.id] = el.secure
+				g_text_readonly[el.id] = el.readonly
 				g_active_fields[el.id] = true
 				current_text := g_text_values[el.id] or { el.text }
 				if el.box.transparent {
@@ -3553,7 +3568,7 @@ fn page_focused_text_area(direction int) {
 						g_focused_field == el.id, el.enabled)
 				}
 				draw_text_area_content(ctx, el, current_text, x, y, clip, scroll_parent_id)
-				if el.enabled && !el.readonly {
+				if el.enabled {
 					add_hit_target(HitTarget{
 						id: el.id
 						action_id: element_action_id(el)

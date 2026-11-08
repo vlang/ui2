@@ -36,9 +36,7 @@ fn C.ui2_macos_msg_super_cell_edit(obj voidptr, superclass voidptr, sel voidptr,
 
 fn C.ui2_macos_msg_super_cell_select(obj voidptr, superclass voidptr, sel voidptr, rect C.ui2_macos_rect, view voidptr, editor voidptr, delegate voidptr, start i64, length i64)
 
-fn C.class_getSuperclass(cls voidptr) voidptr
-
-fn C.object_getClass(obj voidptr) voidptr
+fn C.ui2_macos_superclass(obj voidptr) voidptr
 
 fn C.ui2_macos_msg_id_point(obj voidptr, sel voidptr, x f64, y f64) voidptr
 
@@ -115,6 +113,7 @@ mut:
 	text_area_direct    map[string]bool
 	label_places        map[string]LabelPlacement
 	nodes               map[string]NativeView
+	node_visual_inputs map[string]EmbeddedNativeVisualInputs
 	node_kinds          map[string]Kind
 	node_text_direct    map[string]bool
 	node_interactive    map[string]bool
@@ -1006,6 +1005,7 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'mouseDown:', voidptr(ui2_pointer_mouse_down), 'v@:@')
 		macos.add_method(cls, 'mouseDragged:', voidptr(ui2_pointer_mouse_dragged), 'v@:@')
 		macos.add_method(cls, 'mouseUp:', voidptr(ui2_pointer_mouse_up), 'v@:@')
+		macos.add_method(cls, 'otherMouseDown:', voidptr(ui2_embedded_pointer_other), 'v@:@')
 		macos.add_method(cls, 'accessibilityPerformPress', voidptr(ui2_pointer_accessibility_press),
 			'B@:')
 		macos.add_method(cls, 'resetCursorRects', voidptr(ui2_pointer_reset_cursor_rects), 'v@:')
@@ -1016,6 +1016,7 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'mouseDown:', voidptr(ui2_pointer_mouse_down), 'v@:@')
 		macos.add_method(cls, 'mouseDragged:', voidptr(ui2_pointer_mouse_dragged), 'v@:@')
 		macos.add_method(cls, 'mouseUp:', voidptr(ui2_pointer_mouse_up), 'v@:@')
+		macos.add_method(cls, 'otherMouseDown:', voidptr(ui2_embedded_pointer_other), 'v@:@')
 		macos.register_class_pair(cls)
 	}
 	if macos.get_class('UI2PointerImageView') == unsafe { nil } {
@@ -1023,6 +1024,7 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'mouseDown:', voidptr(ui2_pointer_mouse_down), 'v@:@')
 		macos.add_method(cls, 'mouseDragged:', voidptr(ui2_pointer_mouse_dragged), 'v@:@')
 		macos.add_method(cls, 'mouseUp:', voidptr(ui2_pointer_mouse_up), 'v@:@')
+		macos.add_method(cls, 'otherMouseDown:', voidptr(ui2_embedded_pointer_other), 'v@:@')
 		macos.add_method(cls, 'resetCursorRects', voidptr(ui2_pointer_reset_cursor_rects), 'v@:')
 		macos.register_class_pair(cls)
 	}
@@ -1031,6 +1033,7 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'mouseDown:', voidptr(ui2_pointer_mouse_down), 'v@:@')
 		macos.add_method(cls, 'mouseDragged:', voidptr(ui2_pointer_mouse_dragged), 'v@:@')
 		macos.add_method(cls, 'mouseUp:', voidptr(ui2_pointer_mouse_up), 'v@:@')
+		macos.add_method(cls, 'otherMouseDown:', voidptr(ui2_embedded_pointer_other), 'v@:@')
 		macos.register_class_pair(cls)
 	}
 	// Text field cells that can draw without a bezel: a field whose box draws its
@@ -1145,9 +1148,11 @@ fn render_children(parent NativeView, children []Element, parent_key string, mut
 	}
 }
 
-fn render_element(parent NativeView, el Element, key string, mut active map[string]bool) NativeView {
+fn render_element(parent NativeView, source Element, key string, mut active map[string]bool) NativeView {
+	el := embedded_button_image_element(source)
 	active[key] = true
 	mut st := state()
+	visual_changed := embedded_native_visual_changed(mut st, key, el)
 	if st.refresh_debug.active {
 		st.refresh_debug.nodes_visited++
 	}
@@ -1211,6 +1216,7 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		st.node_shortened.delete(key)
 		create_started := if st.refresh_debug.active { time.sys_mono_now() } else { u64(0) }
 		native = native_create_element(create_el)
+		apply_embedded_text_font(native, create_el)
 		if st.refresh_debug.active {
 			st.refresh_debug.nodes_created++
 			st.refresh_debug.native_create_ns += time.sys_mono_now() - create_started
@@ -1247,7 +1253,10 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		}
 	} else {
 		update_started := if st.refresh_debug.active { time.sys_mono_now() } else { u64(0) }
-		native_update_element(native, el, declared_text_changed, content_changed)
+		if visual_changed {
+			native_update_element(native, el, declared_text_changed, content_changed)
+			apply_embedded_button_image(native, el)
+		}
 		if st.refresh_debug.active {
 			elapsed := time.sys_mono_now() - update_started
 			st.refresh_debug.nodes_updated++
@@ -1343,6 +1352,10 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			register_slider(native, el)
 		}
 		.text_field {
+			macos.msg_void_bool(native, 'setUsesSingleLineMode:', true)
+			macos.msg_void_bool(macos.msg_id(native, 'cell'), 'setScrollable:', true)
+			macos.msg_void_bool(native, 'setEditable:', el.enabled && !el.readonly)
+			macos.msg_void_bool(native, 'setSelectable:', true)
 			register_control(native, element_action_id(el), el.submit_id, el.emit_change)
 		}
 		.text_area {
@@ -1408,6 +1421,8 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 	st.node_declared_text[key] = el.text
 	st.node_content_sig[key] = content_sig
 	apply_common_native_state(native, el)
+	apply_embedded_vector_path(native, el)
+	apply_embedded_button_image(native, el)
 	return native
 }
 
@@ -1531,6 +1546,7 @@ fn native_update_element(native NativeView, el Element, declared_text_changed bo
 		}
 		.label {
 			native_update_label(native, element_rect(el.frame), el.text, el.text_style.color, el.text_style.size, el.text_style.font_family, el.text_style.bold, el.text_style.italic, el.text_style.underline, align_value(el.text_style.align), el.text_style.lines, el.text_style.valign, label_needs_container(el))
+			apply_embedded_text_font(native, el)
 		}
 		.image {
 			native_update_image(native, element_rect(el.frame), el.image_path, el.rotation,
@@ -1538,6 +1554,7 @@ fn native_update_element(native NativeView, el Element, declared_text_changed bo
 		}
 		.button {
 			native_update_button(native, element_rect(el.frame), el.text, el.box, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.text_style.lines, el.image_path, el.native_style)
+			apply_embedded_text_font(native, el)
 		}
 		.checkbox {
 			native_update_checkbox(native, el)
@@ -1881,6 +1898,7 @@ fn apply_common_native_state(native NativeView, el Element) {
 	if native_is_nil(native) || el.kind == .screen {
 		return
 	}
+	macos.msg_void1(native, 'setIdentifier:', macos.nsstring(el.id))
 	native_apply_common_view_state(native, el.hidden, el.enabled, el.accessibility_role, el.accessibility_label, el.accessibility_value)
 }
 
@@ -1910,6 +1928,7 @@ fn remove_stale_nodes(active map[string]bool) {
 	}
 	for key in stale {
 		st.nodes.delete(key)
+		st.node_visual_inputs.delete(key)
 		st.node_kinds.delete(key)
 		st.node_text_direct.delete(key)
 		st.node_interactive.delete(key)
@@ -1970,6 +1989,7 @@ fn remove_stale_nodes_below(root_key string, active map[string]bool) {
 	}
 	for key in stale {
 		st.nodes.delete(key)
+		st.node_visual_inputs.delete(key)
 		st.node_kinds.delete(key)
 		st.node_text_direct.delete(key)
 		st.node_interactive.delete(key)
@@ -2404,6 +2424,9 @@ struct LabelPlacement {
 
 // The text field a label draws with: the view itself, or the one it holds.
 fn label_text_field(view NativeView) NativeView {
+	if macos.msg_bool_id(view, 'isKindOfClass:', macos.get_class('NSTextField')) {
+		return view
+	}
 	subviews := macos.msg_id(view, 'subviews')
 	if native_is_nil(subviews) || macos.msg_u64(subviews, 'count') == 0 {
 		return view
@@ -2738,8 +2761,21 @@ fn native_new_button(frame NativeRect, title string, box BoxStyle, text_hex u32,
 fn native_update_button(button_view NativeView, frame NativeRect, title string, box BoxStyle, text_hex u32, size f64, bold bool, italic bool, underline bool, lines int, image_name string, native_style bool) {
 	native_set_frame(button_view, frame)
 	macos.msg_void1(button_view, 'setTitle:', macos.nsstring(title))
-	macos.msg_void_u64(button_view, 'setBezelStyle:', 1)
-	if native_style && box_draws_fill(box) {
+	apply_embedded_button_bezel(button_view, native_style && !box.transparent && !box_draws_fill(box))
+	if native_style && !box.transparent && !box_draws_fill(box) {
+		macos.msg_void_i64(button_view, 'setButtonType:', ns_button_type_momentary_push_in)
+		if disable_embedded_button_bezel_coalescing {
+			macos.msg_void_u64(button_view, 'setBezelStyle:', 13)
+		}
+		macos.msg_void_bool(button_view, 'setBordered:', true)
+		if disable_embedded_button_bezel_coalescing {
+			macos.msg_void_bool(button_view, 'setShowsBorderOnlyWhileMouseInside:', true)
+		}
+		macos.msg_void_bool(button_view, 'setWantsLayer:', false)
+		macos.msg_void1(button_view, 'setFont:', native_font(size, bold, italic))
+		native_button_set_attributed_title(button_view, title, text_hex, size, bold, italic, underline,
+			lines)
+	} else if native_style && box_draws_fill(box) {
 		macos.msg_void_i64(button_view, 'setButtonType:', ns_button_type_momentary_push_in)
 		macos.msg_void_bool(button_view, 'setBordered:', true)
 		macos.msg_void_bool(button_view, 'setWantsLayer:', false)
@@ -2840,8 +2876,12 @@ fn native_snap_slider_value(slider_view NativeView, spec SliderSpec) f64 {
 
 fn native_update_button_image(button_view NativeView, frame NativeRect, image_name string) {
 	if image_name.trim_space() == '' {
-		macos.msg_void1(button_view, 'setImage:', macos.Id(unsafe { nil }))
-		macos.msg_void_i64(button_view, 'setImagePosition:', 0)
+		if !objc_is_nil(macos.msg_id(button_view, 'image')) {
+			macos.msg_void1(button_view, 'setImage:', macos.Id(unsafe { nil }))
+		}
+		if macos.msg_i64(button_view, 'imagePosition') != 0 {
+			macos.msg_void_i64(button_view, 'setImagePosition:', 0)
+		}
 		return
 	}
 	icon_size := if frame.height >= 42 {
@@ -2945,7 +2985,7 @@ fn native_update_text_field(field NativeView, frame NativeRect, placeholder stri
 
 // The superclass of a ui2 text field cell, which its overrides pass on to.
 fn native_text_cell_superclass(cell voidptr) voidptr {
-	return C.class_getSuperclass(C.object_getClass(cell))
+	return C.ui2_macos_superclass(cell)
 }
 
 fn native_text_cell_padding_key() voidptr {
@@ -3578,7 +3618,7 @@ fn ui2_pointer_mouse_up(self voidptr, _cmd voidptr, event voidptr) {
 fn ui2_pointer_accessibility_press(self voidptr, _cmd voidptr) bool {
 	st := state()
 	pointer := u64(self)
-	if !(st.pointer_buttons[pointer] or { false }) || voidptr(st.event_handler) == unsafe { nil } {
+	if (!(st.pointer_buttons[pointer] or { false }) && !(st.pointer_draggable[pointer] or { false })) || voidptr(st.event_handler) == unsafe { nil } {
 		return false
 	}
 	id := st.pointer_ids[pointer] or { return false }

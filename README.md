@@ -1468,3 +1468,8 @@ remove observers, delegates, actions, menus, and pointer registries on unmount.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+### Embedding controls in an existing host
+
+UI2 exposes native and custom-renderer embedding APIs, vector decorations and
+explicit button icon sizing. See [Embedding UI2 controls](docs/embedding.md).
