@@ -91,8 +91,8 @@ fn browser_screen(browser &ColumnBrowser, bounds ui2.Rect) ui2.Element {
 			pane_height), 0xffffff, column_rows(browser, column))
 		columns << ui2.view('', ui2.rect(x + columns_column_width - 1, 0, 1, pane_height),
 			ui2.BoxStyle{
-			bg: 0xe2e8f0
-		}, [])
+				bg: 0xe2e8f0
+			}, [])
 	}
 	button_box := ui2.BoxStyle{
 		bg:     0xe2e8f0
@@ -108,9 +108,9 @@ fn browser_screen(browser &ColumnBrowser, bounds ui2.Rect) ui2.Element {
 		ui2.button('last', 'Last', ui2.rect(84, 10, 64, 28), button_box, button_text),
 		ui2.label('path', browser.path(), ui2.rect(164, 0, bounds.width - 176, columns_toolbar_height),
 			ui2.TextStyle{
-			color: 0x475569
-			size:  13
-		}),
+				color: 0x475569
+				size:  13
+			}),
 		ui2.scroll_with_mode('columns', ui2.rect(0, columns_toolbar_height, bounds.width,
 			pane_height), 0xffffff, .horizontal_only, columns),
 	])

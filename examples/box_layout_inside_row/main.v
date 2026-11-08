@@ -31,9 +31,9 @@ pub fn (mut app BoxLayoutInsideRowDemo) toggle_position() {
 fn main() {
 	ui2.run_vml[BoxLayoutInsideRowDemo](
 		source: box_row_vml_source
-		model: initial_box_layout_inside_row()
-		title: 'Box Layout inside Row'
-		width: box_row_width
+		model:  initial_box_layout_inside_row()
+		title:  'Box Layout inside Row'
+		width:  box_row_width
 		height: box_row_height
 	) or { panic(err) }
 }

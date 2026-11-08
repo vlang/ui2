@@ -151,17 +151,17 @@ mutually exclusive. `allow_no_selection` defaults to `true`; set it to `false`
 when one member must remain selected. `toggle_button_group_members(id)` returns
 the mounted IDs belonging to the same group.
 
-## GridLayout
+## Grid
 
-![GridLayout example](docs/images/widgets/grid_layout.png)
+![Grid example](docs/images/widgets/grid_layout.png)
 
-`GridLayout` assigns children to matrix cells in declaration order. At least
+`Grid` assigns children to matrix cells in declaration order. At least
 one of `columns`/`cols` or `rows` is required. With one constraint, the other
 dimension grows to fit the children; setting both places a fixed limit on the
 number of cells.
 
 ```vml
-GridLayout {
+Grid {
     columns: 3
     padding: 8
     spacing: 8
@@ -172,7 +172,7 @@ GridLayout {
 }
 ```
 
-The V API is `grid_layout(GridLayoutConfig{...})` and returns an error for an
+The V API is `grid(GridConfig{...})` and returns an error for an
 invalid constraint or capacity. It supports all eight two-axis orientations,
 per-edge `GridPadding`, horizontal/vertical `GridSpacing`, default or forced
 row and column sizes, and per-index minimum sizes. VML also accepts

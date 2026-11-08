@@ -146,9 +146,9 @@ pub fn (mut app CalculateDemo) load_example(index int) {
 fn main() {
 	ui2.run_vml[CalculateDemo](
 		source: calculate_vml_source
-		model: CalculateDemo{}
-		title: 'Calculate'
-		width: calculate_width
+		model:  CalculateDemo{}
+		title:  'Calculate'
+		width:  calculate_width
 		height: calculate_height
 	) or {
 		panic(err)

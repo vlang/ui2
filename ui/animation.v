@@ -70,8 +70,8 @@ pub:
 // example, "slider_style.thumb_size") are accepted.
 pub fn animation_number_property(name string, target f64) AnimationProperty {
 	return AnimationProperty{
-		name: name
-		kind: .number
+		name:   name
+		kind:   .number
 		number: target
 	}
 }
@@ -79,8 +79,8 @@ pub fn animation_number_property(name string, target f64) AnimationProperty {
 // animation_color_property creates a target for a color Element property.
 pub fn animation_color_property(name string, target u32) AnimationProperty {
 	return AnimationProperty{
-		name: name
-		kind: .color
+		name:  name
+		kind:  .color
 		color: target
 	}
 }
@@ -107,8 +107,8 @@ type AnimationRefreshFn = fn ()
 // on every frame.
 pub struct AnimationConfig {
 pub:
-	duration        f64 = 1.0
-	transition      AnimationTransition = .linear
+	duration        f64                   = 1.0
+	transition      AnimationTransition   = .linear
 	transition_fn   AnimationTransitionFn = unsafe { nil }
 	step            f64
 	repeat          bool
@@ -165,7 +165,7 @@ mut:
 	children      []Animation
 	properties    []string
 	transition_fn AnimationTransitionFn = unsafe { nil }
-	on_event      AnimationEventFn = unsafe { nil }
+	on_event      AnimationEventFn      = unsafe { nil }
 }
 
 pub enum AnimationStatus {
@@ -223,33 +223,33 @@ pub fn animation(config AnimationConfig) Animation {
 	duration := math.max(0.0, config.duration)
 	step := math.max(0.0, config.step)
 	return Animation{
-		kind: .tween
-		duration: duration
-		transition: config.transition
+		kind:          .tween
+		duration:      duration
+		transition:    config.transition
 		transition_fn: config.transition_fn
-		step: step
-		repeat: config.repeat
-		on_event: config.on_event
-		properties: properties
-		targets: AnimationTargets{
-			x: config.x
-			y: config.y
-			width: config.width
-			height: config.height
-			rotation: config.rotation
-			background: config.background
-			corner_radius: config.corner_radius
-			text_color: config.text_color
+		step:          step
+		repeat:        config.repeat
+		on_event:      config.on_event
+		properties:    properties
+		targets:       AnimationTargets{
+			x:               config.x
+			y:               config.y
+			width:           config.width
+			height:          config.height
+			rotation:        config.rotation
+			background:      config.background
+			corner_radius:   config.corner_radius
+			text_color:      config.text_color
 			text_background: config.text_background
-			font_size: config.font_size
-			padding_left: config.padding_left
-			properties: normalized_animation_properties(config.properties)
+			font_size:       config.font_size
+			padding_left:    config.padding_left
+			properties:      normalized_animation_properties(config.properties)
 		}
 	}
 }
 
 // + composes two animations sequentially.
-pub fn (left Animation) +(right Animation) Animation {
+pub fn (left Animation) + (right Animation) Animation {
 	return sequence(left, right)
 }
 
@@ -262,10 +262,10 @@ pub fn sequence(animations ...Animation) Animation {
 		properties = merge_property_names(properties, child.properties)
 	}
 	return Animation{
-		kind: .sequence
-		duration: duration
+		kind:       .sequence
+		duration:   duration
 		transition: .linear
-		children: animations
+		children:   animations
 		properties: properties
 	}
 }
@@ -281,10 +281,10 @@ pub fn parallel(animations ...Animation) Animation {
 		properties = merge_property_names(properties, child.properties)
 	}
 	return Animation{
-		kind: .parallel
-		duration: duration
+		kind:       .parallel
+		duration:   duration
 		transition: .linear
-		children: animations
+		children:   animations
 		properties: properties
 	}
 }
@@ -321,7 +321,7 @@ pub fn (definition Animation) animated_properties() []string {
 // is already animated, the new definition starts at its currently displayed
 // values.
 pub fn (definition Animation) start(id string) {
-	start_widget_animation_at(id, definition, time.ticks(), true)
+	start_widget_animation_at(id, definition, animation_now_ms(), true)
 }
 
 pub fn (definition Animation) cancel(id string) {
@@ -354,10 +354,10 @@ pub fn animation_info(id string) AnimationInfo {
 		return AnimationInfo{}
 	}
 	info := AnimationInfo{
-		status: animation_run.status
-		progress: animation_run.progress
-		duration: animation_run.definition.duration
-		repeat: animation_run.definition.repeat
+		status:              animation_run.status
+		progress:            animation_run.progress
+		duration:            animation_run.definition.duration
+		repeat:              animation_run.definition.repeat
 		animated_properties: active_animation_properties(animation_run)
 	}
 	runtime.mutex.unlock()
@@ -478,6 +478,13 @@ fn canonical_animation_property_name(name string) string {
 		'corner_radius', 'box.radius' { 'corner_radius' }
 		'box.border_color' { 'box.border_color' }
 		'box.border_left' { 'box.border_left' }
+		'box.opacity' { 'box.opacity' }
+		'box.shadow.opacity' { 'box.shadow.opacity' }
+		'box.shadow.blur' { 'box.shadow.blur' }
+		'box.shadow.x' { 'box.shadow.x' }
+		'box.shadow.y' { 'box.shadow.y' }
+		'box.shadow.spread' { 'box.shadow.spread' }
+		'box.shadow.color' { 'box.shadow.color' }
 		'box.border_top' { 'box.border_top' }
 		'box.border_right' { 'box.border_right' }
 		'box.border_bottom' { 'box.border_bottom' }
@@ -525,7 +532,12 @@ fn canonical_animation_property_name(name string) string {
 
 fn animation_property_kind_matches(name string, kind AnimationPropertyKind) bool {
 	return match name {
-		'background', 'box.border_color', 'text_color', 'text_background', 'slider_style.track_color', 'slider_style.value_track_color', 'slider_style.thumb_color', 'switch_style.inactive_track_color', 'switch_style.active_track_color', 'switch_style.thumb_color', 'switch_style.disabled_track_color', 'switch_style.disabled_thumb_color', 'toggle_down_box.bg', 'toggle_down_box.border_color', 'toggle_down_text_style.color', 'toggle_down_text_style.background_color' {
+		'background', 'box.border_color', 'box.shadow.color', 'text_color', 'text_background',
+		'slider_style.track_color', 'slider_style.value_track_color', 'slider_style.thumb_color',
+		'switch_style.inactive_track_color', 'switch_style.active_track_color',
+		'switch_style.thumb_color', 'switch_style.disabled_track_color',
+		'switch_style.disabled_thumb_color', 'toggle_down_box.bg', 'toggle_down_box.border_color',
+		'toggle_down_text_style.color', 'toggle_down_text_style.background_color' {
 			kind == .color
 		}
 		else { kind == .number }
@@ -568,14 +580,14 @@ fn start_widget_animation_at(id string, definition Animation, now i64, schedule 
 		retained = merge_property_names(previous.retained, retained)
 	}
 	runtime.runs[id] = AnimationRun{
-		definition: definition
-		started_at: now
-		retained: retained
+		definition:  definition
+		started_at:  now
+		retained:    retained
 		initialized: initialized
-		start: start
-		last: start
-		status: .running
-		suppressed: map[string]bool{}
+		start:       start
+		last:        start
+		status:      .running
+		suppressed:  map[string]bool{}
 	}
 	runtime.mutex.unlock()
 	if schedule {
@@ -614,9 +626,9 @@ fn finish_animation(id string, property string, completing bool) {
 		if completing && voidptr(animation_run.definition.on_event) != unsafe { nil } {
 			pending << PendingAnimationEvent{
 				callback: animation_run.definition.on_event
-				event: AnimationEvent{
-					kind: .complete
-					id: id
+				event:    AnimationEvent{
+					kind:     .complete
+					id:       id
 					progress: animation_run.progress
 				}
 			}
@@ -661,7 +673,7 @@ fn schedule_animation_frames() {
 fn animation_frame_driver() {
 	for {
 		time.sleep(16 * time.millisecond)
-		if !animations_need_frames(time.ticks()) {
+		if !animations_need_frames(animation_now_ms()) {
 			// The first trailing refresh completes an animation whose deadline was
 			// crossed; the second reflects any application state its callback changed.
 			request_animation_refresh()
@@ -710,34 +722,136 @@ fn animations_need_frames(now i64) bool {
 	return active
 }
 
+// Animation timestamps share the wall clock with `after()` timer deadlines and
+// the tests that drive both. The cost of sharing is that NTP corrections or a
+// manual clock change jump tweens; the `after()` pass would misfire far worse
+// on a split clock.
+fn animation_now_ms() i64 {
+	// Animation stamps, timer deadlines and the tests that drive both share
+	// time.ticks(): wall-clock milliseconds. A monotonic clock here would
+	// split `after()` deadlines (stamped with ticks) from the animation pass
+	// that fires them, and leave every test that injects ticks-based times
+	// driving animations stamped with a different clock.
+	return time.ticks()
+}
+
+// The custom renderer schedules at its presentation cadence, without a second
+// animation timer. A running mounted animation needs a frame until evaluation
+// marks it complete, even when suspension has carried it past its deadline.
+// Hidden and unmounted animations retain their state but cannot keep drawing.
+fn custom_animations_need_frame(root Element) bool {
+	runtime := g_animation_runtime
+	runtime.mutex.lock()
+	active := animation_tree_needs_frame(root, runtime.runs)
+	runtime.mutex.unlock()
+	return active
+}
+
+fn animation_tree_needs_frame(root Element, runs map[string]AnimationRun) bool {
+	if root.hidden {
+		return false
+	}
+	if animation_run := runs[root.id] {
+		if animation_run.status == .running {
+			return true
+		}
+	}
+	for child in root.children {
+		if animation_tree_needs_frame(child, runs) {
+			return true
+		}
+	}
+	return false
+}
+
 fn apply_widget_animations(root Element) Element {
-	return apply_widget_animations_at(root, time.ticks())
+	return apply_widget_animations_at(root, animation_now_ms())
 }
 
 fn apply_widget_animations_at(root Element, now i64) Element {
+	return apply_widget_animations_for_visibility(root, now, false)
+}
+
+fn apply_custom_widget_animations(root Element) Element {
+	return apply_custom_widget_animations_at(root, animation_now_ms())
+}
+
+fn apply_custom_widget_animations_at(root Element, now i64) Element {
+	return apply_widget_animations_for_visibility(root, now, true)
+}
+
+fn apply_widget_animations_for_visibility(root Element, now i64, visible_only bool) Element {
 	mut runtime := g_animation_runtime
 	mut pending := []PendingAnimationEvent{}
 	runtime.mutex.lock()
-	result := apply_widget_animation_node(root, now, mut pending)
+	// Custom-rendered text resolves lines: 0 when it draws (text_line_budget), so with no
+	// animation running the tree passes through unchanged instead of being copied.
+	mut result := root
+	if !(visible_only && runtime.runs.len == 0) {
+		result, _ = apply_widget_animation_node(root, now, visible_only, mut pending)
+	}
 	runtime.mutex.unlock()
 	dispatch_animation_events(pending)
+	// `after` callbacks run at the same point as animation callbacks; what they
+	// change is picked up by the build this refresh asks for.
+	if run_due_timers(now) {
+		request_animation_refresh()
+	}
 	return result
 }
 
-fn apply_widget_animation_node(declared Element, now i64, mut pending []PendingAnimationEvent) Element {
+fn apply_widget_animation_node(declared Element, now i64, visible_only bool, mut pending []PendingAnimationEvent) (Element, bool) {
+	// Hidden custom subtrees retain their animation timeline without evaluating
+	// it. Otherwise progress callbacks could repeatedly invalidate the model and
+	// keep an invisible repeating animation drawing despite zero frame demand.
+	if visible_only && declared.hidden {
+		return declared, false
+	}
 	mut runtime := g_animation_runtime
-	mut children := []Element{cap: declared.children.len}
-	for child in declared.children {
-		children << apply_widget_animation_node(child, now, mut pending)
+	// Copy on write: the pass must visit every node, because an untouched
+	// subtree can hold the one animating element, but a node with no animation
+	// run of its own, no line budget to resolve and no changed child is passed
+	// through as the declared value. Only the nodes an animation actually
+	// touches are then cloned per frame.
+	mut changed := false
+	mut children := []Element{}
+	for index, child in declared.children {
+		processed, child_changed := apply_widget_animation_node(child, now, visible_only, mut pending)
+		if child_changed && !changed {
+			changed = true
+			children = []Element{cap: declared.children.len}
+			// Children before the first changed one came back equal to their
+			// declared form, so the declared references stand in for them.
+			for previous_index in 0 .. index {
+				children << declared.children[previous_index]
+			}
+		}
+		if changed {
+			children << processed
+		}
+	}
+	if declared.id.len > 0 && declared.id in runtime.runs {
+		changed = true
+	}
+	if !changed && declared.text_style.lines > 0 {
+		return declared, false
+	}
+	// Every backend renders what this pass returns, so `lines: 0` ("as many lines
+	// as fit") is resolved here once instead of in each backend's text code.
+	if children.len == 0 {
+		// Nothing below this node changed, so the declared children are the
+		// processed children.
+		children = declared.children
 	}
 	mut result := Element{
 		...declared
-		children: children
+		children:   children
+		text_style: text_style_with_line_budget(declared.text_style)
 	}
 	if declared.id.len == 0 {
-		return result
+		return result, true
 	}
-	mut animation_run := runtime.runs[declared.id] or { return result }
+	mut animation_run := runtime.runs[declared.id] or { return result, true }
 	previous_progress := animation_run.progress
 	if !animation_run.initialized {
 		animation_run.initialized = true
@@ -746,9 +860,9 @@ fn apply_widget_animation_node(declared Element, now i64, mut pending []PendingA
 		if voidptr(animation_run.definition.on_event) != unsafe { nil } {
 			pending << PendingAnimationEvent{
 				callback: animation_run.definition.on_event
-				event: AnimationEvent{
+				event:    AnimationEvent{
 					kind: .start
-					id: declared.id
+					id:   declared.id
 				}
 			}
 		}
@@ -789,9 +903,9 @@ fn apply_widget_animation_node(declared Element, now i64, mut pending []PendingA
 			&& animation_run.progress != previous_progress {
 			pending << PendingAnimationEvent{
 				callback: animation_run.definition.on_event
-				event: AnimationEvent{
-					kind: .progress
-					id: declared.id
+				event:    AnimationEvent{
+					kind:     .progress
+					id:       declared.id
 					progress: animation_run.progress
 				}
 			}
@@ -801,9 +915,9 @@ fn apply_widget_animation_node(declared Element, now i64, mut pending []PendingA
 			if voidptr(animation_run.definition.on_event) != unsafe { nil } {
 				pending << PendingAnimationEvent{
 					callback: animation_run.definition.on_event
-					event: AnimationEvent{
-						kind: .complete
-						id: declared.id
+					event:    AnimationEvent{
+						kind:     .complete
+						id:       declared.id
 						progress: 1.0
 					}
 				}
@@ -811,18 +925,24 @@ fn apply_widget_animation_node(declared Element, now i64, mut pending []PendingA
 		}
 		animation_run.last = result
 		runtime.runs[declared.id] = animation_run
-		return result
+		return result, true
 	}
 	if animation_run.initialized {
 		result = merge_animation_properties(result, animation_run.last, animation_run.retained)
 	}
 	runtime.runs[declared.id] = animation_run
-	return result
+	return result, true
 }
 
 fn dispatch_animation_events(pending []PendingAnimationEvent) {
 	for item in pending {
 		item.callback(item.event)
+	}
+	// Callbacks may change the application model after this frame's build.
+	// In particular, completion must schedule one more build after the final
+	// animated values have stopped requesting presentation frames.
+	if pending.len > 0 {
+		request_animation_refresh()
 	}
 }
 
@@ -979,25 +1099,25 @@ fn apply_animation_targets(start Element, targets AnimationTargets, progress f64
 	}
 	mut result := Element{
 		...start
-		frame: Rect{
+		frame:        Rect{
 			...start.frame
-			x: x
-			y: y
-			width: width
+			x:      x
+			y:      y
+			width:  width
 			height: height
 		}
-		box: BoxStyle{
+		box:          BoxStyle{
 			...start.box
-			bg: background
+			bg:     background
 			radius: corner_radius
 		}
-		text_style: TextStyle{
+		text_style:   TextStyle{
 			...start.text_style
-			color: text_color
+			color:            text_color
 			background_color: text_background
-			size: font_size
+			size:             font_size
 		}
-		rotation: rotation
+		rotation:     rotation
 		padding_left: padding_left
 	}
 	for property in targets.properties {
@@ -1022,6 +1142,12 @@ fn animation_number_property_value(element Element, property string) f64 {
 		'rotation' { element.rotation }
 		'corner_radius' { element.box.radius }
 		'box.border_left' { element.box.border_left }
+		'box.opacity' { element.box.opacity }
+		'box.shadow.opacity' { element.box.shadow.opacity }
+		'box.shadow.blur' { element.box.shadow.blur }
+		'box.shadow.x' { element.box.shadow.x }
+		'box.shadow.y' { element.box.shadow.y }
+		'box.shadow.spread' { element.box.shadow.spread }
 		'box.border_top' { element.box.border_top }
 		'box.border_right' { element.box.border_right }
 		'box.border_bottom' { element.box.border_bottom }
@@ -1061,6 +1187,7 @@ fn animation_color_property_value(element Element, property string) u32 {
 	return match property {
 		'background' { element.box.bg }
 		'box.border_color' { element.box.border_color }
+		'box.shadow.color' { element.box.shadow.color }
 		'text_color' { element.text_style.color }
 		'text_background' { element.text_style.background_color }
 		'slider_style.track_color' { element.slider_style.track_color }
@@ -1091,6 +1218,24 @@ fn set_number_animation_property(element Element, property string, value f64) El
 		'corner_radius' { Element{ ...element, box: BoxStyle{ ...element.box, radius: value } } }
 		'box.border_left' {
 			Element{ ...element, box: BoxStyle{ ...element.box, border_left: value } }
+		}
+		'box.opacity' {
+			Element{ ...element, box: BoxStyle{ ...element.box, opacity: value } }
+		}
+		'box.shadow.opacity' {
+			Element{ ...element, box: BoxStyle{ ...element.box, shadow: BoxShadow{ ...element.box.shadow, opacity: value } } }
+		}
+		'box.shadow.blur' {
+			Element{ ...element, box: BoxStyle{ ...element.box, shadow: BoxShadow{ ...element.box.shadow, blur: value } } }
+		}
+		'box.shadow.x' {
+			Element{ ...element, box: BoxStyle{ ...element.box, shadow: BoxShadow{ ...element.box.shadow, x: value } } }
+		}
+		'box.shadow.y' {
+			Element{ ...element, box: BoxStyle{ ...element.box, shadow: BoxShadow{ ...element.box.shadow, y: value } } }
+		}
+		'box.shadow.spread' {
+			Element{ ...element, box: BoxStyle{ ...element.box, shadow: BoxShadow{ ...element.box.shadow, spread: value } } }
 		}
 		'box.border_top' {
 			Element{ ...element, box: BoxStyle{ ...element.box, border_top: value } }
@@ -1169,6 +1314,9 @@ fn set_color_animation_property(element Element, property string, value u32) Ele
 		'box.border_color' {
 			Element{ ...element, box: BoxStyle{ ...element.box, border_color: value } }
 		}
+		'box.shadow.color' {
+			Element{ ...element, box: BoxStyle{ ...element.box, shadow: BoxShadow{ ...element.box.shadow, color: value } } }
+		}
 		'text_color' {
 			Element{ ...element, text_style: TextStyle{ ...element.text_style, color: value } }
 		}
@@ -1218,21 +1366,21 @@ fn set_color_animation_property(element Element, property string, value u32) Ele
 fn merge_animation_properties(base Element, values Element, properties []string) Element {
 	mut result := Element{
 		...base
-		frame: Rect{
+		frame:        Rect{
 			...base.frame
-			x: if 'x' in properties { values.frame.x } else { base.frame.x }
-			y: if 'y' in properties { values.frame.y } else { base.frame.y }
-			width: if 'width' in properties { values.frame.width } else { base.frame.width }
+			x:      if 'x' in properties { values.frame.x } else { base.frame.x }
+			y:      if 'y' in properties { values.frame.y } else { base.frame.y }
+			width:  if 'width' in properties { values.frame.width } else { base.frame.width }
 			height: if 'height' in properties { values.frame.height } else { base.frame.height }
 		}
-		box: BoxStyle{
+		box:          BoxStyle{
 			...base.box
-			bg: if 'background' in properties { values.box.bg } else { base.box.bg }
+			bg:     if 'background' in properties { values.box.bg } else { base.box.bg }
 			radius: if 'corner_radius' in properties { values.box.radius } else { base.box.radius }
 		}
-		text_style: TextStyle{
+		text_style:   TextStyle{
 			...base.text_style
-			color: if 'text_color' in properties {
+			color:            if 'text_color' in properties {
 				values.text_style.color
 			} else {
 				base.text_style.color
@@ -1242,13 +1390,13 @@ fn merge_animation_properties(base Element, values Element, properties []string)
 			} else {
 				base.text_style.background_color
 			}
-			size: if 'font_size' in properties {
+			size:             if 'font_size' in properties {
 				values.text_style.size
 			} else {
 				base.text_style.size
 			}
 		}
-		rotation: if 'rotation' in properties { values.rotation } else { base.rotation }
+		rotation:     if 'rotation' in properties { values.rotation } else { base.rotation }
 		padding_left: if 'padding_left' in properties {
 			values.padding_left
 		} else {
@@ -1281,4 +1429,24 @@ fn reset_widget_animations() {
 	runtime.runs = map[string]AnimationRun{}
 	runtime.driver_running = false
 	runtime.mutex.unlock()
+}
+
+// text_lines_unlimited is the line budget `lines: 0` stands for: more than any
+// frame shows, so text wraps until it runs out or the frame cuts it off.
+const text_lines_unlimited = 10000
+
+// text_line_budget is how many lines a text element draws: lines: 0 means as many as
+// fit, so the budget is unlimited.
+fn text_line_budget(style TextStyle) int {
+	return if style.lines > 0 { style.lines } else { text_lines_unlimited }
+}
+
+fn text_style_with_line_budget(style TextStyle) TextStyle {
+	if style.lines > 0 {
+		return style
+	}
+	return TextStyle{
+		...style
+		lines: text_lines_unlimited
+	}
 }

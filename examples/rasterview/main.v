@@ -11,7 +11,7 @@ pub struct RasterviewDemo {
 pub:
 	image_path string
 pub mut:
-	show_details bool = true
+	show_details bool   = true
 	status       string = 'Bundled repository logo loaded.'
 }
 
@@ -35,9 +35,9 @@ pub fn (mut app RasterviewDemo) toggle_details() {
 fn main() {
 	ui2.run_vml[RasterviewDemo](
 		source: rasterview_vml_source
-		model: initial_rasterview()
-		title: 'Raster View'
-		width: rasterview_width
+		model:  initial_rasterview()
+		title:  'Raster View'
+		width:  rasterview_width
 		height: rasterview_height
 	) or { panic(err) }
 }

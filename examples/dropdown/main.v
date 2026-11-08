@@ -24,9 +24,9 @@ pub fn (mut app DropdownDemo) selection_changed() {
 fn main() {
 	ui2.run_vml[DropdownDemo](
 		source: dropdown_vml_source
-		model: DropdownDemo{}
-		title: 'Dropdown'
-		width: dropdown_width
+		model:  DropdownDemo{}
+		title:  'Dropdown'
+		width:  dropdown_width
 		height: dropdown_height
 	) or { panic(err) }
 }

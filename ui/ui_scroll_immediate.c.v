@@ -3,7 +3,7 @@
 @[has_globals]
 module ui2
 
-$if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
+$if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
 	import gg
 	import math
 
@@ -13,6 +13,14 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	struct TextAreaLineRange {
 		start int
 		end   int
+	}
+
+	// TextAreaRunSpan is a text run resolved to the runes of the shown text it
+	// styles, end exclusive.
+	struct TextAreaRunSpan {
+		start int
+		end   int
+		style TextStyle
 	}
 
 	fn reset_scroll_frame() {
@@ -326,60 +334,6 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return ''
 	}
 
-	// Wrap using the same font measurement as drawing. Explicit blank lines
-	// survive, and an unbroken word is split only at UTF-8 rune boundaries.
-	fn wrap_text_area_lines(value string, width f64, measure fn (string) f64) []string {
-		if width <= 0 {
-			return []string{}
-		}
-		mut lines := []string{}
-		for paragraph in value.replace('\r\n', '\n').replace('\r', '\n').split('\n') {
-			if paragraph.len == 0 {
-				lines << ''
-				continue
-			}
-			runes := paragraph.runes()
-			mut start := 0
-			for start < runes.len {
-				rest := runes[start..].string()
-				if measure(rest) <= width {
-					lines << rest
-					break
-				}
-				mut low := 0
-				mut high := runes.len - start
-				for low < high {
-					mid := (low + high + 1) / 2
-					if measure(runes[start..start + mid].string()) <= width {
-						low = mid
-					} else {
-						high = mid - 1
-					}
-				}
-				// A glyph wider than the pane is clipped, but must still advance.
-				kept := if low > 0 { low } else { 1 }
-				mut end := start + kept
-				mut next := end
-				if end < runes.len {
-					mut space := end
-					for space > start && runes[space] != ` ` && runes[space] != `\t` {
-						space--
-					}
-					if space > start {
-						end = space
-						next = space + 1
-						for next < runes.len && (runes[next] == ` ` || runes[next] == `\t`) {
-							next++
-						}
-					}
-				}
-				lines << runes[start..end].string()
-				start = next
-			}
-		}
-		return lines
-	}
-
 	fn text_area_lines(id string, value string, width f64, style TextStyle, rendered_size int, measure fn (string) f64) []string {
 		if id.len > 0 {
 			if cached := g_text_area_layouts[id] {
@@ -523,6 +477,156 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		return first, last
 	}
 
+	// text_area_run_spans resolves a rich text area's runs against the text being
+	// shown. Runs style consecutive stretches from the start, as AppKit applies
+	// them. Text edited since the runs were declared no longer matches them, and
+	// is drawn plain until the application declares runs for it.
+	fn text_area_run_spans(runs []TextRun, value string) []TextAreaRunSpan {
+		mut spans := []TextAreaRunSpan{cap: runs.len}
+		mut byte_pos := 0
+		mut rune_pos := 0
+		for run in runs {
+			if run.text.len == 0 {
+				continue
+			}
+			end := byte_pos + run.text.len
+			if end > value.len || value[byte_pos..end] != run.text {
+				return []TextAreaRunSpan{}
+			}
+			count := run.text.len_utf8()
+			spans << TextAreaRunSpan{
+				start: rune_pos
+				end: rune_pos + count
+				style: run.style
+			}
+			byte_pos = end
+			rune_pos += count
+		}
+		return spans
+	}
+
+	// Tab stops every 28 points from the start of a line, as AppKit's text views
+	// set them; a tab drawn as a glyph came out about one space wide.
+	const text_area_tab_stop = 28.0
+
+	// text_area_advance is where text ends when drawn from `start` (relative to
+	// its line's start) in the current text config, tabs moving on to the next
+	// stop.
+	fn text_area_advance(ctx &gg.Context, s string, start f64) f64 {
+		if !s.contains('\t') {
+			return start + f64(ctx.text_width_f(s))
+		}
+		mut x := start
+		parts := s.split('\t')
+		for i, part in parts {
+			if part.len > 0 {
+				x += f64(ctx.text_width_f(part))
+			}
+			if i < parts.len - 1 {
+				x = (math.floor(x / text_area_tab_stop + 1e-9) + 1) * text_area_tab_stop
+			}
+		}
+		return x
+	}
+
+	// draw_text_area_tabbed draws text left-aligned from `left`, `start` points
+	// into its line, honoring tab stops, and returns where it ends in the line.
+	fn draw_text_area_tabbed(ctx &gg.Context, s string, left f64, start f64, y f64, cfg gg.TextCfg) f64 {
+		if !s.contains('\t') {
+			ctx.draw_text(int(left + start), int(y), s, cfg)
+			return start + f64(ctx.text_width_f(s))
+		}
+		mut x := start
+		parts := s.split('\t')
+		for i, part in parts {
+			if part.len > 0 {
+				ctx.draw_text(int(left + x), int(y), part, cfg)
+				x += f64(ctx.text_width_f(part))
+			}
+			if i < parts.len - 1 {
+				x = (math.floor(x / text_area_tab_stop + 1e-9) + 1) * text_area_tab_stop
+			}
+		}
+		return x
+	}
+
+	// text_area_selection_color highlights a selection over a text area's fill:
+	// a light blue over light fills, a deep one over dark fills.
+	fn text_area_selection_color(bg u32) u32 {
+		r := f64((bg >> 16) & 0xff)
+		g := f64((bg >> 8) & 0xff)
+		b := f64(bg & 0xff)
+		return if 0.2126 * r + 0.7152 * g + 0.0722 * b >= 128 { u32(0xb8d7ff) } else { u32(0x264f78) }
+	}
+
+	fn text_area_run_cfg(style TextStyle) gg.TextCfg {
+		family := text_font_file(style.font_family, style.bold, style.italic)
+		return gg.TextCfg{
+			color: hex_color(style.color)
+			size: int(font_render_size(style.size, text_font_metrics(family)) + 0.5)
+			bold: style.bold
+			italic: style.italic
+			family: family
+			align: .left
+			vertical_align: .middle
+		}
+	}
+
+	// draw_text_area_run_line draws one wrapped line of a rich text area run by
+	// run, starting at `left`. Stretches no run covers keep the base style.
+	fn draw_text_area_run_line(ctx &gg.Context, line string, line_start int, spans []TextAreaRunSpan, base TextStyle, left f64, y f64, line_height f64) {
+		runes := line.runes()
+		// The first span that ends after the line starts.
+		mut k := 0
+		mut lo, mut hi := 0, spans.len
+		for lo < hi {
+			mid := (lo + hi) / 2
+			if spans[mid].end <= line_start {
+				lo = mid + 1
+			} else {
+				hi = mid
+			}
+		}
+		k = lo
+		mut x := left
+		mut i := 0
+		for i < runes.len {
+			pos := line_start + i
+			mut style := base
+			mut j := runes.len
+			if k < spans.len && spans[k].start <= pos {
+				style = spans[k].style
+				j = math.min(runes.len, spans[k].end - line_start)
+			} else if k < spans.len {
+				j = math.min(runes.len, spans[k].start - line_start)
+			}
+			if j <= i {
+				j = i + 1
+			}
+			segment := runes[i..j].string()
+			cfg := text_area_run_cfg(style)
+			ensure_family_fallbacks(ctx, cfg.family)
+			ctx.set_text_cfg(cfg)
+			end := text_area_advance(ctx, segment, x - left)
+			width := end - (x - left)
+			if style.background_color != 0 {
+				draw_rect(ctx, x, y - line_height / 2, width, line_height, style.background_color, 0)
+			}
+			draw_text_area_tabbed(ctx, segment, left, x - left, y, cfg)
+			if style.underline || style.strikethrough {
+				draw_text_decorations(ctx, segment, x, y, cfg, TextStyle{
+					...style
+					align: .left
+				})
+			}
+			x = left + end
+			i = j
+			if k < spans.len && line_start + i >= spans[k].end {
+				k++
+			}
+		}
+	}
+
 	fn draw_text_area_content(ctx &gg.Context, el Element, value string, x f64, y f64, clip Rect, scroll_parent_id string) {
 		frame := rect(x, y, el.frame.width, el.frame.height)
 		content := text_area_content_rect(frame, el.padding_left, !el.disable_scroll)
@@ -543,6 +647,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			return f64(ctx.text_width_f(line))
 		})
 		line_ranges := text_area_line_rune_ranges(value, lines)
+		spans := text_area_run_spans(el.text_runs, value)
 		editor := g_text_editors[el.id] or { text_editor(value.clone()) }
 		selection_start, selection_end := editor.selection.ordered()
 		show_selection := g_focused_field == el.id && selection_start != selection_end
@@ -556,10 +661,12 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		text_clip := intersect_rect(content, clip)
 		if text_clip.width > 0 && text_clip.height > 0 {
 			apply_clip(ctx, text_clip)
+			base_x := content.x
+			base_w := content.width
 			text_x := match style.align {
-				.left { content.x }
-				.center { content.x + content.width / 2 }
-				.right { content.x + content.width }
+				.left { base_x }
+				.center { base_x + base_w / 2 }
+				.right { base_x + base_w }
 			}
 			first, last := visible_text_area_rows(lines.len, content.y, line_height, offset, text_clip)
 			for index in first .. last {
@@ -572,21 +679,39 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 						line_runes := lines[index].runes()
 						prefix := line_runes[..from - line_range.start].string()
 						selected := line_runes[from - line_range.start..to - line_range.start].string()
-						line_width := f64(ctx.text_width_f(lines[index]))
+						line_width := text_area_advance(ctx, lines[index], 0)
 						line_origin := text_field_aligned_text_origin(content.x, content.width, line_width,
 							style.align)
-						draw_rect(ctx, line_origin + f64(ctx.text_width_f(prefix)), text_y - line_height / 2,
-							f64(ctx.text_width_f(selected)), line_height, 0xb8d7ff, 0)
+						from_x := text_area_advance(ctx, prefix, 0)
+						to_x := text_area_advance(ctx, prefix + selected, 0)
+						draw_rect(ctx, line_origin + from_x, text_y - line_height / 2, to_x - from_x,
+							line_height, text_area_selection_color(el.box.bg), 0)
 					}
 				}
-				ctx.draw_text(int(text_x), int(text_y), lines[index], cfg)
+				if spans.len > 0 && index < line_ranges.len {
+					ctx.set_text_cfg(cfg)
+					line_origin := text_field_aligned_text_origin(content.x, content.width,
+						text_area_advance(ctx, lines[index], 0), style.align)
+					draw_text_area_run_line(ctx, lines[index], line_ranges[index].start, spans,
+						style, line_origin, text_y, line_height)
+					ctx.set_text_cfg(cfg)
+				} else if lines[index].contains('\t') {
+					line_origin := text_field_aligned_text_origin(content.x, content.width,
+						text_area_advance(ctx, lines[index], 0), style.align)
+					draw_text_area_tabbed(ctx, lines[index], line_origin, 0, text_y, gg.TextCfg{
+						...cfg
+						align: .left
+					})
+				} else {
+					ctx.draw_text(int(text_x), int(text_y), lines[index], cfg)
+				}
 			}
 		}
 		pane_clip := intersect_rect(frame, clip)
 		if !el.disable_scroll && pane_clip.width > 0 && pane_clip.height > 0 {
 			apply_clip(ctx, pane_clip)
 			draw_scrollbar(ctx, x, y, frame.width, frame.height, content_height, offset,
-				el.persistent_scrollbars)
+				el.persistent_scrollbars, el.box.bg)
 		}
 		// Neither the next sibling nor the pane's scrollbar inherits the text clip.
 		apply_clip(ctx, clip)

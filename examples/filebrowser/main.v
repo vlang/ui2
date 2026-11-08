@@ -43,9 +43,9 @@ fn (mut app FileBrowserDemo) load_directory(path string) ! {
 				continue
 			}
 			entries << BrowserEntry{
-				id: entries.len + 1
-				name: name
-				path: full_path
+				id:        entries.len + 1
+				name:      name
+				path:      full_path
 				directory: is_directory
 			}
 		}
@@ -100,9 +100,9 @@ pub fn (mut app FileBrowserDemo) cancel_selection() {
 fn main() {
 	ui2.run_vml[FileBrowserDemo](
 		source: filebrowser_vml_source
-		model: file_browser_at(os.getwd())
-		title: 'File Browser'
-		width: filebrowser_width
+		model:  file_browser_at(os.getwd())
+		title:  'File Browser'
+		width:  filebrowser_width
 		height: filebrowser_height
 	) or {
 		panic(err)

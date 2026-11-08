@@ -7,7 +7,7 @@ $if macos && !ui2_custom_rendering ? {
 // control_checked returns a checkbox, switch or toggle button's live mounted state.
 // Missing IDs and other widget kinds return false.
 pub fn control_checked(id string) bool {
-	$if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
+	$if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
 		if id in g_active_checkboxes { return checkbox_checked(id) }
 		if id in g_active_switches { return switch_active(id) }
 		if id in g_active_toggles { return toggle_button_pressed(id) }
@@ -32,7 +32,7 @@ pub fn control_checked(id string) bool {
 // set_control_checked updates live state without emitting an event. Declare the new
 // value on the next build to keep application state and the control in sync.
 pub fn set_control_checked(id string, value bool) {
-	$if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
+	$if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
 		if id in g_active_checkboxes { set_checkbox_checked(id, value) }
 		if id in g_active_switches { set_switch_active(id, value) }
 		if id in g_active_toggles { set_toggle_button_pressed(id, value) }

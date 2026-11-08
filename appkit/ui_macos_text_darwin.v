@@ -47,6 +47,12 @@ fn native_font_with_family(font macos.Id, family_name string, fallback_size f64)
 		manager := macos.msg_id(macos.get_class('NSFontManager'), 'sharedFontManager')
 		base = macos.msg_id_id_u64_i64_f64(manager, 'fontWithFamily:traits:weight:size:', family, 0, 5, size)
 	}
+	// AppKit has no font called `monospace`. A fixed-pitch request it cannot find
+	// falls back to Menlo rather than to the proportional system font, as the
+	// custom renderer falls back to another monospace face.
+	if objc_is_nil(base) && font_is_mono_family(family_name) {
+		base = macos.msg_id_id_f64(macos.get_class('NSFont'), 'fontWithName:size:', macos.nsstring('Menlo'), size)
+	}
 	if objc_is_nil(base) {
 		return if objc_is_nil(font) { macos.msg_id_f64(macos.get_class('NSFont'), 'systemFontOfSize:', size) } else { font }
 	}
@@ -166,8 +172,7 @@ fn native_text_view_set_paragraph_style(tv macos.Id, alignment int, head_indent 
 	if objc_is_nil(style) {
 		style = macos.msg_id(macos.alloc('NSMutableParagraphStyle'), 'init')
 	}
-	native_alignment := if alignment == 1 { i64(1) } else if alignment == 2 { i64(2) } else { i64(0) }
-	macos.msg_void_i64(style, 'setAlignment:', native_alignment)
+	macos.msg_void_i64(style, 'setAlignment:', native_text_alignment(alignment))
 	macos.msg_void_f64(style, 'setHeadIndent:', if head_indent > 0 { head_indent } else { 0 })
 	macos.msg_void_f64(style, 'setFirstLineHeadIndent:', if first_line_indent > 0 { first_line_indent } else { 0 })
 	macos.msg_void_f64(style, 'setTailIndent:', 0)
@@ -220,17 +225,85 @@ fn native_text_view_add_link(tv macos.Id, location u64, length u64, link string)
 	macos.release(attrs)
 }
 
-fn native_control_set_attributed_title(control macos.Id, text string, color u32, size f64, bold bool, italic bool, underline bool) {
+// native_control_set_attributed_title gives a label italic or underlined text.
+// The string carries its own paragraph style, which wins over the field's, so
+// the label's alignment and line breaking go in it too; without them it drew
+// left-aligned whatever it was asked for.
+fn native_control_set_attributed_title(control macos.Id, text string, color u32, size f64, family string, bold bool, italic bool, underline bool, align int, lines int) {
 	if objc_is_nil(control) {
 		return
 	}
-	attrs := native_text_attributes(color, 0, size, '', bold, italic, underline, false, '')
+	attrs := native_text_attributes(color, 0, size, family, bold, italic, underline, false, '')
+	paragraph := macos.msg_id(macos.alloc('NSMutableParagraphStyle'), 'init')
+	macos.msg_void_i64(paragraph, 'setAlignment:', native_text_alignment(align))
+	macos.msg_void_i64(paragraph, 'setLineBreakMode:', if lines == 1 {
+		i64(ns_line_break_by_truncating_tail)
+	} else {
+		i64(ns_line_break_by_word_wrapping)
+	})
+	objc_dict_set(attrs, objc_attr_paragraph_style, paragraph)
+	macos.release(paragraph)
 	attributed := macos.msg_id2(macos.alloc('NSAttributedString'), 'initWithString:attributes:', macos.nsstring(text), attrs)
 	if macos.responds_to(control, 'setAttributedTitle:') {
 		macos.msg_void1(control, 'setAttributedTitle:', attributed)
 	} else if macos.responds_to(control, 'setAttributedStringValue:') {
 		macos.msg_void1(control, 'setAttributedStringValue:', attributed)
 	}
+	macos.release(attributed)
+}
+
+// native_text_alignment turns the alignment numbering align_value uses into
+// NSTextAlignment. AppKit numbers center and right the other way round on Intel,
+// which kept its original values, from Apple silicon, which uses the iOS ones.
+fn native_text_alignment(align int) i64 {
+	return match align {
+		1 { $if amd64 { i64(2) } $else { i64(1) } }
+		2 { $if amd64 { i64(1) } $else { i64(2) } }
+		else { i64(0) }
+	}
+}
+
+// native_button_set_attributed_title centres a styled button's title. NSButton
+// draws an attributed title with that string's own paragraph style, and one with
+// none is left-aligned, unlike a button on any other backend. The style also has
+// to carry the line breaking, or a single-line title would wrap.
+fn native_button_set_attributed_title(button macos.Id, text string, color u32, size f64, bold bool, italic bool, underline bool, lines int) {
+	if objc_is_nil(button) {
+		return
+	}
+	attrs := native_text_attributes(color, 0, size, '', bold, italic, underline, false, '')
+	style := macos.msg_id(macos.alloc('NSMutableParagraphStyle'), 'init')
+	macos.msg_void_i64(style, 'setAlignment:', native_text_alignment(align_value(.center)))
+	macos.msg_void_i64(style, 'setLineBreakMode:', if lines == 1 {
+		i64(ns_line_break_by_truncating_tail)
+	} else {
+		i64(ns_line_break_by_word_wrapping)
+	})
+	objc_dict_set(attrs, objc_attr_paragraph_style, style)
+	macos.release(style)
+	attributed := macos.msg_id2(macos.alloc('NSAttributedString'), 'initWithString:attributes:', macos.nsstring(text), attrs)
+	macos.msg_void1(button, 'setAttributedTitle:', attributed)
+	macos.release(attributed)
+}
+
+// native_checkbox_set_title draws a check box's title in its declared style: a
+// plain NSButton title is always the system's label color, whatever the theme.
+fn native_checkbox_set_title(button macos.Id, text string, style TextStyle) {
+	if objc_is_nil(button) {
+		return
+	}
+	attrs := native_text_attributes(style.color, 0, style.size, style.font_family, style.bold,
+		style.italic, style.underline, false, '')
+	paragraph := macos.msg_id(macos.alloc('NSMutableParagraphStyle'), 'init')
+	macos.msg_void_i64(paragraph, 'setLineBreakMode:', if style.lines == 1 {
+		i64(ns_line_break_by_truncating_tail)
+	} else {
+		i64(ns_line_break_by_word_wrapping)
+	})
+	objc_dict_set(attrs, objc_attr_paragraph_style, paragraph)
+	macos.release(paragraph)
+	attributed := macos.msg_id2(macos.alloc('NSAttributedString'), 'initWithString:attributes:', macos.nsstring(text), attrs)
+	macos.msg_void1(button, 'setAttributedTitle:', attributed)
 	macos.release(attributed)
 }
 
@@ -560,8 +633,14 @@ fn native_text_view_set_background_color(tv_ptr macos.Id, color u32) {
 	if selected.length == 0 { native_apply_typing_color(tv, color, true) } else { native_apply_range_color(tv, selected, color, true) }
 }
 
+// Declared text and runs get their effects here. Unlike the effect command,
+// which selects what it styled, this leaves the selection where it was: the
+// last run of a rich text area used to come up selected.
 fn native_text_view_add_effect(tv macos.Id, location u64, length u64, effect int) {
-	if !objc_is_nil(tv) && length > 0 { native_apply_range_effect(tv, macos.range(location, length), effect) }
+	if objc_is_nil(tv) || length == 0 { return }
+	selected := native_text_view_selected_range(tv)
+	native_apply_range_effect(tv, macos.range(location, length), effect)
+	macos.msg_void_range(tv, 'setSelectedRange:', selected)
 }
 
 fn native_text_view_set_effect(tv_ptr macos.Id, effect int) {

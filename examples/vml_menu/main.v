@@ -8,8 +8,8 @@ fn build() ui2.Element {
 	return ui2.screen(0xffffff, [
 		ui2.label('hint', 'Choose a menu item; its action id is printed to the terminal.',
 			ui2.rect(20, 20, 460, 80), ui2.TextStyle{
-			size: 15
-		}),
+				size: 15
+			}),
 	])
 }
 

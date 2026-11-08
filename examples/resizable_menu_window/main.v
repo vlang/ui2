@@ -8,7 +8,7 @@ const menu_window_vml_source = $embed_file('resizable_menu_window.vml').to_strin
 
 pub struct ResizableMenuDemo {
 pub mut:
-	compact bool = true
+	compact bool   = true
 	status  string = 'Right-click Actions to open its native context menu.'
 }
 
@@ -39,9 +39,9 @@ pub fn (mut app ResizableMenuDemo) add_user() {
 fn main() {
 	ui2.run_vml[ResizableMenuDemo](
 		source: menu_window_vml_source
-		model: ResizableMenuDemo{}
-		title: 'Resizable Menu Window'
-		width: menu_window_width
+		model:  ResizableMenuDemo{}
+		title:  'Resizable Menu Window'
+		width:  menu_window_width
 		height: menu_window_height
 	) or { panic(err) }
 }

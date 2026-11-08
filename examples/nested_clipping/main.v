@@ -60,13 +60,13 @@ fn nested_clipping_demo() NestedClippingDemo {
 		for slot in 1 .. clip_grid_side + 1 {
 			order := (quadrant - 1) * clip_grid_side + slot
 			app.boxes << ClipBox{
-				id: order
-				key: 'box-${order}'
+				id:       order
+				key:      'box-${order}'
 				quadrant: quadrant
-				column: (quadrant - 1) % 2 * 2 + (slot - 1) % 2
-				row: (quadrant - 1) / 2 * 2 + (slot - 1) / 2
-				order: clip_ordinal(order)
-				color: clip_box_color(quadrant, slot)
+				column:   (quadrant - 1) % 2 * 2 + (slot - 1) % 2
+				row:      (quadrant - 1) / 2 * 2 + (slot - 1) / 2
+				order:    clip_ordinal(order)
+				color:    clip_box_color(quadrant, slot)
 				clipping: true
 			}
 		}
@@ -127,9 +127,9 @@ pub fn (mut app NestedClippingDemo) clip_none() {
 fn main() {
 	ui2.run_vml[NestedClippingDemo](
 		source: nested_clipping_vml_source
-		model: nested_clipping_demo()
-		title: 'Nested Clipping'
-		width: nested_clipping_width
+		model:  nested_clipping_demo()
+		title:  'Nested Clipping'
+		width:  nested_clipping_width
 		height: nested_clipping_height
 	) or { panic(err) }
 }

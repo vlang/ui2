@@ -45,7 +45,7 @@ fn test_pointer_model_handles_shared_nested_and_cyclic_references() {
 	}
 	root := element_from_vml_model('Label { text: app.counter.count + app.other.count }', model, rect(0,
 		0, 100, 30)) or { panic(err) }
-	assert root.text == '6.0'
+	assert root.text == '6'
 	counter.next = &PointerCounter{
 		count: 5
 	}

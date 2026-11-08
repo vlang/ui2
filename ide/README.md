@@ -5,7 +5,8 @@
 
 `ide/` is a Delphi/Lazarus-style visual form designer implemented entirely in
 V and UI2. It edits flat `Screen` documents that UI2 renders on macOS, Windows,
-Linux, iOS, and Android, with fixed coordinates or opt-in adaptive layouts.
+Linux, the BSDs, iOS, and Android, with fixed coordinates or opt-in adaptive
+layouts.
 
 Run it from the repository root:
 

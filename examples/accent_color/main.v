@@ -34,7 +34,7 @@ pub mut:
 	font_color  string
 	on_dark     bool
 	swatches    []AccentSwatch
-	subscribed  bool = true
+	subscribed  bool   = true
 	sample      string = 'Accent colors'
 	status      string
 }
@@ -72,30 +72,30 @@ fn (mut app AccentColorDemo) derive() {
 	app.blue_ratio = f64(app.blue) / 255.0
 	app.swatches = [
 		AccentSwatch{
-			key: 'swatch-0'
+			key:   'swatch-0'
 			index: 0
-			role: 'shade'
+			role:  'shade'
 			color: app.shade
 			label: '0 · shade'
 		},
 		AccentSwatch{
-			key: 'swatch-1'
+			key:   'swatch-1'
 			index: 1
-			role: 'accent'
+			role:  'accent'
 			color: app.accent
 			label: '1 · accent'
 		},
 		AccentSwatch{
-			key: 'swatch-2'
+			key:   'swatch-2'
 			index: 2
-			role: 'tint'
+			role:  'tint'
 			color: app.tint
 			label: '2 · tint'
 		},
 		AccentSwatch{
-			key: 'swatch-3'
+			key:   'swatch-3'
 			index: 3
-			role: 'font'
+			role:  'font'
 			color: app.font_color
 			label: '3 · font'
 		},

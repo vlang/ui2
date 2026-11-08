@@ -114,7 +114,9 @@ fn native_color_from_hex(hex u32) macos.Id {
 	r := f64((hex >> 16) & 0xff) / 255.0
 	g := f64((hex >> 8) & 0xff) / 255.0
 	b := f64(hex & 0xff) / 255.0
-	color := macos.msg_id_four_f64(macos.get_class('NSColor'), 'colorWithCalibratedRed:green:blue:alpha:', r, g, b, 1.0)
+	// Hex colors are sRGB, as in CSS and design tools and in the custom renderer.
+	// Calibrated (Generic RGB) components drew #EF4444 as about #E3675C.
+	color := macos.msg_id_four_f64(macos.get_class('NSColor'), 'colorWithSRGBRed:green:blue:alpha:', r, g, b, 1.0)
 	if !objc_is_nil(color) {
 		helpers.colors[hex] = macos.retain(color)
 	}
@@ -163,10 +165,10 @@ fn native_image_from_name(name string) macos.Id {
 	}
 	ns_name := macos.nsstring(name)
 	if name.starts_with('symbol:') {
-		symbol_name := macos.nsstring(name['symbol:'.len..])
+		ns_symbol := macos.nsstring(name['symbol:'.len..])
 		image_class := macos.get_class('NSImage')
 		if macos.responds_to(image_class, 'imageWithSystemSymbolName:accessibilityDescription:') {
-			symbol_image := macos.msg_id2(image_class, 'imageWithSystemSymbolName:accessibilityDescription:', symbol_name, objc_nil())
+			symbol_image := macos.msg_id2(image_class, 'imageWithSystemSymbolName:accessibilityDescription:', ns_symbol, objc_nil())
 			if !objc_is_nil(symbol_image) {
 				return symbol_image
 			}
@@ -244,17 +246,48 @@ fn objc_place_subview(parent macos.Id, child macos.Id, previous macos.Id) {
 	macos.msg_void_id_i64_id(parent, 'addSubview:positioned:relativeTo:', child, position, previous)
 }
 
+// native_accessibility_role maps ui2's (ARIA-style) role names onto AppKit roles,
+// following how WebKit exposes the same ARIA roles. A nil result leaves the view's
+// own role alone: that is right for `presentation`, for roles ui2 puts on rows and
+// native buttons that must stay pressable (`listitem`, `treeitem`, `option`, `row`,
+// `cell`, `columnheader`), and for names AppKit has no role for, which it would
+// otherwise be handed verbatim.
 fn native_accessibility_role(role string) macos.Id {
 	return match role {
-		'' { objc_nil() }
+		'', 'presentation', 'listitem', 'treeitem', 'option', 'row', 'cell', 'columnheader' {
+			objc_nil()
+		}
 		'button' { macos.nsstring('AXButton') }
 		'text', 'label' { macos.nsstring('AXStaticText') }
-		'text_field' { macos.nsstring('AXTextField') }
-		'image' { macos.nsstring('AXImage') }
+		'text_field', 'textbox' { macos.nsstring('AXTextField') }
+		'image', 'img' { macos.nsstring('AXImage') }
+		// Structural roles have no AppKit counterpart of their own; VoiceOver reads
+		// them as groups. A tree is one too: an outline needs rows AppKit can walk.
+		'group', 'navigation', 'status', 'alert', 'dialog', 'alertdialog', 'tree', 'table', 'grid',
+		'rowgroup', 'form', 'log' {
+			macos.nsstring('AXGroup')
+		}
+		'separator' { macos.nsstring('AXSplitter') }
 		'link' { macos.nsstring('AXLink') }
 		'slider' { macos.nsstring('AXSlider') }
-		'switch' { macos.nsstring('AXCheckBox') }
-		else { macos.nsstring(role) }
+		'switch', 'checkbox' { macos.nsstring('AXCheckBox') }
+		'progressbar' { macos.nsstring('AXProgressIndicator') }
+		// ui2's combobox is a select-only dropdown, which WebKit exposes as a pop-up.
+		'combobox' { macos.nsstring('AXPopUpButton') }
+		// A tab is a pressable choice among its siblings, as a radio is.
+		'tab', 'radio' { macos.nsstring('AXRadioButton') }
+		'radiogroup' { macos.nsstring('AXRadioGroup') }
+		'menu' { macos.nsstring('AXMenu') }
+		'menuitem', 'menuitemcheckbox', 'menuitemradio' { macos.nsstring('AXMenuItem') }
+		'list', 'listbox' { macos.nsstring('AXList') }
+		'toolbar' { macos.nsstring('AXToolbar') }
+		'tablist' { macos.nsstring('AXTabGroup') }
+		// WebKit's role for headings, which VoiceOver's rotor jumps between.
+		'heading' { macos.nsstring('AXHeading') }
+		'tooltip' { macos.nsstring('AXHelpTag') }
+		'note', 'search', 'region' { macos.nsstring('AXGroup') }
+		'scrollbar' { macos.nsstring('AXScrollBar') }
+		else { if role.starts_with('AX') { macos.nsstring(role) } else { objc_nil() } }
 	}
 }
 

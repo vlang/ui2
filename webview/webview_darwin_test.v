@@ -128,7 +128,8 @@ fn test_worker_calls_and_cookie_stores_are_isolated() {
 				cookie = value
 				got_cookie = true
 			}
-			else {}
+			else {
+			}
 		}
 	}
 	assert got_cookie
@@ -168,7 +169,8 @@ fn test_cookie_timeout_and_late_native_reader_are_safe_after_close() {
 			value = cookie
 			received = true
 		}
-		else {}
+		else {
+		}
 	}
 	assert received
 	assert value == ''
@@ -188,7 +190,8 @@ fn test_cookie_timeout_and_late_native_reader_are_safe_after_close() {
 				assert view.js_value() == ''
 				return
 			}
-			else {}
+			else {
+			}
 		}
 	}
 	assert detached == 1

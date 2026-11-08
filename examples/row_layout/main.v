@@ -12,10 +12,10 @@ pub mut:
 	margin_choice  string = '24'
 	spacing_choice string = '20'
 	height_choice  string = '44'
-	first_ratio    f64 = 0.3
-	row_margin     f64 = 24
-	row_spacing    f64 = 20
-	button_height  f64 = 44
+	first_ratio    f64    = 0.3
+	row_margin     f64    = 24
+	row_spacing    f64    = 20
+	button_height  f64    = 44
 	status         string = '30 / 70 · margin 24 · spacing 20 · height 44'
 }
 
@@ -42,9 +42,9 @@ pub fn (mut app RowLayoutDemo) reset_layout() {
 fn main() {
 	ui2.run_vml[RowLayoutDemo](
 		source: row_layout_vml_source
-		model: RowLayoutDemo{}
-		title: 'Row Layout'
-		width: row_layout_width
+		model:  RowLayoutDemo{}
+		title:  'Row Layout'
+		width:  row_layout_width
 		height: row_layout_height
 	) or {
 		panic(err)

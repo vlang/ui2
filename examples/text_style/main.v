@@ -25,7 +25,7 @@ pub mut:
 	file        string
 	sample      string = 'il était une fois V ....'
 	size_choice string = '30'
-	font_size   f64 = 30
+	font_size   f64    = 30
 	bold        bool
 	italic      bool
 	status      string
@@ -57,8 +57,8 @@ fn font_family_name(base string) ?string {
 	if lower.contains('[') || lower.contains('variablefont') {
 		return none
 	}
-	for marker in ['bold', 'italic', 'oblique', 'light', 'thin', 'medium', 'black', 'heavy',
-		'condensed', 'semi', 'extra'] {
+	for marker in ['bold', 'italic', 'oblique', 'light', 'thin', 'medium', 'black', 'heavy', 'condensed',
+		'semi', 'extra'] {
 		if lower.contains(marker) {
 			return none
 		}
@@ -103,10 +103,10 @@ fn discover_fonts() []FontEntry {
 			break
 		}
 		fonts << FontEntry{
-			id: fonts.len + 1
-			key: 'font-${fonts.len + 1}'
+			id:     fonts.len + 1
+			key:    'font-${fonts.len + 1}'
 			family: family
-			file: files[family] or { '' }
+			file:   files[family] or { '' }
 		}
 	}
 	return fonts
@@ -119,22 +119,22 @@ fn text_style_demo() TextStyleDemo {
 		// are the generic families every backend maps to something.
 		fonts = [
 			FontEntry{
-				id: 1
-				key: 'font-1'
+				id:     1
+				key:    'font-1'
 				family: 'System'
-				file: 'built in'
+				file:   'built in'
 			},
 			FontEntry{
-				id: 2
-				key: 'font-2'
+				id:     2
+				key:    'font-2'
 				family: 'Serif'
-				file: 'built in'
+				file:   'built in'
 			},
 			FontEntry{
-				id: 3
-				key: 'font-3'
+				id:     3
+				key:    'font-3'
 				family: 'Monospace'
-				file: 'built in'
+				file:   'built in'
 			},
 		]
 	}
@@ -182,9 +182,9 @@ pub fn (mut app TextStyleDemo) emphasis_changed() {
 fn main() {
 	ui2.run_vml[TextStyleDemo](
 		source: text_style_vml_source
-		model: text_style_demo()
-		title: 'Text Style'
-		width: text_style_width
+		model:  text_style_demo()
+		title:  'Text Style'
+		width:  text_style_width
 		height: text_style_height
 	) or { panic(err) }
 }

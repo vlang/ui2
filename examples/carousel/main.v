@@ -22,9 +22,9 @@ pub fn (mut app CarouselDemo) next() {
 fn main() {
 	ui2.run_vml[CarouselDemo](
 		source: carousel_vml_source
-		model: CarouselDemo{}
-		title: 'Carousel'
-		width: carousel_width
+		model:  CarouselDemo{}
+		title:  'Carousel'
+		width:  carousel_width
 		height: carousel_height
 	) or { panic(err) }
 }

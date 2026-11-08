@@ -6,6 +6,7 @@ module ui2
 $if !ui2_custom_rendering ? {
 
 import encoding.base64
+import math
 import macos
 import os
 import time
@@ -13,6 +14,8 @@ import time
 #flag darwin -framework Cocoa
 
 #flag darwin -framework QuartzCore
+
+#flag darwin -framework CoreGraphics
 
 #include "@VMODROOT/appkit/ui_macos_geometry_darwin.h"
 
@@ -26,6 +29,26 @@ struct C.ui2_macos_rect {
 fn C.ui2_macos_msg_rect_rect(obj voidptr, sel voidptr, rect C.ui2_macos_rect) C.ui2_macos_rect
 
 fn C.ui2_macos_msg_super_void_id(obj voidptr, superclass voidptr, sel voidptr, arg voidptr)
+
+fn C.ui2_macos_msg_super_rect_rect(obj voidptr, superclass voidptr, sel voidptr, rect C.ui2_macos_rect) C.ui2_macos_rect
+
+fn C.ui2_macos_msg_super_cell_edit(obj voidptr, superclass voidptr, sel voidptr, rect C.ui2_macos_rect, view voidptr, editor voidptr, delegate voidptr, event voidptr)
+
+fn C.ui2_macos_msg_super_cell_select(obj voidptr, superclass voidptr, sel voidptr, rect C.ui2_macos_rect, view voidptr, editor voidptr, delegate voidptr, start i64, length i64)
+
+fn C.class_getSuperclass(cls voidptr) voidptr
+
+fn C.object_getClass(obj voidptr) voidptr
+
+fn C.ui2_macos_msg_id_point(obj voidptr, sel voidptr, x f64, y f64) voidptr
+
+fn C.ui2_macos_add_tracking_area(view voidptr)
+
+fn C.ui2_macos_msg_void_float(obj voidptr, sel voidptr, value f32)
+
+fn C.ui2_macos_set_shadow_path(layer voidptr, x f64, y f64, width f64, height f64, radius f64)
+
+fn C.ui2_macos_set_shape_path(layer voidptr, commands &f64, count int)
 
 const ns_window_style_titled = u64(1)
 const ns_window_style_closable = u64(2)
@@ -79,10 +102,13 @@ mut:
 	text_key_consumed   bool
 	scroll_handler      ScrollFn = ScrollFn(unsafe { nil })
 	drop_handler        DropFn = DropFn(unsafe { nil })
+	window_ready_fn     WindowReadyFn = WindowReadyFn(unsafe { nil })
+	window_resize_fn    WindowResizeFn = WindowResizeFn(unsafe { nil })
 	window              NativeView
 	root_view           NativeView
 	button_handler      NativeView
 	app_delegate        NativeView
+	measure_label       NativeView // off-screen label measure_text_width asks
 	views               map[string]NativeView
 	view_keys           map[string]string
 	view_kinds          map[string]Kind
@@ -98,12 +124,21 @@ mut:
 	node_content_sig    map[string]string
 	node_tooltips       map[string]string
 	node_shortened      map[string]ShortenedText
+	label_line_heights  map[string]f64 // font name and size -> one laid-out line of ASCII
 	node_menu_sig       map[string]string
 	node_menu_items     map[string][]u64
 	textview_ids        map[u64]string // NSTextView pointer -> lookup id (no tag on NSView)
 	textview_action_ids map[u64]string // NSTextView pointer -> change event id
 	scroll_ids          map[u64]string // NSClipView pointer -> Scroll element id
 	pointer_ids         map[u64]string // NSView pointer -> element id
+	hover_ids           map[u64]string // NSView pointer -> action of a hoverable element
+	rendering           bool // refresh is building or applying the tree
+	refresh_pending     bool // a refresh was asked for while one was rendering
+	image_symbols       map[u64]string // NSImageView pointer -> the symbol and tint it shows
+	hovered             []string       // hovered actions, outermost first
+	hover_window_point  macos.Point    // last pointer location, window coordinates
+	hover_root_point    macos.Point    // the same in the root view's coordinates
+	hover_inside        bool
 	pointer_clickable   map[u64]bool
 	pointer_buttons     map[u64]bool
 	pointer_draggable   map[u64]bool
@@ -205,6 +240,7 @@ fn run_window_with_min_size(title string, width int, height int, min_width int, 
 	st.build_screen = build_fn
 	st.event_handler = event_fn
 	configure_animation_driver(request_refresh, true)
+	configure_text_measurer(native_measure_text_width)
 	st.run_config = RunConfig{
 		title: title
 		width: width
@@ -222,12 +258,26 @@ fn run_window_with_min_size(title string, width int, height int, min_width int, 
 }
 
 pub fn refresh() {
-	st := state()
+	mut st := state()
 	if native_is_nil(st.root_view) || voidptr(st.build_screen) == unsafe { nil } {
 		return
 	}
+	// Moving and resizing views posts notifications (a scroll view's bounds, for
+	// one) whose handlers may ask for a refresh. Rendering again inside a render
+	// tore the tree it was in the middle of updating, so such a request waits for
+	// the render to finish.
+	if st.rendering {
+		st.refresh_pending = true
+		return
+	}
+	st.rendering = true
 	root := st.build_screen()
 	render_root(root)
+	st.rendering = false
+	if st.refresh_pending {
+		st.refresh_pending = false
+		request_refresh()
+	}
 	schedule_screenshot_capture()
 }
 
@@ -321,6 +371,48 @@ pub fn on_drop(handler DropFn) {
 	st.drop_handler = handler
 }
 
+// on_window_ready registers a handler called with the NSWindow after the
+// application has finished launching, the window has been ordered front and
+// the first frame has been rendered. An embedder creates its child view
+// inside it.
+pub fn on_window_ready(handler WindowReadyFn) {
+	mut st := state()
+	st.window_ready_fn = handler
+}
+
+// fire_window_ready notifies the embedder registered through on_window_ready,
+// if any.
+fn fire_window_ready() {
+	st := state()
+	if voidptr(st.window_ready_fn) == unsafe { nil } {
+		return
+	}
+	st.window_ready_fn(st.window)
+}
+
+// on_window_resize registers a handler called with the content size in
+// points (AppKit logical units, which differ from pixels on Retina displays)
+// whenever the window is resized, so an embedder can size its child view to
+// match.
+pub fn on_window_resize(handler WindowResizeFn) {
+	mut st := state()
+	st.window_resize_fn = handler
+}
+
+// fire_window_resize notifies the embedder registered through
+// on_window_resize, if any.
+fn fire_window_resize() {
+	st := state()
+	if voidptr(st.window_resize_fn) == unsafe { nil } {
+		return
+	}
+	if native_is_nil(st.root_view) {
+		return
+	}
+	b := native_bounds(st.root_view)
+	st.window_resize_fn(int(b.width), int(b.height))
+}
+
 // set_window_title updates the current AppKit window title.
 pub fn set_window_title(title string) {
 	st := state()
@@ -338,6 +430,13 @@ fn refresh_on_main() {
 pub fn request_refresh() {
 	cb := refresh_on_main
 	native_dispatch_main(cb)
+}
+
+// refresh_on_demand reports whether the window redraws only when asked. The
+// AppKit backend redraws on the run loop's own pacing and has no on_demand
+// mode yet.
+pub fn refresh_on_demand() bool {
+	return false
 }
 
 // scroll_offset returns the current vertical scroll position of a Scroll element.
@@ -888,6 +987,10 @@ fn ensure_runtime_classes() {
 	if macos.get_class('UI2FlippedView') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSView'), 'UI2FlippedView')
 		macos.add_method(cls, 'isFlipped', voidptr(ui2_view_is_flipped), 'B@:')
+		// Only the root view carries a tracking area, so only it receives these.
+		macos.add_method(cls, 'mouseEntered:', voidptr(ui2_root_mouse_moved), 'v@:@')
+		macos.add_method(cls, 'mouseMoved:', voidptr(ui2_root_mouse_moved), 'v@:@')
+		macos.add_method(cls, 'mouseExited:', voidptr(ui2_root_mouse_exited), 'v@:@')
 		macos.add_method(cls, 'draggingEntered:', voidptr(ui2_dragging_entered), 'Q@:@')
 		macos.add_method(cls, 'performDragOperation:', voidptr(ui2_perform_drag_operation), 'B@:@')
 		macos.register_class_pair(cls)
@@ -929,6 +1032,25 @@ fn ensure_runtime_classes() {
 		macos.add_method(cls, 'mouseDragged:', voidptr(ui2_pointer_mouse_dragged), 'v@:@')
 		macos.add_method(cls, 'mouseUp:', voidptr(ui2_pointer_mouse_up), 'v@:@')
 		macos.register_class_pair(cls)
+	}
+	// Text field cells that can draw without a bezel: a field whose box draws its
+	// own border shows its text centered on one line and moved in by its
+	// padding_left (see native_text_cell_rect).
+	rect_type := '{CGRect={CGPoint=dd}{CGSize=dd}}'
+	for name, base in {
+		'UI2TextFieldCell':       'NSTextFieldCell'
+		'UI2SecureTextFieldCell': 'NSSecureTextFieldCell'
+	} {
+		if macos.get_class(name) == unsafe { nil } {
+			cls := macos.allocate_class_pair(macos.get_class(base), name)
+			macos.add_method(cls, 'drawingRectForBounds:', voidptr(ui2_text_cell_drawing_rect),
+				'${rect_type}@:${rect_type}')
+			macos.add_method(cls, 'editWithFrame:inView:editor:delegate:event:', voidptr(ui2_text_cell_edit),
+				'v@:${rect_type}@@@@')
+			macos.add_method(cls, 'selectWithFrame:inView:editor:delegate:start:length:',
+				voidptr(ui2_text_cell_select), 'v@:${rect_type}@@@qq')
+			macos.register_class_pair(cls)
+		}
 	}
 	if macos.get_class('UI2AppDelegate') == unsafe { nil } {
 		cls := macos.allocate_class_pair(macos.get_class('NSObject'), 'UI2AppDelegate')
@@ -986,6 +1108,7 @@ fn render_root(declared Element) {
 	st.view_kinds = map[string]Kind{}
 	st.text_area_direct = map[string]bool{}
 	st.pointer_ids = map[u64]string{}
+	st.hover_ids = map[u64]string{}
 	st.pointer_clickable = map[u64]bool{}
 	st.pointer_buttons = map[u64]bool{}
 	st.pointer_draggable = map[u64]bool{}
@@ -1005,6 +1128,8 @@ fn render_root(declared Element) {
 	mut active := map[string]bool{}
 	render_children(st.root_view, root.children, '', mut active)
 	remove_stale_nodes(active)
+	// Content can move under a pointer that stays put.
+	native_update_hover()
 }
 
 fn render_children(parent NativeView, children []Element, parent_key string, mut active map[string]bool) {
@@ -1141,12 +1266,16 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 		}
 	}
 	if el.kind != .screen {
+		register_hover(native, el)
 		border_box := if el.kind == .toggle_button && el.checked {
 			el.toggle_down_box
 		} else {
 			el.box
 		}
 		native_set_box_borders(native, border_box)
+		if el.kind == .view {
+			native_set_view_shape(native, el)
+		}
 	}
 
 	match el.kind {
@@ -1154,7 +1283,7 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			native = parent
 			render_children(parent, el.children, key, mut active)
 		}
-		.view {
+		.view, .opengl {
 			register_pointer(native, el)
 			render_children(native, el.children, key, mut active)
 		}
@@ -1163,6 +1292,13 @@ fn render_element(parent NativeView, el Element, key string, mut active map[stri
 			clip := macos.msg_id(native, 'contentView')
 			if el.id.len > 0 {
 				st.scroll_ids[u64(voidptr(clip))] = el.id
+				// Sizing the document below can move the clip view, and the scroll it
+				// reports is read back by id, so the id has to lead to this view from
+				// here, not only once the element is done: a scroll that changed its
+				// id read back 0 for that first report.
+				st.views[el.id] = native
+				st.view_keys[el.id] = key
+				st.view_kinds[el.id] = el.kind
 			}
 			if u64(voidptr(clip)) !in st.observed {
 				st.observed[u64(voidptr(clip))] = true
@@ -1338,18 +1474,18 @@ fn native_create_element(el Element) NativeView {
 		.screen {
 			native_nil_view()
 		}
-		.view {
+		.view, .opengl {
 			native_new_view(element_rect(el.frame), el.box, element_interactive(el))
 		}
 		.scroll {
 			native_new_scroll(element_rect(el.frame), el.box, el.persistent_scrollbars,
-				el.scroll_mode)
+				el.scroll_mode, el.disable_scroll)
 		}
 		.label {
-			native_new_label(element_rect(el.frame), el.text, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, align_value(el.text_style.align), el.text_style.lines, el.text_style.valign, label_needs_container(el))
+			native_new_label(element_rect(el.frame), el.text, el.text_style.color, el.text_style.size, el.text_style.font_family, el.text_style.bold, el.text_style.italic, el.text_style.underline, align_value(el.text_style.align), el.text_style.lines, el.text_style.valign, label_needs_container(el))
 		}
 		.image {
-			native_new_image(element_rect(el.frame), el.image_path, el.rotation)
+			native_new_image(element_rect(el.frame), el.image_path, el.rotation, el.text_style.color)
 		}
 		.button {
 			native_new_button(element_rect(el.frame), el.text, el.box, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.text_style.lines, el.image_path, el.native_style)
@@ -1381,22 +1517,24 @@ fn native_create_element(el Element) NativeView {
 fn native_update_element(native NativeView, el Element, declared_text_changed bool, content_changed bool) {
 	match el.kind {
 		.screen {}
-		.view {
+		.view, .opengl {
 			native_set_frame(native, element_rect(el.frame))
 			native_set_box_background(native, el.box)
-			native_set_corner_radius(native, el.box.radius)
+			native_set_box_corners(native, el.box)
 		}
 		.scroll {
 			native_set_frame(native, element_rect(el.frame))
 			native_set_scroll_background(native, el.box)
-			native_set_scroll_axes(native, el.scroll_mode)
+			native_set_scroll_axes(native, el.scroll_mode, el.disable_scroll)
 			native_set_scrollbar_mode(native, el.persistent_scrollbars)
+			native_match_scroll_appearance(native, el.box)
 		}
 		.label {
-			native_update_label(native, element_rect(el.frame), el.text, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, align_value(el.text_style.align), el.text_style.lines, el.text_style.valign, label_needs_container(el))
+			native_update_label(native, element_rect(el.frame), el.text, el.text_style.color, el.text_style.size, el.text_style.font_family, el.text_style.bold, el.text_style.italic, el.text_style.underline, align_value(el.text_style.align), el.text_style.lines, el.text_style.valign, label_needs_container(el))
 		}
 		.image {
-			native_update_image(native, element_rect(el.frame), el.image_path, el.rotation)
+			native_update_image(native, element_rect(el.frame), el.image_path, el.rotation,
+				el.text_style.color)
 		}
 		.button {
 			native_update_button(native, element_rect(el.frame), el.text, el.box, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.text_style.lines, el.image_path, el.native_style)
@@ -1416,7 +1554,7 @@ fn native_update_element(native NativeView, el Element, declared_text_changed bo
 		.text_field {
 			native_update_text_field(native, element_rect(el.frame), el.placeholder, el.text,
 				el.box, el.text_style.color, el.text_style.size,
-				declared_text_changed, el.readonly, el.enabled)
+				declared_text_changed, el.readonly, el.enabled, el.text_style.align, el.padding_left)
 		}
 		.text_area {
 			native_update_text_area(native, el, declared_text_changed, content_changed)
@@ -1452,6 +1590,85 @@ fn register_pointer(native NativeView, el Element) {
 	}
 	if element_interactive(el) {
 		native_invalidate_cursor_rects(native)
+	}
+}
+
+fn register_hover(native NativeView, el Element) {
+	if el.hoverable && !el.hidden && element_action_id(el).len > 0 {
+		mut st := state()
+		st.hover_ids[u64(voidptr(native))] = element_action_id(el)
+	}
+}
+
+@[export: 'ui2_root_mouse_moved']
+fn ui2_root_mouse_moved(self voidptr, _cmd voidptr, event voidptr) {
+	mut st := state()
+	if NativeView(self) != st.root_view {
+		return
+	}
+	st.hover_window_point = macos.msg_point(event, 'locationInWindow')
+	st.hover_root_point = native_event_point(st.root_view, event)
+	st.hover_inside = true
+	native_update_hover()
+}
+
+@[export: 'ui2_root_mouse_exited']
+fn ui2_root_mouse_exited(self voidptr, _cmd voidptr, event voidptr) {
+	mut st := state()
+	if NativeView(self) != st.root_view {
+		return
+	}
+	st.hover_root_point = native_event_point(st.root_view, event)
+	st.hover_inside = false
+	native_update_hover()
+}
+
+// native_hovered_chain returns the hoverable elements at a window point, outermost
+// first: the topmost view there and its superviews, as CSS :hover counts them.
+// hitTest: skips hidden views and the parts of a scroll view's content clipped away.
+fn native_hovered_chain(window_point macos.Point) []string {
+	st := state()
+	if st.hover_ids.len == 0 || native_is_nil(st.root_view) {
+		return []string{}
+	}
+	// hitTest: takes a point in the receiver's superview, which for the window's
+	// content view shares the window's coordinates.
+	superview := macos.msg_id(st.root_view, 'superview')
+	point := if objc_is_nil(superview) {
+		window_point
+	} else {
+		macos.msg_point_point_id(superview, 'convertPoint:fromView:', window_point, objc_nil())
+	}
+	mut hit_view := NativeView(C.ui2_macos_msg_id_point(st.root_view, macos.sel('hitTest:'), point.x,
+		point.y))
+	mut inner_first := []string{}
+	for !native_is_nil(hit_view) {
+		if action := st.hover_ids[u64(voidptr(hit_view))] {
+			inner_first << action
+		}
+		if hit_view == st.root_view {
+			break
+		}
+		hit_view = NativeView(macos.msg_id(hit_view, 'superview'))
+	}
+	return inner_first.reverse()
+}
+
+fn native_update_hover() {
+	mut st := state()
+	current := if st.hover_inside { native_hovered_chain(st.hover_window_point) } else { []string{} }
+	left, entered := hover_transitions(st.hovered, current)
+	st.hovered = current
+	if voidptr(st.event_handler) == unsafe { nil } {
+		return
+	}
+	handler := st.event_handler
+	point := st.hover_root_point
+	for action in left {
+		handler('pointer:leave:${action}:${point.x}:${point.y}')
+	}
+	for action in entered {
+		handler('pointer:enter:${action}:${point.x}:${point.y}')
 	}
 }
 
@@ -1568,6 +1785,7 @@ fn unregister_node(key string, native NativeView, kind Kind, text_direct bool) {
 		st.pointer_button_id = ''
 	}
 	st.pointer_ids.delete(pointer)
+	st.image_symbols.delete(pointer)
 	st.pointer_clickable.delete(pointer)
 	st.pointer_buttons.delete(pointer)
 	st.pointer_draggable.delete(pointer)
@@ -1767,8 +1985,8 @@ fn remove_stale_nodes_below(root_key string, active map[string]bool) {
 fn node_has_ancestor_in_set(key string, keys map[string]bool) bool {
 	mut ancestor := key
 	for {
-		separator := ancestor.last_index('/') or { return false }
-		ancestor = ancestor[..separator]
+		slash := ancestor.last_index('/') or { return false }
+		ancestor = ancestor[..slash]
 		if ancestor in keys {
 			return true
 		}
@@ -1947,6 +2165,84 @@ fn native_new_object(class_name string) NativeView {
 	return macos.msg_id(macos.alloc(class_name), 'init')
 }
 
+// native_set_view_shape draws a view's path (see `shape`) with a CAShapeLayer
+// beneath its children, above a gradient fill, and takes the layer away again
+// when the view stops drawing one.
+fn native_set_view_shape(view NativeView, el Element) {
+	key := voidptr(macos.sel('ui2_shape_assoc'))
+	mut layer := NativeView(macos.get_associated_object(view, key))
+	if !element_has_shape(el) {
+		if !native_is_nil(layer) {
+			macos.msg_void(layer, 'removeFromSuperlayer')
+			native_set_associated_object(view, key, NativeView(objc_nil()))
+		}
+		return
+	}
+	macos.msg_void_bool(view, 'setWantsLayer:', true)
+	parent := macos.msg_id(view, 'layer')
+	if native_is_nil(layer) {
+		layer = macos.msg_id(macos.alloc('CAShapeLayer'), 'init')
+		native_set_associated_object(view, key, layer)
+		macos.release(layer)
+		macos.msg_void_f64(layer, 'setZPosition:', -999)
+		// What falls outside the frame is clipped, as in the custom renderer.
+		macos.msg_void_bool(layer, 'setMasksToBounds:', true)
+	}
+	if macos.msg_id(layer, 'superlayer') != parent {
+		macos.msg_void1(parent, 'addSublayer:', layer)
+	}
+	transaction := macos.Id(macos.get_class('CATransaction'))
+	macos.msg_void(transaction, 'begin')
+	macos.msg_void_bool(transaction, 'setDisableActions:', true)
+	macos.msg_void_rect(layer, 'setFrame:', macos.msg_rect(view, 'bounds'))
+	mut commands := []f64{cap: el.path.len * 7}
+	for cmd in el.path {
+		commands << f64(int(cmd.verb))
+		commands << cmd.x
+		commands << cmd.y
+		commands << cmd.cx1
+		commands << cmd.cy1
+		commands << cmd.cx2
+		commands << cmd.cy2
+	}
+	C.ui2_macos_set_shape_path(layer, commands.data, el.path.len)
+	style := el.shape_style
+	fill := if hex := style.fill {
+		native_cg_color(hex, style.fill_opacity)
+	} else {
+		objc_nil()
+	}
+	macos.msg_void1(layer, 'setFillColor:', fill)
+	stroke := if hex := style.stroke {
+		native_cg_color(hex, if style.stroke_width > 0 { style.stroke_opacity } else { 0.0 })
+	} else {
+		objc_nil()
+	}
+	macos.msg_void1(layer, 'setStrokeColor:', stroke)
+	macos.msg_void_f64(layer, 'setLineWidth:', style.stroke_width)
+	macos.msg_void1(layer, 'setLineJoin:', macos.nsstring(match style.line_join {
+		.round { 'round' }
+		.miter { 'miter' }
+		.bevel { 'bevel' }
+	}))
+	macos.msg_void1(layer, 'setLineCap:', macos.nsstring(match style.line_cap {
+		.round { 'round' }
+		.butt { 'butt' }
+		.square { 'square' }
+	}))
+	macos.msg_void1(layer, 'setFillRule:', macos.nsstring(if style.fill_rule == .even_odd {
+		'even-odd'
+	} else {
+		'non-zero'
+	}))
+	macos.msg_void(transaction, 'commit')
+}
+
+fn native_cg_color(hex u32, opacity f64) macos.Id {
+	color := macos.msg_id_f64(native_color(hex), 'colorWithAlphaComponent:', unit_clamp(opacity))
+	return macos.msg_id(color, 'CGColor')
+}
+
 fn native_set_associated_object(obj NativeView, key voidptr, value NativeView) {
 	macos.set_associated_object(obj, key, value, macos.assoc_retain_nonatomic)
 }
@@ -1967,22 +2263,35 @@ fn native_new_view(frame NativeRect, box BoxStyle, interactive bool) NativeView 
 	}
 	native := macos.msg_id_rect(macos.alloc(class_name), 'initWithFrame:', appkit_rect(frame))
 	native_set_box_background(native, box)
-	native_set_corner_radius(native, box.radius)
+	native_set_box_corners(native, box)
 	return native
 }
 
-fn native_new_scroll(frame NativeRect, box BoxStyle, persistent_scrollbars bool, mode ScrollMode) NativeView {
+fn native_new_scroll(frame NativeRect, box BoxStyle, persistent_scrollbars bool, mode ScrollMode, hidden bool) NativeView {
 	scroll_view := macos.msg_id_rect(macos.alloc('UI2ScrollView'), 'initWithFrame:', appkit_rect(frame))
-	native_set_scroll_axes(scroll_view, mode)
+	native_set_scroll_axes(scroll_view, mode, hidden)
 	native_set_scrollbar_mode(scroll_view, persistent_scrollbars)
 	native_set_scroll_background(scroll_view, box)
+	native_match_scroll_appearance(scroll_view, box)
 	return scroll_view
 }
 
-// native_set_scroll_axes gives a scroll view a scroller for each axis its mode scrolls.
-fn native_set_scroll_axes(scroll NativeView, mode ScrollMode) {
-	macos.msg_void_bool(scroll, 'setHasVerticalScroller:', mode != .horizontal_only)
-	macos.msg_void_bool(scroll, 'setHasHorizontalScroller:', mode != .vertical_only)
+// native_set_scroll_axes gives a scroll view a scroller for each axis its mode
+// scrolls, or none at all when the element hides them (`disable_scroll`).
+fn native_set_scroll_axes(scroll NativeView, mode ScrollMode, hidden bool) {
+	macos.msg_void_bool(scroll, 'setHasVerticalScroller:', !hidden && mode != .horizontal_only)
+	macos.msg_void_bool(scroll, 'setHasHorizontalScroller:', !hidden && mode != .vertical_only)
+}
+
+// native_match_scroll_appearance gives a scroll view's scrollers the light or
+// dark look of what they sit on: the scroll's fill, or the color a transparent
+// scroll names as its background.
+fn native_match_scroll_appearance(scroll NativeView, box BoxStyle) {
+	native_match_appearance(scroll, box, if native_color_is_light(box.bg) {
+		u32(0x000000)
+	} else {
+		u32(0xffffff)
+	})
 }
 
 fn native_set_scrollbar_mode(scroll NativeView, persistent bool) {
@@ -2003,13 +2312,16 @@ fn native_set_scroll_background(scroll NativeView, box BoxStyle) {
 	}
 }
 
-fn native_new_image(frame NativeRect, path string, rotation f64) NativeView {
+fn native_new_image(frame NativeRect, path string, rotation f64, tint u32) NativeView {
 	image_view := macos.msg_id_rect(macos.alloc('UI2PointerImageView'), 'initWithFrame:', appkit_rect(frame))
-	native_update_image(image_view, frame, path, rotation)
+	native_update_image(image_view, frame, path, rotation, tint)
 	return image_view
 }
 
-fn native_update_image(image_view NativeView, frame NativeRect, path string, rotation f64) {
+// A `symbol:` path draws that SF Symbol, scaled to the frame and tinted with the
+// element's text color the way the other backends tint its glyph; a file image
+// keeps its own colors.
+fn native_update_image(image_view NativeView, frame NativeRect, path string, rotation f64, tint u32) {
 	rotated := rotation < -0.001 || rotation > 0.001
 	native_view_reset_transform(image_view)
 	native_set_frame(image_view, frame)
@@ -2023,6 +2335,27 @@ fn native_update_image(image_view NativeView, frame NativeRect, path string, rot
 		macos.msg_void1(image_view, 'setImage:', macos.Id(unsafe { nil }))
 		return
 	}
+	tints := macos.responds_to(image_view, 'setContentTintColor:')
+	mut st := state()
+	pointer := u64(voidptr(image_view))
+	if path.starts_with('symbol:') {
+		// Looking a symbol up and tinting it again on every refresh cost half the
+		// main thread while an animation kept the window refreshing.
+		symbol_sig := '${path}:${tint}'
+		if (st.image_symbols[pointer] or { '' }) == symbol_sig {
+			return
+		}
+		st.image_symbols[pointer] = symbol_sig
+		macos.msg_void1(image_view, 'setImage:', native_image_from_name(path))
+		if tints {
+			macos.msg_void1(image_view, 'setContentTintColor:', native_color(tint))
+		}
+		return
+	}
+	st.image_symbols.delete(pointer)
+	if tints {
+		macos.msg_void1(image_view, 'setContentTintColor:', macos.Id(unsafe { nil }))
+	}
 	img := macos.msg_id1(macos.alloc('NSImage'), 'initWithContentsOfFile:', macos.nsstring(path))
 	macos.msg_void1(image_view, 'setImage:', img)
 	if !native_is_nil(img) {
@@ -2030,7 +2363,7 @@ fn native_update_image(image_view NativeView, frame NativeRect, path string, rot
 	}
 }
 
-fn native_new_label(frame NativeRect, text string, text_hex u32, size f64, bold bool, italic bool, underline bool, align int, lines int, valign VAlign, boxed bool) NativeView {
+fn native_new_label(frame NativeRect, text string, text_hex u32, size f64, family string, bold bool, italic bool, underline bool, align int, lines int, valign VAlign, boxed bool) NativeView {
 	inner := if boxed {
 		NativeRect{
 			width:  frame.width
@@ -2046,14 +2379,14 @@ fn native_new_label(frame NativeRect, text string, text_hex u32, size f64, bold 
 	}
 	field := macos.msg_id_rect(macos.alloc(label_class), 'initWithFrame:', appkit_rect(inner))
 	if !boxed {
-		native_update_label(field, frame, text, text_hex, size, bold, italic, underline,
-			align, lines, valign, boxed)
+		native_update_label(field, frame, text, text_hex, size, family, bold, italic,
+			underline, align, lines, valign, boxed)
 		return field
 	}
 	container := macos.msg_id_rect(macos.alloc('UI2FlippedView'), 'initWithFrame:', appkit_rect(frame))
 	native_add_subview(container, field)
 	macos.release(field)
-	native_update_label(container, frame, text, text_hex, size, bold, italic, underline,
+	native_update_label(container, frame, text, text_hex, size, family, bold, italic, underline,
 		align, lines, valign, boxed)
 	return container
 }
@@ -2078,7 +2411,7 @@ fn label_text_field(view NativeView) NativeView {
 	return NativeView(macos.msg_id_u64(subviews, 'objectAtIndex:', 0))
 }
 
-fn native_update_label(view NativeView, frame NativeRect, text string, text_hex u32, size f64, bold bool, italic bool, underline bool, align int, lines int, valign VAlign, boxed bool) {
+fn native_update_label(view NativeView, frame NativeRect, text string, text_hex u32, size f64, family string, bold bool, italic bool, underline bool, align int, lines int, valign VAlign, boxed bool) {
 	native_set_frame(view, frame)
 	label_view := if boxed { label_text_field(view) } else { view }
 	macos.msg_void1(label_view, 'setStringValue:', macos.nsstring(text))
@@ -2088,19 +2421,52 @@ fn native_update_label(view NativeView, frame NativeRect, text string, text_hex 
 	macos.msg_void_bool(label_view, 'setBezeled:', false)
 	macos.msg_void_bool(label_view, 'setDrawsBackground:', false)
 	macos.msg_void1(label_view, 'setTextColor:', native_color(text_hex))
-	macos.msg_void1(label_view, 'setFont:', native_font(size, bold, italic))
+	macos.msg_void1(label_view, 'setFont:', native_text_style_font(TextStyle{
+		size:        size
+		font_family: family
+		bold:        bold
+		italic:      italic
+	}))
 	if italic || underline {
-		native_control_set_attributed_title(label_view, text, text_hex, size, bold, italic, underline)
+		native_control_set_attributed_title(label_view, text, text_hex, size, family, bold, italic,
+			underline, align, lines)
 	}
-	macos.msg_void_i64(label_view, 'setAlignment:', i64(align))
+	macos.msg_void_i64(label_view, 'setAlignment:', native_text_alignment(align))
 	native_apply_line_limit(label_view, lines)
-	// Only NSTextField carries a line budget; an NSButton has none to set.
-	macos.msg_void_i64(label_view, 'setMaximumNumberOfLines:', i64(if lines > 1 {
+	// Only NSTextField carries a line budget; an NSButton has none to set. Zero
+	// is no limit, for both NSTextField and ui2.
+	macos.msg_void_i64(label_view, 'setMaximumNumberOfLines:', i64(if lines > 0 {
 		lines
 	} else {
-		1
+		0
 	}))
 	native_place_label_text(label_view, frame, lines, valign, boxed)
+}
+
+// native_measure_text_width asks an off-screen label, set up as native_update_label
+// sets labels up, for the size of its cell: the text's width plus the inset an
+// NSTextField draws it with.
+fn native_measure_text_width(text string, style TextStyle) f64 {
+	mut st := state()
+	if native_is_nil(st.measure_label) {
+		st.measure_label = macos.msg_id_rect(macos.alloc('NSTextField'), 'initWithFrame:',
+			appkit_rect(native_rect(0, 0, 100, 20)))
+		macos.msg_void_bool(st.measure_label, 'setEditable:', false)
+		macos.msg_void_bool(st.measure_label, 'setSelectable:', false)
+		macos.msg_void_bool(st.measure_label, 'setBordered:', false)
+		macos.msg_void_bool(st.measure_label, 'setBezeled:', false)
+		macos.msg_void_bool(st.measure_label, 'setDrawsBackground:', false)
+		native_apply_line_limit(st.measure_label, 1)
+	}
+	field := st.measure_label
+	macos.msg_void1(field, 'setFont:', native_text_style_font(TextStyle{
+		size:        style.size
+		font_family: style.font_family
+		bold:        style.bold
+		italic:      style.italic
+	}))
+	macos.msg_void1(field, 'setStringValue:', macos.nsstring(text))
+	return macos.msg_point(macos.msg_id(field, 'cell'), 'cellSize').x
 }
 
 // Put the text field back over the whole area the label was laid out with, then move
@@ -2116,7 +2482,33 @@ fn native_place_label_text(label_view NativeView, frame NativeRect, lines int, v
 	} else {
 		frame
 	})
-	native_apply_label_valign(label_view, frame, lines, valign, boxed)
+	mut drawn_lines := lines
+	if lines != 1 && native_label_fits_one_line(label_view, frame) {
+		// Text that may wrap but needs one line at this width is drawn as one line.
+		// Left to wrap, a centered field barely wider than its text drew it twice,
+		// at two letter spacings, as if laid out once wrapped and once not.
+		native_apply_line_limit(label_view, 1)
+		macos.msg_void_i64(label_view, 'setMaximumNumberOfLines:', 1)
+		drawn_lines = 1
+	}
+	native_apply_label_valign(label_view, frame, drawn_lines, valign, boxed)
+	if drawn_lines == 1 && macos.msg_i64(label_view, 'alignment') == native_text_alignment(1) {
+		// A centered line cut to the width measure_text_width reports came out
+		// shortened to an ellipsis, though the same field fits it left or right
+		// aligned. The field is widened by a few points on each side, which keeps
+		// the text where it was and gives AppKit the room it wants.
+		field_frame := macos.msg_rect(label_view, 'frame')
+		macos.msg_void_rect(label_view, 'setFrame:', macos.rect(field_frame.x - native_centered_label_slack,
+			field_frame.y, field_frame.width + native_centered_label_slack * 2, field_frame.height))
+	}
+}
+
+const native_centered_label_slack = 4.0
+
+fn native_label_fits_one_line(label_view NativeView, frame NativeRect) bool {
+	wrapped := native_label_content_height(label_view, frame, 0)
+	single := native_label_content_height(label_view, frame, 1)
+	return wrapped > 0 && single > 0 && wrapped <= single + 0.5
 }
 
 // A text field draws its content from the top of its frame however tall that frame
@@ -2158,10 +2550,13 @@ fn native_apply_label_valign(label_view NativeView, frame NativeRect, lines int,
 // it had to break against. Telling the field that width makes its intrinsic size the
 // size the text really wants, so that is what a wrapping label is measured by.
 //
-// One line needs no measuring at all: it is the font's own line height, which the
-// font's metrics give directly, so a grid of labels pays no layout pass for it.
+// One line is not the font's ascender, descender and leading: the cell lays it out a
+// little taller, and some faces (Helvetica) much taller, so a field cut to those
+// metrics clips descenders. A line of ASCII is as tall as its font makes it, so that
+// is measured once per font and a grid of labels pays no layout pass for it. Other
+// text may draw with a taller fallback face and is measured each time.
 fn native_label_content_height(label_view NativeView, frame NativeRect, lines int) f64 {
-	if lines > 1 {
+	if lines != 1 {
 		macos.msg_void_f64(label_view, 'setPreferredMaxLayoutWidth:', frame.width)
 		// Point carries a Cocoa size as well as a point; y is the height.
 		return macos.msg_point(label_view, 'intrinsicContentSize').y
@@ -2170,9 +2565,27 @@ fn native_label_content_height(label_view NativeView, frame NativeRect, lines in
 	if native_is_nil(font) {
 		return 0
 	}
-	// descender is reported as a negative distance below the baseline.
-	return macos.msg_f64(font, 'ascender') - macos.msg_f64(font, 'descender') +
-		macos.msg_f64(font, 'leading')
+	label_text := macos.utf8_string(macos.msg_id(label_view, 'stringValue'))
+	if label_text.len == 0 {
+		return 0
+	}
+	if !label_text.is_ascii() {
+		return native_single_line_height(label_view)
+	}
+	key := '${macos.utf8_string(macos.msg_id(font, 'fontName'))}:${macos.msg_f64(font, 'pointSize')}'
+	mut st := state()
+	if height := st.label_line_heights[key] {
+		return height
+	}
+	height := native_single_line_height(label_view)
+	st.label_line_heights[key] = height
+	return height
+}
+
+// A width left over from when the label wrapped would make it measure as wrapped.
+fn native_single_line_height(label_view NativeView) f64 {
+	macos.msg_void_f64(label_view, 'setPreferredMaxLayoutWidth:', 0)
+	return macos.msg_point(label_view, 'intrinsicContentSize').y
 }
 
 // NSLineBreakMode values.
@@ -2184,8 +2597,11 @@ const ns_line_break_by_truncating_tail = 4
 // means anything if the text may flow onto them, so the break mode has to change with
 // it: left at truncate-tail, a multi-line label still laid its text out on one line
 // and clipped the rest, and asking for more lines did nothing.
+// A budget of 0 (or less) wraps as many lines as the frame shows. The build pass
+// normally turns it into a large budget first, but an element styled after that
+// pass must not collapse onto one line.
 fn native_apply_line_limit(view NativeView, lines int) {
-	single := lines <= 1
+	single := lines == 1
 	cell := macos.msg_id(view, 'cell')
 	macos.msg_void_i64(cell, 'setLineBreakMode:', if single {
 		ns_line_break_by_truncating_tail
@@ -2206,6 +2622,7 @@ struct ShortenedText {
 	width     f64
 	height    f64
 	size      f64
+	family    string
 	bold      bool
 	italic    bool
 	image     string
@@ -2230,7 +2647,7 @@ fn native_hover_text(key string, native NativeView, el Element) string {
 	if cached := st.node_shortened[key] {
 		if cached.text == full_text && cached.width == el.frame.width
 			&& cached.height == el.frame.height && cached.size == el.text_style.size
-			&& cached.bold == el.text_style.bold && cached.italic == el.text_style.italic
+			&& cached.family == el.text_style.font_family && cached.bold == el.text_style.bold && cached.italic == el.text_style.italic
 			&& cached.image == el.image_path {
 			return if cached.shortened { full_text } else { '' }
 		}
@@ -2241,6 +2658,7 @@ fn native_hover_text(key string, native NativeView, el Element) string {
 		width:     el.frame.width
 		height:    el.frame.height
 		size:      el.text_style.size
+		family:    el.text_style.font_family
 		bold:      el.text_style.bold
 		italic:    el.text_style.italic
 		image:     el.image_path
@@ -2255,7 +2673,7 @@ fn native_hover_text(key string, native NativeView, el Element) string {
 fn shortenable_text(el Element) string {
 	return match el.kind {
 		.label, .button, .toggle_button, .checkbox {
-			if el.text_style.lines > 1 { '' } else { el.text }
+			if el.text_style.lines != 1 { '' } else { el.text }
 		}
 		.dropdown {
 			el.text
@@ -2329,9 +2747,10 @@ fn native_update_button(button_view NativeView, frame NativeRect, title string, 
 		macos.msg_void_i64(button_view, 'setButtonType:', ns_button_type_momentary_change)
 		macos.msg_void_bool(button_view, 'setBordered:', false)
 		macos.msg_void1(button_view, 'setFont:', native_font(size, bold, italic))
-		native_control_set_attributed_title(button_view, title, text_hex, size, bold, italic, underline)
+		native_button_set_attributed_title(button_view, title, text_hex, size, bold, italic, underline,
+			lines)
 		native_set_box_background(button_view, box)
-		native_set_corner_radius(button_view, box.radius)
+		native_set_box_corners(button_view, box)
 	}
 	native_apply_line_limit(button_view, lines)
 	native_update_button_image(button_view, frame, image_name)
@@ -2351,6 +2770,8 @@ fn native_update_checkbox(checkbox_view NativeView, el Element) {
 	macos.msg_void_i64(checkbox_view, 'setState:', if el.checked { i64(1) } else { i64(0) })
 	macos.msg_void_bool(checkbox_view, 'setAllowsMixedState:', false)
 	macos.msg_void1(checkbox_view, 'setFont:', native_font(el.text_style.size, el.text_style.bold, el.text_style.italic))
+	native_checkbox_set_title(checkbox_view, el.text, el.text_style)
+	native_match_appearance(checkbox_view, el.box, el.text_style.color)
 }
 
 fn native_new_switch_control(el Element) NativeView {
@@ -2454,18 +2875,28 @@ fn native_update_dropdown(popup NativeView, el Element) {
 	macos.msg_void1(popup, 'setFont:', native_font(el.text_style.size, el.text_style.bold, el.text_style.italic))
 	macos.msg_void_bool(popup, 'setBordered:', box_draws_fill(el.box))
 	macos.msg_void_u64(popup, 'setBezelStyle:', 1)
+	native_match_appearance(popup, el.box, el.text_style.color)
 }
 
 fn native_new_text_field(el Element) NativeView {
 	frame := element_rect(el.frame)
 	cls := if el.secure { 'NSSecureTextField' } else { 'NSTextField' }
 	field := macos.msg_id_rect(macos.alloc(cls), 'initWithFrame:', appkit_rect(frame))
+	cell_class := if el.secure { 'UI2SecureTextFieldCell' } else { 'UI2TextFieldCell' }
+	if macos.get_class(cell_class) != unsafe { nil } {
+		cell := macos.msg_id1(macos.alloc(cell_class), 'initTextCell:', macos.nsstring(''))
+		macos.msg_void_bool(cell, 'setScrollable:', true)
+		macos.msg_void_bool(cell, 'setWraps:', false)
+		macos.msg_void_bool(cell, 'setUsesSingleLineMode:', true)
+		macos.msg_void1(field, 'setCell:', cell)
+		macos.release(cell)
+	}
 	native_update_text_field(field, frame, el.placeholder, el.text, el.box, el.text_style.color,
-		el.text_style.size, true, el.readonly, el.enabled)
+		el.text_style.size, true, el.readonly, el.enabled, el.text_style.align, el.padding_left)
 	return field
 }
 
-fn native_update_text_field(field NativeView, frame NativeRect, placeholder string, text string, box BoxStyle, text_hex u32, size f64, declared_text_changed bool, readonly bool, enabled bool) {
+fn native_update_text_field(field NativeView, frame NativeRect, placeholder string, text string, box BoxStyle, text_hex u32, size f64, declared_text_changed bool, readonly bool, enabled bool, align Align, padding_left f64) {
 	native_set_frame(field, frame)
 	// Unrelated refreshes preserve native edits. A changed declaration remains
 	// controlled and is applied explicitly.
@@ -2475,17 +2906,139 @@ fn native_update_text_field(field NativeView, frame NativeRect, placeholder stri
 	macos.msg_void1(field, 'setPlaceholderString:', macos.nsstring(placeholder))
 	macos.msg_void1(field, 'setTextColor:', native_color(text_hex))
 	macos.msg_void1(field, 'setFont:', native_font(size, false, false))
-	macos.msg_void_bool(field, 'setBordered:', true)
-	macos.msg_void_bool(field, 'setBezeled:', true)
-	macos.msg_void_u64(field, 'setBezelStyle:', 1)
-	draws_background := box_draws_fill(box)
-	macos.msg_void_bool(field, 'setDrawsBackground:', draws_background)
-	if draws_background {
-		macos.msg_void1(field, 'setBackgroundColor:', native_color(box.bg))
+	macos.msg_void_i64(field, 'setAlignment:', native_text_alignment(align_value(align)))
+	// A box that draws its own border styles the field: the native bezel would
+	// draw a second frame inside it, so the field goes without one and shows
+	// the box's fill, corners and border. Otherwise AppKit's rounded bezel is
+	// the field's look.
+	styled := box_draws_border(box)
+	macos.msg_void_bool(field, 'setBordered:', !styled)
+	macos.msg_void_bool(field, 'setBezeled:', !styled)
+	if !styled {
+		macos.msg_void_u64(field, 'setBezelStyle:', 1)
 	}
+	native_text_cell_set_padding(field, padding_left)
+	draws_background := box_draws_fill(box)
+	if styled {
+		// Without a bezel the cell fills only the line of text it draws, so the
+		// view's layer paints the box: fill and corners, under the border.
+		macos.msg_void_bool(field, 'setDrawsBackground:', false)
+		native_set_box_background(field, box)
+		native_set_box_corners(field, box)
+	} else {
+		macos.msg_void_bool(field, 'setDrawsBackground:', draws_background)
+		if draws_background {
+			macos.msg_void1(field, 'setBackgroundColor:', native_color(box.bg))
+		}
+		if macos.msg_bool(field, 'wantsLayer') {
+			// It was styled before: its layer no longer paints a box.
+			native_set_box_background(field, BoxStyle{
+				transparent: true
+			})
+		}
+	}
+	native_match_appearance(field, box, text_hex)
 	macos.msg_void_bool(field, 'setEditable:', !readonly && enabled)
 	macos.msg_void_bool(field, 'setSelectable:', true)
 	macos.msg_void_bool(field, 'setEnabled:', enabled)
+}
+
+// The superclass of a ui2 text field cell, which its overrides pass on to.
+fn native_text_cell_superclass(cell voidptr) voidptr {
+	return C.class_getSuperclass(C.object_getClass(cell))
+}
+
+fn native_text_cell_padding_key() voidptr {
+	return voidptr(macos.sel('ui2_cell_padding_assoc'))
+}
+
+fn native_text_cell_set_padding(field NativeView, padding f64) {
+	cell := macos.msg_id(field, 'cell')
+	if native_is_nil(cell) {
+		return
+	}
+	number := macos.msg_id_f64(macos.get_class('NSNumber'), 'numberWithDouble:', padding)
+	native_set_associated_object(cell, native_text_cell_padding_key(), number)
+}
+
+// native_text_cell_rect is where a field without a bezel draws and edits its
+// text: one line tall, centered in the field, and moved in by its
+// padding_left. A bezeled field keeps the rectangle AppKit gives it.
+fn native_text_cell_rect(cell voidptr, rect C.ui2_macos_rect) C.ui2_macos_rect {
+	if macos.msg_bool(macos.Id(cell), 'isBezeled') {
+		return rect
+	}
+	number := macos.get_associated_object(macos.Id(cell), native_text_cell_padding_key())
+	padding := if native_is_nil(number) { 0.0 } else { macos.msg_f64(number, 'doubleValue') }
+	mut height := rect.height
+	font := macos.msg_id(macos.Id(cell), 'font')
+	if !native_is_nil(font) {
+		line := math.ceil(macos.msg_f64(font, 'ascender') - macos.msg_f64(font, 'descender') +
+			macos.msg_f64(font, 'leading'))
+		if line > 0 && line < rect.height {
+			height = line
+		}
+	}
+	return C.ui2_macos_rect{
+		x:      rect.x + padding
+		y:      rect.y + (rect.height - height) / 2
+		width:  math.max(rect.width - padding * 2, 0)
+		height: height
+	}
+}
+
+@[export: 'ui2_text_cell_drawing_rect']
+fn ui2_text_cell_drawing_rect(cell voidptr, cmd voidptr, bounds C.ui2_macos_rect) C.ui2_macos_rect {
+	base := C.ui2_macos_msg_super_rect_rect(cell, native_text_cell_superclass(cell), cmd,
+		bounds)
+	return native_text_cell_rect(cell, base)
+}
+
+// Editing starts in the rectangle the text is drawn in, so the caret and the
+// text do not jump when the field takes focus.
+@[export: 'ui2_text_cell_edit']
+fn ui2_text_cell_edit(cell voidptr, cmd voidptr, frame C.ui2_macos_rect, view voidptr, editor voidptr, delegate voidptr, event voidptr) {
+	C.ui2_macos_msg_super_cell_edit(cell, native_text_cell_superclass(cell), cmd, native_text_cell_edit_frame(cell,
+		frame), view, editor, delegate, event)
+}
+
+@[export: 'ui2_text_cell_select']
+fn ui2_text_cell_select(cell voidptr, cmd voidptr, frame C.ui2_macos_rect, view voidptr, editor voidptr, delegate voidptr, start i64, length i64) {
+	C.ui2_macos_msg_super_cell_select(cell, native_text_cell_superclass(cell), cmd, native_text_cell_edit_frame(cell,
+		frame), view, editor, delegate, start, length)
+}
+
+// The frame editing is given is the rectangle the text is drawn in: the field
+// editor is placed on it as it is, so the text does not move when editing
+// starts.
+fn native_text_cell_edit_frame(cell voidptr, frame C.ui2_macos_rect) C.ui2_macos_rect {
+	return native_text_cell_rect(cell, frame)
+}
+
+// native_match_appearance gives a native control the light or dark system
+// appearance its declared colors call for, so its bezel, check box, placeholder
+// and insertion point suit a light or dark ui2 theme whatever the system's own
+// appearance is. A filled control goes by its fill, an unfilled one by its text:
+// light text on an unfilled field would otherwise sit on a light bezel.
+fn native_match_appearance(view NativeView, box BoxStyle, text_hex u32) {
+	dark := if box_draws_fill(box) {
+		!native_color_is_light(box.bg)
+	} else {
+		native_color_is_light(text_hex)
+	}
+	name := if dark { 'NSAppearanceNameDarkAqua' } else { 'NSAppearanceNameAqua' }
+	appearance := macos.msg_id1(macos.get_class('NSAppearance'), 'appearanceNamed:',
+		macos.nsstring(name))
+	macos.msg_void1(view, 'setAppearance:', appearance)
+}
+
+// native_color_is_light reports whether a 0xRRGGBB color's relative luminance
+// is above the middle.
+fn native_color_is_light(hex u32) bool {
+	r := f64((hex >> 16) & 0xff) / 255.0
+	g := f64((hex >> 8) & 0xff) / 255.0
+	b := f64(hex & 0xff) / 255.0
+	return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5
 }
 
 // native_new_text_area builds an NSScrollView wrapping an NSTextView —
@@ -2494,6 +3047,7 @@ fn native_new_text_area(el Element) NativeView {
 	frame := element_rect(el.frame)
 	if el.disable_scroll {
 		tv := native_new_text_view(appkit_rect(frame), el)
+		native_match_appearance(tv, el.box, el.text_style.color)
 		return tv
 	}
 	scroll_view := macos.msg_id_rect(macos.alloc('NSScrollView'), 'initWithFrame:', appkit_rect(frame))
@@ -2504,6 +3058,7 @@ fn native_new_text_area(el Element) NativeView {
 	macos.msg_void1(scroll_view, 'setDocumentView:', tv)
 	macos.release(tv)
 	native_set_corner_radius(scroll_view, el.box.radius)
+	native_match_appearance(scroll_view, el.box, el.text_style.color)
 	return scroll_view
 }
 
@@ -2543,12 +3098,17 @@ fn native_update_text_area(native NativeView, el Element, declared_text_changed 
 	}
 	macos.msg_void_bool(tv, 'setEditable:', !el.readonly && el.enabled)
 	macos.msg_void_bool(tv, 'setSelectable:', true)
-	macos.msg_void1(tv, 'setFont:', native_text_style_font(el.text_style))
-	macos.msg_void1(tv, 'setTextColor:', native_color(el.text_style.color))
+	if el.text_runs.len == 0 {
+		// Both apply to all of the text, so a rich text area keeps the fonts and
+		// colors its runs gave it; its base style goes in with its content.
+		macos.msg_void1(tv, 'setFont:', native_text_style_font(el.text_style))
+		macos.msg_void1(tv, 'setTextColor:', native_color(el.text_style.color))
+	}
 	macos.msg_void_bool(tv, 'setDrawsBackground:', box_draws_fill(el.box))
 	if box_draws_fill(el.box) {
 		macos.msg_void1(tv, 'setBackgroundColor:', native_color(el.box.bg))
 	}
+	native_match_appearance(native, el.box, el.text_style.color)
 	current := macos.utf8_string(macos.msg_id(tv, 'string'))
 	replace_text := declared_text_changed && current != el.text
 	if replace_text || content_changed {
@@ -2669,14 +3229,124 @@ fn native_set_background(view NativeView, hex u32) {
 	macos.msg_void1(layer, 'setBackgroundColor:', macos.msg_id(native_color(hex), 'CGColor'))
 }
 
+// native_set_box_background paints what a BoxStyle puts beneath its borders: the
+// solid fill at its opacity or a CAGradientLayer, and the drop shadow.
 fn native_set_box_background(view NativeView, box BoxStyle) {
-	if box_draws_fill(box) {
-		native_set_background(view, box.bg)
-		return
-	}
 	macos.msg_void_bool(view, 'setWantsLayer:', true)
 	layer := macos.msg_id(view, 'layer')
-	macos.msg_void1(layer, 'setBackgroundColor:', macos.Id(unsafe { nil }))
+	transaction := macos.Id(macos.get_class('CATransaction'))
+	macos.msg_void(transaction, 'begin')
+	macos.msg_void_bool(transaction, 'setDisableActions:', true)
+	opacity := box_fill_opacity(box)
+	// A control draws its title in its own layer, beneath any sublayer, so only
+	// views take a gradient; a button keeps its solid fill.
+	gradient := box_has_gradient(box)
+		&& !macos.msg_bool_id(view, 'isKindOfClass:', macos.get_class('NSControl'))
+	if gradient {
+		macos.msg_void1(layer, 'setBackgroundColor:', macos.Id(unsafe { nil }))
+		native_set_gradient_layer(view, layer, box, opacity)
+	} else {
+		native_hide_gradient_layer(view)
+		fill := if opacity <= 0 {
+			macos.Id(unsafe { nil })
+		} else if opacity < 1 {
+			macos.msg_id(macos.msg_id_f64(native_color(box.bg), 'colorWithAlphaComponent:',
+				opacity), 'CGColor')
+		} else {
+			macos.msg_id(native_color(box.bg), 'CGColor')
+		}
+		macos.msg_void1(layer, 'setBackgroundColor:', fill)
+	}
+	native_set_layer_shadow(view, layer, box)
+	macos.msg_void(transaction, 'commit')
+}
+
+fn native_gradient_key() voidptr {
+	return voidptr(macos.sel('ui2_gradient_assoc'))
+}
+
+// The gradient is a sublayer kept behind the subviews' layers and the borders by
+// its z position, sized to the view and rounded like it, since a shadowed box
+// cannot clip its sublayers.
+fn native_set_gradient_layer(view NativeView, layer macos.Id, box BoxStyle, opacity f64) {
+	mut gradient := NativeView(macos.get_associated_object(view, native_gradient_key()))
+	if native_is_nil(gradient) {
+		gradient = macos.msg_id(macos.alloc('CAGradientLayer'), 'init')
+		macos.msg_void_f64(gradient, 'setZPosition:', -1000)
+		native_set_associated_object(view, native_gradient_key(), gradient)
+		macos.release(gradient)
+	}
+	if macos.msg_id(gradient, 'superlayer') != layer {
+		macos.msg_void1(layer, 'addSublayer:', gradient)
+	}
+	layer_bounds := macos.msg_rect(view, 'bounds')
+	macos.msg_void_rect(gradient, 'setFrame:', layer_bounds)
+	macos.msg_void_f64(gradient, 'setCornerRadius:', box.radius)
+	stops := gradient_sorted_stops(box.gradient)
+	colors := macos.msg_id(macos.alloc('NSMutableArray'), 'init')
+	locations := macos.msg_id(macos.alloc('NSMutableArray'), 'init')
+	for stop in stops {
+		color := macos.msg_id_f64(native_color(stop.color), 'colorWithAlphaComponent:', stop.opacity * opacity)
+		macos.msg_void1(colors, 'addObject:', macos.msg_id(color, 'CGColor'))
+		macos.msg_void1(locations, 'addObject:', macos.msg_id_f64(macos.get_class('NSNumber'),
+			'numberWithDouble:', stop.position))
+	}
+	macos.msg_void1(gradient, 'setColors:', colors)
+	macos.msg_void1(gradient, 'setLocations:', locations)
+	macos.release(colors)
+	macos.release(locations)
+	// The gradient runs along a line in the box's top-left based points; the layer
+	// takes its ends as fractions of its bounds, with y up unless the view flips it.
+	line := gradient_line(box.gradient.angle, layer_bounds.width, layer_bounds.height)
+	w := if layer_bounds.width > 0 { layer_bounds.width } else { 1.0 }
+	h := if layer_bounds.height > 0 { layer_bounds.height } else { 1.0 }
+	sx, sy, ex, ey := gradient_unit_points(line, w, h)
+	flipped := macos.msg_bool(view, 'isFlipped')
+	y0 := if flipped { sy } else { 1 - sy }
+	y1 := if flipped { ey } else { 1 - ey }
+	macos.msg_void_point(gradient, 'setStartPoint:', macos.point(sx, y0))
+	macos.msg_void_point(gradient, 'setEndPoint:', macos.point(ex, y1))
+	macos.msg_void_bool(gradient, 'setHidden:', false)
+}
+
+fn native_hide_gradient_layer(view NativeView) {
+	gradient := NativeView(macos.get_associated_object(view, native_gradient_key()))
+	if !native_is_nil(gradient) {
+		macos.msg_void_bool(gradient, 'setHidden:', true)
+	}
+}
+
+// A layer-backed view owns its layer's shadow through its NSShadow and resets the
+// layer's shadow opacity whenever it has none, so the shadow is given to the view.
+// The rounded shadow path then lets CoreAnimation draw it from the box's shape
+// rather than from its rendered content, which a transparent box does not have.
+fn native_set_layer_shadow(view NativeView, layer macos.Id, box BoxStyle) {
+	if !box_has_shadow(box) {
+		if !objc_is_nil(macos.msg_id(view, 'shadow')) {
+			macos.msg_void1(view, 'setShadow:', objc_nil())
+		}
+		return
+	}
+	shadow := box.shadow
+	ns_shadow := macos.msg_id(macos.alloc('NSShadow'), 'init')
+	macos.msg_void1(ns_shadow, 'setShadowColor:', macos.msg_id_f64(native_color(shadow.color),
+		'colorWithAlphaComponent:', unit_clamp(shadow.opacity)))
+	// AppKit hands the blur radius to CoreAnimation, whose radius is the blur's
+	// standard deviation: about half the CSS-style blur the box declares.
+	macos.msg_void_f64(ns_shadow, 'setShadowBlurRadius:', if shadow.blur > 0 { shadow.blur / 2 } else { 0.0 })
+	// NSShadow measures its offset upward, whatever the view's flipping.
+	macos.msg_void_point(ns_shadow, 'setShadowOffset:', macos.point(shadow.x, -shadow.y))
+	macos.msg_void1(view, 'setShadow:', ns_shadow)
+	macos.release(ns_shadow)
+	layer_bounds := macos.msg_rect(view, 'bounds')
+	C.ui2_macos_set_shadow_path(layer, -shadow.spread, -shadow.spread, layer_bounds.width + 2 * shadow.spread,
+		layer_bounds.height + 2 * shadow.spread, box.radius + shadow.spread)
+}
+
+// A rounded box clips its subviews to its corners, except when it casts a shadow:
+// a layer that masks to its bounds masks its own shadow away too.
+fn native_box_clips(box BoxStyle) bool {
+	return box.radius > 0 && !box_has_shadow(box)
 }
 
 fn native_set_corner_radius(view NativeView, radius f64) {
@@ -2684,6 +3354,13 @@ fn native_set_corner_radius(view NativeView, radius f64) {
 	layer := macos.msg_id(view, 'layer')
 	macos.msg_void_f64(layer, 'setCornerRadius:', radius)
 	macos.msg_void_bool(layer, 'setMasksToBounds:', radius > 0)
+}
+
+fn native_set_box_corners(view NativeView, box BoxStyle) {
+	macos.msg_void_bool(view, 'setWantsLayer:', true)
+	layer := macos.msg_id(view, 'layer')
+	macos.msg_void_f64(layer, 'setCornerRadius:', box.radius)
+	macos.msg_void_bool(layer, 'setMasksToBounds:', native_box_clips(box))
 }
 
 fn native_set_border_layer(view NativeView, side string, frame NativeRect, color u32, visible bool) {
@@ -2717,18 +3394,30 @@ fn native_set_box_borders(view NativeView, box BoxStyle) {
 	top := box_border_width(box.border_top, view_bounds.height)
 	right := box_border_width(box.border_right, view_bounds.width)
 	bottom := box_border_width(box.border_bottom, view_bounds.height)
-	if left <= 0 && top <= 0 && right <= 0 && bottom <= 0 {
+	rounded := box_rounded_border(box)
+	if (left <= 0 && top <= 0 && right <= 0 && bottom <= 0) || rounded > 0 {
 		for side in ['left', 'top', 'right', 'bottom'] {
 			native_set_border_layer(view, side, NativeRect{}, box.border_color, false)
 		}
+	}
+	if left <= 0 && top <= 0 && right <= 0 && bottom <= 0 {
+		macos.msg_void_f64(macos.msg_id(view, 'layer'), 'setBorderWidth:', 0)
 		return
 	}
 	macos.msg_void_bool(view, 'setWantsLayer:', true)
+	layer := macos.msg_id(view, 'layer')
 	if box.radius > 0 {
-		layer := macos.msg_id(view, 'layer')
 		macos.msg_void_f64(layer, 'setCornerRadius:', box.radius)
-		macos.msg_void_bool(layer, 'setMasksToBounds:', true)
+		macos.msg_void_bool(layer, 'setMasksToBounds:', native_box_clips(box))
 	}
+	// An even border on a rounded box is the layer's own, which follows the
+	// corners; straight side layers would leave them bare.
+	if rounded > 0 {
+		macos.msg_void_f64(layer, 'setBorderWidth:', rounded)
+		macos.msg_void1(layer, 'setBorderColor:', macos.msg_id(native_color(box.border_color), 'CGColor'))
+		return
+	}
+	macos.msg_void_f64(layer, 'setBorderWidth:', 0)
 	transaction := macos.Id(macos.get_class('CATransaction'))
 	macos.msg_void(transaction, 'begin')
 	macos.msg_void_bool(transaction, 'setDisableActions:', true)
@@ -2777,6 +3466,10 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 	install_declared_menus()
 	frame := native_rect(120, 120, f64(st.run_config.width), f64(st.run_config.height))
 	st.window = native_new_window(frame, st.run_config.title)
+	// The handle published by run_window is nil on macOS because the window
+	// only exists once the app has finished launching; publish the real
+	// NSWindow now so native_window_handle() reports it to embedders.
+	menu_update_window(st.window)
 	native_set_content_min_size(st.window, f64(st.run_config.min_width),
 		f64(st.run_config.min_height))
 	// The app delegate doubles as window delegate for windowDidResize:
@@ -2785,6 +3478,7 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 	st.root_view = native_new_flipped_view(root_frame, BoxStyle{
 		bg: 0xffffff
 	})
+	C.ui2_macos_add_tracking_area(st.root_view)
 	native_register_drop_types(st.root_view)
 	native_set_content_view(st.window, st.root_view)
 	macos.release(st.root_view)
@@ -2794,6 +3488,7 @@ fn ui2_app_did_finish_launching(_self voidptr, _cmd voidptr, _notification voidp
 	native_make_key_and_order_front(st.window)
 	native_activate()
 	refresh()
+	fire_window_ready()
 }
 
 fn fire_pointer_event(native NativeView, phase string, event voidptr) {
@@ -2961,12 +3656,32 @@ fn ui2_control_text_changed(_self voidptr, _cmd voidptr, notification voidptr) {
 @[export: 'ui2_control_do_command']
 fn ui2_control_do_command(_self voidptr, _cmd voidptr, control voidptr, _text_view voidptr, command voidptr) bool {
 	mut st := state()
-	if voidptr(st.key_handler) == unsafe { nil }
-		|| u64(control) !in st.control_change_ids {
+	if u64(control) !in st.control_change_ids {
 		return false
 	}
-	key := text_command_key(command, native_current_event_modifier_flags()) or { return false }
-	if key != 'tab' && key != 'shift+tab' {
+	modifiers := native_current_event_modifier_flags()
+	key := text_command_key(command, modifiers) or { return false }
+	// The field editor turns Backspace and Delete into commands before any key
+	// handler sees them, so on_key_event is offered the key here, and a handler
+	// that consumes it (moving back from an empty code cell, say) keeps the field
+	// from acting on it.
+	if key in ['backspace', 'forward_delete'] {
+		if voidptr(st.key_event_handler) == unsafe { nil } {
+			return false
+		}
+		st.key_consumed = false
+		st.key_event_handler(KeyEvent{
+			code:  if key == 'backspace' { KeyCode.backspace } else { KeyCode.delete }
+			shift: modifiers & 0x20000 != 0
+			ctrl:  modifiers & 0x40000 != 0
+			alt:   modifiers & 0x80000 != 0
+			cmd:   modifiers & 0x100000 != 0
+		})
+		consumed := st.key_consumed
+		st.key_consumed = false
+		return consumed
+	}
+	if voidptr(st.key_handler) == unsafe { nil } || (key != 'tab' && key != 'shift+tab') {
 		return false
 	}
 	st.key_consumed = false
@@ -3233,6 +3948,7 @@ fn scroll_view_move(scroll NativeView, horizontal bool, distance f64) {
 @[export: 'ui2_window_did_resize']
 fn ui2_window_did_resize(_self voidptr, _cmd voidptr, _notification voidptr) {
 	refresh()
+	fire_window_resize()
 }
 
 @[export: 'ui2_window_key_down']

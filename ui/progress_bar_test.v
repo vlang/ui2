@@ -10,13 +10,13 @@ fn test_progress_bar_normalizes_and_clamps_values() {
 
 fn test_progress_bar_builds_portable_accessible_geometry() {
 	el := progress_bar(
-		id: 'upload'
-		frame: rect(5, 7, 240, 18)
-		value: 75
-		max: 200
+		id:         'upload'
+		frame:      rect(5, 7, 240, 18)
+		value:      75
+		max:        200
 		background: 0x111827
-		color: 0x22c55e
-		radius: 9
+		color:      0x22c55e
+		radius:     9
 	)
 
 	assert el.kind == .view

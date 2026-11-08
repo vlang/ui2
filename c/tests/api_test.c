@@ -56,7 +56,7 @@ static ui2_node *build(void *user_data) {
         return root;
     }
 
-    for (int kind = UI2_VIEW; kind <= UI2_TOGGLE_BUTTON; kind++) {
+    for (int kind = UI2_VIEW; kind <= UI2_OPENGL; kind++) {
         char id[32];
         snprintf(id, sizeof id, "widget-%d", kind);
         ui2_node *n = ui2_create(kind, id, 0, kind * 30, 180, 24);

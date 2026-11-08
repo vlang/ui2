@@ -10,7 +10,7 @@ pub struct ChangeTitleDemo {
 pub mut:
 	title         string = 'Name'
 	applied_title string = 'Name'
-	valid         bool = true
+	valid         bool   = true
 	status        string = 'Enter a new window title.'
 }
 
@@ -31,9 +31,9 @@ pub fn (mut app ChangeTitleDemo) apply_title() {
 fn main() {
 	ui2.run_vml[ChangeTitleDemo](
 		source: change_title_vml_source
-		model: ChangeTitleDemo{}
-		title: 'Name'
-		width: change_title_width
+		model:  ChangeTitleDemo{}
+		title:  'Name'
+		width:  change_title_width
 		height: change_title_height
 	) or { panic(err) }
 }

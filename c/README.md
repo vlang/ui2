@@ -20,9 +20,9 @@ executable. Windows uses Clang and LLVM's `llvm-dlltool` to create an x64
 import library for the example/tests. You can also invoke the portable build
 script directly: `v run c/build.vsh example`. On macOS and Windows, choose the
 custom renderer with `make c-example C_API_FLAGS='-d ui2_custom_rendering'`.
-The initial C library supports desktop macOS, Linux, and Windows.
+The initial C library supports desktop macOS, Linux, the BSDs, and Windows.
 
-To compile your own application on macOS or Linux:
+To compile your own application on macOS, Linux, or the BSDs:
 
 ```sh
 cc -std=c99 app.c -Ic -Lbuild/c -lui2 \
@@ -30,10 +30,12 @@ cc -std=c99 app.c -Ic -Lbuild/c -lui2 \
 ```
 
 Ship the library beside your application and set the executable's runtime
-search path for that location (`@loader_path` on macOS, `$ORIGIN` on Linux).
+search path for that location (`@loader_path` on macOS, `$ORIGIN` on Linux and
+the BSDs).
 Windows finds `ui2.dll` beside the executable; link against `build/c/ui2.lib`.
 The library still needs the normal platform dependencies of the selected
-backend, as described in the main README. No GTK is involved on Linux.
+backend, as described in the main README. No GTK is involved on Linux or the
+BSDs.
 
 ## A small app
 

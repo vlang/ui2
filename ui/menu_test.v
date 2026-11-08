@@ -68,7 +68,7 @@ fn test_validate_menus_rejects_a_submenu_that_also_emits() {
 		title: 'File'
 		items: [
 			MenuItem{
-				id: 'export'
+				id:    'export'
 				title: 'Export'
 				items: [menu_item('export_pdf', 'PDF')]
 			},
@@ -85,7 +85,7 @@ fn test_validate_menus_rejects_a_decorated_separator() {
 		title: 'File'
 		items: [MenuItem{
 			separator: true
-			title: 'Nope'
+			title:     'Nope'
 		}]
 	}]) or {
 		assert err.msg().contains('separator')

@@ -21,9 +21,9 @@ const tray_statuses = ['Available', 'Busy', 'Away']
 @[heap]
 pub struct TrayDemo {
 pub mut:
-	docked        bool = true
+	docked        bool   = true
 	status        string = 'Available'
-	notifications bool = true
+	notifications bool   = true
 	last_action   string = 'Open the tray menu from the status area.'
 	log           string
 	opened        int
@@ -44,11 +44,11 @@ pub fn (app &TrayDemo) tray_config() ui2.TrayConfig {
 	return ui2.TrayConfig{
 		// The title keeps the item visible even where the icon cannot be
 		// resolved; the id is only reached by a tray with no menu at all.
-		id: 'tray_clicked'
-		title: 'ui2'
-		icon: 'symbol:cup.and.saucer.fill'
+		id:      'tray_clicked'
+		title:   'ui2'
+		icon:    'symbol:cup.and.saucer.fill'
 		tooltip: 'ui2 tray demo — ${app.status}'
-		menu: [
+		menu:    [
 			ui2.menu_item('tray_status', 'Show current status'),
 			ui2.menu_separator(),
 			ui2.submenu('Set status', statuses),

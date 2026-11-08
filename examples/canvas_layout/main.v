@@ -23,13 +23,13 @@ pub:
 @[heap]
 pub struct CanvasLayoutDemo {
 pub mut:
-	tile_x       f64 = 24
-	tile_y       f64 = 24
+	tile_x       f64    = 24
+	tile_y       f64    = 24
 	theme        string = 'Classic'
 	tile_color   string = '#E2E8F0'
 	tile_text    string = '#0F172A'
 	pointer_text string = '(0, 0)'
-	menu_hidden  bool = true
+	menu_hidden  bool   = true
 	menu_label   string = 'Show menu'
 	notes        []CanvasNote
 	text         string = 'A canvas places every child at its own\ncoordinates, so this text area keeps its\nspot while the sheet scrolls.'
@@ -104,13 +104,13 @@ pub fn (mut app CanvasLayoutDemo) reset_tile() {
 pub fn (mut app CanvasLayoutDemo) add_note() {
 	id := app.next_note
 	app.notes << CanvasNote{
-		id: id
-		key: 'note-${id}'
+		id:    id
+		key:   'note-${id}'
 		label: 'Note ${id}'
 		// Notes walk down the sheet in a fixed pattern, so a rebuild puts every
 		// keyed card back where it was.
-		x: 24 + f64((id - 1) % 3) * 150
-		y: 300 + f64((id - 1) / 3) * 90
+		x:     24 + f64((id - 1) % 3) * 150
+		y:     300 + f64((id - 1) / 3) * 90
 	}
 	app.next_note++
 	app.status = 'Added note ${id}; the sheet keeps growing past the viewport.'

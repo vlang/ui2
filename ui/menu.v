@@ -83,8 +83,11 @@ mut:
 	// is how the per-platform menu code reaches the window's event handler, the
 	// name to build a macOS application menu from, and the native handle a
 	// Win32 menu bar attaches to — without depending on one backend's state.
+	// The window doubles as the embedder-facing main window handle reported by
+	// native_window_handle; menu_update_window publishes it late on backends
+	// whose window only exists after the event loop starts (AppKit).
 	dispatch EventFn = EventFn(unsafe { nil })
-	app_name string = 'App'
+	app_name string  = 'App'
 	window   voidptr
 }
 
@@ -122,6 +125,24 @@ fn menu_window() voidptr {
 	return menu_state().window
 }
 
+// menu_update_window replaces the native handle published by
+// publish_menu_context. Backends whose window only exists after the event
+// loop starts (AppKit) call it once the real window is created.
+fn menu_update_window(window voidptr) {
+	mut st := menu_state()
+	st.window = window
+}
+
+// native_window_handle reports the main window's native handle for embedders
+// (e.g. hosting a webview as a child of this window).
+//
+//   - Windows: the real HWND.
+//   - macOS: the NSWindow once the app has finished launching (nil before).
+//   - custom renderer / Linux: nil (embedding is not supported).
+pub fn native_window_handle() voidptr {
+	return menu_window()
+}
+
 // install_declared_menus applies what was declared before the window existed.
 // Backends call it once there is something to attach a menu to. The menu bar
 // is installed even when nothing was declared, because macOS still needs its
@@ -137,7 +158,7 @@ fn install_declared_menus() {
 // menu_item builds a plain row that emits `id` when chosen.
 pub fn menu_item(id string, title string) MenuItem {
 	return MenuItem{
-		id: id
+		id:    id
 		title: title
 	}
 }
@@ -146,8 +167,8 @@ pub fn menu_item(id string, title string) MenuItem {
 // menu_item_with_shortcut('new', 'New', 'cmd+n').
 pub fn menu_item_with_shortcut(id string, title string, shortcut string) MenuItem {
 	return MenuItem{
-		id: id
-		title: title
+		id:       id
+		title:    title
 		shortcut: shortcut
 	}
 }
@@ -156,8 +177,8 @@ pub fn menu_item_with_shortcut(id string, title string, shortcut string) MenuIte
 // remembered: rebuild the menu bar with the new value after handling the event.
 pub fn menu_check_item(id string, title string, checked bool) MenuItem {
 	return MenuItem{
-		id: id
-		title: title
+		id:      id
+		title:   title
 		checked: checked
 	}
 }
@@ -186,7 +207,9 @@ pub fn disabled(item MenuItem) MenuItem {
 
 // set_menu_bar installs the application's top level menu bar, replacing any
 // previous one. Call it before or after run_window: menus declared before the
-// window exists are installed as the application finishes launching.
+// window exists are installed as the application finishes launching. A call
+// from a thread or between frames asks for the frame that shows the bar; a
+// call from inside the frame being built is covered by that frame already.
 pub fn set_menu_bar(menus []Menu) {
 	mut st := menu_state()
 	st.menus = menus.clone()
@@ -306,11 +329,11 @@ pub fn parse_menu_shortcut(shortcut string) MenuShortcut {
 		}
 	}
 	return MenuShortcut{
-		cmd: cmd
-		ctrl: ctrl
-		alt: alt
+		cmd:   cmd
+		ctrl:  ctrl
+		alt:   alt
 		shift: shift
-		key: key
+		key:   key
 	}
 }
 

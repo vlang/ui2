@@ -11,9 +11,9 @@ pub struct BoxLayoutDemo {}
 fn main() {
 	ui2.run_vml[BoxLayoutDemo](
 		source: box_layout_vml_source
-		model: BoxLayoutDemo{}
-		title: 'Box Layout'
-		width: box_layout_width
+		model:  BoxLayoutDemo{}
+		title:  'Box Layout'
+		width:  box_layout_width
 		height: box_layout_height
 	) or { panic(err) }
 }

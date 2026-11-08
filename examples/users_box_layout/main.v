@@ -40,7 +40,7 @@ pub mut:
 	age            string
 	password       string
 	country        string = 'United States'
-	online         bool = true
+	online         bool   = true
 	subscribed     bool
 	is_error       bool
 	progress       f64
@@ -55,8 +55,8 @@ fn users_box_countries() []CountryChoice {
 	mut choices := []CountryChoice{cap: names.len}
 	for index, name in names {
 		choices << CountryChoice{
-			id: index + 1
-			key: 'country-${index + 1}'
+			id:   index + 1
+			key:  'country-${index + 1}'
 			name: name
 		}
 	}
@@ -85,13 +85,13 @@ fn users_box_demo() UsersBoxLayoutDemo {
 
 fn (mut app UsersBoxLayoutDemo) add_seed(first string, last string, age string, country string) {
 	app.users << FormUser{
-		id: app.next_id
-		key: 'user-${app.next_id}'
+		id:         app.next_id
+		key:        'user-${app.next_id}'
 		first_name: first
-		last_name: last
-		age: age
-		country: country
-		stripe: if app.users.len % 2 == 0 { '#FFFFFF' } else { '#F8FAFC' }
+		last_name:  last
+		age:        age
+		country:    country
+		stripe:     if app.users.len % 2 == 0 { '#FFFFFF' } else { '#F8FAFC' }
 	}
 	app.next_id++
 }
@@ -183,9 +183,9 @@ pub fn (mut app UsersBoxLayoutDemo) about() {
 fn main() {
 	ui2.run_vml[UsersBoxLayoutDemo](
 		source: users_box_vml_source
-		model: users_box_demo()
-		title: 'Users (box layout)'
-		width: users_box_width
+		model:  users_box_demo()
+		title:  'Users (box layout)'
+		width:  users_box_width
 		height: users_box_height
 	) or { panic(err) }
 }

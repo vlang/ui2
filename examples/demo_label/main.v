@@ -11,9 +11,9 @@ pub struct DemoLabel {}
 fn main() {
 	ui2.run_vml[DemoLabel](
 		source: demo_label_vml_source
-		model: DemoLabel{}
-		title: 'Label'
-		width: demo_label_width
+		model:  DemoLabel{}
+		title:  'Label'
+		width:  demo_label_width
 		height: demo_label_height
 	) or { panic(err) }
 }

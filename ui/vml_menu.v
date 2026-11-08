@@ -59,8 +59,8 @@ fn vml_application_menu_items(node &VNode) ![]MenuItem {
 				items << menu_separator()
 			}
 			'MenuItem' {
-				vml_menu_properties(child, ['id', 'title', 'text', 'on_tap', 'shortcut',
-					'checked', 'enabled', 'separator'])!
+				vml_menu_properties(child, ['id', 'title', 'text', 'on_tap', 'shortcut', 'checked',
+					'enabled', 'separator'])!
 				item := MenuItem{
 					id:        child.prop_or('on_tap', child.id)
 					title:     child.prop_or('title', child.prop('text'))

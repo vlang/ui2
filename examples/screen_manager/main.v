@@ -22,9 +22,9 @@ pub fn (mut app ScreenManagerDemo) show_details() {
 fn main() {
 	ui2.run_vml[ScreenManagerDemo](
 		source: screen_manager_vml_source
-		model: ScreenManagerDemo{}
-		title: 'Screen Manager'
-		width: screen_manager_width
+		model:  ScreenManagerDemo{}
+		title:  'Screen Manager'
+		width:  screen_manager_width
 		height: screen_manager_height
 	) or { panic(err) }
 }

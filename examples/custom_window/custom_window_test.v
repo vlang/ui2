@@ -31,7 +31,7 @@ fn test_custom_window_counter_never_becomes_negative() {
 fn test_custom_window_vml_exposes_clear_space_and_custom_chrome() {
 	app := CustomWindowDemo{
 		transparent_screen: true
-		screen_background: '#010203'
+		screen_background:  '#010203'
 	}
 	root := ui2.element_from_vml_model(custom_window_vml_source, app, ui2.rect(0, 0, custom_window_width, custom_window_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }

@@ -117,15 +117,15 @@ fn (mut block GlobalBlock) build(invoke voidptr, signature string) voidptr {
 		return unsafe { nil }
 	}
 	block.descriptor = BlockDescriptor{
-		reserved: 0
-		size: u64(sizeof(BlockLiteral))
+		reserved:  0
+		size:      u64(sizeof(BlockLiteral))
 		signature: voidptr(signature.str)
 	}
 	block.literal = BlockLiteral{
-		isa: isa
-		flags: block_is_global | block_has_signature
-		reserved: 0
-		invoke: invoke
+		isa:        isa
+		flags:      block_is_global | block_has_signature
+		reserved:   0
+		invoke:     invoke
 		descriptor: voidptr(&block.descriptor)
 	}
 	return voidptr(&block.literal)
@@ -170,7 +170,7 @@ __global g_accessibility_keys = AccessibilityKeys{}
 fn accessibility_traits(role string) u64 {
 	return match role {
 		'button' { extern_u64('UIAccessibilityTraitButton', 1) }
-		'image' { extern_u64('UIAccessibilityTraitImage', 4) }
+		'image', 'img' { extern_u64('UIAccessibilityTraitImage', 4) }
 		'link' { extern_u64('UIAccessibilityTraitLink', 2) }
 		'header' { extern_u64('UIAccessibilityTraitHeader', 0x10000) }
 		'adjustable', 'slider' { extern_u64('UIAccessibilityTraitAdjustable', 0x1000) }

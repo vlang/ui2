@@ -22,6 +22,11 @@ pub:
 	action_id string
 	content   Element
 	enabled   bool = true
+	// Drawn by the themed look (see TabbedPanelConfig.variant): a symbol
+	// before the title, a badge after it, and a close button.
+	icon     string
+	badge    string
+	closable bool
 }
 
 pub struct TabbedPanelConfig {
@@ -38,6 +43,21 @@ pub:
 	header_text_style        TextStyle
 	active_header_text_style TextStyle
 	tabs                     []TabbedPanelTab
+	// Setting variant or theme draws the panel the GPUI Kit way, with a
+	// tab_bar of that variant along the side tab_position names (aligned as
+	// it says) on the theme's background; box, header_box, the text styles,
+	// tab_width and tab_height then go unused, and the panel needs an id.
+	// Without either the panel keeps its application-styled headers.
+	variant ?TabVariant
+	theme   ?ComponentTheme
+	size    ComponentSize = .medium
+	fill    bool // Themed: share the bar's length among the tabs.
+	// bar_size is the width of a themed bar beside the content; zero is 180.
+	// A bar above or below it is as tall as tab_bar_height says.
+	bar_size            f64
+	hovered             int = -1 // Themed: the index of the tab under the pointer.
+	offset              f64 // Themed: how far overflowing tabs are scrolled; see tabbed_panel_bar.
+	accessibility_label string
 }
 
 pub struct TabbedPanelGeometry {
@@ -117,6 +137,9 @@ fn tab_strip_start(available f64, occupied f64, alignment BoxAlignment) f64 {
 // tabbed_panel_geometry returns one content frame and a header frame for every
 // declared tab. A zero tab_width distributes headers evenly along the strip.
 pub fn tabbed_panel_geometry(config TabbedPanelConfig) !TabbedPanelGeometry {
+	if tabbed_panel_themed(config) {
+		return tabbed_panel_themed_geometry(config)
+	}
 	tabbed_panel_validate(config)!
 	horizontal := tabs_are_horizontal(config.tab_position)
 	content := if horizontal {
@@ -165,6 +188,9 @@ pub fn tabbed_panel_geometry(config TabbedPanelConfig) !TabbedPanelGeometry {
 }
 
 pub fn tabbed_panel(config TabbedPanelConfig) !Element {
+	if tabbed_panel_themed(config) {
+		return tabbed_panel_themed_element(config)
+	}
 	geometry := tabbed_panel_geometry(config)!
 	mut children := []Element{}
 	if config.tabs.len > 0 {
@@ -183,9 +209,9 @@ pub fn tabbed_panel(config TabbedPanelConfig) !Element {
 			} else {
 				config.header_box
 			}, if active { config.active_header_text_style } else { config.header_text_style })
-			action_id: tab.action_id
-			enabled: tab.enabled
-			accessibility_role: 'tab'
+			action_id:           tab.action_id
+			enabled:             tab.enabled
+			accessibility_role:  'tab'
 			accessibility_value: if active { 'selected' } else { 'not selected' }
 		}
 	}

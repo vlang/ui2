@@ -2,7 +2,7 @@ module ui2
 
 fn test_stack_layout_wraps_variable_width_children() {
 	config := StackLayoutConfig{
-		frame: rect(0, 0, 180, 120)
+		frame:   rect(0, 0, 180, 120)
 		padding: StackPadding{ left: 10, top: 8, right: 10, bottom: 8 }
 		spacing: StackSpacing{ horizontal: 6, vertical: 4 }
 	}
@@ -14,10 +14,10 @@ fn test_stack_layout_wraps_variable_width_children() {
 
 fn test_stack_layout_supports_reverse_horizontal_and_vertical_flow() {
 	config := StackLayoutConfig{
-		frame: rect(0, 0, 180, 120)
+		frame:       rect(0, 0, 180, 120)
 		orientation: .right_to_left_bottom_to_top
-		padding: StackPadding{ left: 10, top: 8, right: 10, bottom: 8 }
-		spacing: StackSpacing{ horizontal: 6, vertical: 4 }
+		padding:     StackPadding{ left: 10, top: 8, right: 10, bottom: 8 }
+		spacing:     StackSpacing{ horizontal: 6, vertical: 4 }
 	}
 	sizes := [rect(0, 0, 70, 20), rect(0, 0, 80, 30), rect(0, 0, 90, 24)]
 	frames := stack_layout_frames(config, sizes) or { panic(err) }
@@ -26,9 +26,9 @@ fn test_stack_layout_supports_reverse_horizontal_and_vertical_flow() {
 
 fn test_stack_layout_wraps_column_major_children() {
 	config := StackLayoutConfig{
-		frame: rect(0, 0, 160, 100)
+		frame:       rect(0, 0, 160, 100)
 		orientation: .top_to_bottom_left_to_right
-		spacing: StackSpacing{ horizontal: 5, vertical: 4 }
+		spacing:     StackSpacing{ horizontal: 5, vertical: 4 }
 	}
 	sizes := [rect(0, 0, 30, 40), rect(0, 0, 50, 50), rect(0, 0, 40, 30)]
 	frames := stack_layout_frames(config, sizes) or { panic(err) }
@@ -37,9 +37,9 @@ fn test_stack_layout_wraps_column_major_children() {
 
 fn test_stack_layout_preserves_sizes_and_content() {
 	stack := stack_layout(
-		id: 'tags'
-		frame: rect(0, 0, 150, 80)
-		spacing: StackSpacing{ horizontal: 4 }
+		id:       'tags'
+		frame:    rect(0, 0, 150, 80)
+		spacing:  StackSpacing{ horizontal: 4 }
 		children: [
 			button('one', 'One', rect(0, 0, 70, 30), BoxStyle{}, TextStyle{}),
 			button('two', 'Two', rect(0, 0, 80, 30), BoxStyle{}, TextStyle{}),

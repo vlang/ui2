@@ -19,7 +19,7 @@ pub struct TabsDemo {
 pub:
 	pages []TabPage
 pub mut:
-	active_tab int = 1
+	active_tab int    = 1
 	status     string = 'tab1 selected.'
 }
 
@@ -46,9 +46,9 @@ pub fn (mut app TabsDemo) select_tab(id int) {
 fn main() {
 	ui2.run_vml[TabsDemo](
 		source: tabs_vml_source
-		model: initial_tabs()
-		title: 'Tabs'
-		width: tabs_width
+		model:  initial_tabs()
+		title:  'Tabs'
+		width:  tabs_width
 		height: tabs_height
 	) or { panic(err) }
 }

@@ -10,9 +10,9 @@ pub struct GroupDemo {
 pub mut:
 	first_name    string
 	last_name     string
-	registration1 bool = true
-	registration2 bool = true
-	registration3 bool = true
+	registration1 bool   = true
+	registration2 bool   = true
+	registration3 bool   = true
 	message       string = 'Enter a first and last name.'
 }
 
@@ -29,9 +29,9 @@ pub fn (mut app GroupDemo) submit() {
 fn main() {
 	ui2.run_vml[GroupDemo](
 		source: group_vml_source
-		model: GroupDemo{}
-		title: 'Group Demo'
-		width: group_width
+		model:  GroupDemo{}
+		title:  'Group Demo'
+		width:  group_width
 		height: group_height
 	) or { panic(err) }
 }

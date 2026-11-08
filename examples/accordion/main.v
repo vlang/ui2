@@ -19,7 +19,7 @@ pub struct AccordionDemo {
 pub:
 	sections []AccordionSection
 pub mut:
-	open_id int = 1
+	open_id int    = 1
 	status  string = 'Rectangle is open.'
 }
 
@@ -53,9 +53,9 @@ pub fn (mut app AccordionDemo) toggle_section(id int) {
 fn main() {
 	ui2.run_vml[AccordionDemo](
 		source: accordion_vml_source
-		model: initial_accordion()
-		title: 'Accordion'
-		width: accordion_width
+		model:  initial_accordion()
+		title:  'Accordion'
+		width:  accordion_width
 		height: accordion_height
 	) or { panic(err) }
 }

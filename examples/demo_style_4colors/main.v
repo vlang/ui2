@@ -13,7 +13,7 @@ pub mut:
 	color1  string = '#E5E7EB'
 	color2  string = '#BFDBFE'
 	color3  string = '#111827'
-	enabled bool = true
+	enabled bool   = true
 	status  string = 'Classic palette selected.'
 }
 
@@ -55,9 +55,9 @@ pub fn (mut app StyleFourColorsDemo) apply_palette() {
 fn main() {
 	ui2.run_vml[StyleFourColorsDemo](
 		source: style_colors_vml_source
-		model: StyleFourColorsDemo{}
-		title: 'Four Colors'
-		width: style_colors_width
+		model:  StyleFourColorsDemo{}
+		title:  'Four Colors'
+		width:  style_colors_width
 		height: style_colors_height
 	) or { panic(err) }
 }

@@ -42,9 +42,9 @@ pub fn (mut app MessageDemo) ask_native_question() {
 fn main() {
 	ui2.run_vml[MessageDemo](
 		source: message_vml_source
-		model: MessageDemo{}
-		title: 'Message'
-		width: message_width
+		model:  MessageDemo{}
+		title:  'Message'
+		width:  message_width
 		height: message_height
 	) or { panic(err) }
 }

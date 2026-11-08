@@ -23,21 +23,21 @@ pub:
 // whether pressing the selected member can release it.
 pub fn toggle_button(config ToggleButtonConfig) Element {
 	return Element{
-		kind: .toggle_button
-		id: config.id
-		action_id: config.action_id
-		text: config.title
-		frame: config.frame
-		box: config.box
-		text_style: config.text_style
-		checked: config.pressed
-		toggle_group: config.group
+		kind:                      .toggle_button
+		id:                        config.id
+		action_id:                 config.action_id
+		text:                      config.title
+		frame:                     config.frame
+		box:                       config.box
+		text_style:                config.text_style
+		checked:                   config.pressed
+		toggle_group:              config.group
 		toggle_allow_no_selection: config.allow_no_selection
-		toggle_down_box: config.down_box
-		toggle_down_text_style: config.down_text_style
-		native_style: config.native_style
-		accessibility_role: 'button'
-		accessibility_label: config.title
-		accessibility_value: if config.pressed { 'pressed' } else { 'released' }
+		toggle_down_box:           config.down_box
+		toggle_down_text_style:    config.down_text_style
+		native_style:              config.native_style
+		accessibility_role:        'button'
+		accessibility_label:       config.title
+		accessibility_value:       if config.pressed { 'pressed' } else { 'released' }
 	}
 }

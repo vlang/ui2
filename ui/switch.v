@@ -16,6 +16,9 @@ pub:
 	frame     Rect
 	active    bool
 	style     SwitchStyle
+	// enabled false shows the disabled colors and ignores input on every backend.
+	enabled             bool   = true
+	accessibility_label string = 'Switch'
 }
 
 // switch_track_frame centers the switch chrome inside the full interactive
@@ -45,14 +48,19 @@ fn switch_thumb_frame(track Rect, active bool) Rect {
 // live backend value during the action callback.
 pub fn switch_control(config SwitchConfig) Element {
 	return Element{
-		kind: .switch_control
-		id: config.id
-		action_id: config.action_id
-		frame: config.frame
-		checked: config.active
-		switch_style: config.style
-		accessibility_role: 'switch'
-		accessibility_label: 'Switch'
+		kind:                .switch_control
+		id:                  config.id
+		action_id:           config.action_id
+		frame:               config.frame
+		checked:             config.active
+		switch_style:        config.style
+		enabled:             config.enabled
+		accessibility_role:  'switch'
+		accessibility_label: if config.accessibility_label.len > 0 {
+			config.accessibility_label
+		} else {
+			'Switch'
+		}
 		accessibility_value: if config.active { 'on' } else { 'off' }
 	}
 }

@@ -35,6 +35,15 @@ fn v_string(value string) VValue {
 	}
 }
 
+// v_number_text is how a computed number reads: a whole one without a
+// fraction, so `${app.index + 1}` shows "2", not "2.0".
+fn v_number_text(value f64) string {
+	if value == math.trunc(value) && math.abs(value) < 1e15 {
+		return i64(value).str()
+	}
+	return value.str()
+}
+
 fn v_number(value f64, text string) VValue {
 	return VValue{
 		kind:   .number
@@ -526,16 +535,16 @@ fn v_eval_binary(expr &VExpression, scope map[string]VValue) !VValue {
 				v_string(left.string_value() + right.string_value())
 			} else {
 				value := left.numeric(expr.line)! + right.numeric(expr.line)!
-				v_number(value, value.str())
+				v_number(value, v_number_text(value))
 			}
 		}
 		'-' {
 			value := left.numeric(expr.line)! - right.numeric(expr.line)!
-			v_number(value, value.str())
+			v_number(value, v_number_text(value))
 		}
 		'*' {
 			value := left.numeric(expr.line)! * right.numeric(expr.line)!
-			v_number(value, value.str())
+			v_number(value, v_number_text(value))
 		}
 		'/' {
 			divisor := right.numeric(expr.line)!
@@ -543,7 +552,7 @@ fn v_eval_binary(expr &VExpression, scope map[string]VValue) !VValue {
 				return error('division by zero at line ${expr.line}')
 			}
 			value := left.numeric(expr.line)! / divisor
-			v_number(value, value.str())
+			v_number(value, v_number_text(value))
 		}
 		'%' {
 			divisor := right.numeric(expr.line)!
@@ -551,7 +560,7 @@ fn v_eval_binary(expr &VExpression, scope map[string]VValue) !VValue {
 				return error('division by zero at line ${expr.line}')
 			}
 			value := math.fmod(left.numeric(expr.line)!, divisor)
-			v_number(value, value.str())
+			v_number(value, v_number_text(value))
 		}
 		'==' {
 			v_bool(v_values_equal(left, right))
@@ -714,7 +723,7 @@ fn v_child_layout(node &VNode, actual Rect, metrics []VLayoutChildMetrics) !VChi
 		'Row' { VChildLayoutKind.row }
 		'BoxLayout' { VChildLayoutKind.box }
 		'FloatLayout', 'RelativeLayout' { VChildLayoutKind.float }
-		'GridLayout' { VChildLayoutKind.grid }
+		'Grid' { VChildLayoutKind.grid }
 		'AnchorLayout' { VChildLayoutKind.anchor }
 		'StackLayout' { VChildLayoutKind.stack }
 		'PageLayout' { VChildLayoutKind.page }
@@ -768,7 +777,7 @@ fn v_child_layout(node &VNode, actual Rect, metrics []VLayoutChildMetrics) !VChi
 	}
 	mut cells := []Rect{}
 	if kind == .grid {
-		cells = grid_layout_frames(v_grid_config(node, local)!, child_sizes.len)!
+		cells = grid_frames(v_grid_config(node, local)!, child_sizes.len)!
 	} else if kind == .box {
 		cells = box_layout_frames(v_box_layout_config(node, local, box_children)!)!
 	} else if kind == .float {
@@ -1055,7 +1064,8 @@ fn v_eval_node(node &VNode, incoming_scope map[string]VValue, frame Rect, mut ev
 	mut binding := ?VmlBinding(none)
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
-			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit', 'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
+			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
+				'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 			continue
 		}
 		resolved.props[key] = v_eval(expr, scope)!.string_value()
@@ -1326,7 +1336,8 @@ fn v_validate_node_schema[T](node &VNode, incoming_scope map[string]VSchema) ! {
 	}
 	for key, expr in node.expressions {
 		if key == 'id' || key in node.property_types || key.starts_with('bind.')
-			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit', 'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
+			|| key in ['on_tap', 'on_change', 'on_active', 'on_state', 'on_text', 'on_submit',
+				'on_text_validate', 'on_select', 'on_toggle', 'on_dismiss'] {
 			continue
 		}
 		v_schema_expression(expr, scope)!
@@ -1457,17 +1468,17 @@ fn type_check_action[T](name string, args []VSchema, line int) ! {
 		if method.name == name {
 			$if !method.is_pub {
 				return error('app action `${name}` is not public')
-			} $else $if method.typ is fn () {
+			} $else $if method.typ is fn() {
 				if args.len != 0 {
 					return error('app action `${name}` expects no arguments at line ${line}')
 				}
 				return
-			} $else $if method.typ is fn (int) {
+			} $else $if method.typ is fn(int) {
 				if args.len != 1 || args[0].kind != .number {
 					return error('app action `${name}` expects one int argument at line ${line}')
 				}
 				return
-			} $else $if method.typ is fn (string) {
+			} $else $if method.typ is fn(string) {
 				if args.len != 1 || args[0].kind != .string_ {
 					return error('app action `${name}` expects one string argument at line ${line}')
 				}
@@ -1495,13 +1506,13 @@ fn vml_dispatch[T](mut model T, invocation VmlInvocation) ! {
 	}
 	$for method in T.methods {
 		if method.name == invocation.name {
-			$if method.is_pub && method.typ is fn () {
+			$if method.is_pub && method.typ is fn() {
 				model.$method()
 				return
-			} $else $if method.is_pub && method.typ is fn (int) {
+			} $else $if method.is_pub && method.typ is fn(int) {
 				model.$method(int(args[0].numeric(invocation.line)!))
 				return
-			} $else $if method.is_pub && method.typ is fn (string) {
+			} $else $if method.is_pub && method.typ is fn(string) {
 				model.$method(args[0].string_value())
 				return
 			}
@@ -1518,11 +1529,11 @@ fn vml_apply_assignment[T](mut model T, assignment VmlAssignment) ! {
 
 pub struct VmlRunConfig[T] {
 pub:
-	source string
-	model  T
-	title  string = 'App'
-	width  int    = 400
-	height int    = 800
+	source     string
+	model      T
+	title      string = 'App'
+	width      int    = 400
+	height     int    = 800
 	min_width  int
 	min_height int
 }

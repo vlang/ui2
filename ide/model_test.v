@@ -254,6 +254,6 @@ fn test_saved_form_and_generated_main_compile_together() {
 	app.sync_source()
 	app.save_document() or { panic(err) }
 	main_path := app.generate_companion(false) or { panic(err) }
-	result := os.execute('${os.quoted_path(@VEXE)} -check ${os.quoted_path(main_path)}')
+	result := os.exec([@VEXE, '-check', main_path])
 	assert result.exit_code == 0, result.output
 }

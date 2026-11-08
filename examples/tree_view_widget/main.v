@@ -31,9 +31,9 @@ pub fn (mut app TreeViewWidgetDemo) select_license() {
 fn main() {
 	ui2.run_vml[TreeViewWidgetDemo](
 		source: tree_view_widget_vml_source
-		model: TreeViewWidgetDemo{}
-		title: 'Tree View'
-		width: tree_view_widget_width
+		model:  TreeViewWidgetDemo{}
+		title:  'Tree View'
+		width:  tree_view_widget_width
 		height: tree_view_widget_height
 	) or { panic(err) }
 }

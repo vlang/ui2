@@ -117,12 +117,12 @@ fn build_adaptive_toolbar(layout IdeLayout, app &IdeApp) []ui2.Element {
 	// Scrolling keeps the toolbar usable when the IDE window is narrow.
 	children << ui2.text_field_with_submit('layout_preview_width', 'layout_preview_size', 'Width',
 		'${app.canvas_width():g}', ui2.rect(x + 4, 6, 66, 24), ui2.BoxStyle{ bg: 0xffffff }, text_style(10,
-		color_text, false), ui2.keyboard_decimal)
+			color_text, false), ui2.keyboard_decimal)
 	children << ui2.label('', 'x', ui2.rect(x + 76, 9, 12, 18), text_style(10, color_muted, false))
 	children << ui2.text_field_with_submit('layout_preview_height', 'layout_preview_size',
 		'Height', '${app.canvas_height():g}', ui2.rect(x + 90, 6, 66, 24), ui2.BoxStyle{
-		bg: 0xffffff
-	}, text_style(10, color_text, false), ui2.keyboard_decimal)
+			bg: 0xffffff
+		}, text_style(10, color_text, false), ui2.keyboard_decimal)
 	children << tiny_button('layout_preview_size', 'Apply size', ui2.rect(x + 164, 6, 76, 24), true)
 	children << tiny_button('layout_check', 'Check layout', ui2.rect(x + 248, 6, 90, 24), true)
 	children << ide_button('layout_width_class', 'Edit width: ${app.edit_width_class}', ui2.rect(8,
@@ -131,8 +131,7 @@ fn build_adaptive_toolbar(layout IdeLayout, app &IdeApp) []ui2.Element {
 		38, 142, 24), app.edit_height_class != .any)
 	children << ui2.checkbox('layout_guides', 'Guides', app.show_layout_guides, ui2.rect(310, 38,
 		80, 24), text_style(10, color_text, false))
-	classes := 'w:${ui2.adaptive_size_class(app.canvas_width(), app.breakpoint_width)} h:${ui2.adaptive_size_class(app.canvas_height(),
-		app.breakpoint_height)}'
+	classes := 'w:${ui2.adaptive_size_class(app.canvas_width(), app.breakpoint_width)} h:${ui2.adaptive_size_class(app.canvas_height(), app.breakpoint_height)}'
 	children << ui2.label('', '${app.edit_class_label()}   |   Preview ${classes}', ui2.rect(398,
 		42, 340, 18), text_style(10, color_muted, false))
 	return [

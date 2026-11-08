@@ -113,8 +113,7 @@ fn test_adaptive_designer_and_runtime_have_matching_frames() {
 	app.set_geometry_property('property_x', '24')
 	app.set_geometry_property('property_width', '342')
 	app.set_layout_axis(true, .stretch)
-	for size in [ui2.rect(0, 0, 390, 844), ui2.rect(0, 0, 320, 568),
-		ui2.rect(0, 0, 1280, 800)] {
+	for size in [ui2.rect(0, 0, 390, 844), ui2.rect(0, 0, 320, 568), ui2.rect(0, 0, 1280, 800)] {
 		app.set_preview_size(size.width, size.height)
 		displayed := app.selected_component()?
 		root := ui2.element_from_vml(app.source_text, size)!

@@ -41,15 +41,15 @@ pub fn progress_bar(config ProgressBarConfig) Element {
 	maximum := if config.max > 0 { config.max } else { 0.0 }
 	clamped_value := normalized * maximum
 	fill := view('', rect(0, 0, config.frame.width * normalized, config.frame.height), BoxStyle{
-		bg: config.color
+		bg:     config.color
 		radius: config.radius
 	}, [])
 	return Element{
 		...view(config.id, config.frame, BoxStyle{
-			bg: config.background
+			bg:     config.background
 			radius: config.radius
 		}, [fill])
-		accessibility_role: 'progressbar'
+		accessibility_role:  'progressbar'
 		accessibility_label: 'Progress'
 		accessibility_value: '${progress_bar_number(clamped_value)} of ${progress_bar_number(maximum)}'
 	}

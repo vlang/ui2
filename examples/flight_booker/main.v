@@ -53,7 +53,7 @@ fn today_date() string {
 fn initial_flight_booker() FlightBooker {
 	today := today_date()
 	return FlightBooker{
-		departure: today
+		departure:   today
 		return_date: today
 	}
 }
@@ -94,9 +94,9 @@ pub fn (mut app FlightBooker) book() {
 fn main() {
 	ui2.run_vml[FlightBooker](
 		source: flight_booker_vml_source
-		model: initial_flight_booker()
-		title: 'Flight Booker'
-		width: flight_booker_width
+		model:  initial_flight_booker()
+		title:  'Flight Booker'
+		width:  flight_booker_width
 		height: flight_booker_height
 	) or { panic(err) }
 }

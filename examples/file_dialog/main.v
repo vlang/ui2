@@ -14,10 +14,10 @@ pub mut:
 
 pub fn (mut app FileDialogDemo) open_source() {
 	paths := ui2.open_file_dialog(
-		title: 'Open a V source file'
+		title:   'Open a V source file'
 		filters: [
 			ui2.FileDialogFilter{
-				name: 'V source'
+				name:       'V source'
 				extensions: ['v', 'vv']
 			},
 		]
@@ -27,10 +27,10 @@ pub fn (mut app FileDialogDemo) open_source() {
 
 pub fn (mut app FileDialogDemo) save_text() {
 	paths := ui2.save_file_dialog(
-		title: 'Save text file'
+		title:    'Save text file'
 		filename: 'notes.txt'
-		filters: [ui2.FileDialogFilter{
-			name: 'Text'
+		filters:  [ui2.FileDialogFilter{
+			name:       'Text'
 			extensions: ['txt']
 		}]
 	)
@@ -39,7 +39,7 @@ pub fn (mut app FileDialogDemo) save_text() {
 
 pub fn (mut app FileDialogDemo) choose_folder() {
 	paths := ui2.open_folder_dialog(
-		title: 'Choose a folder'
+		title:     'Choose a folder'
 		directory: os.home_dir()
 	)
 	app.selection = if paths.len > 0 {
@@ -52,9 +52,9 @@ pub fn (mut app FileDialogDemo) choose_folder() {
 fn main() {
 	ui2.run_vml[FileDialogDemo](
 		source: file_dialog_qml_source
-		model: FileDialogDemo{}
-		title: 'Native file dialog'
-		width: file_dialog_width
+		model:  FileDialogDemo{}
+		title:  'Native file dialog'
+		width:  file_dialog_width
 		height: file_dialog_height
 	) or { panic(err) }
 }

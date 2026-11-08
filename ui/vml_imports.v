@@ -36,8 +36,8 @@ fn (mut p Parser) parse_document() !VmlDocument {
 	p.eat(.eof)!
 	return VmlDocument{
 		module_name: module_name
-		imports: imports
-		root: root
+		imports:     imports
+		root:        root
 	}
 }
 
@@ -152,15 +152,15 @@ fn clone_vml_import_node(node &VNode) &VNode {
 		children << clone_vml_import_node(child)
 	}
 	return &VNode{
-		tag: node.tag
-		id: node.id
-		props: node.props.clone()
-		children: children
-		expressions: node.expressions.clone()
+		tag:            node.tag
+		id:             node.id
+		props:          node.props.clone()
+		children:       children
+		expressions:    node.expressions.clone()
 		property_types: node.property_types.clone()
 		property_order: node.property_order.clone()
-		line: node.line
-		path: node.path
+		line:           node.line
+		path:           node.path
 	}
 }
 
@@ -191,7 +191,7 @@ pub fn new_vml_app_file[T](path string, model T) !&VmlApp[T] {
 	validate_element_tree(element_from_vnode(resolved, probe)!)!
 	return &VmlApp[T]{
 		template: template
-		model: model
+		model:    model
 	}
 }
 
@@ -203,8 +203,8 @@ pub:
 	source_path string
 	model       T
 	title       string = 'App'
-	width       int = 400
-	height      int = 800
+	width       int    = 400
+	height      int    = 800
 }
 
 // run_vml_file owns one typed model for a file-backed VML window and resolves
@@ -217,8 +217,8 @@ pub fn run_vml_file[T](config VmlFileRunConfig[T]) ! {
 	validate_element_tree(element_from_vnode(resolved, initial_frame)!)!
 	mut controller := &VmlController[T]{
 		template: template
-		model: config.model
-		events: events
+		model:    config.model
+		events:   events
 	}
 	mut runtime := vml_runtime()
 	runtime.controller = voidptr(controller)

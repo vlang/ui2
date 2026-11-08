@@ -15,8 +15,13 @@
 #endif
 
 #include <windows.h>
+#ifdef __TINYC__
+// V's bundled tcc has no commdlg.h or shlobj.h: the names used are declared there.
+#include "tcc_compat_windows.h"
+#else
 #include <commdlg.h>
 #include <shlobj.h>
+#endif
 #include <wchar.h>
 
 enum {

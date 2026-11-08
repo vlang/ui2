@@ -5,6 +5,7 @@ module ui2
 $if !ui2_custom_rendering ? {
 
 import macos
+import math
 
 fn test_appkit_key_codes_use_physical_ansi_positions() {
 	assert appkit_key_code(0x2b) == .comma
@@ -188,7 +189,7 @@ fn test_macos_transparent_box_controls_disable_native_backgrounds() {
 	button_view := native_new_button(native_rect(0, 0, 96, 40), 'Clear', BoxStyle{},
 		0xffffff, 15, false, false, false, 0, '', true)
 	scroll_view := native_new_scroll(native_rect(0, 0, 120, 80), BoxStyle{}, false,
-		.vertical_only)
+		.vertical_only, false)
 	toggle_view := native_new_toggle_button(toggle_button(
 		title: 'Clear toggle'
 		box: transparent_box
@@ -237,7 +238,7 @@ fn test_macos_scroll_mode_selects_scrollers_and_document_size() {
 		view('', rect(200, 0, 200, 300), BoxStyle{}, []),
 	])
 	scroll_view := native_new_scroll(element_rect(columns.frame), columns.box, false,
-		columns.scroll_mode)
+		columns.scroll_mode, false)
 	defer {
 		macos.release(scroll_view)
 	}
@@ -285,7 +286,7 @@ fn test_macos_scroll_mode_selects_scrollers_and_document_size() {
 	// Before the scroll view has been laid out there is only the frame to go by.
 	assert scroll_document_size(narrow, 0, 0).width == 120
 
-	native_set_scroll_axes(scroll_view, .both)
+	native_set_scroll_axes(scroll_view, .both, false)
 	assert macos.msg_bool(scroll_view, 'hasVerticalScroller')
 	assert macos.msg_bool(scroll_view, 'hasHorizontalScroller')
 }
@@ -296,14 +297,14 @@ fn test_macos_scroll_gesture_passes_to_an_enclosing_view_only_when_it_cannot_be_
 	defer {
 		macos.release(pool)
 	}
-	outer := native_new_scroll(native_rect(0, 0, 400, 300), BoxStyle{}, false, .horizontal_only)
+	outer := native_new_scroll(native_rect(0, 0, 400, 300), BoxStyle{}, false, .horizontal_only, false)
 	defer {
 		macos.release(outer)
 	}
 	outer_document := native_new_flipped_view(native_rect(0, 0, 1200, 300), BoxStyle{})
 	native_set_document_view(outer, outer_document)
 	macos.release(outer_document)
-	inner := native_new_scroll(native_rect(0, 0, 200, 150), BoxStyle{}, false, .horizontal_only)
+	inner := native_new_scroll(native_rect(0, 0, 200, 150), BoxStyle{}, false, .horizontal_only, false)
 	inner_document := native_new_flipped_view(native_rect(0, 0, 200, 150), BoxStyle{})
 	native_set_document_view(inner, inner_document)
 	macos.release(inner_document)
@@ -363,6 +364,124 @@ fn test_macos_text_field_uses_native_bezel_without_layer_mask() {
 	// AppKit owns the bezel shape. A custom backing layer was what produced
 	// the clipped corner gaps in the rendered field.
 	assert !macos.msg_bool(field, 'wantsLayer')
+}
+
+fn test_macos_controls_take_the_appearance_their_colors_call_for() {
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	// Light text on an unfilled field: a light bezel would hide it.
+	dark_field := native_new_text_field(text_field('dark', '', 'san', rect(0, 0, 200, 32),
+		BoxStyle{
+		transparent: true
+	}, TextStyle{
+		color: 0xf1f5f9
+	}, keyboard_default))
+	defer {
+		macos.release(dark_field)
+	}
+	// A filled field goes by its fill, whatever its text color.
+	light_field := native_new_text_field(text_field('light', '', 'ada', rect(0, 0, 200, 32),
+		BoxStyle{
+		bg: 0xffffff
+	}, TextStyle{
+		color: 0xf1f5f9
+	}, keyboard_default))
+	defer {
+		macos.release(light_field)
+	}
+	dark_box := native_new_checkbox(checkbox('box', 'Dark theme', true, rect(0, 0, 160, 24),
+		TextStyle{
+		color: 0xe2e8f0
+	}))
+	defer {
+		macos.release(dark_box)
+	}
+	assert native_appearance_name(dark_field) == 'NSAppearanceNameDarkAqua'
+	assert native_appearance_name(light_field) == 'NSAppearanceNameAqua'
+	assert native_appearance_name(dark_box) == 'NSAppearanceNameDarkAqua'
+}
+
+fn test_macos_checkbox_title_takes_its_text_color() {
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	box := native_new_checkbox(checkbox('box', 'Remember me', false, rect(0, 0, 160, 24),
+		TextStyle{
+		color: 0xef4444
+	}))
+	defer {
+		macos.release(box)
+	}
+	title := macos.msg_id(box, 'attributedTitle')
+	assert macos.utf8_string(macos.msg_id(title, 'string')) == 'Remember me'
+	attrs := macos.msg_id_u64_id(title, 'attributesAtIndex:effectiveRange:', 0, macos.Id(unsafe { nil }))
+	color := macos.msg_id1(attrs, 'objectForKey:', macos.nsstring('NSColor'))
+	assert macos.msg_bool_id(color, 'isEqual:', native_color(0xef4444))
+}
+
+fn test_macos_unlimited_line_budget_wraps() {
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	field := macos.msg_id_rect(macos.alloc('NSTextField'), 'initWithFrame:', appkit_rect(native_rect(0,
+		0, 120, 60)))
+	defer {
+		macos.release(field)
+	}
+	native_apply_line_limit(field, 0)
+	assert !macos.msg_bool(macos.msg_id(field, 'cell'), 'usesSingleLineMode')
+	native_apply_line_limit(field, 1)
+	assert macos.msg_bool(macos.msg_id(field, 'cell'), 'usesSingleLineMode')
+}
+
+fn test_macos_bordered_text_field_draws_its_box_instead_of_a_bezel() {
+	pool := macos.autorelease_pool_new()
+	defer {
+		macos.release(pool)
+	}
+	ensure_runtime_classes()
+	styled := native_new_text_field(Element{
+		...text_field('styled', 'Message', '', rect(0, 0, 240, 40), BoxStyle{
+			bg:            0x1e293b
+			radius:        8
+			border_color:  0x334155
+			border_left:   1
+			border_top:    1
+			border_right:  1
+			border_bottom: 1
+		}, TextStyle{
+			size: 14
+		}, keyboard_default)
+		padding_left: 12
+	})
+	defer {
+		macos.release(styled)
+	}
+	plain := native_new_text_field(text_field('plain', 'Name', '', rect(0, 0, 200, 32),
+		BoxStyle{}, TextStyle{}, keyboard_default))
+	defer {
+		macos.release(plain)
+	}
+	assert !macos.msg_bool(styled, 'isBezeled')
+	assert macos.msg_bool(plain, 'isBezeled')
+	cell := macos.msg_id(styled, 'cell')
+	assert macos.msg_bool_id(cell, 'isKindOfClass:', macos.get_class('UI2TextFieldCell'))
+	// One line of 14 pt text, centered in the 40 pt field and moved in by the padding.
+	text_rect := C.ui2_macos_msg_rect_rect(cell, macos.sel('drawingRectForBounds:'), C.ui2_macos_rect{
+		width:  240
+		height: 40
+	})
+	assert text_rect.height > 14 && text_rect.height < 24
+	assert math.abs(text_rect.y + text_rect.height / 2 - 20) < 1
+	assert text_rect.x >= 12
+}
+
+fn native_appearance_name(view NativeView) string {
+	return macos.utf8_string(macos.msg_id(macos.msg_id(view, 'appearance'), 'name'))
 }
 
 fn test_macos_independent_borders_follow_the_view_bounds() {

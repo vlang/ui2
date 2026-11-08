@@ -69,7 +69,7 @@ pub fn modal_view(config ModalViewConfig) !Element {
 	geometry := modal_view_geometry(config)!
 	backdrop := Element{
 		...button(modal_view_id(config.id, 'backdrop'), '', geometry.overlay, config.overlay_box, TextStyle{})
-		action_id: if config.auto_dismiss { config.dismiss_action_id } else { '' }
+		action_id:          if config.auto_dismiss { config.dismiss_action_id } else { '' }
 		accessibility_role: 'presentation'
 	}
 	// The surface button sits above the backdrop and consumes clicks in blank
@@ -90,7 +90,7 @@ pub fn modal_view(config ModalViewConfig) !Element {
 	}
 	return Element{
 		...view(config.id, config.frame, BoxStyle{ transparent: true }, [backdrop, surface, content])
-		hidden: !config.open
+		hidden:             !config.open
 		accessibility_role: 'dialog'
 	}
 }

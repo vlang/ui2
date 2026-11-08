@@ -26,9 +26,9 @@ pub fn (mut app TabbedPanelDemo) show_security() {
 fn main() {
 	ui2.run_vml[TabbedPanelDemo](
 		source: tabbed_vml_source
-		model: TabbedPanelDemo{}
-		title: 'Tabbed Panel'
-		width: tabbed_width
+		model:  TabbedPanelDemo{}
+		title:  'Tabbed Panel'
+		width:  tabbed_width
 		height: tabbed_height
 	) or { panic(err) }
 }

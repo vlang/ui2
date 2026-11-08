@@ -26,9 +26,9 @@ fn initial_scrollview() ScrollviewDemo {
 fn main() {
 	ui2.run_vml[ScrollviewDemo](
 		source: scrollview_vml_source
-		model: initial_scrollview()
-		title: 'Scrollview'
-		width: scrollview_width
+		model:  initial_scrollview()
+		title:  'Scrollview'
+		width:  scrollview_width
 		height: scrollview_height
 	) or { panic(err) }
 }

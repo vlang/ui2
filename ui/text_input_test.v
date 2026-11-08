@@ -2,9 +2,9 @@ module ui2
 
 fn test_text_input_defaults_to_multiline_editor() {
 	el := text_input(
-		id: 'notes'
-		frame: rect(0, 0, 240, 120)
-		text: 'One\nTwo'
+		id:        'notes'
+		frame:     rect(0, 0, 240, 120)
+		text:      'One\nTwo'
 		hint_text: 'Notes'
 		action_id: 'notes_changed'
 	) or { panic(err) }
@@ -17,14 +17,14 @@ fn test_text_input_defaults_to_multiline_editor() {
 
 fn test_text_input_single_line_supports_submit_and_password() {
 	el := text_input(
-		id: 'password'
-		frame: rect(0, 0, 200, 36)
-		text: 'secret'
-		hint_text: 'Password'
-		multiline: false
-		password: true
-		submit_id: 'sign_in'
-		autocorrect: false
+		id:           'password'
+		frame:        rect(0, 0, 200, 36)
+		text:         'secret'
+		hint_text:    'Password'
+		multiline:    false
+		password:     true
+		submit_id:    'sign_in'
+		autocorrect:  false
 		padding_left: 8
 	) or { panic(err) }
 	assert el.kind == .text_field
@@ -37,11 +37,11 @@ fn test_text_input_single_line_supports_submit_and_password() {
 
 fn test_text_input_preserves_readonly_and_disabled_state() {
 	el := text_input(
-		id: 'preview'
-		frame: rect(0, 0, 200, 36)
+		id:        'preview'
+		frame:     rect(0, 0, 200, 36)
 		multiline: false
-		readonly: true
-		enabled: false
+		readonly:  true
+		enabled:   false
 	) or { panic(err) }
 	assert el.kind == .text_field
 	assert el.readonly

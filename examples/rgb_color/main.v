@@ -12,7 +12,7 @@ pub mut:
 	green         string = '128'
 	blue          string = '128'
 	preview_color string = '#808080'
-	valid         bool = true
+	valid         bool   = true
 	message       string = 'rgb(128, 128, 128)'
 }
 
@@ -64,9 +64,9 @@ pub fn (mut app RgbColorDemo) show_color() {
 fn main() {
 	ui2.run_vml[RgbColorDemo](
 		source: rgb_color_vml_source
-		model: RgbColorDemo{}
-		title: 'RGB Color'
-		width: rgb_color_width
+		model:  RgbColorDemo{}
+		title:  'RGB Color'
+		width:  rgb_color_width
 		height: rgb_color_height
 	) or { panic(err) }
 }

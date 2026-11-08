@@ -83,11 +83,11 @@ fn handle_transitions_event(event string) {
 	mut state := unsafe { transitions_state }
 	state.select_target(stage_width, stage_height)
 	ui2.animation(
-		duration: 0.75
+		duration:   0.75
 		transition: .in_out_cubic
-		x: state.target_x
-		y: state.target_y
-		on_event: transition_animation_event
+		x:          state.target_x
+		y:          state.target_y
+		on_event:   transition_animation_event
 	).start('moving_tile')
 	ui2.refresh()
 }

@@ -1,0 +1,41 @@
+Screen {
+    id: root
+    background: #F1F5F9
+
+    Rectangle {
+        id: card
+        x: 16
+        y: 16
+        width: root.width - 32
+        height: root.height - 32
+        background: #FFFFFF
+        corner_radius: 10
+
+        Label { text: "PC Specs" x: 18 y: 14 width: 140 height: 28 color: #111827 font_size: 18 bold: true }
+        Label { text: "Basic details about this machine" x: 150 y: 18 width: 320 height: 20 color: #64748B font_size: 11 }
+        Button { id: refresh_button text: "Refresh" on_tap: app.refresh() native: true x: card.width - 108 y: 14 width: 90 height: 34 }
+
+        Rectangle {
+            id: table
+            x: 18
+            y: 58
+            width: card.width - 36
+            height: 310
+            background: #E2E8F0
+            corner_radius: 7
+
+            Rectangle { x: 1 y: 1 width: table.width - 2 height: 32 background: #334155
+                Label { text: "Component" x: 12 y: 0 width: 150 height: 32 color: #FFFFFF font_size: 11 bold: true }
+                Label { text: "Value" x: 172 y: 0 width: table.width - 190 height: 32 color: #FFFFFF font_size: 11 bold: true }
+            }
+            Repeater { model: app.rows key: item.label
+                Rectangle { x: 1 y: 33 + item.index * 34 width: table.width - 2 height: 34 background: item.index % 2 == 0 ? #FFFFFF : #F8FAFC
+                    Label { text: item.label x: 12 y: 0 width: 150 height: 34 color: #475569 font_size: 11 bold: true }
+                    Label { text: item.value x: 172 y: 0 width: table.width - 190 height: 34 color: #1E293B font_family: "Courier New" font_size: 11 }
+                }
+            }
+        }
+
+        Label { id: pc_specs_status text: app.status x: 18 y: card.height - 40 width: card.width - 36 height: 18 align: center color: #166534 font_size: 11 }
+    }
+}

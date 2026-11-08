@@ -79,10 +79,10 @@ fn (mut app TreeviewDemo) refresh_visible() {
 	for node in app.nodes {
 		if tree_node_visible(app.nodes, node) {
 			rows << TreeRow{
-				id: node.id
-				title: node.title
-				depth: node.depth
-				folder: node.folder
+				id:       node.id
+				title:    node.title
+				depth:    node.depth
+				folder:   node.folder
 				expanded: node.expanded
 			}
 		}
@@ -112,9 +112,9 @@ pub fn (mut app TreeviewDemo) select_node(id int) {
 fn main() {
 	ui2.run_vml[TreeviewDemo](
 		source: treeview_vml_source
-		model: initial_treeview()
-		title: 'Tree View'
-		width: treeview_width
+		model:  initial_treeview()
+		title:  'Tree View'
+		width:  treeview_width
 		height: treeview_height
 	) or { panic(err) }
 }

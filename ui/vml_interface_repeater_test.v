@@ -41,11 +41,10 @@ fn test_repeater_reads_interface_fields_and_dispatches_stable_item_actions() {
 		items: [RepeaterItemContract(RepeaterItemA{
 			id:    7
 			label: 'One'
-		}),
-			RepeaterItemContract(&RepeaterItemB{
-				id:    9
-				label: 'Two'
-			})]
+		}), RepeaterItemContract(&RepeaterItemB{
+			id:    9
+			label: 'Two'
+		})]
 	}
 	template := parse_vml(interface_repeater_source) or { panic(err) }
 	v_validate_template(template, model) or { panic(err) }
@@ -83,10 +82,9 @@ fn test_interface_repeater_rejects_duplicate_keys() {
 	model := InterfaceRepeaterApp{
 		items: [RepeaterItemContract(RepeaterItemA{
 			id: 7
-		}),
-			RepeaterItemContract(RepeaterItemB{
-				id: 7
-			})]
+		}), RepeaterItemContract(RepeaterItemB{
+			id: 7
+		})]
 	}
 	if _ := element_from_vml_model(interface_repeater_source, model, rect(0, 0, 240, 160)) {
 		assert false, 'duplicate interface keys must not be accepted'

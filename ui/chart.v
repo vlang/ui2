@@ -119,7 +119,7 @@ fn chart_scale(values []f64, zero bool, lower ?f64, upper ?f64) !ChartScale {
 }
 
 fn (scale ChartScale) fraction(value f64) f64 {
-	return math.max(0, math.min(1, (value - scale.min) / (scale.max - scale.min)))
+	return math.max(0.0, math.min(1.0, (value - scale.min) / (scale.max - scale.min)))
 }
 
 fn chart_tick_scale(scale ChartScale, ticks int) (ChartScale, int) {
@@ -220,7 +220,7 @@ fn chart_legend(mut children []Element, names []string, colors []u32, width f64,
 	mut x := 12.0
 	mut row_y := y
 	for i, name in names {
-		item_width := math.min(width - 24, math.max(48, f64(name.runes().len) * 7 + 28))
+		item_width := math.min(width - 24, math.max(48.0, f64(name.runes().len) * 7 + 28))
 		if x > 12 && x + item_width > width - 12 {
 			x = 12
 			row_y += 22
@@ -488,7 +488,7 @@ fn chart_slices(mut children []Element, dataset ChartDataset, config ChartConfig
 		y0 := -r + row
 		y1 := math.min(r, y0 + 1)
 		y := (y0 + y1) / 2
-		half := math.sqrt(math.max(0, r * r - y * y))
+		half := math.sqrt(math.max(0.0, r * r - y * y))
 		mut edges := [-half, half]
 		if math.abs(y) < inner {
 			hole := math.sqrt(inner * inner - y * y)

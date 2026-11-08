@@ -4,14 +4,22 @@ module ui2
 import math
 
 __global g_animation_test_events = []AnimationEvent{}
+__global g_animation_test_clear_refreshes = 0
 
 fn animation_test_event_handler(event AnimationEvent) {
 	g_animation_test_events << event
 }
 
+fn animation_test_clear_refresh_handler() {
+	// A refresh callback may inspect animation state, so it must run outside
+	// the runtime mutex and after the retained values have been removed.
+	assert animation_info('tile').status == .idle
+	g_animation_test_clear_refreshes++
+}
+
 fn animation_test_element() Element {
 	return view('tile', rect(10, 20, 100, 40), BoxStyle{
-		bg: 0x000000
+		bg:     0x000000
 		radius: 4
 	}, [])
 }
@@ -36,13 +44,13 @@ fn animation_test_find(element Element, id string) Element {
 fn test_animation_interpolates_multiple_widget_properties() {
 	reset_widget_animations()
 	definition := animation(AnimationConfig{
-		duration: 1
-		transition: .linear
-		x: 110
-		y: 120
-		width: 200
-		rotation: 90
-		background: u32(0xffffff)
+		duration:      1
+		transition:    .linear
+		x:             110
+		y:             120
+		width:         200
+		rotation:      90
+		background:    u32(0xffffff)
 		corner_radius: 12
 	})
 	start_widget_animation_at('tile', definition, 1_000, false)
@@ -67,11 +75,11 @@ fn test_animation_sequence_and_parallel_composition() {
 	reset_widget_animations()
 	move_x := animation(AnimationConfig{
 		duration: 1
-		x: 110
+		x:        110
 	})
 	move_y := animation(AnimationConfig{
 		duration: 2
-		y: 100
+		y:        100
 	})
 	sequence_definition := move_x + move_y
 	assert sequence_definition.duration == 3
@@ -94,8 +102,8 @@ fn test_animation_easing_step_and_custom_transition() {
 	reset_widget_animations()
 	stepped := animation(AnimationConfig{
 		duration: 1
-		step: 0.25
-		x: 110
+		step:     0.25
+		x:        110
 	})
 	start_widget_animation_at('tile', stepped, 1_000, false)
 	result := animation_test_find(apply_widget_animations_at(animation_test_root(animation_test_element()), 1_370), 'tile')
@@ -103,11 +111,11 @@ fn test_animation_easing_step_and_custom_transition() {
 
 	reset_widget_animations()
 	custom := animation(AnimationConfig{
-		duration: 1
+		duration:      1
 		transition_fn: fn (progress f64) f64 {
 			return progress * progress
 		}
-		x: 110
+		x:             110
 	})
 	start_widget_animation_at('tile', custom, 1_000, false)
 	eased := animation_test_find(apply_widget_animations_at(animation_test_root(animation_test_element()), 1_500), 'tile')
@@ -117,7 +125,7 @@ fn test_animation_easing_step_and_custom_transition() {
 fn test_animation_generic_properties_cover_widget_and_style_values() {
 	reset_widget_animations()
 	definition := animation(AnimationConfig{
-		duration: 1
+		duration:   1
 		properties: [
 			animation_number_property('value', 80),
 			animation_number_property('box.border_left', 10),
@@ -144,8 +152,8 @@ fn test_animation_generic_properties_normalize_names_and_ignore_invalid_targets(
 	assert !is_animatable_property('text', .number)
 	assert !is_animatable_property('value', .color)
 	definition := animation(AnimationConfig{
-		duration: 1
-		x: 110
+		duration:   1
+		x:          110
 		properties: [
 			animation_number_property('frame.x', 210),
 			animation_color_property('value', 0xffffff),
@@ -164,11 +172,11 @@ fn test_repeating_sequence_restarts_from_previous_end() {
 	reset_widget_animations()
 	forward := animation(AnimationConfig{
 		duration: 0.1
-		x: 110
+		x:        110
 	})
 	back := animation(AnimationConfig{
 		duration: 0.1
-		x: 10
+		x:        10
 	})
 	definition := (forward + back).repeating()
 	start_widget_animation_at('tile', definition, 1_000, false)
@@ -181,15 +189,15 @@ fn test_redirect_cancel_property_and_clear_preserve_declarative_values() {
 	reset_widget_animations()
 	first := animation(AnimationConfig{
 		duration: 1
-		x: 110
-		y: 120
+		x:        110
+		y:        120
 	})
 	start_widget_animation_at('tile', first, 1_000, false)
 	apply_widget_animations_at(animation_test_root(animation_test_element()), 1_500)
 
 	redirect := animation(AnimationConfig{
 		duration: 1
-		x: 210
+		x:        210
 	})
 	start_widget_animation_at('tile', redirect, 1_500, false)
 	redirected := animation_test_find(apply_widget_animations_at(animation_test_root(animation_test_element()), 2_000), 'tile')
@@ -217,7 +225,7 @@ fn test_animation_events_and_stop_cancel_semantics() {
 	g_animation_test_events = []AnimationEvent{}
 	definition := animation(AnimationConfig{
 		duration: 1
-		x: 110
+		x:        110
 		on_event: animation_test_event_handler
 	})
 	start_widget_animation_at('tile', definition, 1_000, false)
@@ -242,4 +250,79 @@ fn test_animation_events_and_stop_cancel_semantics() {
 	stop_animation('tile')
 	assert animation_info('tile').status == .stopped
 	assert g_animation_test_events.last().kind == .complete
+}
+
+fn test_custom_animation_requests_terminal_frame_after_suspension() {
+	reset_widget_animations()
+	g_animation_test_events = []AnimationEvent{}
+	root := animation_test_root(animation_test_element())
+	definition := animation(AnimationConfig{
+		duration: 1
+		x: 110
+		on_event: animation_test_event_handler
+	})
+	start_widget_animation_at('tile', definition, 1_000, false)
+	apply_custom_widget_animations_at(root, 1_500)
+	assert custom_animations_need_frame(root)
+
+	// No presentation ran while the window was suspended. The first resumed
+	// presentation still has to apply the final values and emit complete.
+	resumed := apply_custom_widget_animations_at(root, 30_000)
+	assert animation_test_find(resumed, 'tile').frame.x == 110
+	assert g_animation_test_events.last().kind == .complete
+	assert !custom_animations_need_frame(resumed)
+	apply_custom_widget_animations_at(root, 30_016)
+	assert g_animation_test_events.filter(it.kind == .complete).len == 1
+}
+
+fn test_custom_repeating_animation_does_not_draw_hidden_or_unmounted_nodes() {
+	reset_widget_animations()
+	definition := animation(AnimationConfig{
+		duration: 1
+		x: 110
+		repeat: true
+	})
+	start_widget_animation_at('tile', definition, 1_000, false)
+	root := animation_test_root(animation_test_element())
+	apply_custom_widget_animations_at(root, 1_500)
+	assert custom_animations_need_frame(root)
+	assert !custom_animations_need_frame(screen(0xffffff, []))
+	assert !custom_animations_need_frame(animation_test_root(Element{
+		...animation_test_element()
+		hidden: true
+	}))
+	assert !custom_animations_need_frame(Element{
+		...root
+		hidden: true
+	})
+	assert animation_info('tile').status == .running
+
+	// Visibility pauses frame demand without cancelling the animation. A later
+	// mount continues on the same timeline, and cancellation returns to idle.
+	assert custom_animations_need_frame(root)
+	resumed := apply_custom_widget_animations_at(root, 30_500)
+	assert math.close(animation_test_find(resumed, 'tile').frame.x, 110)
+	cancel_animation('tile')
+	assert !custom_animations_need_frame(root)
+}
+
+fn test_clearing_retained_animation_requests_refresh_outside_runtime_lock() {
+	reset_widget_animations()
+	runtime := g_animation_runtime
+	runtime.mutex.lock()
+	previous_callback := runtime.refresh_callback
+	previous_drive_frames := runtime.drive_frames
+	runtime.mutex.unlock()
+	defer { configure_animation_driver(previous_callback, previous_drive_frames) }
+	root := animation_test_root(animation_test_element())
+	start_widget_animation_at('tile', animation(AnimationConfig{duration: 1, x: 110}), 1_000, false)
+	completed := apply_widget_animations_at(root, 2_000)
+	assert animation_test_find(completed, 'tile').frame.x == 110
+	assert !custom_animations_need_frame(completed)
+	g_animation_test_clear_refreshes = 0
+	configure_animation_driver(animation_test_clear_refresh_handler, false)
+	clear_animation('tile')
+	assert g_animation_test_clear_refreshes == 1
+	refreshed := apply_widget_animations_at(root, 3_000)
+	assert animation_test_find(refreshed, 'tile').frame == animation_test_element().frame
 }

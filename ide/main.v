@@ -245,7 +245,7 @@ fn (mut app IdeApp) build_project() {
 	}
 	app.status = 'Building ${main_path}...'
 	app.log(app.status)
-	result := os.execute('${os.quoted_path(@VEXE)} -check ${os.quoted_path(main_path)}')
+	result := os.exec([@VEXE, '-check', main_path])
 	if result.output.trim_space().len > 0 {
 		app.log(result.output.trim_space())
 	}

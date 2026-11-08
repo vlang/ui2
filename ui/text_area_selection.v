@@ -16,7 +16,7 @@ fn clamped_text_area_selection(text string, location int, length int) TextAreaSe
 	start := clamp_int(location, 0, text_length)
 	return TextAreaSelectionRange{
 		location: start
-		length: clamp_int(length, 0, text_length - start)
+		length:   clamp_int(length, 0, text_length - start)
 	}
 }
 

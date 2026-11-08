@@ -45,7 +45,7 @@ an action, title, shortcut, checked/disabled state, or child rows.
 **declarations, not automatic toggles**. Handle the action in V and install a new
 menu declaration to change its state. Shortcuts use the same syntax and platform
 behavior as `menu_item_with_shortcut`: `cmd` means Command on macOS and Control
-on Windows/Linux.
+on Windows, Linux, and the BSDs.
 
 For repeated updates, parse the source once with `parse_vml`, change the relevant
 node's `props` in V, and call `menu_bar_from_vnode` followed by `set_menu_bar`.

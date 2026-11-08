@@ -17,7 +17,7 @@ pub:
 pub struct FilesDroppedDemo {
 pub mut:
 	files   []DroppedFile
-	next_id int = 1
+	next_id int    = 1
 	status  string = 'Drop files anywhere in this window.'
 }
 
@@ -31,7 +31,7 @@ fn dropped_name(path string) string {
 fn (mut app FilesDroppedDemo) receive(paths []string, dropped_text string) {
 	for path in paths {
 		app.files << DroppedFile{
-			id: app.next_id
+			id:   app.next_id
 			name: dropped_name(path)
 			path: path
 		}
@@ -39,7 +39,7 @@ fn (mut app FilesDroppedDemo) receive(paths []string, dropped_text string) {
 	}
 	if paths.len == 0 && dropped_text.len > 0 {
 		app.files << DroppedFile{
-			id: app.next_id
+			id:   app.next_id
 			name: 'Dropped text'
 			path: dropped_text
 		}

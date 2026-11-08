@@ -36,7 +36,7 @@ fn (mut app DirectoryBrowserDemo) load_directory(path string) ! {
 		full_path := os.join_path(real_path, name)
 		if os.is_dir(full_path) {
 			entries << DirectoryEntry{
-				id: entries.len + 1
+				id:   entries.len + 1
 				name: name
 				path: full_path
 			}
@@ -72,9 +72,9 @@ pub fn (mut app DirectoryBrowserDemo) choose_current() {
 fn main() {
 	ui2.run_vml[DirectoryBrowserDemo](
 		source: dirbrowser_vml_source
-		model: directory_browser_at(os.getwd())
-		title: 'Directory Browser'
-		width: dirbrowser_width
+		model:  directory_browser_at(os.getwd())
+		title:  'Directory Browser'
+		width:  dirbrowser_width
 		height: dirbrowser_height
 	) or { panic(err) }
 }

@@ -20,9 +20,9 @@ pub fn (mut app TextInputDemo) save() {
 fn main() {
 	ui2.run_vml[TextInputDemo](
 		source: text_input_vml_source
-		model: TextInputDemo{}
-		title: 'Text Input'
-		width: text_input_width
+		model:  TextInputDemo{}
+		title:  'Text Input'
+		width:  text_input_width
 		height: text_input_height
 	) or { panic(err) }
 }

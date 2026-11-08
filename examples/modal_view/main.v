@@ -30,9 +30,9 @@ pub fn (mut app ModalViewDemo) confirm() {
 fn main() {
 	ui2.run_vml[ModalViewDemo](
 		source: modal_view_vml_source
-		model: ModalViewDemo{}
-		title: 'Modal View'
-		width: modal_view_width
+		model:  ModalViewDemo{}
+		title:  'Modal View'
+		width:  modal_view_width
 		height: modal_view_height
 	) or { panic(err) }
 }

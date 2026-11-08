@@ -23,10 +23,10 @@ pub:
 // ── Point sizes ────────────────────────────────────────────────────
 
 // font_pixels_per_point resolves a point the way the platform's own toolkit
-// does. Win32 and the Linux desktops render type at 96 dpi, AppKit and UIKit
-// at 72, so a declared size lines up with the native controls beside it.
+// does. Win32 and the Linux and BSD desktops render type at 96 dpi, AppKit and
+// UIKit at 72, so a declared size lines up with the native controls beside it.
 fn font_pixels_per_point() f64 {
-	$if linux || windows {
+	$if linux || freebsd || openbsd || netbsd || dragonfly || solaris || windows {
 		return 96.0 / 72.0
 	} $else {
 		return 1.0
@@ -93,8 +93,7 @@ fn wrap_text_lines_measured(text string, width f64, limit int, measure fn (strin
 			if lines.len >= limit - 1 {
 				// The last line there is room for. Everything still to come stays on it
 				// so the draw truncates it, rather than text quietly disappearing.
-				lines << text_with_overflow(candidate, words[word_index + 1..], paragraphs[
-					index + 1..])
+				lines << text_with_overflow(candidate, words[word_index + 1..], paragraphs[index + 1..])
 				return lines
 			}
 			lines << current
@@ -109,6 +108,60 @@ fn wrap_text_lines_measured(text string, width f64, limit int, measure fn (strin
 		lines << current
 		if lines.len >= limit {
 			return lines
+		}
+	}
+	return lines
+}
+
+// Wrap using the same font measurement as drawing. Explicit blank lines
+// survive, and an unbroken word is split only at UTF-8 rune boundaries.
+fn wrap_text_area_lines(value string, width f64, measure fn (string) f64) []string {
+	if width <= 0 {
+		return []string{}
+	}
+	mut lines := []string{}
+	for paragraph in value.replace('\r\n', '\n').replace('\r', '\n').split('\n') {
+		if paragraph.len == 0 {
+			lines << ''
+			continue
+		}
+		runes := paragraph.runes()
+		mut start := 0
+		for start < runes.len {
+			rest := runes[start..].string()
+			if measure(rest) <= width {
+				lines << rest
+				break
+			}
+			mut low := 0
+			mut high := runes.len - start
+			for low < high {
+				mid := (low + high + 1) / 2
+				if measure(runes[start..start + mid].string()) <= width {
+					low = mid
+				} else {
+					high = mid - 1
+				}
+			}
+			// A glyph wider than the pane is clipped, but must still advance.
+			kept := if low > 0 { low } else { 1 }
+			mut end := start + kept
+			mut next := end
+			if end < runes.len {
+				mut space := end
+				for space > start && runes[space] != ` ` && runes[space] != `\t` {
+					space--
+				}
+				if space > start {
+					end = space
+					next = space + 1
+					for next < runes.len && (runes[next] == ` ` || runes[next] == `\t`) {
+						next++
+					}
+				}
+			}
+			lines << runes[start..end].string()
+			start = next
 		}
 	}
 	return lines
@@ -161,8 +214,8 @@ fn parse_font_metrics(data []u8) !FontMetrics {
 	// A collection keeps its own header up front and the first font's table
 	// directory further in.
 	base := if font_tag(data, 0) == 'ttcf' { font_u32(data, 12) } else { 0 }
-	tag := font_tag(data, base)
-	if tag != 'OTTO' && tag != 'true' && font_u32(data, base) != 0x00010000 {
+	font_kind := font_tag(data, base)
+	if font_kind != 'OTTO' && font_kind != 'true' && font_u32(data, base) != 0x00010000 {
 		return error('not a TrueType or OpenType font')
 	}
 	num_tables := font_u16(data, base + 4)
@@ -185,8 +238,8 @@ fn parse_font_metrics(data []u8) !FontMetrics {
 	}
 	metrics := FontMetrics{
 		units_per_em: font_u16(data, head + 18)
-		ascender: font_i16(data, hhea + 4)
-		descender: font_i16(data, hhea + 6)
+		ascender:     font_i16(data, hhea + 4)
+		descender:    font_i16(data, hhea + 6)
 	}
 	if metrics.units_per_em <= 0 || metrics.ascender - metrics.descender <= 0 {
 		return error('font has no usable vertical metrics')
@@ -273,11 +326,29 @@ fn font_lookup(index map[string]string, family string, bold bool, italic bool) s
 // binary can look the same on a machine with nothing useful installed.
 fn font_bundle_dirs() []string {
 	exe_dir := os.dir(os.executable())
-	return [
+	mut dirs := [
 		os.join_path(exe_dir, 'fonts'),
 		os.join_path(exe_dir, 'assets', 'fonts'),
 		os.join_path(@VMODROOT, 'assets', 'fonts'),
 	]
+	$if android {
+		if unpacked := android_font_dir() {
+			dirs << unpacked
+		}
+	}
+	return dirs
+}
+
+// font_bundle_file returns the path of a font file shipped with the application
+// or with ui2 itself, or '' when none of the bundle directories has it.
+fn font_bundle_file(file_name string) string {
+	for dir in font_bundle_dirs() {
+		path := os.join_path(dir, file_name)
+		if os.is_file(path) {
+			return path
+		}
+	}
+	return ''
 }
 
 // font_system_dirs are the font trees the platform installs into.
@@ -285,8 +356,8 @@ fn font_system_dirs() []string {
 	home := os.home_dir()
 	$if android {
 		return ['/system/fonts', '/data/fonts']
-	} $else $if linux {
-		return [
+	} $else $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
+		mut dirs := [
 			os.join_path(home, '.local', 'share', 'fonts'),
 			os.join_path(home, '.fonts'),
 			'/usr/local/share/fonts',
@@ -294,6 +365,19 @@ fn font_system_dirs() []string {
 			// The host's fonts as a Flatpak sandbox sees them.
 			'/run/host/fonts',
 		]
+		$if openbsd {
+			// Xenocara's own trees, where the base system's faces live; the
+			// packages' fonts land in /usr/local/share/fonts above.
+			dirs << '/usr/X11R6/lib/X11/fonts'
+		}
+		$if netbsd {
+			// The base system's X11R7 tree, and both of pkgsrc's font
+			// layouts; font_index skips the ones not present.
+			dirs << '/usr/X11R7/lib/X11/fonts'
+			dirs << '/usr/pkg/share/fonts'
+			dirs << '/usr/pkg/lib/X11/fonts'
+		}
+		return dirs
 	} $else $if macos {
 		return [os.join_path(home, 'Library', 'Fonts'), '/Library/Fonts', '/System/Library/Fonts']
 	} $else $if windows {
@@ -332,8 +416,10 @@ fn font_mono_preferences() []string {
 // letters a paragraph is set in. A text face only draws the scripts it was cut
 // for: the bundled Roboto stops at 927 code points, so the triangles, arrows
 // and check marks an interface labels its rows with land on glyph 0, the empty
-// box. `ui2` ships Noto Sans Symbols 2 and Noto Emoji for that reason, so those
-// boxes are gone with nothing installed on the machine; the rest are the symbol
+// box. `ui2` ships Noto Sans Symbols 2 and Noto Emoji for that reason, which
+// holds up for the misc-symbols and dingbat ranges; the arrows live in the wide
+// fallback faces font_symbol_paths appends from the machine (Noto Sans Symbols
+// and DejaVu Sans both carry U+2190). The rest of this list are the symbol
 // faces the three desktops come with. Symbols are looked for before emoji: the
 // two overlap around the dingbats, and a ✔ beside a line of text should be the
 // text-weight one rather than the emoji.
@@ -385,12 +471,23 @@ fn font_is_symbol_family(family string) bool {
 	return false
 }
 
+// font_symbol_path_limit caps the faces font_symbol_paths hands to fontstash.
+// A glyph the text font misses walks the whole chain once per code point and
+// size before the glyph cache takes over, and every face is loaded fully on a
+// rebind, so the list pays at both ends for ranges that rarely come up. Five
+// keeps the env override, the bundled faces, and the first two installed
+// families — the symbol face plus whatever follows it — inside the fallback
+// budget fontstash itself allows.
+const font_symbol_path_limit = 5
+
 // font_symbol_paths lists the files to search for a glyph the text font has no
-// outline for, in the order they are searched. Everything the application ships
-// comes first, and then at most one face off the machine, so an installed
-// symbol font can cover what the bundle does not without the window holding
-// another few megabytes of glyphs it will never draw. `UI2_FONT_SYMBOLS` names
-// a file to put ahead of both.
+// outline for, in the order they are searched, up to font_symbol_path_limit.
+// Everything the application ships comes first, and then every family from the
+// machine the list names, in the same order. The later families matter: Noto
+// Sans Symbols 2 holds the misc-symbols ranges but not the arrows at U+2190,
+// which sit in Noto Sans Symbols and DejaVu Sans, so stopping at the first
+// face the machine has would leave those arrows blank.
+// `UI2_FONT_SYMBOLS` names a file to put ahead of every other face.
 fn font_symbol_paths() []string {
 	families := font_symbol_fallback_families()
 	mut paths := []string{}
@@ -400,14 +497,23 @@ fn font_symbol_paths() []string {
 	}
 	bundled := font_index(font_bundle_dirs())
 	for family in families {
+		if paths.len >= font_symbol_path_limit {
+			break
+		}
 		path := font_lookup(bundled, family, false, false)
 		if path != '' && path !in paths {
 			paths << path
 		}
 	}
-	installed := font_first_available(font_index(font_system_dirs()), families, false, false)
-	if installed != '' && installed !in paths {
-		paths << installed
+	installed := font_index(font_system_dirs())
+	for family in families {
+		if paths.len >= font_symbol_path_limit {
+			break
+		}
+		path := font_lookup(installed, family, false, false)
+		if path != '' && path !in paths {
+			paths << path
+		}
 	}
 	return paths
 }

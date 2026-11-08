@@ -36,7 +36,7 @@ fn custom_window_screen_background() string {
 }
 
 fn custom_window_platform_note() string {
-	$if ( macos || windows ) && !ui2_custom_rendering ? {
+	$if (macos || windows) && !ui2_custom_rendering ? {
 		return 'The empty area around these cards is the desktop.'
 	} $else {
 		return 'Frameless transparency is demonstrated by the native macOS and Windows backends.'

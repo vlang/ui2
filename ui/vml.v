@@ -403,11 +403,11 @@ fn (mut p Parser) eat(kind TokenKind) !Token {
 }
 
 fn (mut p Parser) parse_node() !&VNode {
-	tag := p.eat(.ident)!
+	tag_tok := p.eat(.ident)!
 	p.eat(.lbrace)!
 	mut node := &VNode{
-		tag:  tag.val
-		line: tag.line
+		tag:  tag_tok.val
+		line: tag_tok.line
 	}
 	for p.at().kind != .rbrace && p.at().kind != .eof {
 		// Lookahead: if IDENT followed by '{', it's a child node; if followed by ':', it's a property
@@ -776,7 +776,11 @@ pub fn element_from_vnode(node &VNode, frame Rect) !Element {
 }
 
 fn node_to_element(node &VNode, frame Rect) !Element {
-	resolved := if node.tag == 'Screen' && node.prop_bool('adaptive') { frame } else { v_frame(node, frame) }
+	resolved := if node.tag == 'Screen' && node.prop_bool('adaptive') {
+		frame
+	} else {
+		v_frame(node, frame)
+	}
 	el := node_to_element_base(node, resolved)!
 	key := node.prop('key')
 	menu := v_menu(node)
@@ -791,6 +795,7 @@ fn node_to_element(node &VNode, frame Rect) !Element {
 		button_behavior:     el.kind == .view
 			&& (el.button_behavior || node.prop_bool('button_behavior'))
 		draggable:           node.prop_bool('draggable')
+		hoverable:           el.hoverable || node.prop_bool('hoverable')
 		long_press:          node.prop_bool('long_press')
 		swipe_left:          node.prop_bool('swipe_left')
 		rotation:            node.prop_or('rotation', '0').f64()
@@ -843,7 +848,7 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 		'FloatLayout', 'RelativeLayout' {
 			return v_float_layout(node, frame)!
 		}
-		'GridLayout' {
+		'Grid' {
 			return v_grid(node, frame)!
 		}
 		'AnchorLayout' {
@@ -883,13 +888,13 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 				return Element{
 					...scroll_persistent(node.id, frame, v_color(node, 'background', 0xffffff),
 						children)
-					box: v_box(node)
+					box:         v_box(node)
 					scroll_mode: mode
 				}
 			}
 			return Element{
 				...scroll(node.id, frame, v_color(node, 'background', 0xffffff), children)
-				box: v_box(node)
+				box:         v_box(node)
 				scroll_mode: mode
 			}
 		}
@@ -901,6 +906,82 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 		}
 		'Image' {
 			return image(node.id, node.prop_or('source', node.prop('path')), frame)
+		}
+		'Card' {
+			return view(node.id, frame, v_box(node), v_children(node, local)!)
+		}
+		'Divider' {
+			h := if node.prop_or('thickness', '1').f64() > 0 {
+				node.prop_or('thickness', '1').f64()
+			} else {
+				1.0
+			}
+			return view(node.id, rect(frame.x, frame.y, frame.width, h), BoxStyle{ bg: v_color(node, 'color', 0xcbd5e1) }, [])
+		}
+		'Chip' {
+			return Element{
+				...button(node.id, node.prop('text'), frame, v_box(node), v_text_style(node))
+				action_id: node.prop('on_tap')
+			}
+		}
+		'Badge' {
+			return view(node.id, frame, v_box(node), [label('${node.id}_text', node.prop('text'), rect(0, 0, frame.width, frame.height), v_text_style(node))])
+		}
+		'FloatingActionButton' {
+			return Element{
+				...button(node.id, node.prop_or('icon', node.prop('text')), frame, v_box(node), v_text_style(node))
+				action_id: node.prop('on_tap')
+			}
+		}
+		'AppBar' {
+			return view(node.id, frame, v_box(node), [label('${node.id}_title', node.prop('title'), rect(16, 0, frame.width - 32, frame.height), v_text_style(node))])
+		}
+		'SnackBar' {
+			return view(node.id, frame, v_box(node), [label('${node.id}_text', node.prop('text'), rect(16, 0, frame.width - 32, frame.height), v_text_style(node))])
+		}
+		'IconButton' {
+			return Element{
+				...button(node.id, node.prop_or('icon', node.prop('text')), frame, v_box(node), v_text_style(node))
+				action_id: node.prop('on_tap')
+			}
+		}
+		'Radio' {
+			return button(node.id, node.prop('text'), frame, v_box(node), v_text_style(node))
+		}
+		'Icon' {
+			return label(node.id, node.prop_or('icon', node.prop('text')), frame, v_text_style(node))
+		}
+		'Spacer' {
+			return view(node.id, frame, BoxStyle{ transparent: true }, [])
+		}
+		'AlertDialog' {
+			return view(node.id, frame, v_box(node), [
+				label('${node.id}_title', node.prop('title'), rect(16, 16, frame.width - 32, 24), v_text_style(node)),
+				label('${node.id}_text', node.prop('text'), rect(16, 44, frame.width - 32, frame.height - 60), v_text_style(node)),
+			])
+		}
+		'BottomSheet' {
+			return if node.prop_bool('open') {
+				view(node.id, frame, v_box(node), v_children(node, local)!)
+			} else {
+				view(node.id, rect(0, 0, 0, 0), BoxStyle{ transparent: true }, [])
+			}
+		}
+		'BottomNavigationBar' {
+			return view(node.id, frame, v_box(node), [])
+		}
+		'Drawer' {
+			return if node.prop_bool('open') {
+				view(node.id, frame, v_box(node), v_children(node, local)!)
+			} else {
+				view(node.id, rect(0, 0, 0, 0), BoxStyle{ transparent: true }, [])
+			}
+		}
+		'ListTile' {
+			return view(node.id, frame, v_box(node), [label('${node.id}_title', node.prop_or('title', node.prop('text')), rect(12, 8, frame.width - 24, 20), v_text_style(node))])
+		}
+		'Scaffold' {
+			return view(node.id, frame, v_box(node), v_children(node, local)!)
 		}
 		'ProgressBar' {
 			return progress_bar(
@@ -1224,8 +1305,8 @@ fn v_box_layout_config(node &VNode, frame Rect, children []BoxLayoutChild) !BoxL
 		id:          node.id
 		frame:       frame
 		box:         v_box(node)
-		orientation: box_orientation(node.prop_or('orientation', 'horizontal'))!
-		padding:     BoxPadding{
+		orientation: layout_orientation(node.prop_or('orientation', 'horizontal'))!
+		padding:     LayoutPadding{
 			left:   node.prop_or('padding_left', padding.str()).f64()
 			top:    node.prop_or('padding_top', padding.str()).f64()
 			right:  node.prop_or('padding_right', padding.str()).f64()
@@ -1326,10 +1407,10 @@ fn v_float_layout(node &VNode, frame Rect) !Element {
 	return view(node.id, frame, v_box(node), children)
 }
 
-fn v_grid_config(node &VNode, frame Rect) !GridLayoutConfig {
+fn v_grid_config(node &VNode, frame Rect) !GridConfig {
 	padding := node.prop_or('padding', '0').f64()
 	spacing := node.prop_or('spacing', '0').f64()
-	return GridLayoutConfig{
+	return GridConfig{
 		id:                   node.id
 		frame:                frame
 		box:                  v_box(node)
@@ -1361,7 +1442,7 @@ fn v_grid(node &VNode, frame Rect) !Element {
 		}
 	}
 	config := v_grid_config(node, rect(0, 0, frame.width, frame.height))!
-	frames := grid_layout_frames(config, visible.len)!
+	frames := grid_frames(config, visible.len)!
 	mut children := []Element{cap: visible.len}
 	for index, child in visible {
 		children << node_to_element(child, frames[index])!
@@ -1546,7 +1627,7 @@ fn v_accordion_config(node &VNode, frame Rect, items []AccordionItem) !Accordion
 		frame:                    frame
 		box:                      v_box(node)
 		current:                  node.prop_or('current', '0').int()
-		orientation:              box_orientation(node.prop_or('orientation', 'horizontal'))!
+		orientation:              layout_orientation(node.prop_or('orientation', 'horizontal'))!
 		min_space:                node.prop_or('min_space', '44').f64()
 		header_box:               BoxStyle{
 			bg:     v_color(node, 'title_background', 0xe2e8f0)
@@ -1823,7 +1904,7 @@ fn v_frame(node &VNode, fallback Rect) Rect {
 	return rect(node.prop_or('x', fallback.x.str()).f64(),
 		node.prop_or('y', fallback.y.str()).f64(),
 		node.prop_or('width', fallback.width.str()).f64(), node.prop_or('height',
-		fallback.height.str()).f64())
+			fallback.height.str()).f64())
 }
 
 fn v_dimension(node &VNode, key string, fallback f64) f64 {

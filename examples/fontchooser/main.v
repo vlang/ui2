@@ -11,10 +11,10 @@ pub mut:
 	font_choice  string = 'System'
 	font_family  string
 	size_choice  string = '30'
-	font_size    f64 = 30
+	font_size    f64    = 30
 	color_choice string = 'Red'
 	text_color   string = '#B91C1C'
-	bold         bool = true
+	bold         bool   = true
 	italic       bool
 	text         string = 'il était une fois V ....\nLa vie est belle...'
 	status       string = 'System, 30 pt, red'
@@ -52,9 +52,9 @@ pub fn (mut app FontChooserDemo) reset_style() {
 fn main() {
 	ui2.run_vml[FontChooserDemo](
 		source: fontchooser_vml_source
-		model: FontChooserDemo{}
-		title: 'Font Chooser'
-		width: fontchooser_width
+		model:  FontChooserDemo{}
+		title:  'Font Chooser'
+		width:  fontchooser_width
 		height: fontchooser_height
 	) or {
 		panic(err)

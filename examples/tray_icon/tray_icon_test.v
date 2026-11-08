@@ -61,7 +61,7 @@ fn test_tray_choose_logs_and_ignores_unknown_ids() {
 
 fn test_tray_does_not_claim_to_dock_without_a_status_area() {
 	mut app := TrayDemo{
-		docked: false
+		docked:    false
 		supported: false
 	}
 	assert app.choose('tray_show')
@@ -79,7 +79,7 @@ fn test_tray_status_from_id_only_matches_status_rows() {
 fn test_tray_vml_offers_the_same_rows_where_there_is_no_status_area() {
 	root := ui2.element_from_vml_model(tray_icon_vml_source, TrayDemo{
 		supported: false
-		docked: false
+		docked:    false
 	}, ui2.rect(0, 0, tray_icon_width, tray_icon_height)) or { panic(err) }
 	ui2.validate_element_tree(root) or { panic(err) }
 	// The fallback buttons carry the very ids the tray menu rows emit.

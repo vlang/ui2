@@ -16,7 +16,7 @@ pub struct RadioDemo {
 pub:
 	countries []CountryChoice
 pub mut:
-	compact          bool = true
+	compact          bool   = true
 	selected_country string = 'United States'
 	message          string = 'Country: United States'
 }
@@ -40,9 +40,9 @@ pub fn (mut app RadioDemo) select_country(country string) {
 fn main() {
 	ui2.run_vml[RadioDemo](
 		source: radio_vml_source
-		model: initial_radio_demo()
-		title: 'Radio Choices'
-		width: radio_width
+		model:  initial_radio_demo()
+		title:  'Radio Choices'
+		width:  radio_width
 		height: radio_height
 	) or { panic(err) }
 }

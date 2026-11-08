@@ -6,9 +6,9 @@ fn box_test_child(id string, width f64, height f64) Element {
 
 fn test_box_layout_distributes_space_after_fixed_children() {
 	config := BoxLayoutConfig{
-		frame: rect(0, 0, 330, 80)
-		padding: BoxPadding{ left: 10, top: 5, right: 10, bottom: 5 }
-		spacing: 10
+		frame:    rect(0, 0, 330, 80)
+		padding:  LayoutPadding{ left: 10, top: 5, right: 10, bottom: 5 }
+		spacing:  10
 		children: [
 			BoxLayoutChild{ element: box_test_child('fixed', 80, 20), size_hint_x: -1 },
 			BoxLayoutChild{ element: box_test_child('wide', 1, 20), size_hint_x: 2 },
@@ -21,7 +21,7 @@ fn test_box_layout_distributes_space_after_fixed_children() {
 
 fn test_box_layout_honors_bounds_and_redistributes_remaining_space() {
 	config := BoxLayoutConfig{
-		frame: rect(0, 0, 300, 60)
+		frame:    rect(0, 0, 300, 60)
 		children: [
 			BoxLayoutChild{ element: box_test_child('limited', 1, 20), maximum_width: 80 },
 			BoxLayoutChild{ element: box_test_child('remaining', 1, 20) },
@@ -34,15 +34,15 @@ fn test_box_layout_honors_bounds_and_redistributes_remaining_space() {
 
 fn test_vertical_box_layout_supports_fixed_cross_size_and_alignment() {
 	config := BoxLayoutConfig{
-		frame: rect(0, 0, 200, 120)
+		frame:       rect(0, 0, 200, 120)
 		orientation: .vertical
-		padding: BoxPadding{ left: 10, top: 10, right: 10, bottom: 10 }
-		spacing: 4
-		children: [
+		padding:     LayoutPadding{ left: 10, top: 10, right: 10, bottom: 10 }
+		spacing:     4
+		children:    [
 			BoxLayoutChild{
-				element: box_test_child('centered', 60, 20)
-				size_hint_x: -1
-				size_hint_y: -1
+				element:          box_test_child('centered', 60, 20)
+				size_hint_x:      -1
+				size_hint_y:      -1
 				horizontal_align: .center
 			},
 			BoxLayoutChild{ element: box_test_child('fill', 1, 1) },
@@ -54,18 +54,18 @@ fn test_vertical_box_layout_supports_fixed_cross_size_and_alignment() {
 
 fn test_box_layout_reports_minimum_size_and_preserves_content() {
 	config := BoxLayoutConfig{
-		frame: rect(0, 0, 200, 80)
-		padding: BoxPadding{ left: 5, top: 6, right: 7, bottom: 8 }
-		spacing: 4
+		frame:    rect(0, 0, 200, 80)
+		padding:  LayoutPadding{ left: 5, top: 6, right: 7, bottom: 8 }
+		spacing:  4
 		children: [
 			BoxLayoutChild{
-				element: button('fixed', 'Fixed', rect(0, 0, 60, 30), BoxStyle{}, TextStyle{})
+				element:     button('fixed', 'Fixed', rect(0, 0, 60, 30), BoxStyle{}, TextStyle{})
 				size_hint_x: -1
 				size_hint_y: -1
 			},
 			BoxLayoutChild{
-				element: button('flex', 'Flexible', rect(0, 0, 10, 20), BoxStyle{}, TextStyle{})
-				minimum_width: 40
+				element:        button('flex', 'Flexible', rect(0, 0, 10, 20), BoxStyle{}, TextStyle{})
+				minimum_width:  40
 				minimum_height: 24
 			},
 		]
@@ -78,9 +78,9 @@ fn test_box_layout_reports_minimum_size_and_preserves_content() {
 
 fn test_box_layout_rejects_invalid_bounds() {
 	config := BoxLayoutConfig{
-		frame: rect(0, 0, 100, 40)
+		frame:    rect(0, 0, 100, 40)
 		children: [BoxLayoutChild{
-			element: box_test_child('invalid', 10, 10)
+			element:       box_test_child('invalid', 10, 10)
 			minimum_width: 30
 			maximum_width: 20
 		}]
@@ -94,10 +94,10 @@ fn test_box_layout_rejects_invalid_bounds() {
 
 fn test_box_layout_never_assigns_negative_space_after_fixed_overflow() {
 	config := BoxLayoutConfig{
-		frame: rect(0, 0, 100, 40)
+		frame:    rect(0, 0, 100, 40)
 		children: [
 			BoxLayoutChild{
-				element: box_test_child('oversized', 120, 20)
+				element:     box_test_child('oversized', 120, 20)
 				size_hint_x: -1
 			},
 			BoxLayoutChild{ element: box_test_child('flexible', 1, 20) },

@@ -11,9 +11,9 @@ pub struct StackLayoutDemo {}
 fn main() {
 	ui2.run_vml[StackLayoutDemo](
 		source: stack_vml_source
-		model: StackLayoutDemo{}
-		title: 'Stack Layout'
-		width: stack_width
+		model:  StackLayoutDemo{}
+		title:  'Stack Layout'
+		width:  stack_width
 		height: stack_height
 	) or { panic(err) }
 }

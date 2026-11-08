@@ -10,8 +10,8 @@ fn page_test_children(count int) []Element {
 
 fn test_page_layout_positions_first_page_and_next_border() {
 	config := PageLayoutConfig{
-		frame: rect(0, 0, 300, 160)
-		border: 40
+		frame:    rect(0, 0, 300, 160)
+		border:   40
 		children: page_test_children(3)
 	}
 	assert page_layout_frames(config)! == [rect(0, 0, 260, 160), rect(260, 0, 260, 160),
@@ -20,9 +20,9 @@ fn test_page_layout_positions_first_page_and_next_border() {
 
 fn test_page_layout_positions_middle_page_between_two_borders() {
 	config := PageLayoutConfig{
-		frame: rect(0, 0, 300, 160)
-		page: 1
-		border: 40
+		frame:    rect(0, 0, 300, 160)
+		page:     1
+		border:   40
 		children: page_test_children(3)
 	}
 	assert page_layout_frames(config)! == [rect(0, 0, 260, 160), rect(20, 0, 260, 160),
@@ -45,10 +45,10 @@ fn test_page_layout_swipe_threshold_changes_page() {
 
 fn test_page_layout_constructor_preserves_page_content() {
 	config := PageLayoutConfig{
-		id: 'pager'
-		frame: rect(10, 20, 200, 100)
-		page: 1
-		border: 20
+		id:       'pager'
+		frame:    rect(10, 20, 200, 100)
+		page:     1
+		border:   20
 		children: [
 			button('one', 'One', rect(0, 0, 1, 1), BoxStyle{}, TextStyle{}),
 			button('two', 'Two', rect(0, 0, 1, 1), BoxStyle{}, TextStyle{}),

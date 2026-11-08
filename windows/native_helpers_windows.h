@@ -22,13 +22,22 @@
 
 #include <windows.h>
 #include <windowsx.h>
+#ifdef __TINYC__
+// V's bundled tcc has no commctrl.h or oleacc.h: the names used are declared there.
+#include "tcc_compat_windows.h"
+#else
 #include <commctrl.h>
 #include <oleacc.h>
+#endif
 #include <oleauto.h>
 #include <shellapi.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <wchar.h>
+
+// IAccessible's interface id, spelled here so no compiler needs uuid.lib for it
+// (tcc has none; the other compilers would link it for this one GUID).
+static const IID ui2_iid_iaccessible = { 0x618736e0, 0x3c3d, 0x11cf, { 0x81, 0x0c, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 } };
 
 #define UI2_WM_REFRESH (WM_APP + 77)
 #define UI2_WM_TRAY (WM_APP + 78)
@@ -56,6 +65,7 @@ extern int ui2_windows_control_key(void *hwnd, unsigned int virtual_key);
 extern int ui2_windows_context_menu(void *hwnd, int screen_x, int screen_y);
 extern int ui2_windows_cursor(void *hwnd);
 extern void ui2_windows_control_pointer(void *hwnd, unsigned int message, int x, int y);
+extern void ui2_windows_hover_changed(void);
 extern void ui2_windows_control_border(void *hwnd);
 extern int ui2_windows_is_transparent_button(void *hwnd);
 extern int ui2_windows_paint_transparent_button(void *hwnd);
@@ -241,9 +251,9 @@ static inline void ui2_win_notify_invoked(void *hwnd_ptr) {
 static inline LRESULT ui2_win_accessible_button_object(HWND hwnd, WPARAM wparam) {
 	IAccessible *accessible = NULL;
 	HRESULT result = CreateStdAccessibleProxyW(hwnd, L"BUTTON", OBJID_CLIENT,
-		&IID_IAccessible, (void **)&accessible);
+		&ui2_iid_iaccessible, (void **)&accessible);
 	if (FAILED(result) || accessible == NULL) return 0;
-	LRESULT object = LresultFromObject(&IID_IAccessible, wparam, (IUnknown *)accessible);
+	LRESULT object = LresultFromObject(&ui2_iid_iaccessible, wparam, (IUnknown *)accessible);
 	accessible->lpVtbl->Release(accessible);
 	return object;
 }
@@ -279,6 +289,47 @@ static inline int ui2_win_forward_wheel(HWND hwnd, UINT message, WPARAM wparam, 
 	return 1;
 }
 
+// Hover is worked out from where the cursor is, not from which window got the
+// message: moving onto a child window makes Win32 report leaving its parent, but
+// CSS-style hover keeps the parent hovered. Asking for WM_MOUSELEAVE on each
+// window the cursor moves over lets the pointer leaving the whole window be seen.
+static void ui2_win_note_hover(HWND hwnd, UINT message) {
+	if (message == WM_MOUSEMOVE) {
+		TRACKMOUSEEVENT track = { sizeof(TRACKMOUSEEVENT), TME_LEAVE, hwnd, 0 };
+		TrackMouseEvent(&track);
+	}
+	ui2_windows_hover_changed();
+}
+
+// Returns the deepest visible window of `root` under the cursor, or NULL when the
+// cursor is outside it or over another top-level window. Unlike WindowFromPoint,
+// descending with ChildWindowFromPointEx also finds static controls (labels and
+// images), which answer hit tests as transparent. The cursor position in root
+// client coordinates goes to *x and *y.
+static inline void *ui2_win_hover_target(void *root, int *x, int *y) {
+	POINT screen;
+	if (root == NULL || !GetCursorPos(&screen)) return NULL;
+	HWND root_window = (HWND)root;
+	POINT local = screen;
+	ScreenToClient(root_window, &local);
+	*x = local.x;
+	*y = local.y;
+	RECT client;
+	GetClientRect(root_window, &client);
+	if (!PtInRect(&client, local)) return NULL;
+	HWND top = WindowFromPoint(screen);
+	if (top == NULL || GetAncestor(top, GA_ROOT) != GetAncestor(root_window, GA_ROOT)) return NULL;
+	HWND current = root_window;
+	for (int depth = 0; depth < 256; depth++) {
+		POINT point = screen;
+		ScreenToClient(current, &point);
+		HWND child = ChildWindowFromPointEx(current, point, CWP_SKIPINVISIBLE);
+		if (child == NULL || child == current) break;
+		current = child;
+	}
+	return current;
+}
+
 static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM wparam,
 		LPARAM lparam, UINT_PTR subclass_id, DWORD_PTR reference_data) {
 	(void)subclass_id;
@@ -300,6 +351,9 @@ static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM
 	if (message == WM_CONTEXTMENU
 		&& ui2_windows_context_menu(hwnd, GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam))) {
 		return 0;
+	}
+	if (message == WM_MOUSEMOVE || message == WM_MOUSELEAVE) {
+		ui2_win_note_hover(hwnd, message);
 	}
 	if (message == WM_LBUTTONDOWN || message == WM_MOUSEMOVE || message == WM_LBUTTONUP) {
 		ui2_windows_control_pointer(hwnd, message, GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
@@ -373,6 +427,9 @@ static LRESULT CALLBACK ui2_win_window_proc(HWND hwnd, UINT message, WPARAM wpar
 	}
 	if (message == WM_SETCURSOR && LOWORD(lparam) == HTCLIENT && ui2_win_apply_cursor(hwnd)) {
 		return TRUE;
+	}
+	if (message == WM_MOUSEMOVE || message == WM_MOUSELEAVE) {
+		ui2_win_note_hover(hwnd, message);
 	}
 	if (message == WM_LBUTTONDOWN || message == WM_MOUSEMOVE || message == WM_LBUTTONUP) {
 		ui2_windows_control_pointer(hwnd, message, GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
@@ -976,7 +1033,7 @@ static inline unsigned int ui2_win_accessible_button_info(void *hwnd_ptr,
 	HWND hwnd = (HWND)hwnd_ptr;
 	if (hwnd == NULL) return 0;
 	IAccessible *accessible = NULL;
-	if (FAILED(AccessibleObjectFromWindow(hwnd, OBJID_CLIENT, &IID_IAccessible,
+	if (FAILED(AccessibleObjectFromWindow(hwnd, OBJID_CLIENT, &ui2_iid_iaccessible,
 			(void **)&accessible)) || accessible == NULL) {
 		return 0;
 	}
@@ -1024,7 +1081,7 @@ static inline int ui2_win_accessible_button_invoke(void *hwnd_ptr) {
 	HWND hwnd = (HWND)hwnd_ptr;
 	if (hwnd == NULL) return 0;
 	IAccessible *accessible = NULL;
-	if (FAILED(AccessibleObjectFromWindow(hwnd, OBJID_CLIENT, &IID_IAccessible,
+	if (FAILED(AccessibleObjectFromWindow(hwnd, OBJID_CLIENT, &ui2_iid_iaccessible,
 			(void **)&accessible)) || accessible == NULL) {
 		return 0;
 	}
@@ -1217,6 +1274,25 @@ static inline void *ui2_win_create_font(void *hwnd, double point_size,
 	return replacement;
 }
 
+// Measures one line of text in the font a label with this style is given, so
+// layout can size a label to its text.
+static inline double ui2_win_measure_text(void *hwnd, double point_size,
+		const wchar_t *family, int bold, int italic, const wchar_t *text) {
+	HFONT font = (HFONT)ui2_win_create_font(hwnd, point_size, family, bold, italic, 0, 0, text);
+	HDC dc = GetDC((HWND)hwnd);
+	if (dc == NULL) {
+		if (font != NULL) DeleteObject(font);
+		return 0;
+	}
+	HGDIOBJ previous = font != NULL ? SelectObject(dc, font) : NULL;
+	SIZE size = { 0, 0 };
+	GetTextExtentPoint32W(dc, text, (int)wcslen(text), &size);
+	if (previous != NULL) SelectObject(dc, previous);
+	ReleaseDC((HWND)hwnd, dc);
+	if (font != NULL) DeleteObject(font);
+	return (double)size.cx;
+}
+
 // Reports how many characters of `text` the font cannot draw, so tests can
 // assert that a control ended up with a font that covers its text.
 static inline int ui2_win_font_missing_glyphs(void *font, const wchar_t *text) {
@@ -1358,6 +1434,30 @@ static inline void ui2_win_draw_borders(HDC dc, const RECT *rect, unsigned int c
 	DeleteObject(brush);
 }
 
+// An even border on a rounded box is stroked as one rounded rectangle so it
+// follows the corners; anything else is drawn side by side.
+static inline void ui2_win_draw_box_borders(HDC dc, const RECT *rect, unsigned int color,
+		double left_width, double top_width, double right_width, double bottom_width,
+		double radius) {
+	if (dc == NULL || rect == NULL) return;
+	if (radius <= 0.5 || left_width <= 0 || left_width != top_width
+		|| left_width != right_width || left_width != bottom_width) {
+		ui2_win_draw_borders(dc, rect, color, left_width, top_width, right_width, bottom_width);
+		return;
+	}
+	int width = (int)(left_width + 0.5);
+	if (width < 1) width = 1;
+	HPEN pen = CreatePen(PS_INSIDEFRAME, width, ui2_win_color(color));
+	if (pen == NULL) return;
+	HGDIOBJ old_pen = SelectObject(dc, pen);
+	HGDIOBJ old_brush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+	int diameter = (int)(radius * 2.0 + 0.5);
+	RoundRect(dc, rect->left, rect->top, rect->right, rect->bottom, diameter, diameter);
+	SelectObject(dc, old_brush);
+	SelectObject(dc, old_pen);
+	DeleteObject(pen);
+}
+
 static inline void ui2_win_paint_control_border(void *hwnd_ptr, unsigned int color,
 		double radius, double left, double top, double right, double bottom) {
 	HWND hwnd = (HWND)hwnd_ptr;
@@ -1373,7 +1473,7 @@ static inline void ui2_win_paint_control_border(void *hwnd_ptr, unsigned int col
 			diameter, diameter);
 		if (clip != NULL) SelectClipRgn(dc, clip);
 	}
-	ui2_win_draw_borders(dc, &rect, color, left, top, right, bottom);
+	ui2_win_draw_box_borders(dc, &rect, color, left, top, right, bottom, radius);
 	if (clip != NULL) {
 		SelectClipRgn(dc, NULL);
 		DeleteObject(clip);
@@ -1400,6 +1500,87 @@ static inline void ui2_win_fill_background(HDC dc, const RECT *rect,
 	DeleteObject(brush);
 }
 
+// One vertex of a gradient mesh: a point in the box and its color there.
+typedef struct ui2_win_mesh_vertex {
+	int x;
+	int y;
+	unsigned int color;
+} ui2_win_mesh_vertex;
+
+// Fills a box with a solid color or a gradient mesh at `opacity`, over whatever
+// the DC already holds (the parent's backdrop). Translucency and gradients are
+// drawn into an offscreen bitmap and blended in, clipped to the rounded corners.
+// GradientFill writes colors without blending, so a gradient's own stop opacity
+// is not drawn; the box's fill opacity is.
+static inline void ui2_win_fill_box(HDC dc, const RECT *rect, unsigned int background,
+		double radius, double opacity, const ui2_win_mesh_vertex *vertices, int vertex_count,
+		const unsigned int *triangles, int triangle_count) {
+	if (opacity <= 0.0) return;
+	int width = rect->right - rect->left;
+	int height = rect->bottom - rect->top;
+	if (width <= 0 || height <= 0) return;
+	if (opacity >= 1.0 && vertex_count == 0) {
+		ui2_win_fill_background(dc, rect, background, radius);
+		return;
+	}
+	HDC memory = CreateCompatibleDC(dc);
+	HBITMAP bitmap = CreateCompatibleBitmap(dc, width, height);
+	if (memory == NULL || bitmap == NULL) {
+		if (bitmap != NULL) DeleteObject(bitmap);
+		if (memory != NULL) DeleteDC(memory);
+		ui2_win_fill_background(dc, rect, background, radius);
+		return;
+	}
+	HGDIOBJ old_bitmap = SelectObject(memory, bitmap);
+	RECT local = { 0, 0, width, height };
+	if (vertex_count > 0 && triangle_count > 0) {
+		TRIVERTEX *mesh = (TRIVERTEX *)HeapAlloc(GetProcessHeap(), 0,
+			(size_t)vertex_count * sizeof(TRIVERTEX));
+		if (mesh != NULL) {
+			for (int i = 0; i < vertex_count; i++) {
+				unsigned int color = vertices[i].color;
+				mesh[i].x = vertices[i].x;
+				mesh[i].y = vertices[i].y;
+				mesh[i].Red = (COLOR16)(((color >> 16) & 0xff) << 8);
+				mesh[i].Green = (COLOR16)(((color >> 8) & 0xff) << 8);
+				mesh[i].Blue = (COLOR16)((color & 0xff) << 8);
+				mesh[i].Alpha = 0xff00;
+			}
+			GradientFill(memory, mesh, (ULONG)vertex_count, (PVOID)triangles, (ULONG)triangle_count,
+				GRADIENT_FILL_TRIANGLE);
+			HeapFree(GetProcessHeap(), 0, mesh);
+		}
+	} else {
+		HBRUSH brush = CreateSolidBrush(ui2_win_color(background));
+		if (brush != NULL) {
+			FillRect(memory, &local, brush);
+			DeleteObject(brush);
+		}
+	}
+	HRGN clip = NULL;
+	if (radius > 0.5) {
+		int diameter = (int)(radius * 2.0 + 0.5);
+		POINT origin = { 0, 0 };
+		GetViewportOrgEx(dc, &origin);
+		clip = CreateRoundRectRgn(rect->left + origin.x, rect->top + origin.y,
+			rect->right + origin.x + 1, rect->bottom + origin.y + 1, diameter, diameter);
+		if (clip != NULL) ExtSelectClipRgn(dc, clip, RGN_AND);
+	}
+	if (opacity >= 1.0) {
+		BitBlt(dc, rect->left, rect->top, width, height, memory, 0, 0, SRCCOPY);
+	} else {
+		BLENDFUNCTION blend = { AC_SRC_OVER, 0, (BYTE)(opacity * 255.0 + 0.5), 0 };
+		AlphaBlend(dc, rect->left, rect->top, width, height, memory, 0, 0, width, height, blend);
+	}
+	if (clip != NULL) {
+		SelectClipRgn(dc, NULL);
+		DeleteObject(clip);
+	}
+	SelectObject(memory, old_bitmap);
+	DeleteObject(bitmap);
+	DeleteDC(memory);
+}
+
 static inline void ui2_win_paint_parent_background(HWND hwnd, HDC dc) {
 	HWND parent = GetParent(hwnd);
 	if (parent == NULL) return;
@@ -1415,10 +1596,194 @@ static inline void ui2_win_paint_parent_background(HWND hwnd, HDC dc) {
 	}
 }
 
-static inline void ui2_win_paint_background_into(void *hwnd_ptr, void *dc_ptr,
+// A view's vector path (ui2 `shape`), packed seven doubles per command: verb
+// (move, line, quad, cubic, close), x, y and the control points.
+typedef struct ui2_win_shape {
+	const double *commands;
+	int count;
+	int has_fill;
+	unsigned int fill;
+	double fill_opacity;
+	int has_stroke;
+	unsigned int stroke;
+	double stroke_opacity;
+	double stroke_width;
+	int join;  /* round, miter, bevel */
+	int cap;   /* round, butt, square */
+	int even_odd;
+} ui2_win_shape;
+
+// GDI+ draws shapes antialiased, which GDI cannot. Its flat API is looked up
+// in gdiplus.dll at run time, so applications need no extra library to link.
+typedef struct ui2_gdip_startup_input {
+	UINT32 version;
+	void *debug_callback;
+	BOOL suppress_background_thread;
+	BOOL suppress_external_codecs;
+} ui2_gdip_startup_input;
+
+typedef int (WINAPI *ui2_gdip_startup_fn)(ULONG_PTR *, const ui2_gdip_startup_input *, void *);
+typedef int (WINAPI *ui2_gdip_from_hdc_fn)(HDC, void **);
+typedef int (WINAPI *ui2_gdip_set_int_fn)(void *, int);
+typedef int (WINAPI *ui2_gdip_create_path_fn)(int, void **);
+typedef int (WINAPI *ui2_gdip_path_fn)(void *);
+typedef int (WINAPI *ui2_gdip_add_line_fn)(void *, float, float, float, float);
+typedef int (WINAPI *ui2_gdip_add_bezier_fn)(void *, float, float, float, float, float, float, float, float);
+typedef int (WINAPI *ui2_gdip_solid_fill_fn)(unsigned int, void **);
+typedef int (WINAPI *ui2_gdip_fill_path_fn)(void *, void *, void *);
+typedef int (WINAPI *ui2_gdip_create_pen_fn)(unsigned int, float, int, void **);
+typedef int (WINAPI *ui2_gdip_set_float_fn)(void *, float);
+typedef int (WINAPI *ui2_gdip_draw_path_fn)(void *, void *, void *);
+
+typedef struct ui2_gdip_api {
+	int loaded;
+	int ok;
+	ui2_gdip_from_hdc_fn from_hdc;
+	ui2_gdip_set_int_fn smoothing;
+	ui2_gdip_set_int_fn pixel_offset;
+	ui2_gdip_create_path_fn create_path;
+	ui2_gdip_path_fn start_figure;
+	ui2_gdip_path_fn close_figure;
+	ui2_gdip_add_line_fn add_line;
+	ui2_gdip_add_bezier_fn add_bezier;
+	ui2_gdip_solid_fill_fn solid_fill;
+	ui2_gdip_fill_path_fn fill_path;
+	ui2_gdip_create_pen_fn create_pen;
+	ui2_gdip_set_int_fn pen_join;
+	ui2_gdip_set_int_fn pen_start_cap;
+	ui2_gdip_set_int_fn pen_end_cap;
+	ui2_gdip_set_float_fn pen_miter_limit;
+	ui2_gdip_draw_path_fn draw_path;
+	ui2_gdip_path_fn delete_path;
+	ui2_gdip_path_fn delete_brush;
+	ui2_gdip_path_fn delete_pen;
+	ui2_gdip_path_fn delete_graphics;
+} ui2_gdip_api;
+
+static inline ui2_gdip_api *ui2_gdip(void) {
+	static ui2_gdip_api api;
+	if (api.loaded) return api.ok ? &api : NULL;
+	api.loaded = 1;
+	HMODULE module = LoadLibraryW(L"gdiplus.dll");
+	if (module == NULL) return NULL;
+#define UI2_GDIP(field, type, name) api.field = (type)(void *)GetProcAddress(module, name); \
+	if (api.field == NULL) return NULL;
+	ui2_gdip_startup_fn startup = (ui2_gdip_startup_fn)(void *)GetProcAddress(module, "GdiplusStartup");
+	if (startup == NULL) return NULL;
+	UI2_GDIP(from_hdc, ui2_gdip_from_hdc_fn, "GdipCreateFromHDC")
+	UI2_GDIP(smoothing, ui2_gdip_set_int_fn, "GdipSetSmoothingMode")
+	UI2_GDIP(pixel_offset, ui2_gdip_set_int_fn, "GdipSetPixelOffsetMode")
+	UI2_GDIP(create_path, ui2_gdip_create_path_fn, "GdipCreatePath")
+	UI2_GDIP(start_figure, ui2_gdip_path_fn, "GdipStartPathFigure")
+	UI2_GDIP(close_figure, ui2_gdip_path_fn, "GdipClosePathFigure")
+	UI2_GDIP(add_line, ui2_gdip_add_line_fn, "GdipAddPathLine")
+	UI2_GDIP(add_bezier, ui2_gdip_add_bezier_fn, "GdipAddPathBezier")
+	UI2_GDIP(solid_fill, ui2_gdip_solid_fill_fn, "GdipCreateSolidFill")
+	UI2_GDIP(fill_path, ui2_gdip_fill_path_fn, "GdipFillPath")
+	UI2_GDIP(create_pen, ui2_gdip_create_pen_fn, "GdipCreatePen1")
+	UI2_GDIP(pen_join, ui2_gdip_set_int_fn, "GdipSetPenLineJoin")
+	UI2_GDIP(pen_start_cap, ui2_gdip_set_int_fn, "GdipSetPenStartCap")
+	UI2_GDIP(pen_end_cap, ui2_gdip_set_int_fn, "GdipSetPenEndCap")
+	UI2_GDIP(pen_miter_limit, ui2_gdip_set_float_fn, "GdipSetPenMiterLimit")
+	UI2_GDIP(draw_path, ui2_gdip_draw_path_fn, "GdipDrawPath")
+	UI2_GDIP(delete_path, ui2_gdip_path_fn, "GdipDeletePath")
+	UI2_GDIP(delete_brush, ui2_gdip_path_fn, "GdipDeleteBrush")
+	UI2_GDIP(delete_pen, ui2_gdip_path_fn, "GdipDeletePen")
+	UI2_GDIP(delete_graphics, ui2_gdip_path_fn, "GdipDeleteGraphics")
+#undef UI2_GDIP
+	ULONG_PTR token = 0;
+	ui2_gdip_startup_input input = { 1, NULL, FALSE, FALSE };
+	if (startup(&token, &input, NULL) != 0) return NULL;
+	api.ok = 1;
+	return &api;
+}
+
+static inline unsigned int ui2_gdip_argb(unsigned int rgb, double opacity) {
+	double a = opacity < 0 ? 0 : (opacity > 1 ? 1 : opacity);
+	return ((unsigned int)(a * 255.0 + 0.5) << 24) | (rgb & 0xffffff);
+}
+
+static inline void ui2_win_draw_shape(HDC dc, const ui2_win_shape *shape) {
+	if (shape == NULL || shape->commands == NULL || shape->count <= 0) return;
+	ui2_gdip_api *gdip = ui2_gdip();
+	if (gdip == NULL) return;
+	void *graphics = NULL;
+	if (gdip->from_hdc(dc, &graphics) != 0 || graphics == NULL) return;
+	gdip->smoothing(graphics, 4 /* SmoothingModeAntiAlias */);
+	gdip->pixel_offset(graphics, 4 /* PixelOffsetModeHalf */);
+	void *path = NULL;
+	if (gdip->create_path(shape->even_odd ? 0 : 1, &path) != 0 || path == NULL) {
+		gdip->delete_graphics(graphics);
+		return;
+	}
+	double cx = 0, cy = 0;
+	int started = 0;
+	for (int i = 0; i < shape->count; i++) {
+		const double *c = shape->commands + i * 7;
+		int verb = (int)c[0];
+		if (verb == 0) {
+			gdip->start_figure(path);
+			cx = c[1];
+			cy = c[2];
+			started = 1;
+			continue;
+		}
+		if (verb == 4) {
+			if (started) gdip->close_figure(path);
+			continue;
+		}
+		if (!started) {
+			cx = c[1];
+			cy = c[2];
+			started = 1;
+			if (verb == 1) continue;
+		}
+		if (verb == 1) {
+			gdip->add_line(path, (float)cx, (float)cy, (float)c[1], (float)c[2]);
+		} else if (verb == 2) {
+			/* A quadratic as the cubic with controls two thirds of the way in. */
+			double c1x = cx + 2.0 / 3.0 * (c[3] - cx), c1y = cy + 2.0 / 3.0 * (c[4] - cy);
+			double c2x = c[1] + 2.0 / 3.0 * (c[3] - c[1]), c2y = c[2] + 2.0 / 3.0 * (c[4] - c[2]);
+			gdip->add_bezier(path, (float)cx, (float)cy, (float)c1x, (float)c1y, (float)c2x,
+				(float)c2y, (float)c[1], (float)c[2]);
+		} else if (verb == 3) {
+			gdip->add_bezier(path, (float)cx, (float)cy, (float)c[3], (float)c[4], (float)c[5],
+				(float)c[6], (float)c[1], (float)c[2]);
+		}
+		cx = c[1];
+		cy = c[2];
+	}
+	if (shape->has_fill) {
+		void *brush = NULL;
+		if (gdip->solid_fill(ui2_gdip_argb(shape->fill, shape->fill_opacity), &brush) == 0) {
+			gdip->fill_path(graphics, brush, path);
+			gdip->delete_brush(brush);
+		}
+	}
+	if (shape->has_stroke && shape->stroke_width > 0) {
+		void *pen = NULL;
+		if (gdip->create_pen(ui2_gdip_argb(shape->stroke, shape->stroke_opacity),
+				(float)shape->stroke_width, 2 /* UnitPixel */, &pen) == 0) {
+			static const int joins[] = { 2 /* round */, 0 /* miter */, 1 /* bevel */ };
+			static const int caps[] = { 2 /* round */, 0 /* flat */, 1 /* square */ };
+			gdip->pen_join(pen, joins[shape->join % 3]);
+			gdip->pen_start_cap(pen, caps[shape->cap % 3]);
+			gdip->pen_end_cap(pen, caps[shape->cap % 3]);
+			gdip->pen_miter_limit(pen, 4.0f);
+			gdip->draw_path(graphics, pen, path);
+			gdip->delete_pen(pen);
+		}
+	}
+	gdip->delete_path(path);
+	gdip->delete_graphics(graphics);
+}
+
+static inline void ui2_win_paint_background_into_fx(void *hwnd_ptr, void *dc_ptr,
 		unsigned int background, double radius, int transparent,
 		unsigned int border_color, double border_left, double border_top,
-		double border_right, double border_bottom) {
+		double border_right, double border_bottom, double opacity,
+		const ui2_win_mesh_vertex *vertices, int vertex_count,
+		const unsigned int *triangles, int triangle_count, const ui2_win_shape *shape) {
 	HWND hwnd = (HWND)hwnd_ptr;
 	HDC dc = (HDC)dc_ptr;
 	if (hwnd == NULL || dc == NULL) return;
@@ -1437,8 +1802,10 @@ static inline void ui2_win_paint_background_into(void *hwnd_ptr, void *dc_ptr,
 		ui2_win_fill_background(dc, &rect, background, 0.0);
 	}
 	if (!transparent) {
-		ui2_win_fill_background(dc, &rect, background, radius);
+		ui2_win_fill_box(dc, &rect, background, radius, opacity, vertices, vertex_count,
+			triangles, triangle_count);
 	}
+	ui2_win_draw_shape(dc, shape);
 	HRGN clip = NULL;
 	if (radius > 0.5) {
 		int diameter = (int)(radius * 2.0 + 0.5);
@@ -1446,25 +1813,44 @@ static inline void ui2_win_paint_background_into(void *hwnd_ptr, void *dc_ptr,
 			diameter, diameter);
 		if (clip != NULL) SelectClipRgn(dc, clip);
 	}
-	ui2_win_draw_borders(dc, &rect, border_color, border_left, border_top,
-		border_right, border_bottom);
+	ui2_win_draw_box_borders(dc, &rect, border_color, border_left, border_top,
+		border_right, border_bottom, radius);
 	if (clip != NULL) {
 		SelectClipRgn(dc, NULL);
 		DeleteObject(clip);
 	}
 }
 
-static inline void ui2_win_paint_background(void *hwnd_ptr, unsigned int background,
+static inline void ui2_win_paint_background_into(void *hwnd_ptr, void *dc_ptr,
+		unsigned int background, double radius, int transparent,
+		unsigned int border_color, double border_left, double border_top,
+		double border_right, double border_bottom) {
+	ui2_win_paint_background_into_fx(hwnd_ptr, dc_ptr, background, radius, transparent,
+		border_color, border_left, border_top, border_right, border_bottom, 1.0, NULL, 0, NULL, 0,
+		NULL);
+}
+
+static inline void ui2_win_paint_background_fx(void *hwnd_ptr, unsigned int background,
 		double radius, int transparent, unsigned int border_color, double border_left,
-		double border_top, double border_right, double border_bottom) {
+		double border_top, double border_right, double border_bottom, double opacity,
+		const ui2_win_mesh_vertex *vertices, int vertex_count, const unsigned int *triangles,
+		int triangle_count, const ui2_win_shape *shape) {
 	HWND hwnd = (HWND)hwnd_ptr;
 	PAINTSTRUCT paint;
 	HDC dc = BeginPaint(hwnd, &paint);
 	if (dc != NULL) {
-		ui2_win_paint_background_into(hwnd, dc, background, radius, transparent,
-			border_color, border_left, border_top, border_right, border_bottom);
+		ui2_win_paint_background_into_fx(hwnd, dc, background, radius, transparent,
+			border_color, border_left, border_top, border_right, border_bottom, opacity,
+			vertices, vertex_count, triangles, triangle_count, shape);
 	}
 	EndPaint(hwnd, &paint);
+}
+
+static inline void ui2_win_paint_background(void *hwnd_ptr, unsigned int background,
+		double radius, int transparent, unsigned int border_color, double border_left,
+		double border_top, double border_right, double border_bottom) {
+	ui2_win_paint_background_fx(hwnd_ptr, background, radius, transparent, border_color,
+		border_left, border_top, border_right, border_bottom, 1.0, NULL, 0, NULL, 0, NULL);
 }
 
 static inline void ui2_win_paint_transparent_button(void *hwnd_ptr,
@@ -1486,8 +1872,8 @@ static inline void ui2_win_paint_transparent_button(void *hwnd_ptr,
 				rect.bottom + 1, diameter, diameter);
 			if (clip != NULL) SelectClipRgn(dc, clip);
 		}
-		ui2_win_draw_borders(dc, &rect, border_color, border_left, border_top,
-			border_right, border_bottom);
+		ui2_win_draw_box_borders(dc, &rect, border_color, border_left, border_top,
+			border_right, border_bottom, radius);
 		if (clip != NULL) {
 			SelectClipRgn(dc, NULL);
 			DeleteObject(clip);

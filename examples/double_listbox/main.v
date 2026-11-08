@@ -68,9 +68,9 @@ pub fn (mut app DoubleListboxDemo) show_values() {
 fn main() {
 	ui2.run_vml[DoubleListboxDemo](
 		source: double_list_vml_source
-		model: initial_double_listbox()
-		title: 'Double Listbox'
-		width: double_list_width
+		model:  initial_double_listbox()
+		title:  'Double Listbox'
+		width:  double_list_width
 		height: double_list_height
 	) or { panic(err) }
 }

@@ -41,7 +41,7 @@ fn test_temperature_rejects_invalid_input() {
 
 fn test_temperature_vml_builds_bound_fields() {
 	app := TemperatureConverter{
-		celsius: '20'
+		celsius:    '20'
 		fahrenheit: '68'
 	}
 	root := ui2.element_from_vml_model(temperature_vml_source, app, ui2.rect(0, 0, temperature_width, temperature_height)) or { panic(err) }

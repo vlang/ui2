@@ -75,13 +75,13 @@ fn test_font_metrics_reject_zero_vertical_metrics() {
 fn test_render_size_scales_the_em_square_by_the_font_metrics() {
 	roboto := FontMetrics{
 		units_per_em: 2048
-		ascender: 1900
-		descender: -500
+		ascender:     1900
+		descender:    -500
 	}
 	noto := FontMetrics{
 		units_per_em: 1000
-		ascender: 1069
-		descender: -293
+		ascender:     1069
+		descender:    -293
 	}
 	assert font_render_size(15, roboto) == font_em_pixels(15) * 2400.0 / 2048.0
 	assert font_render_size(15, noto) == font_em_pixels(15) * 1362.0 / 1000.0
@@ -93,8 +93,8 @@ fn test_render_size_scales_the_em_square_by_the_font_metrics() {
 fn test_render_size_falls_back_to_the_em_square_for_unusable_metrics() {
 	broken := FontMetrics{
 		units_per_em: 0
-		ascender: 0
-		descender: 0
+		ascender:     0
+		descender:    0
 	}
 	assert font_render_size(15, broken) == font_em_pixels(15)
 }
@@ -301,8 +301,7 @@ fn test_mono_families_are_recognized_by_name() {
 }
 
 fn test_an_unavailable_mono_family_falls_back_to_another_mono() {
-	dir := font_test_dir('mono', ['Roboto-Regular.ttf', 'RobotoMono-Regular.ttf',
-		'RobotoMono-Bold.ttf'])
+	dir := font_test_dir('mono', ['Roboto-Regular.ttf', 'RobotoMono-Regular.ttf', 'RobotoMono-Bold.ttf'])
 	defer {
 		os.rmdir_all(dir) or {}
 	}
@@ -433,8 +432,7 @@ fn measure_by_length(line string) f64 {
 
 fn test_wrap_text_lines_breaks_on_spaces_within_the_width() {
 	// "hello world" is 11 wide, so a 6 wide line takes one word at a time.
-	assert wrap_text_lines_measured('hello world', 6, 4, measure_by_length) == ['hello',
-		'world']
+	assert wrap_text_lines_measured('hello world', 6, 4, measure_by_length) == ['hello', 'world']
 	// Everything fits, so nothing is broken up.
 	assert wrap_text_lines_measured('hello world', 40, 4, measure_by_length) == ['hello world']
 	// A single line is left to the caller to truncate, whatever its width.
@@ -443,17 +441,21 @@ fn test_wrap_text_lines_breaks_on_spaces_within_the_width() {
 
 fn test_wrap_text_lines_keeps_the_texts_own_line_breaks() {
 	assert wrap_text_lines_measured('one\ntwo', 40, 4, measure_by_length) == ['one', 'two']
-	assert wrap_text_lines_measured('alpha beta\ngamma', 6, 4, measure_by_length) == ['alpha',
-		'beta', 'gamma']
+	assert wrap_text_lines_measured('alpha beta\ngamma', 6, 4, measure_by_length) == [
+		'alpha',
+		'beta',
+		'gamma',
+	]
 }
 
 fn test_wrap_text_lines_leaves_the_overflow_on_its_last_line() {
 	// Two lines of room and four words: the second line keeps the words that did not
 	// fit, so drawing truncates them instead of dropping them without a mark.
-	assert wrap_text_lines_measured('aa bb cc dd', 5, 2, measure_by_length) == ['aa bb',
-		'cc dd']
-	assert wrap_text_lines_measured('aa bb cc dd ee', 5, 2, measure_by_length) == ['aa bb',
-		'cc dd ee']
+	assert wrap_text_lines_measured('aa bb cc dd', 5, 2, measure_by_length) == ['aa bb', 'cc dd']
+	assert wrap_text_lines_measured('aa bb cc dd ee', 5, 2, measure_by_length) == [
+		'aa bb',
+		'cc dd ee',
+	]
 	// Never more lines than asked for.
 	assert wrap_text_lines_measured('a b c d e f', 1, 3, measure_by_length).len == 3
 }

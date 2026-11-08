@@ -11,9 +11,9 @@ const timer_vml_source = $embed_file('timer.vml').to_string()
 @[heap]
 pub struct TimerDemo {
 pub mut:
-	duration       f64 = 15
+	duration       f64    = 15
 	duration_label string = '15 seconds'
-	duration_ratio f64 = 0.5
+	duration_ratio f64    = 0.5
 	elapsed        f64
 	elapsed_label  string = '0.0 s'
 	progress       f64

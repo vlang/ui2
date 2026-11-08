@@ -48,10 +48,10 @@ fn calculator_keys() []CalculatorKey {
 				else { 'digit' }
 			}
 			keys << CalculatorKey{
-				text: text
-				row: row
+				text:   text
+				row:    row
 				column: column
-				role: role
+				role:   role
 			}
 		}
 	}
@@ -263,9 +263,9 @@ pub fn (mut calculator Calculator) press(key string) {
 fn main() {
 	ui2.run_vml[Calculator](
 		source: calculator_vml_source
-		model: initial_calculator()
-		title: 'V Calc'
-		width: window_width
+		model:  initial_calculator()
+		title:  'V Calc'
+		width:  window_width
 		height: window_height
 	) or { panic(err) }
 }

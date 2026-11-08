@@ -10,9 +10,9 @@ pub:
 
 fn relative_as_float(config RelativeLayoutConfig) FloatLayoutConfig {
 	return FloatLayoutConfig{
-		id: config.id
-		frame: config.frame
-		box: config.box
+		id:       config.id
+		frame:    config.frame
+		box:      config.box
 		children: config.children
 	}
 }

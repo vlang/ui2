@@ -29,43 +29,43 @@ struct MetadataType {
 
 const scanner_metadata_types = [
 	MetadataType{
-		symbol: 'AVMetadataObjectTypeQRCode'
+		symbol:   'AVMetadataObjectTypeQRCode'
 		fallback: 'org.iso.QRCode'
 	},
 	MetadataType{
-		symbol: 'AVMetadataObjectTypeEAN13Code'
+		symbol:   'AVMetadataObjectTypeEAN13Code'
 		fallback: 'org.gs1.EAN-13'
 	},
 	MetadataType{
-		symbol: 'AVMetadataObjectTypeEAN8Code'
+		symbol:   'AVMetadataObjectTypeEAN8Code'
 		fallback: 'org.gs1.EAN-8'
 	},
 	MetadataType{
-		symbol: 'AVMetadataObjectTypeUPCECode'
+		symbol:   'AVMetadataObjectTypeUPCECode'
 		fallback: 'org.gs1.UPC-E'
 	},
 	MetadataType{
-		symbol: 'AVMetadataObjectTypeCode128Code'
+		symbol:   'AVMetadataObjectTypeCode128Code'
 		fallback: 'org.iso.Code128'
 	},
 	MetadataType{
-		symbol: 'AVMetadataObjectTypeCode39Code'
+		symbol:   'AVMetadataObjectTypeCode39Code'
 		fallback: 'org.iso.Code39'
 	},
 	MetadataType{
-		symbol: 'AVMetadataObjectTypeCode93Code'
+		symbol:   'AVMetadataObjectTypeCode93Code'
 		fallback: 'org.iso.Code93'
 	},
 	MetadataType{
-		symbol: 'AVMetadataObjectTypePDF417Code'
+		symbol:   'AVMetadataObjectTypePDF417Code'
 		fallback: 'org.iso.PDF417'
 	},
 	MetadataType{
-		symbol: 'AVMetadataObjectTypeDataMatrixCode'
+		symbol:   'AVMetadataObjectTypeDataMatrixCode'
 		fallback: 'org.iso.DataMatrix'
 	},
 	MetadataType{
-		symbol: 'AVMetadataObjectTypeITF14Code'
+		symbol:   'AVMetadataObjectTypeITF14Code'
 		fallback: 'org.gs1.ITF14'
 	},
 ]

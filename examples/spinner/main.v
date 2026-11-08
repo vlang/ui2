@@ -19,9 +19,9 @@ pub fn (mut app SpinnerDemo) selection_changed() {
 fn main() {
 	ui2.run_vml[SpinnerDemo](
 		source: spinner_vml_source
-		model: SpinnerDemo{}
-		title: 'Spinner'
-		width: spinner_width
+		model:  SpinnerDemo{}
+		title:  'Spinner'
+		width:  spinner_width
 		height: spinner_height
 	) or { panic(err) }
 }

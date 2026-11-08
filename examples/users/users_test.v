@@ -117,11 +117,11 @@ fn test_app_add_user_is_only_business_logic() {
 	app.add_user()
 	assert app.users.len == 3
 	assert app.users[2] == User{
-		id: 3
+		id:         3
 		first_name: 'Grace'
-		last_name: 'Hopper'
-		age: 85
-		country: 'United Kingdom'
+		last_name:  'Hopper'
+		age:        85
+		country:    'United Kingdom'
 	}
 	assert app.first_name == ''
 	assert app.age == ''

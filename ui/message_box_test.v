@@ -25,19 +25,19 @@ fn test_out_of_range_button_index_falls_back_to_dismissal() {
 
 fn test_custom_message_box_centres_the_card_and_stacks_buttons_from_the_right() {
 	overlay := custom_message_box(
-		id: 'confirm'
-		frame: rect(0, 0, 400, 300)
-		title: 'Delete file?'
-		text: 'This cannot be undone.'
+		id:      'confirm'
+		frame:   rect(0, 0, 400, 300)
+		title:   'Delete file?'
+		text:    'This cannot be undone.'
 		actions: [
 			MessageBoxAction{
-				id: 'confirm_delete'
+				id:    'confirm_delete'
 				title: 'Delete'
 			},
 			MessageBoxAction{
-				id: 'confirm_keep'
+				id:        'confirm_keep'
 				action_id: 'dismiss'
-				title: 'Cancel'
+				title:     'Cancel'
 			},
 		]
 	)
@@ -69,8 +69,8 @@ fn test_custom_message_box_centres_the_card_and_stacks_buttons_from_the_right() 
 
 fn test_custom_message_box_names_unlabelled_actions_after_the_overlay() {
 	overlay := custom_message_box(
-		frame: rect(0, 0, 200, 200)
-		hidden: true
+		frame:   rect(0, 0, 200, 200)
+		hidden:  true
 		actions: [MessageBoxAction{
 			title: 'OK'
 		}]

@@ -1,0 +1,212 @@
+Screen {
+    id: showcase
+    width: 900
+    height: 640
+    background: #F1F5F9
+
+    AppBar {
+        id: bar
+        x: 0
+        y: 0
+        width: 900
+        height: 56
+        title: "UI2 Widget Showcase"
+        background: #2563EB
+        color: #FFFFFF
+    }
+
+    Card {
+        id: card1
+        x: 16
+        y: 72
+        width: 260
+        height: 180
+        background: #FFFFFF
+        corner_radius: 12
+        Label { text: "Card" x: 12 y: 12 width: 236 height: 24 color: #0F172A bold: true }
+        Label { text: "A rounded surface" x: 12 y: 40 width: 236 height: 20 color: #64748B }
+        Button { text: "Action" x: 12 y: 140 width: 100 height: 32 background: #2563EB color: #FFFFFF corner_radius: 6 }
+    }
+
+    Divider {
+        id: div1
+        x: 16
+        y: 268
+        width: 260
+        height: 2
+        color: #CBD5E1
+        thickness: 2
+    }
+
+    Chip {
+        id: chip1
+        x: 16
+        y: 284
+        width: 96
+        height: 32
+        text: "Chip"
+        background: #E2E8F0
+        color: #1E293B
+    }
+
+    Badge {
+        id: badge1
+        x: 128
+        y: 284
+        width: 44
+        height: 22
+        text: "3"
+        background: #EF4444
+    }
+
+    FloatingActionButton {
+        id: fab1
+        x: 260
+        y: 284
+        width: 56
+        height: 56
+        text: "+"
+        background: #2563EB
+        color: #FFFFFF
+    }
+
+    Icon {
+        id: icon1
+        x: 16
+        y: 356
+        width: 32
+        height: 32
+        text: "★"
+        color: #F59E0B
+        font_size: 24
+    }
+
+    IconButton {
+        id: ib1
+        x: 64
+        y: 356
+        width: 40
+        height: 40
+        text: "☰"
+        background: #FFFFFF
+        color: #0F172A
+    }
+
+    Spacer {
+        id: sp1
+        x: 120
+        y: 356
+        width: 40
+        height: 40
+    }
+
+    Radio {
+        id: r1
+        x: 16
+        y: 412
+        width: 140
+        height: 30
+        text: "Option A"
+        selected: true
+    }
+
+    ListTile {
+        id: tile1
+        x: 300
+        y: 72
+        width: 280
+        height: 64
+        title: "List tile"
+        subtitle: "Supporting text"
+        background: #FFFFFF
+    }
+
+    AlertDialog {
+        id: dlg1
+        x: 300
+        y: 152
+        width: 280
+        height: 150
+        title: "Alert"
+        text: "This is a dialog."
+        background: #FFFFFF
+    }
+
+    BottomSheet {
+        id: sheet1
+        x: 300
+        y: 320
+        width: 280
+        height: 140
+        open: true
+        background: #FFFFFF
+        Label { text: "Bottom sheet" x: 12 y: 12 width: 256 height: 24 color: #0F172A bold: true }
+    }
+
+    Drawer {
+        id: drawer1
+        x: 600
+        y: 72
+        width: 240
+        height: 500
+        open: true
+        background: #FFFFFF
+        Label { text: "Drawer" x: 12 y: 12 width: 216 height: 24 color: #0F172A bold: true }
+    }
+
+    SnackBar {
+        id: snack1
+        x: 600
+        y: 590
+        width: 280
+        height: 40
+        text: "Saved"
+        background: #323232
+        color: #FFFFFF
+    }
+
+    ProgressBar {
+        id: pb1
+        x: 16
+        y: 460
+        width: 260
+        height: 12
+        value: 60
+        max: 100
+        background: #E2E8F0
+        color: #2563EB
+    }
+
+    Slider {
+        id: sl1
+        x: 16
+        y: 490
+        width: 260
+        height: 32
+        value: 40
+        min: 0
+        max: 100
+        background: #CBD5E1
+        color: #2563EB
+    }
+
+    Switch {
+        id: sw1
+        x: 16
+        y: 540
+        width: 60
+        height: 32
+        active: true
+        active_color: #22C55E
+    }
+
+    ToggleButton {
+        id: tb1
+        x: 96
+        y: 540
+        width: 100
+        height: 32
+        text: "Bold"
+        background: #E2E8F0
+    }
+}

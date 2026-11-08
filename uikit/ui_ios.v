@@ -64,6 +64,9 @@ __global g_event_handler = EventFn(unsafe { nil })
 __global g_window = View(unsafe { nil })
 __global g_root_vc = View(unsafe { nil })
 __global g_root_view = View(unsafe { nil })
+// A refresh asked for while one renders waits for it, as on AppKit.
+__global g_ios_rendering = false
+__global g_ios_refresh_pending = false
 __global g_button_handler = View(unsafe { nil })
 __global g_long_press_handler = View(unsafe { nil })
 __global g_swipe_handler = View(unsafe { nil })
@@ -98,9 +101,9 @@ __global g_view_translation_x = map[voidptr]f64{}
 pub fn bounds() Rect {
 	b := macos.msg_rect(macos.msg_id(macos.get_class('UIScreen'), 'mainScreen'), 'bounds')
 	return Rect{
-		x: b.x
-		y: b.y
-		width: b.width
+		x:      b.x
+		y:      b.y
+		width:  b.width
 		height: b.height
 	}
 }
@@ -109,6 +112,7 @@ pub fn run(build_screen BuildFn, event_handler EventFn) {
 	g_build_screen = build_screen
 	g_event_handler = event_handler
 	configure_animation_driver(request_refresh, true)
+	configure_text_measurer(ios_measure_text_width)
 	ensure_runtime_classes()
 	pool := macos.autorelease_pool_new()
 	defer {
@@ -124,8 +128,18 @@ pub fn refresh() {
 	if g_root_view == unsafe { nil } || voidptr(g_build_screen) == unsafe { nil } {
 		return
 	}
+	if g_ios_rendering {
+		g_ios_refresh_pending = true
+		return
+	}
+	g_ios_rendering = true
 	root := g_build_screen()
 	render_root(root)
+	g_ios_rendering = false
+	if g_ios_refresh_pending {
+		g_ios_refresh_pending = false
+		request_refresh()
+	}
 }
 
 // request_refresh schedules a declarative rebuild on UIKit's main thread.
@@ -135,6 +149,12 @@ pub fn request_refresh() {
 		return
 	}
 	macos.msg_void_sel_id_bool(g_button_handler, 'performSelectorOnMainThread:withObject:waitUntilDone:', macos.sel('vuiRefresh:'), objc_nil(), false)
+}
+
+// refresh_on_demand reports whether the window redraws only when asked. The
+// UIKit backend rebuilds on its own run loop and has no on_demand mode yet.
+pub fn refresh_on_demand() bool {
+	return false
 }
 
 pub fn text(id string) string {
@@ -326,13 +346,242 @@ fn font(size f64, bold bool) macos.Id {
 	return macos.msg_id_f64(macos.get_class('UIFont'), 'systemFontOfSize:', size)
 }
 
+// ios_measure_text_width measures text in the font labels are given; a UILabel
+// draws its text with no inset.
+fn ios_measure_text_width(text string, style TextStyle) f64 {
+	attrs := macos.msg_id2(macos.get_class('NSDictionary'), 'dictionaryWithObject:forKey:',
+		font(style.size, style.bold), macos.nsstring('NSFont'))
+	attributed := macos.msg_id2(macos.alloc('NSAttributedString'), 'initWithString:attributes:',
+		macos.nsstring(text), attrs)
+	width := macos.msg_point(attributed, 'size').x
+	macos.release(attributed)
+	return width
+}
+
+// set_box_background paints what a BoxStyle puts beneath its borders: the solid
+// fill at its opacity or a CAGradientLayer, and the drop shadow.
 fn set_box_background(view View, box BoxStyle) {
-	color := if box_draws_fill(box) {
-		ios.color(box.bg)
-	} else {
+	opacity := box_fill_opacity(box)
+	layer := macos.msg_id(view, 'layer')
+	transaction := macos.Id(macos.get_class('CATransaction'))
+	macos.msg_void(transaction, 'begin')
+	macos.msg_void_bool(transaction, 'setDisableActions:', true)
+	color := if opacity <= 0 || box_has_gradient(box) {
 		macos.msg_id(macos.get_class('UIColor'), 'clearColor')
+	} else if opacity < 1 {
+		ios.color_alpha(box.bg, opacity)
+	} else {
+		ios.color(box.bg)
 	}
 	macos.msg_void1(view, 'setBackgroundColor:', color)
+	if box_has_gradient(box) {
+		set_gradient_layer(view, layer, box, opacity)
+	} else {
+		gradient := macos.get_associated_object(view, gradient_key())
+		if !objc_is_nil(gradient) {
+			macos.msg_void_bool(gradient, 'setHidden:', true)
+		}
+	}
+	set_layer_shadow(layer, box)
+	macos.msg_void(transaction, 'commit')
+}
+
+fn gradient_key() voidptr {
+	return voidptr(macos.sel('ui2_gradient_assoc'))
+}
+
+// The gradient is a sublayer kept behind the subviews' layers and the borders by
+// its z position, sized to the view and rounded like it.
+fn set_gradient_layer(view View, layer macos.Id, box BoxStyle, opacity f64) {
+	mut gradient := macos.get_associated_object(view, gradient_key())
+	if objc_is_nil(gradient) {
+		gradient = macos.msg_id(macos.alloc('CAGradientLayer'), 'init')
+		macos.msg_void_f64(gradient, 'setZPosition:', -1000)
+		macos.set_associated_object(view, gradient_key(), gradient, macos.assoc_retain_nonatomic)
+		macos.release(gradient)
+	}
+	if macos.msg_id(gradient, 'superlayer') != layer {
+		macos.msg_void1(layer, 'addSublayer:', gradient)
+	}
+	bounds := macos.msg_rect(view, 'bounds')
+	macos.msg_void_rect(gradient, 'setFrame:', bounds)
+	macos.msg_void_f64(gradient, 'setCornerRadius:', box.radius)
+	colors := macos.msg_id(macos.alloc('NSMutableArray'), 'init')
+	locations := macos.msg_id(macos.alloc('NSMutableArray'), 'init')
+	for stop in gradient_sorted_stops(box.gradient) {
+		macos.msg_void1(colors, 'addObject:', macos.msg_id(ios.color_alpha(stop.color, stop.opacity * opacity),
+			'CGColor'))
+		macos.msg_void1(locations, 'addObject:', macos.msg_id_f64(macos.get_class('NSNumber'),
+			'numberWithDouble:', stop.position))
+	}
+	macos.msg_void1(gradient, 'setColors:', colors)
+	macos.msg_void1(gradient, 'setLocations:', locations)
+	macos.release(colors)
+	macos.release(locations)
+	// UIKit layers already measure from the top left, as the gradient line does.
+	line := gradient_line(box.gradient.angle, bounds.width, bounds.height)
+	w := if bounds.width > 0 { bounds.width } else { 1.0 }
+	h := if bounds.height > 0 { bounds.height } else { 1.0 }
+	sx, sy, ex, ey := gradient_unit_points(line, w, h)
+	macos.msg_void_point(gradient, 'setStartPoint:', macos.point(sx, sy))
+	macos.msg_void_point(gradient, 'setEndPoint:', macos.point(ex, ey))
+	macos.msg_void_bool(gradient, 'setHidden:', false)
+}
+
+// shadowOpacity is a float, set through key-value coding so the bridge's double
+// setters are not handed a float slot.
+fn set_layer_shadow(layer macos.Id, box BoxStyle) {
+	opacity := if box_has_shadow(box) { unit_clamp(box.shadow.opacity) } else { 0.0 }
+	macos.msg_void2(layer, 'setValue:forKey:', macos.msg_id_f64(macos.get_class('NSNumber'),
+		'numberWithDouble:', opacity), macos.nsstring('shadowOpacity'))
+	if opacity <= 0 {
+		return
+	}
+	shadow := box.shadow
+	macos.msg_void1(layer, 'setShadowColor:', macos.msg_id(ios.color(shadow.color), 'CGColor'))
+	// CoreAnimation's radius is the blur's standard deviation, about half the
+	// CSS-style blur the box declares.
+	macos.msg_void_f64(layer, 'setShadowRadius:', if shadow.blur > 0 {
+		shadow.blur / 2
+	} else {
+		0.0
+	})
+	macos.msg_void_point(layer, 'setShadowOffset:', macos.point(shadow.x, shadow.y))
+}
+
+// A rounded box clips its subviews to its corners, except when it casts a shadow:
+// a layer that masks to its bounds masks its own shadow away too.
+type IosPathCreateFn = fn () voidptr
+
+type IosPathPointFn = fn (path voidptr, transform voidptr, x f64, y f64)
+
+type IosPathQuadFn = fn (path voidptr, transform voidptr, cx f64, cy f64, x f64, y f64)
+
+type IosPathCubicFn = fn (path voidptr, transform voidptr, c1x f64, c1y f64, c2x f64, c2y f64, x f64, y f64)
+
+type IosPathOneFn = fn (path voidptr)
+
+// cg_path builds a CGPath from ui2 path commands; the caller releases it.
+// CoreGraphics is reached through its exported symbols, as the constants are.
+fn cg_path(commands []PathCommand) voidptr {
+	create := unsafe { IosPathCreateFn(extern_symbol('CGPathCreateMutable')) }
+	move := unsafe { IosPathPointFn(extern_symbol('CGPathMoveToPoint')) }
+	line := unsafe { IosPathPointFn(extern_symbol('CGPathAddLineToPoint')) }
+	quad := unsafe { IosPathQuadFn(extern_symbol('CGPathAddQuadCurveToPoint')) }
+	cubic := unsafe { IosPathCubicFn(extern_symbol('CGPathAddCurveToPoint')) }
+	close_subpath := unsafe { IosPathOneFn(extern_symbol('CGPathCloseSubpath')) }
+	if voidptr(create) == unsafe { nil } || voidptr(move) == unsafe { nil }
+		|| voidptr(line) == unsafe { nil } || voidptr(quad) == unsafe { nil }
+		|| voidptr(cubic) == unsafe { nil } || voidptr(close_subpath) == unsafe { nil } {
+		return unsafe { nil }
+	}
+	path := create()
+	mut started := false
+	for cmd in commands {
+		if cmd.verb != .move_to && cmd.verb != .close && !started {
+			// CoreGraphics needs a current point before a line or curve.
+			move(path, unsafe { nil }, cmd.x, cmd.y)
+			started = true
+			if cmd.verb == .line_to {
+				continue
+			}
+		}
+		match cmd.verb {
+			.move_to {
+				move(path, unsafe { nil }, cmd.x, cmd.y)
+				started = true
+			}
+			.line_to {
+				line(path, unsafe { nil }, cmd.x, cmd.y)
+			}
+			.quad_to {
+				quad(path, unsafe { nil }, cmd.cx1, cmd.cy1, cmd.x, cmd.y)
+			}
+			.cubic_to {
+				cubic(path, unsafe { nil }, cmd.cx1, cmd.cy1, cmd.cx2, cmd.cy2, cmd.x, cmd.y)
+			}
+			.close {
+				if started {
+					close_subpath(path)
+				}
+			}
+		}
+	}
+	return path
+}
+
+// set_view_shape draws a view's path (see `shape`) with a CAShapeLayer beneath
+// its children, and takes the layer away when the view stops drawing one.
+fn set_view_shape(view View, el Element) {
+	key := voidptr(macos.sel('ui2_shape_assoc'))
+	mut layer := macos.get_associated_object(view, key)
+	if !element_has_shape(el) {
+		if layer != unsafe { nil } {
+			macos.msg_void(layer, 'removeFromSuperlayer')
+			macos.set_associated_object(view, key, unsafe { nil }, macos.assoc_retain_nonatomic)
+		}
+		return
+	}
+	parent := macos.msg_id(view, 'layer')
+	if layer == unsafe { nil } {
+		layer = macos.msg_id(macos.alloc('CAShapeLayer'), 'init')
+		macos.set_associated_object(view, key, layer, macos.assoc_retain_nonatomic)
+		macos.release(layer)
+		macos.msg_void_f64(layer, 'setZPosition:', -999)
+		// What falls outside the frame is clipped, as in the custom renderer.
+		macos.msg_void_bool(layer, 'setMasksToBounds:', true)
+	}
+	if macos.msg_id(layer, 'superlayer') != parent {
+		macos.msg_void1(parent, 'addSublayer:', layer)
+	}
+	macos.msg_void_rect(layer, 'setFrame:', macos.msg_rect(view, 'bounds'))
+	path := cg_path(el.path)
+	macos.msg_void1(layer, 'setPath:', path)
+	if path != unsafe { nil } {
+		release := unsafe { IosPathOneFn(extern_symbol('CGPathRelease')) }
+		if voidptr(release) != unsafe { nil } {
+			release(path)
+		}
+	}
+	style := el.shape_style
+	fill := if hex := style.fill {
+		macos.msg_id(ios.color_alpha(hex, style.fill_opacity), 'CGColor')
+	} else {
+		unsafe { nil }
+	}
+	macos.msg_void1(layer, 'setFillColor:', fill)
+	stroke := if hex := style.stroke {
+		macos.msg_id(ios.color_alpha(hex, if style.stroke_width > 0 {
+			style.stroke_opacity
+		} else {
+			0.0
+		}), 'CGColor')
+	} else {
+		unsafe { nil }
+	}
+	macos.msg_void1(layer, 'setStrokeColor:', stroke)
+	macos.msg_void_f64(layer, 'setLineWidth:', style.stroke_width)
+	macos.msg_void1(layer, 'setLineJoin:', macos.nsstring(match style.line_join {
+		.round { 'round' }
+		.miter { 'miter' }
+		.bevel { 'bevel' }
+	}))
+	macos.msg_void1(layer, 'setLineCap:', macos.nsstring(match style.line_cap {
+		.round { 'round' }
+		.butt { 'butt' }
+		.square { 'square' }
+	}))
+	macos.msg_void1(layer, 'setFillRule:', macos.nsstring(if style.fill_rule == .even_odd {
+		'even-odd'
+	} else {
+		'non-zero'
+	}))
+}
+
+fn set_box_corners(view View, box BoxStyle) {
+	layer := macos.msg_id(view, 'layer')
+	macos.msg_void_f64(layer, 'setCornerRadius:', box.radius)
+	macos.msg_void_bool(layer, 'setMasksToBounds:', !box_has_shadow(box))
 }
 
 fn set_corner_radius(view View, radius f64) {
@@ -374,15 +623,28 @@ fn set_box_borders(view View, box BoxStyle) {
 	top := box_border_width(box.border_top, view_bounds.height)
 	right := box_border_width(box.border_right, view_bounds.width)
 	bottom := box_border_width(box.border_bottom, view_bounds.height)
-	if left <= 0 && top <= 0 && right <= 0 && bottom <= 0 {
+	rounded := box_rounded_border(box)
+	layer := macos.msg_id(view, 'layer')
+	if (left <= 0 && top <= 0 && right <= 0 && bottom <= 0) || rounded > 0 {
 		for side in ['left', 'top', 'right', 'bottom'] {
 			set_border_layer(view, side, Rect{}, box.border_color, false)
 		}
+	}
+	if left <= 0 && top <= 0 && right <= 0 && bottom <= 0 {
+		macos.msg_void_f64(layer, 'setBorderWidth:', 0)
 		return
 	}
 	if box.radius > 0 {
-		set_corner_radius(view, box.radius)
+		set_box_corners(view, box)
 	}
+	// An even border on a rounded box is the layer's own, which follows the
+	// corners; straight side layers would leave them bare.
+	if rounded > 0 {
+		macos.msg_void_f64(layer, 'setBorderWidth:', rounded)
+		macos.msg_void1(layer, 'setBorderColor:', macos.msg_id(ios.color(box.border_color), 'CGColor'))
+		return
+	}
+	macos.msg_void_f64(layer, 'setBorderWidth:', 0)
 	transaction := macos.Id(macos.get_class('CATransaction'))
 	macos.msg_void(transaction, 'begin')
 	macos.msg_void_bool(transaction, 'setDisableActions:', true)
@@ -525,7 +787,7 @@ fn new_native_view(frame Rect, box BoxStyle, button_behavior bool) View {
 	class_name := if button_behavior { 'VuiButtonBehaviorView' } else { 'UIView' }
 	view := macos.msg_id_rect(macos.alloc(class_name), 'initWithFrame:', native_rect(frame))
 	set_box_background(view, box)
-	set_corner_radius(view, box.radius)
+	set_box_corners(view, box)
 	return view
 }
 
@@ -658,23 +920,33 @@ fn apply_label_valign(lbl View, frame Rect, lines int, valign VAlign, boxed bool
 	}))
 }
 
-fn new_image_view(frame Rect, path string, rotation f64) View {
+fn new_image_view(frame Rect, path string, rotation f64, tint u32) View {
 	image_view := macos.msg_id_rect(macos.alloc('UIImageView'), 'initWithFrame:', native_rect(frame))
-	update_image_view(image_view, frame, path, rotation)
+	update_image_view(image_view, frame, path, rotation, tint)
 	return image_view
 }
 
-fn update_image_view(image_view View, frame Rect, path string, rotation f64) {
+// A `symbol:` path draws that SF Symbol tinted with the element's text color, as
+// every backend tints its symbol glyph; a file image keeps its own colors.
+fn update_image_view(image_view View, frame Rect, path string, rotation f64, tint u32) {
 	native_set_view_rotation(image_view, 0)
 	macos.msg_void_rect(image_view, 'setFrame:', native_rect(frame))
 	macos.msg_void_i64(image_view, 'setContentMode:', 1)
 	native_set_view_rotation(image_view, rotation)
+	symbol := path.starts_with('symbol:')
 	image := if path.trim_space().len == 0 {
 		View(unsafe { nil })
+	} else if symbol {
+		macos.msg_id1(macos.get_class('UIImage'), 'systemImageNamed:', macos.nsstring(path['symbol:'.len..]))
 	} else {
 		macos.msg_id1(macos.get_class('UIImage'), 'imageWithContentsOfFile:', macos.nsstring(path))
 	}
 	macos.msg_void1(image_view, 'setImage:', image)
+	macos.msg_void1(image_view, 'setTintColor:', if symbol {
+		ios.color(tint)
+	} else {
+		View(unsafe { nil })
+	})
 }
 
 fn new_text_area_view(el Element) View {
@@ -1042,12 +1314,12 @@ fn render_children(parent View, children []Element, parent_key string, mut activ
 fn native_create_element(el Element) View {
 	return match el.kind {
 		.screen { View(unsafe { nil }) }
-		.view { new_native_view(el.frame, el.box, el.button_behavior) }
+		.view, .opengl { new_native_view(el.frame, el.box, el.button_behavior) }
 		.scroll { new_scroll_view(el.frame, el.box) }
 		.label {
 			new_label_view(el.frame, el.text, el.text_style.color, el.text_style.size, el.text_style.bold, align_value(el.text_style.align), el.text_style.lines, el.text_style.valign, label_needs_container(el))
 		}
-		.image { new_image_view(el.frame, el.image_path, el.rotation) }
+		.image { new_image_view(el.frame, el.image_path, el.rotation, el.text_style.color) }
 		.button {
 			new_button_view(el.frame, el.text, el.box, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.lines)
 		}
@@ -1068,10 +1340,10 @@ fn native_create_element(el Element) View {
 fn native_update_element(native View, el Element, declared_text_changed bool) {
 	match el.kind {
 		.screen {}
-		.view {
+		.view, .opengl {
 			macos.msg_void_rect(native, 'setFrame:', native_rect(el.frame))
 			set_box_background(native, el.box)
-			set_corner_radius(native, el.box.radius)
+			set_box_corners(native, el.box)
 		}
 		.scroll {
 			macos.msg_void_rect(native, 'setFrame:', native_rect(el.frame))
@@ -1081,7 +1353,9 @@ fn native_update_element(native View, el Element, declared_text_changed bool) {
 		.label {
 			update_label_view(native, el.frame, el.text, el.text_style.color, el.text_style.size, el.text_style.bold, align_value(el.text_style.align), el.text_style.lines, el.text_style.valign, label_needs_container(el))
 		}
-		.image { update_image_view(native, el.frame, el.image_path, el.rotation) }
+		.image {
+			update_image_view(native, el.frame, el.image_path, el.rotation, el.text_style.color)
+		}
 		.button {
 			update_button_view(native, el.frame, el.text, el.box, el.text_style.color, el.text_style.size, el.text_style.bold, el.text_style.lines)
 		}
@@ -1274,6 +1548,9 @@ fn render_element(parent View, el Element, key string, mut active map[string]boo
 		el.box
 	}
 	set_box_borders(native, border_box)
+	if el.kind == .view {
+		set_view_shape(native, el)
+	}
 
 	match el.kind {
 		.screen {}
@@ -1294,7 +1571,11 @@ fn render_element(parent View, el Element, key string, mut active map[string]boo
 			} else {
 				el.frame.width
 			}
-			height := if el.scroll_mode != .horizontal_only { content_h + 16 } else { el.frame.height }
+			height := if el.scroll_mode != .horizontal_only {
+				content_h + 16
+			} else {
+				el.frame.height
+			}
 			macos.msg_void_rect(native, 'setContentSize:', macos.rect(width, height, 0, 0))
 			macos.msg_void_bool(native, 'setAlwaysBounceVertical:', el.scroll_mode != .horizontal_only)
 			// Where the view should be: where it is, or where it was before it was

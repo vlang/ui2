@@ -15,9 +15,9 @@ pub mut:
 fn main() {
 	ui2.run_vml[ToggleButtonDemo](
 		source: toggle_vml_source
-		model: ToggleButtonDemo{}
-		title: 'Toggle Button'
-		width: toggle_width
+		model:  ToggleButtonDemo{}
+		title:  'Toggle Button'
+		width:  toggle_width
 		height: toggle_height
 	) or { panic(err) }
 }

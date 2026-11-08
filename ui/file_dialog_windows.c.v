@@ -6,6 +6,7 @@ import os
 #flag windows -lcomdlg32
 #flag windows -lshell32
 #flag windows -lole32
+#flag windows -I @VMODROOT/windows
 
 #insert "@VMODROOT/windows/file_dialog_windows.h"
 

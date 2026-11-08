@@ -7,11 +7,15 @@
 
 
 `ui2` is a compact declarative UI module for V. It uses retained native controls
-on macOS, iOS, and Windows and a custom immediate-mode `gg` renderer on Linux
-and Android.
+on macOS, iOS, and Windows and a custom immediate-mode `gg` renderer on Linux,
+the BSDs, and Android.
 
-The Linux backend draws and handles widgets directly through `gg`/Sokol; it has
-no GTK dependency.
+The Linux and BSD backends draw and handle widgets directly through
+`gg`/Sokol; they have no GTK dependency.
+
+The V API includes responsive Flex and Grid placement with intrinsic text
+measurement. See the [layout guide](docs/modern-layout.md) and
+[responsive example](examples/responsive_layout/main.v).
 
 You can also build desktop ui2 apps in C or any language with a C FFI. Build
 the shared library and the C counter with `make c-example`; the standalone
@@ -31,6 +35,11 @@ v -d ui2_custom_rendering run examples/users/main.v
 `ui2` needs V 0.5.2 or newer. The module is split across `ui/`, `appkit/`,
 `uikit/`, `windows/`, and `linux/` through the `subdirs` field of `v.mod`, and
 older compilers ignore that field. Run `v up` if `import ui2` fails.
+
+FreeBSD, OpenBSD, NetBSD, and DragonFlyBSD share the custom `gg` renderer with
+Linux, drawing through X11: the X11 client libraries (`libX11`, `libXcursor`,
+`libXi`, `libXrandr`) and OpenGL have to be installed, and stock V's sokol
+module already supplies each BSD's include and library paths.
 
 To use `ui2` from a project outside this repository, link the clone into
 `~/.vmodules`:
@@ -54,12 +63,29 @@ applies that value, while a refresh with the same declaration preserves the
 current native/local edit, selection, focus, and (on native controls) input
 method composition. Use `set_text` for an explicit imperative replacement.
 
+The custom renderer is demand driven: it builds on demand and reuses its tree
+while idle, `ui2.WindowOptions{refresh: .continuous}` restores the historical
+per-vsync rebuild loop, and `refresh: .manual` suppresses all drawing between
+explicit asks. See
+[render scheduling](docs/render-scheduling.md) for invalidation, worker
+delivery, window lifecycle and the acceptance fixture.
+
+On Linux, glvnd probes the ICD of every installed GL vendor before the first
+frame, mapping each vendor's whole userspace stack into the process — tens of
+megabytes per vendor, even when only one of them renders.
+`ui2.WindowOptions{gl_load: .mesa_only}` probes the Mesa vendor only (VMs, CI,
+Xvfb), `gl_load: .gpu_only` probes the proprietary vendor only (NVIDIA
+desktops; it needs a real hardware GL context). The `UI2_GL_VENDOR`
+environment variable overrides the field without a recompile, and an explicit
+`__EGL_VENDOR_LIBRARY_FILENAMES` or `__EGL_VENDOR_LIBRARY_DIRS` in the
+process wins over both.
+
 ## Widget animations
 
 Animations target a mounted element by `id` and are applied after each
 declarative build, so they work with both V-built and VML-built trees. The
-native backends schedule redraws for the duration; the custom renderer already
-builds every frame.
+native and custom backends schedule frames while the animation is active. The
+custom renderer returns to idle when the animation completes.
 
 ```v
 move := ui2.animation(
@@ -307,6 +333,22 @@ or gesture phases. Use `button_behavior` for a normal action-bearing composite
 control. If both flags are set, the surface emits the raw pointer phases and
 then its ordinary action after a successful tap.
 
+### Hover
+
+`hoverable: true` (or `ui2.with_hover(el)`) makes any element report
+`pointer:enter:<action>:<x>:<y>` when the pointer comes over it and
+`pointer:leave:...` when it goes, so a hover card can open or a row can
+highlight. `ui2.parse_pointer_event(event)` decodes these and the other
+pointer phases, including actions that contain colons.
+
+Hover follows the CSS `:hover` rule on AppKit, Windows and the custom renderer
+alike: an element is hovered while the topmost element under the pointer is it
+or one of its descendants. Moving onto a child keeps its hoverable ancestors
+hovered, an element covered by another one is not hovered, and hover is checked
+again after every render, so content moving under a still pointer is reported
+too. Leaves are reported innermost first and enters outermost first. Touch
+platforms (iOS, Android) have no hover.
+
 To reuse that style, put the defaults in a sibling VML module. `PrimaryButton`
 can live in `PrimaryButton.vml` or the conventional snake-case
 `primary_button.vml`:
@@ -461,15 +503,57 @@ fn save_card(id string, action string, frame ui2.Rect) ui2.Element {
 already exists. `button_view` and `with_button_behavior` leave the raw
 `clickable` flag unset.
 
+## Box effects
+
+`BoxStyle` can fade, shade and color a box beyond its solid `bg`:
+
+```v
+card := ui2.view('card', ui2.rect(20, 20, 280, 160), ui2.BoxStyle{
+	bg:     0xffffff
+	radius: 12
+	shadow: ui2.box_shadow(0x000000, 0.18, 24, 8) // color, opacity, blur, y offset
+}, children)
+
+backdrop := ui2.view('backdrop', ui2.rect(0, 0, w, h), ui2.BoxStyle{
+	bg:      0x000000
+	opacity: 0.4 // the fill only; borders and children keep theirs
+}, [])
+
+banner := ui2.view('banner', ui2.rect(0, 0, w, 120), ui2.BoxStyle{
+	gradient: ui2.linear_gradient(90, ui2.gradient_stop(0x2563eb, 0),
+		ui2.gradient_stop(0x9333ea, 1))
+}, [])
+```
+
+- `opacity` (0 to 1) fades the fill and nothing else.
+- `gradient` replaces `bg` on a view with a linear gradient: `angle` in degrees
+  (0 runs left to right, 90 top to bottom) and two or more stops, each with a
+  position from 0 to 1 and an optional opacity. Like CSS `linear-gradient`, it
+  spans the box corner to corner along its angle. Buttons keep their solid fill
+  (a native button draws its title beneath any gradient layer); make a gradient
+  button from a view with `button_behavior`.
+- `shadow` draws a drop shadow beneath the box: `color`, `opacity`, `blur`,
+  offset `x`/`y` and `spread`, as in CSS `box-shadow`. A box that casts a shadow
+  does not clip its children to its rounded corners on AppKit and UIKit, since a
+  layer masking to its bounds masks its shadow away too.
+
+All three are animatable through `animation_number_property('box.opacity', ...)`
+and the like. AppKit and UIKit use CoreAnimation (`NSShadow`/layer shadows and a
+`CAGradientLayer`), and the custom renderer draws them itself. Windows draws
+fill opacity and gradients with `AlphaBlend` and `GradientFill`, but not a
+gradient's per-stop opacity, and it draws no shadows: Win32 child windows cannot
+paint outside themselves. Screenshots taken with `UI2_SCREENSHOT_PATH` on AppKit
+do not show CoreAnimation shadows, which `cacheDisplayInRect:` does not render.
+
 ## Backend capabilities
 
 Call `control_support(kind)` to query support. macOS implements every shared
 control kind. iOS implements every kind, with text areas reported as `partial`
-because rich runs are currently rendered as plain text. Linux, Android, and
-opt-in custom desktop builds implement every kind through custom rendering;
-dropdowns and text areas are `partial` because the dropdown list is drawn by
-the renderer instead of a native menu and rich text-area runs are rendered as
-plain text.
+because rich runs are currently rendered as plain text. Linux, the BSDs,
+Android, and opt-in custom desktop builds implement every kind through custom
+rendering; dropdowns and text areas are `partial` because the dropdown list is
+drawn by the renderer instead of a native menu and rich text-area runs are
+rendered as plain text.
 
 A button marked `native` asks the platform for the standard bezel and hands it
 the interaction styling. AppKit and Win32 supply theirs; the custom renderer
@@ -510,7 +594,10 @@ its text area is plain-text, so those two controls report `partial` support.
 
 Shared state includes `hidden`, `enabled`, `accessibility_role`,
 `accessibility_label`, and `accessibility_value`. Native backends expose these
-through AppKit/UIKit. Standard Windows controls expose their native name and
+through AppKit/UIKit. Roles use ARIA names (`button`, `checkbox`, `tab`,
+`progressbar`, `navigation`, …); AppKit maps them onto its own roles, passes
+`AX…` roles through unchanged, and leaves a view's native role in place for a
+name it has no role for. Standard Windows controls expose their native name and
 value; `button_behavior` views also expose a native button role, generated
 label, keyboard focus, and accessibility activation. Other explicit Windows
 accessibility role/value overrides are not yet implemented.
@@ -546,10 +633,10 @@ choice := ui2.message_box(
 
 `title` is the short heading and `text` the body. macOS renders them as an
 `NSAlert` message and informative text, Windows as a `MessageBoxW` caption and
-body, and Linux as the desktop's own `zenity` or `kdialog` dialog — `kdialog`
-first under KDE and Plasma. iOS presents a `UIAlertController` and pumps the run
-loop so the call stays synchronous like the desktop backends. `alert(title,
-text)` and `confirm(title, text)` wrap the two common cases.
+body, and the Linux and BSD desktops as their own `zenity` or `kdialog` dialog
+— `kdialog` first under KDE and Plasma. iOS presents a `UIAlertController` and
+pumps the run loop so the call stays synchronous like the desktop backends.
+`alert(title, text)` and `confirm(title, text)` wrap the two common cases.
 
 Android has no alert this layer can drive without a JVM callback, so
 `message_box_supported()` returns `false` there and `message_box` answers as if
@@ -573,6 +660,91 @@ MessageBox {
     Button { id: close_message text: "OK" on_tap: app.close_message() }
 }
 ```
+
+## Window chrome
+
+`set_window_chrome(.hidden_titlebar)` lets the application draw its own title
+bar: content runs to the top edge of the window. macOS keeps its close,
+minimize and zoom buttons over the content's leading corner
+(`window_controls_leading_inset()` is how much room they take); Windows removes
+the caption but keeps the resizable border, and `window_draws_own_controls()`
+says the application draws the window buttons.
+
+```v
+fn on_event(event string) {
+	if ev := ui2.parse_pointer_event(event) {
+		if ev.phase == 'down' && ev.action == 'titlebar' {
+			ui2.start_window_drag() // the platform moves the window
+		}
+	}
+	match event {
+		'minimize' { ui2.minimize_window() }
+		'maximize' { ui2.toggle_maximize_window() }
+		'close' { ui2.quit() }
+		else {}
+	}
+}
+```
+
+`start_window_drag` only works while a press is being handled, so give the
+title bar `clickable: true` (or `draggable`) and call it on `pointer:down`.
+`window_is_maximized` tells a maximize button which icon to show. These work
+for native and custom-rendered windows on macOS and Windows; Linux, the BSDs,
+Android and iOS keep their own frame and the calls report false.
+
+The window does not exist until `run_window` starts, so hide the title bar
+from a zero-second timer set up before it; the timer runs during the first
+build, and the rebuild it asks for lays the window out at its new size:
+
+```v
+ui2.after(0, fn [mut app] () {
+	app.chrome_hidden = ui2.set_window_chrome(.hidden_titlebar)
+})
+ui2.run_window(...)
+```
+
+Pointer events carry no click count, and a press in a hidden title bar does
+not zoom the window on its own, so detect the double click yourself (the
+`title_bar` component's `title_bar_event` does) and call
+`toggle_maximize_window`.
+
+## Timers
+
+`after` runs a callback on the UI thread once a delay has passed and then
+rebuilds the window, so a notification can dismiss itself or a search can
+debounce without the application owning a thread:
+
+```v
+toast := ui2.after(4, fn [mut app] () {
+	app.toast_visible = false
+})
+ui2.cancel_timer(toast) // call it off, e.g. when the user dismisses it first
+```
+
+Callbacks run where widget animation callbacks do, between building the
+declared tree and rendering it, and a refresh is requested so whatever they
+change is drawn next. `timer_pending(id)` reports whether a callback has yet to
+run. A negative or non-finite delay runs at the next build.
+
+## Clipboard
+
+`set_clipboard_text` replaces the system clipboard with plain text and
+`clipboard_text` reads it back (`none` when it holds no text). Text fields
+keep their own copy and paste; these are for copying anything else, such as
+the contents of a code block.
+
+```v
+if !ui2.set_clipboard_text(token) {
+	// no clipboard this platform can reach
+}
+pasted := ui2.clipboard_text() or { '' }
+```
+
+macOS uses `NSPasteboard`, iOS `UIPasteboard` and Windows the Win32 clipboard,
+for native and custom-rendered windows alike. Linux and the BSDs drive
+`wl-copy`/`wl-paste` under Wayland, or `xclip` or `xsel` under X11, so one of
+them has to be installed; Android has no clipboard this layer can reach. Check
+`clipboard_supported()` before offering a copy action.
 
 ## File and folder dialogs
 
@@ -606,13 +778,14 @@ destination := ui2.save_file_dialog(
 
 The API uses `NSOpenPanel`/`NSSavePanel` on macOS, standard Win32 open/save
 and folder dialogs on Windows, and the desktop's `zenity` or `kdialog` picker
-on Linux. Linux requires a graphical session and one of those helpers;
-`file_dialog_supported()` reports that availability. The synchronous API is not
+on Linux and the BSDs. Those desktops require a graphical session and one of
+those helpers; `file_dialog_supported()` reports that availability. The
+synchronous API is not
 available on iOS or Android, where a document picker needs an app-specific
 asynchronous presentation callback.
 
-For Linux and custom-rendered applications, `FilePicker` provides an in-window
-picker with no `zenity` or `kdialog` dependency. It uses the same
+For Linux, the BSDs, and custom-rendered applications, `FilePicker` provides
+an in-window picker with no `zenity` or `kdialog` dependency. It uses the same
 `FileDialogConfig` for open, save, and folder modes. Keep the picker in app
 state, add `picker.render(ui2.bounds())` as the last screen child, and forward
 events to `picker.handle`. The picker is asynchronous: `done` becomes true when
@@ -677,10 +850,11 @@ ui2.set_tray(
 ```
 
 A shortcut names the platform's primary modifier as `cmd`: Command on macOS,
-Control on Windows and Linux. A row's `checked` state is declared rather than
-remembered — after handling the event, install the menu again with the new
-value. Either call may come before `run_window`; what was declared is installed
-as soon as there is a window to attach it to. `remove_tray()` undocks the icon.
+Control on Windows, Linux, and the BSDs. A row's `checked` state is declared
+rather than remembered — after handling the event, install the menu again with
+the new value. Either call may come before `run_window`; what was declared is
+installed as soon as there is a window to attach it to. `remove_tray()` undocks
+the icon.
 
 macOS builds an `NSMenu` main menu, keeping its own application menu with
 "Quit <app>" first, and an `NSStatusItem` for the tray, whose `icon` may name an
@@ -696,6 +870,22 @@ both calls are accepted and ignored; check `menu_bar_supported()` and
 `validate_menus(...)` rejects an untitled menu, a row that emits nothing, a
 duplicated id, a submenu that also emits, and a decorated separator, so a
 declaration can be checked in a test without a window.
+
+In the custom renderer, every colour of the drawn menu bar can be recoloured to
+match the host application's theme:
+
+```v
+ui2.set_menu_bar_background_color(0x2c3e50)
+ui2.set_menu_bar_border_color(0x34495e)
+ui2.set_menu_bar_title_color(0xecf0f1)
+ui2.set_menu_bar_text_color(0xecf0f1)
+ui2.set_menu_bar_disabled_text_color(0x7f8c8d)
+ui2.set_menu_bar_highlight_color(0x3498db)
+ui2.set_menu_bar_panel_background_color(0x34495e)
+ui2.set_menu_bar_panel_shadow_color(0x2c3e50)
+ui2.set_menu_bar_shortcut_text_color(0xbdc3c7)
+ui2.set_menu_bar_separator_color(0x95a5a6)
+```
 
 ## Layout and text offsets
 
@@ -760,11 +950,11 @@ these functions.
 
 ## Fonts and text sizes
 
-`TextStyle.size` is in points. Win32 and the Linux desktops resolve a point at
-96 dpi, AppKit and UIKit at 72, so the custom renderer follows whichever
-platform it draws on and a declared size matches the native controls beside it.
-The default size of 15 is therefore a 20 px em square on Linux and Windows, and
-15 px on macOS and iOS.
+`TextStyle.size` is in points. Win32 and the Linux and BSD desktops resolve a
+point at 96 dpi, AppKit and UIKit at 72, so the custom renderer follows
+whichever platform it draws on and a declared size matches the native controls
+beside it. The default size of 15 is therefore a 20 px em square on Linux, the
+BSDs, and Windows, and 15 px on macOS and iOS.
 
 The custom renderer draws through fontstash, which sizes a glyph by its
 ascender-to-descender height rather than by the em square. `ui2` reads
@@ -839,6 +1029,54 @@ which is no better.
 UI2_FONT_SYMBOLS=/usr/share/fonts/truetype/ancient-scripts/Symbola.ttf ./treeview
 ```
 
+### Measuring text
+
+`measure_text_width(text, style)` is how wide a label must be to show `text`
+on one line in `style`, measured by the backend that draws it: AppKit and
+UIKit with the label's own font, Win32 with GDI, the custom renderer with
+fontstash. It includes the inset a backend's labels put around their text, so
+a label that wide is not cut short, and widths are cached, so a build may
+measure the same words every frame. `wrap_text_to_width(text, style, width)`
+breaks text into the lines a label that wide shows.
+
+```v
+w := ui2.measure_text_width('Save changes', style)
+ui2.label('', 'Save changes', ui2.rect(x, y, w, 20), style)
+```
+
+Measuring needs a running window. Before one starts, and in tests, both
+estimate from the character count, and `text_measurement_exact()` is false.
+
+## Shapes
+
+`shape(id, frame, path, style)` draws a vector path inside a frame: lines,
+curves, areas, slices and outlines, antialiased on every backend (a
+CAShapeLayer on AppKit and UIKit, GDI+ on Windows, multisampled triangles in
+the custom renderer). Path coordinates are local to the frame, and the shape is
+a view, so it can hold children drawn above it.
+
+```v
+mut area := ui2.path_smooth(points) // a curve through the points, no overshoot
+area << ui2.path_line_to(width, height)
+area << ui2.path_line_to(0, height)
+area << ui2.path_close()
+ui2.shape('revenue', ui2.rect(0, 0, width, height), area, ui2.ShapeStyle{
+	fill:         u32(0x3b82f6)
+	fill_opacity: 0.25
+	stroke:       u32(0x2563eb)
+	stroke_width: 2
+})
+```
+
+Paths are lists of `path_move_to`, `path_line_to`, `path_quad_to`,
+`path_cubic_to` and `path_close`; `path_polyline`, `path_rect`,
+`path_rounded_rect`, `path_ellipse`, `path_circle`, `path_arc`,
+`path_sector` (a pie slice) and `path_annular_sector` (a doughnut slice) build
+common ones. `ShapeStyle` takes an optional fill and stroke with their
+opacities, the stroke width, `line_join`, `line_cap` and `fill_rule`
+(`.nonzero` or `.even_odd`, for holes). Angles are in radians from the
+positive x axis, growing clockwise on screen. See `examples/shapes`.
+
 ## Charts
 
 `ui2.chart` creates line, grouped bar, scatter, pie, and doughnut charts. Its
@@ -900,6 +1138,57 @@ Run `v run examples/charts/main.v` to see all five chart types in a layout that
 adapts to the window width. Add `-d ui2_custom_rendering` to try the custom
 renderer on macOS or Windows.
 
+## Window input
+
+`on_pointer_move` reports every pointer move over the window, wherever it lands, in
+logical units. The custom renderer delivers it; native backends do not yet.
+
+`on_mouse_button` reports raw mouse button transitions in window points: button 0
+is left, 1 right, 2 middle, and `down` says press or release. `on_wheel` reports
+raw wheel deltas before any scroll element or the menu bar sees them, so
+shift+wheel arrives as a vertical delta exactly as the hardware sent it. The
+custom renderer delivers both; native backends do not yet.
+
+`set_menu_bar_hidden(true)` hides the menu bar in the custom renderer: it takes no
+room, draws nothing and takes no clicks. Native menu bars are not hidden. Read the
+state with `menu_bar_hidden()`.
+
+`KeyEvent.repeat` is true for an autorepeat of a key that is still held, so an
+application can act on the first press only. The custom renderer delivers it;
+native backends do not yet.
+## OpenGL surfaces
+
+`opengl(id, frame)` reserves a rectangle for content an application renders with
+OpenGL, such as a video frame. The gg renderer draws it where the graphics backend
+is OpenGL — Linux, the BSDs, and Android. Custom-rendered desktop builds render
+through Metal (macOS) or D3D11 (Windows), which have no GL texture to wrap, so a
+texture handed over there draws as an empty quad; native backends show it as a
+transparent view.
+
+`set_gl_surface_renderer` installs a function that runs before every frame, on the
+UI thread with the GL context current, once for each `opengl` element drawn in the
+previous frame. Render into a framebuffer there, then hand ui2 the texture with
+`set_gl_surface_texture(id, texture, width, height)`, sizes in pixels. ui2 draws the
+texture as a quad over the element's frame, in the normal UI pass, so menus and other
+overlays draw above it. A texture whose element is no longer drawn is released before
+the next frame. The renderer runs inside the frame sokol is already driving: GL state
+it changes behind sokol's back — a framebuffer or texture it binds — has to be handed
+back with `gfx.reset_state_cache()` before returning, or sokol may skip reapplying
+bindings and draw the UI with stale ones.
+
+```v
+ui2.set_gl_surface_renderer(fn (id string, frame ui2.Rect, scale f64, height f64) {
+	if id == 'video' {
+		// ... render into the framebuffer that owns `texture`, sized w x h pixels ...
+		ui2.set_gl_surface_texture(id, texture, w, h)
+		gfx.reset_state_cache()
+	}
+})
+```
+
+A new element first gets its texture one frame after it appears.
+`examples/opengl_demo` renders a colour that cycles over time into the element.
+
 ## Keyboard events
 
 Use `on_key_event` when a shortcut should follow a physical key across keyboard
@@ -917,6 +1206,10 @@ fn handle_key(event ui2.KeyEvent) {
 
 ui2.on_key_event(handle_key)
 ```
+
+Pointer events do not carry modifier keys; `ui2.key_modifiers()` reports the
+ones held right now (`shift`, `ctrl`, `alt`, and `cmd` for Command or the
+Windows key), so a click handler can tell a Shift- or Cmd-click apart.
 
 The existing `on_key` callback remains available for normalized strings such as
 `cmd+n` and `up`. On AppKit those strings are now also derived from physical key
@@ -945,6 +1238,8 @@ Typed-VML ports from `v-ui` include:
   window-anchored rectangles.
 - `v run examples/dynamic_layout/main.v` — add, remove, reorder, hide, and
   rename controls through a keyed repeater.
+- `v run examples/reorder_queue/main.v` — a print queue in a scrolling list:
+  drag a job to move it, or select it and press Alt with Up or Down.
 - `v run examples/grid/main.v` — the original compact three-column data grid.
 - `v run examples/label_justify/main.v` — left, center, and right label
   alignment plus single-line clipping.
@@ -1003,6 +1298,8 @@ Typed-VML ports from `v-ui` include:
   and toggle their visibility and alignment.
 - `v run examples/cells/main.v` — edit a compact spreadsheet and recalculate
   dependent `sum` formulas.
+- `v run examples/pc_specs/main.v` — show basic machine specs in a striped
+  table with a Refresh button for live disk usage.
 - `v run examples/circle_drawer/main.v` — add and resize circles with
   selection-aware undo and redo.
 - `v run examples/gg2048/main.v` — play a deterministic, responsive version
@@ -1093,7 +1390,7 @@ root, build an APK for an example:
 ```sh
 mkdir -p build/android
 vab --name "ui2 counter" --package-id io.vlang.ui2.counter \
-  -o build/android/counter.apk examples/counter
+  -o build/android/counter.apk examples/counter -f '-d sokol_gles3'
 ```
 
 Replace `counter` in the source path, output name, application name, and package
@@ -1142,7 +1439,8 @@ needs no screen recording permission and captures the window alone. The
 recorder reads the presented framebuffer back, which only the GL backend
 implements, so the script builds macOS examples against GL instead of Metal.
 Text is a third wider at 96 dpi than it is on macOS, so a layout that only just
-fits in a macOS screenshot still has to be checked on Linux or Windows.
+fits in a macOS screenshot still has to be checked on Linux, the BSDs, or
+Windows.
 
 The Windows backend also has an executable Wine smoke test. It creates every
 native widget kind, reads text back from the Win32 controls, verifies text-area

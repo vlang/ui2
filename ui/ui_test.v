@@ -13,7 +13,7 @@ fn test_key_code_names_match_normalized_shortcut_names() {
 fn test_transparent_box_does_not_draw_a_fill() {
 	assert box_draws_fill(BoxStyle{})
 	assert !box_draws_fill(BoxStyle{
-		bg: 0xff00ff
+		bg:          0xff00ff
 		transparent: true
 	})
 }
@@ -126,8 +126,8 @@ fn test_scroll_mode_defaults_to_vertical_and_content_width_follows_the_children(
 		view('', rect(0, 0, 180, 100), BoxStyle{}, []),
 		view('', rect(180, 0, 180, 100), BoxStyle{}, []),
 		Element{
-			kind: .view
-			frame: rect(360, 0, 180, 100)
+			kind:   .view
+			frame:  rect(360, 0, 180, 100)
 			hidden: true
 		},
 	])

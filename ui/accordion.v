@@ -4,9 +4,20 @@ pub struct AccordionItem {
 pub:
 	id        string
 	title     string
-	action_id string
+	action_id string // .fill: the action its header emits (.stack emits its own)
 	content   Element
 	enabled   bool = true
+	icon      string // .stack: SF Symbol name drawn before the title
+}
+
+// AccordionLayout chooses between the two accordions ui2 offers. The fill layout
+// is Kivy's: one item is always open and takes every point the other headers
+// leave. The stack layout is GPUI Kit's: items stack from the top, any of them
+// (or several, with `multiple`) may be open, and an open panel is as tall as its
+// content. See component_disclosure.v.
+pub enum AccordionLayout {
+	fill
+	stack
 }
 
 pub struct AccordionConfig {
@@ -15,13 +26,24 @@ pub:
 	frame                    Rect
 	box                      BoxStyle
 	current                  int
-	orientation              BoxOrientation
+	orientation              LayoutOrientation
 	min_space                f64 = 44.0
 	header_box               BoxStyle
 	active_header_box        BoxStyle
 	header_text_style        TextStyle
 	active_header_text_style TextStyle
 	items                    []AccordionItem
+	// The fields below belong to the stack layout; the fill layout ignores them.
+	layout              AccordionLayout
+	open                []int // indices of the expanded items
+	multiple            bool  // let more than one item be open at a time
+	bordered            bool = true // one rounded card; false keeps only the separators
+	enabled             bool = true // false disables every item
+	hovered             int  = -1   // title row under the pointer: accordion_hover_from_event
+	focused             int  = -1   // title row the keyboard is on: accordion_focus_after_key
+	accessibility_label string
+	size                ComponentSize = .medium
+	theme               ComponentTheme
 }
 
 pub struct AccordionGeometry {
@@ -52,8 +74,8 @@ fn accordion_validate(config AccordionConfig) ! {
 	}
 }
 
-// accordion_geometry reserves min_space for every title and assigns all
-// remaining space to the active item.
+// accordion_geometry is the fill layout's: it reserves min_space for every
+// title and assigns all remaining space to the active item.
 pub fn accordion_geometry(config AccordionConfig) !AccordionGeometry {
 	accordion_validate(config)!
 	if config.items.len == 0 {
@@ -88,13 +110,19 @@ pub fn accordion_geometry(config AccordionConfig) !AccordionGeometry {
 		cursor += item_length
 	}
 	return AccordionGeometry{
-		items: items
+		items:   items
 		headers: headers
 		content: content
 	}
 }
 
+// accordion builds the layout config.layout names. The fill layout (the
+// default) is described by accordion_geometry; the stack layout by
+// accordion_stack_layout.
 pub fn accordion(config AccordionConfig) !Element {
+	if config.layout == .stack {
+		return accordion_stack(config)
+	}
 	geometry := accordion_geometry(config)!
 	mut children := []Element{}
 	if config.items.len > 0 {
@@ -112,9 +140,9 @@ pub fn accordion(config AccordionConfig) !Element {
 			} else {
 				config.header_box
 			}, if active { config.active_header_text_style } else { config.header_text_style })
-			action_id: item.action_id
-			enabled: item.enabled
-			accessibility_role: 'button'
+			action_id:           item.action_id
+			enabled:             item.enabled
+			accessibility_role:  'button'
 			accessibility_value: if active { 'expanded' } else { 'collapsed' }
 		}
 	}

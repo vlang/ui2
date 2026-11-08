@@ -26,9 +26,9 @@ pub fn (mut app AccordionDemo) show_security() {
 fn main() {
 	ui2.run_vml[AccordionDemo](
 		source: accordion_vml_source
-		model: AccordionDemo{}
-		title: 'Accordion'
-		width: accordion_width
+		model:  AccordionDemo{}
+		title:  'Accordion'
+		width:  accordion_width
 		height: accordion_height
 	) or { panic(err) }
 }

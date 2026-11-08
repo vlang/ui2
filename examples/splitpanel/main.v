@@ -18,8 +18,8 @@ pub struct SplitPanelDemo {
 pub:
 	rows []SplitRow
 pub mut:
-	top_weight  f64 = 0.28
-	left_weight f64 = 0.34
+	top_weight  f64    = 0.28
+	left_weight f64    = 0.34
 	notes       string = 'This editable pane mirrors the text area in the original split-panel demo.\n\nUse the controls above to resize both split axes.'
 	status      string = 'Top 28% · left 34%'
 }
@@ -39,7 +39,11 @@ fn initial_splitpanel() SplitPanelDemo {
 fn split_clamp(value f64) f64 {
 	return if value < 0.18 {
 		0.18
-	} else if value > 0.62 { 0.62 } else { value }
+	} else if value > 0.62 {
+		0.62
+	} else {
+		value
+	}
 }
 
 fn (mut app SplitPanelDemo) update_status() {
@@ -75,9 +79,9 @@ pub fn (mut app SplitPanelDemo) reset_splits() {
 fn main() {
 	ui2.run_vml[SplitPanelDemo](
 		source: splitpanel_vml_source
-		model: initial_splitpanel()
-		title: 'Split Panel'
-		width: splitpanel_width
+		model:  initial_splitpanel()
+		title:  'Split Panel'
+		width:  splitpanel_width
 		height: splitpanel_height
 	) or {
 		panic(err)

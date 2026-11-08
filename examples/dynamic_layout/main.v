@@ -22,9 +22,9 @@ pub mut:
 
 fn initial_dynamic_layout() DynamicLayoutDemo {
 	return DynamicLayoutDemo{
-		items: [DynamicItem{ id: 1, label: 'Button 1' }]
+		items:   [DynamicItem{ id: 1, label: 'Button 1' }]
 		next_id: 2
-		status: '1 button'
+		status:  '1 button'
 	}
 }
 
@@ -34,7 +34,7 @@ fn (mut app DynamicLayoutDemo) update_status() {
 
 pub fn (mut app DynamicLayoutDemo) add_last() {
 	app.items << DynamicItem{
-		id: app.next_id
+		id:    app.next_id
 		label: 'Button ${app.next_id}'
 	}
 	app.next_id++
@@ -88,9 +88,9 @@ pub fn (mut app DynamicLayoutDemo) rename(id int) {
 fn main() {
 	ui2.run_vml[DynamicLayoutDemo](
 		source: dynamic_layout_vml_source
-		model: initial_dynamic_layout()
-		title: 'Dynamic Layout'
-		width: dynamic_layout_width
+		model:  initial_dynamic_layout()
+		title:  'Dynamic Layout'
+		width:  dynamic_layout_width
 		height: dynamic_layout_height
 	) or { panic(err) }
 }

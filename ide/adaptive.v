@@ -299,7 +299,9 @@ fn adaptive_rule_properties(layout ui2.AdaptiveLayout, include_defaults bool) []
 	if include_defaults || layout.horizontal != .start {
 		properties << 'layout_x: ${layout.horizontal}'
 	}
-	if include_defaults || layout.vertical != .start { properties << 'layout_y: ${layout.vertical}' }
+	if include_defaults || layout.vertical != .start {
+		properties << 'layout_y: ${layout.vertical}'
+	}
 	if include_defaults || layout.min_width != 0 {
 		properties << 'layout_min_width: ${layout.min_width:g}'
 	}
@@ -368,7 +370,9 @@ fn (mut app IdeApp) set_geometry_property(field string, raw string) bool {
 		'property_x' { component.x = clamp(number, 0, app.canvas_width() - component.width) }
 		'property_y' { component.y = clamp(number, 0, app.canvas_height() - component.height) }
 		'property_width' { component.width = clamp(number, 32, app.canvas_width() - component.x) }
-		'property_height' { component.height = clamp(number, 24, app.canvas_height() - component.y) }
+		'property_height' {
+			component.height = clamp(number, 24, app.canvas_height() - component.y)
+		}
 		else { return false }
 	}
 
@@ -408,8 +412,10 @@ fn (mut app IdeApp) handle_adaptive_event(event string) bool {
 		return true
 	}
 	mutates_document :=
-		event in ['layout_enable', 'layout_reset_variation', 'layout_hidden', 'layout_min_width', 'layout_max_width', 'layout_min_height', 'layout_max_height', 'layout_breakpoint_width', 'layout_breakpoint_height']
-		|| event.starts_with('layout_x_') || event.starts_with('layout_y_')
+		event in ['layout_enable', 'layout_reset_variation', 'layout_hidden', 'layout_min_width',
+			'layout_max_width', 'layout_min_height', 'layout_max_height', 'layout_breakpoint_width',
+			'layout_breakpoint_height']
+			|| event.starts_with('layout_x_') || event.starts_with('layout_y_')
 	if mutates_document && app.source_modified && !app.apply_source_editor() { return true }
 	match event {
 		'layout_enable' {

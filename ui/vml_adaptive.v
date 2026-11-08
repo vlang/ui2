@@ -72,8 +72,8 @@ pub fn adaptive_variations_from_vnode(node &VNode) ![]AdaptiveLayoutVariation {
 		}
 		for key, _ in child.props {
 			if key !in ['width_class', 'height_class', 'reference_width', 'reference_height', 'x',
-				'y', 'width', 'height', 'layout_x', 'layout_y', 'layout_min_width',
-				'layout_max_width', 'layout_min_height', 'layout_max_height', 'hidden'] {
+				'y', 'width', 'height', 'layout_x', 'layout_y', 'layout_min_width', 'layout_max_width',
+				'layout_min_height', 'layout_max_height', 'hidden'] {
 				return error('unsupported LayoutVariation property `${key}`')
 			}
 		}

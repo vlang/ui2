@@ -22,9 +22,9 @@ pub fn (mut app PageLayoutDemo) next() {
 fn main() {
 	ui2.run_vml[PageLayoutDemo](
 		source: page_vml_source
-		model: PageLayoutDemo{}
-		title: 'Page Layout'
-		width: page_width
+		model:  PageLayoutDemo{}
+		title:  'Page Layout'
+		width:  page_width
 		height: page_height
 	) or { panic(err) }
 }

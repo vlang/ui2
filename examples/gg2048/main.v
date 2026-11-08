@@ -41,9 +41,9 @@ fn game_cells() []GameCell {
 	for row in 0 .. 4 {
 		for column in 0 .. 4 {
 			cells << GameCell{
-				id: row * 4 + column
-				key: 'cell-${row * 4 + column}'
-				row: row
+				id:     row * 4 + column
+				key:    'cell-${row * 4 + column}'
+				row:    row
 				column: column
 			}
 		}
@@ -120,12 +120,12 @@ fn (mut app Game2048) update_tiles() {
 		}
 		color, text_color := tile_colors(value)
 		tiles << GameTile{
-			id: index
-			key: 'tile-${index}'
-			row: index / 4
-			column: index % 4
-			value: value
-			color: color
+			id:         index
+			key:        'tile-${index}'
+			row:        index / 4
+			column:     index % 4
+			value:      value
+			color:      color
 			text_color: text_color
 		}
 	}
@@ -191,9 +191,9 @@ pub fn (mut app Game2048) new_game() {
 fn main() {
 	ui2.run_vml[Game2048](
 		source: game_2048_vml_source
-		model: initial_2048()
-		title: '2048'
-		width: game_2048_width
+		model:  initial_2048()
+		title:  '2048'
+		width:  game_2048_width
 		height: game_2048_height
 	) or {
 		panic(err)

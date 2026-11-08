@@ -33,9 +33,9 @@ fn initial_resizable_rectangles() ResizableRectanglesDemo {
 fn main() {
 	ui2.run_vml[ResizableRectanglesDemo](
 		source: resizable_rectangles_vml_source
-		model: initial_resizable_rectangles()
-		title: 'Resizable Rectangles'
-		width: resizable_rectangles_width
+		model:  initial_resizable_rectangles()
+		title:  'Resizable Rectangles'
+		width:  resizable_rectangles_width
 		height: resizable_rectangles_height
 	) or { panic(err) }
 }

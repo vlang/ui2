@@ -14,7 +14,7 @@ pub mut:
 	horizontal_valid bool = true
 	vertical_value   int
 	vertical_text    string
-	vertical_valid   bool = true
+	vertical_valid   bool   = true
 	status           string = 'Drag either slider or type a value.'
 }
 
@@ -48,7 +48,11 @@ fn slider_textbox_demo() SliderTextboxDemo {
 fn (mut app SliderTextboxDemo) set_horizontal(value int) {
 	clamped := if value < -20 {
 		-20
-	} else if value > 100 { 100 } else { value }
+	} else if value > 100 {
+		100
+	} else {
+		value
+	}
 	app.horizontal_value = clamped
 	app.horizontal_text = clamped.str()
 	app.horizontal_valid = true
@@ -58,7 +62,11 @@ fn (mut app SliderTextboxDemo) set_horizontal(value int) {
 fn (mut app SliderTextboxDemo) set_vertical(value int) {
 	clamped := if value < -100 {
 		-100
-	} else if value > -20 { -20 } else { value }
+	} else if value > -20 {
+		-20
+	} else {
+		value
+	}
 	app.vertical_value = clamped
 	app.vertical_text = clamped.str()
 	app.vertical_valid = true

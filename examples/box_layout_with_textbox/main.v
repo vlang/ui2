@@ -14,7 +14,7 @@ pub mut:
 
 fn initial_box_layout_textbox() BoxLayoutTextboxDemo {
 	return BoxLayoutTextboxDemo{
-		text: 'blah blah blah\n'.repeat(10).trim_right('\n')
+		text:   'blah blah blah\n'.repeat(10).trim_right('\n')
 		status: 'Edit the yellow text area, or show the original message.'
 	}
 }
@@ -31,9 +31,9 @@ pub fn (mut app BoxLayoutTextboxDemo) show_message() {
 fn main() {
 	ui2.run_vml[BoxLayoutTextboxDemo](
 		source: box_textbox_vml_source
-		model: initial_box_layout_textbox()
-		title: 'Box Layout with Textbox'
-		width: box_textbox_width
+		model:  initial_box_layout_textbox()
+		title:  'Box Layout with Textbox'
+		width:  box_textbox_width
 		height: box_textbox_height
 	) or {
 		panic(err)

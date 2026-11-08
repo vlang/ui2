@@ -11,9 +11,9 @@ pub struct LabelJustifyDemo {}
 fn main() {
 	ui2.run_vml[LabelJustifyDemo](
 		source: label_justify_vml_source
-		model: LabelJustifyDemo{}
-		title: 'Label Justify'
-		width: label_justify_width
+		model:  LabelJustifyDemo{}
+		title:  'Label Justify'
+		width:  label_justify_width
 		height: label_justify_height
 	) or { panic(err) }
 }

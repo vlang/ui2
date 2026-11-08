@@ -11,7 +11,7 @@ pub mut:
 	first_ipsum  string
 	second_ipsum string
 	full_name    string
-	likes_v      bool = true
+	likes_v      bool   = true
 	status       string = 'Fill either group to try the controls.'
 }
 
@@ -38,9 +38,9 @@ pub fn (mut app Group2Demo) submit() {
 fn main() {
 	ui2.run_vml[Group2Demo](
 		source: group2_vml_source
-		model: Group2Demo{}
-		title: 'Group 2 Demo'
-		width: group2_width
+		model:  Group2Demo{}
+		title:  'Group 2 Demo'
+		width:  group2_width
 		height: group2_height
 	) or { panic(err) }
 }

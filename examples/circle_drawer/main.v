@@ -75,11 +75,11 @@ fn (mut app CircleDrawerDemo) add_or_select(x f64, y f64) {
 	}
 	app.checkpoint()
 	circle := DrawCircle{
-		id: app.next_id
-		x: x
-		y: y
+		id:     app.next_id
+		x:      x
+		y:      y
 		radius: 24
-		color: circle_color(app.next_id)
+		color:  circle_color(app.next_id)
 	}
 	app.circles << circle
 	app.selected_id = circle.id

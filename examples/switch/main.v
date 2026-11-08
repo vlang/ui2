@@ -14,9 +14,9 @@ pub mut:
 fn main() {
 	ui2.run_vml[SwitchDemo](
 		source: switch_vml_source
-		model: SwitchDemo{}
-		title: 'Switch'
-		width: switch_width
+		model:  SwitchDemo{}
+		title:  'Switch'
+		width:  switch_width
 		height: switch_height
 	) or { panic(err) }
 }

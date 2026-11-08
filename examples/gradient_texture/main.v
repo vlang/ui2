@@ -79,10 +79,10 @@ fn (mut app GradientTextureDemo) rebuild() {
 		for column in 0 .. gradient_columns {
 			value := 1.0 - f64(column) / f64(gradient_columns - 1)
 			cells << GradientCell{
-				id: row * gradient_columns + column
+				id:     row * gradient_columns + column
 				column: column
-				row: row
-				color: hsv_gradient_color(hue, saturation, value)
+				row:    row
+				color:  hsv_gradient_color(hue, saturation, value)
 			}
 		}
 	}
@@ -105,9 +105,9 @@ pub fn (mut app GradientTextureDemo) next_hue() {
 fn main() {
 	ui2.run_vml[GradientTextureDemo](
 		source: gradient_texture_vml_source
-		model: gradient_demo(0)
-		title: 'Gradient Texture'
-		width: gradient_texture_width
+		model:  gradient_demo(0)
+		title:  'Gradient Texture'
+		width:  gradient_texture_width
 		height: gradient_texture_height
 	) or { panic(err) }
 }

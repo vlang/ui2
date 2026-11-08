@@ -3,15 +3,15 @@ module ui2
 fn screen_manager_test_screens() []ManagedScreen {
 	return [
 		ManagedScreen{
-			name: 'home'
+			name:    'home'
 			content: view('home', rect(4, 5, 10, 10), BoxStyle{}, [])
 		},
 		ManagedScreen{
-			name: 'details'
+			name:    'details'
 			content: view('details', rect(4, 5, 10, 10), BoxStyle{}, [])
 		},
 		ManagedScreen{
-			name: 'settings'
+			name:    'settings'
 			content: view('settings', rect(4, 5, 10, 10), BoxStyle{}, [])
 		},
 	]
@@ -19,7 +19,7 @@ fn screen_manager_test_screens() []ManagedScreen {
 
 fn test_screen_manager_selects_named_screen() {
 	config := ScreenManagerConfig{
-		frame: rect(0, 0, 320, 200)
+		frame:   rect(0, 0, 320, 200)
 		current: 'details'
 		screens: screen_manager_test_screens()
 	}
@@ -33,7 +33,7 @@ fn test_screen_manager_selects_named_screen() {
 
 fn test_screen_manager_defaults_to_first_screen() {
 	config := ScreenManagerConfig{
-		frame: rect(0, 0, 320, 200)
+		frame:   rect(0, 0, 320, 200)
 		screens: screen_manager_test_screens()
 	}
 	assert screen_manager_index(config)! == 0
@@ -48,7 +48,7 @@ fn test_screen_manager_navigation_wraps() {
 
 fn test_screen_manager_rejects_unknown_or_duplicate_names() {
 	if _ := screen_manager_index(
-		frame: rect(0, 0, 100, 100)
+		frame:   rect(0, 0, 100, 100)
 		current: 'missing'
 		screens: screen_manager_test_screens()
 	) {
@@ -57,7 +57,7 @@ fn test_screen_manager_rejects_unknown_or_duplicate_names() {
 		assert err.msg().contains('missing')
 	}
 	if _ := screen_manager(
-		frame: rect(0, 0, 100, 100)
+		frame:   rect(0, 0, 100, 100)
 		screens: [ManagedScreen{ name: 'same' }, ManagedScreen{ name: 'same' }]
 	) {
 		assert false, 'duplicate screen names must fail'

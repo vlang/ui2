@@ -141,11 +141,11 @@ fn colorbox_demo() ColorBoxDemo {
 		hue := f64(index) * 360.0 / f64(swatch_columns * swatch_rows)
 		red, green, blue := hsv_to_rgb(hue, 0.65, 0.9)
 		app.swatches << Swatch{
-			key: 'swatch-${index}'
-			index: index
-			column: index % swatch_columns
-			row: index / swatch_columns
-			color: hex_color(red, green, blue)
+			key:      'swatch-${index}'
+			index:    index
+			column:   index % swatch_columns
+			row:      index / swatch_columns
+			color:    hex_color(red, green, blue)
 			selected: index == 0
 		}
 	}
@@ -161,7 +161,7 @@ fn hue_strip_cells() []HueCell {
 		hue := f64(index) * 360.0 / f64(hue_bands)
 		red, green, blue := hsv_to_rgb(hue, 1.0, 1.0)
 		cells << HueCell{
-			key: 'hue-${index}'
+			key:   'hue-${index}'
 			index: index
 			color: hex_color(red, green, blue)
 		}
@@ -179,10 +179,10 @@ fn (mut app ColorBoxDemo) sync() {
 			value := 1.0 - (f64(row) + 0.5) / f64(sv_side)
 			red, green, blue := hsv_to_rgb(app.hue, saturation, value)
 			app.sv_cells << SvCell{
-				key: 'sv-${row}-${column}'
+				key:    'sv-${row}-${column}'
 				column: column
-				row: row
-				color: hex_color(red, green, blue)
+				row:    row
+				color:  hex_color(red, green, blue)
 			}
 		}
 	}

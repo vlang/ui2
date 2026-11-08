@@ -25,16 +25,16 @@ fn benchmark_model() Calculator {
 	for row in 0 .. 5 {
 		for column in 0 .. 4 {
 			keys << Key{
-				text: '${row * 4 + column}'
-				role: if column == 3 { 'operator' } else { 'digit' }
-				row: row
+				text:   '${row * 4 + column}'
+				role:   if column == 3 { 'operator' } else { 'digit' }
+				row:    row
 				column: column
 			}
 		}
 	}
 	return Calculator{
 		display: '12345'
-		keys: keys
+		keys:    keys
 	}
 }
 

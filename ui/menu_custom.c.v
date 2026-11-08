@@ -6,7 +6,7 @@
 @[has_globals]
 module ui2
 
-$if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
+$if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
 	import gg
 
 	const menubar_height = 26.0
@@ -31,6 +31,66 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	const menubar_panel_shadow = u32(0xdbe2ea)
 	const menubar_shortcut_text = u32(0x64748b)
 	const menubar_separator_color = u32(0xe2e8f0)
+
+	// g_menubar_* are the colours of the drawn menu bar, each settable by the
+	// host so a host can match its own theme: the bar strip, its border, the
+	// titles and rows, the disabled rows, the hover highlight, the open
+	// panel's background and shadow, the shortcuts, and the separators.
+	__global g_menubar_background = menubar_background
+	__global g_menubar_border = menubar_border
+	__global g_menubar_text = menubar_text
+	__global g_menubar_disabled_text = menubar_disabled_text
+	__global g_menubar_highlight = menubar_highlight
+	__global g_menubar_panel_background = menubar_panel_background
+	__global g_menubar_panel_shadow = menubar_panel_shadow
+	__global g_menubar_shortcut_text = menubar_shortcut_text
+	__global g_menubar_separator_color = menubar_separator_color
+
+	// ── Public setters ────────────────────────────────────────────────
+	// Each one recolours one part of the drawn menu bar, letting a host match
+	// its own theme.
+
+	pub fn set_menu_bar_background_color(color u32) {
+		g_menubar_background = color
+	}
+
+	pub fn set_menu_bar_border_color(color u32) {
+		g_menubar_border = color
+	}
+
+	pub fn set_menu_bar_title_color(color u32) {
+		g_menubar_text = color
+	}
+
+	pub fn set_menu_bar_text_color(color u32) {
+		g_menubar_text = color
+	}
+
+	pub fn set_menu_bar_disabled_text_color(color u32) {
+		g_menubar_disabled_text = color
+	}
+
+	pub fn set_menu_bar_highlight_color(color u32) {
+		g_menubar_highlight = color
+	}
+
+	pub fn set_menu_bar_panel_background_color(color u32) {
+		g_menubar_panel_background = color
+	}
+
+	pub fn set_menu_bar_panel_shadow_color(color u32) {
+		g_menubar_panel_shadow = color
+	}
+
+	pub fn set_menu_bar_shortcut_text_color(color u32) {
+		g_menubar_shortcut_text = color
+	}
+
+	pub fn set_menu_bar_separator_color(color u32) {
+		g_menubar_separator_color = color
+	}
+
+	// ── Configuration ─────────────────────────────────────────────────
 
 	// MenuBarHit is one clickable region of the drawn bar. `path` locates it:
 	// a one element path is a bar title, a longer one walks down the open
@@ -61,7 +121,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// bounds() subtracts it and the screen is drawn below it, so an element at
 	// y 0 sits under the bar rather than behind it.
 	fn menu_bar_height() f64 {
-		return if menu_bar().len == 0 { 0.0 } else { menubar_height }
+		return if g_menu_bar_hidden || menu_bar().len == 0 { 0.0 } else { menubar_height }
 	}
 
 	fn menu_bar_open() bool {
@@ -77,7 +137,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	fn menu_bar_title_style() TextStyle {
 		return TextStyle{
-			color: menubar_text
+			color: g_menubar_text
 			size: 13
 			align: .left
 		}
@@ -85,7 +145,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	fn menu_bar_row_style(enabled bool) TextStyle {
 		return TextStyle{
-			color: if enabled { menubar_text } else { menubar_disabled_text }
+			color: if enabled { g_menubar_text } else { g_menubar_disabled_text }
 			size: 13
 			align: .left
 		}
@@ -93,7 +153,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	fn menu_bar_shortcut_style(enabled bool) TextStyle {
 		return TextStyle{
-			color: if enabled { menubar_shortcut_text } else { menubar_disabled_text }
+			color: if enabled { g_menubar_shortcut_text } else { g_menubar_disabled_text }
 			size: 12
 			align: .right
 		}
@@ -126,20 +186,27 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		menus := menu_bar()
 		g_menu_hits = []MenuBarHit{}
 		g_menu_panels = []Rect{}
+		if g_menu_bar_hidden {
+			// A menu left open when the bar was hidden must not come back open later.
+			if menu_bar_open() {
+				close_menu_bar()
+			}
+			return
+		}
 		if menus.len == 0 {
 			return
 		}
 		window := rect(0, 0, f64(ctx.width), f64(ctx.height))
 		apply_clip(ctx, window)
-		draw_rect(ctx, 0, 0, window.width, menubar_height, menubar_background, 0)
-		draw_rect(ctx, 0, menubar_height - 1, window.width, 1, menubar_border, 0)
+		draw_rect(ctx, 0, 0, window.width, menubar_height, g_menubar_background, 0)
+		draw_rect(ctx, 0, menubar_height - 1, window.width, 1, g_menubar_border, 0)
 		style := menu_bar_title_style()
 		mut x := menubar_edge_margin + 4.0
 		mut open_x := x
 		for index, m in menus {
 			w := menu_text_width(ctx, m.title, style) + menubar_title_padding * 2
 			if menu_bar_open() && g_menu_open_path[0] == index {
-				draw_rect(ctx, x, 2, w, menubar_height - 5, menubar_highlight, 5)
+				draw_rect(ctx, x, 2, w, menubar_height - 5, g_menubar_highlight, 5)
 				open_x = x
 			}
 			draw_text(ctx, m.title, x + menubar_title_padding, 0, w - menubar_title_padding * 2,
@@ -178,9 +245,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		x := clamp_menu_coordinate(anchor_x, width, window.width)
 		y := clamp_menu_coordinate(anchor_y, height, window.height)
 		g_menu_panels << rect(x, y, width, height)
-		draw_rect(ctx, x + 1, y + 2, width, height, menubar_panel_shadow, 6)
-		draw_rect(ctx, x, y, width, height, menubar_panel_background, 6)
-		draw_outline(ctx, x, y, width, height, menubar_border, 6)
+		draw_rect(ctx, x + 1, y + 2, width, height, g_menubar_panel_shadow, 6)
+		draw_rect(ctx, x, y, width, height, g_menubar_panel_background, 6)
+		draw_outline(ctx, x, y, width, height, g_menubar_border, 6)
 		mut row_y := y + menubar_panel_padding
 		mut child_items := []MenuItem{}
 		mut child_x := 0.0
@@ -188,7 +255,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		for index, item in items {
 			if item.separator {
 				draw_rect(ctx, x + 8, row_y + menubar_separator_height / 2, width - 16, 1,
-					menubar_separator_color, 0)
+					g_menubar_separator_color, 0)
 				row_y += menubar_separator_height
 				continue
 			}
@@ -196,7 +263,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 			hovered := int_paths_equal(g_menu_hover_path, row_path)
 				|| (item.items.len > 0 && menu_path_starts_with(g_menu_open_path, row_path))
 			if hovered && item.enabled {
-				draw_rect(ctx, x + 2, row_y, width - 4, menubar_row_height, menubar_highlight,
+				draw_rect(ctx, x + 2, row_y, width - 4, menubar_row_height, g_menubar_highlight,
 					4)
 			}
 			if item.checked {
@@ -344,7 +411,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// act on release, the way both platform menus do, so a press-drag-release
 	// selects in one gesture.
 	fn menu_bar_handle_down(x f64, y f64) bool {
-		if menu_bar().len == 0 {
+		if g_menu_bar_hidden || menu_bar().len == 0 {
 			return false
 		}
 		if hit := menu_bar_hit_at(x, y) {
@@ -368,7 +435,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn menu_bar_handle_move(x f64, y f64) bool {
-		if !menu_bar_open() {
+		if g_menu_bar_hidden || !menu_bar_open() {
 			return false
 		}
 		hit := menu_bar_hit_at(x, y) or {
@@ -413,6 +480,9 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	// asked before the window's own key handler, so a menu shortcut wins over
 	// an app binding on the same chord.
 	fn menu_bar_handle_key(e &gg.Event) bool {
+		if g_menu_bar_hidden {
+			return false
+		}
 		if menu_bar_open() && e.key_code == .escape {
 			close_menu_bar()
 			return true

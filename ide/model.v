@@ -24,55 +24,56 @@ pub mut:
 	font_size     f64 = 14
 	checked       bool
 	event_handler string
-	layout ui2.AdaptiveLayout
-	variations []ui2.AdaptiveLayoutVariation
+	layout        ui2.AdaptiveLayout
+	variations    []ui2.AdaptiveLayoutVariation
 }
 
 struct IdeSnapshot {
-	components      []DesignerComponent
-	selected_id     int
-	next_id         int
-	form_name       string
-	form_width      f64
-	form_height     f64
-	form_background u32
-	adaptive bool
-	breakpoint_width f64 = 600
+	components        []DesignerComponent
+	selected_id       int
+	next_id           int
+	form_name         string
+	form_width        f64
+	form_height       f64
+	form_background   u32
+	adaptive          bool
+	breakpoint_width  f64 = 600
 	breakpoint_height f64 = 600
 }
 
 @[heap]
 pub struct IdeApp {
 pub mut:
-	adaptive bool
-	breakpoint_width f64 = 600
-	breakpoint_height f64 = 600
-	preview_width f64
-	preview_height f64
-	edit_width_class ui2.AdaptiveSizeClass
-	edit_height_class ui2.AdaptiveSizeClass
+	adaptive           bool
+	breakpoint_width   f64 = 600
+	breakpoint_height  f64 = 600
+	preview_width      f64
+	preview_height     f64
+	edit_width_class   ui2.AdaptiveSizeClass
+	edit_height_class  ui2.AdaptiveSizeClass
 	show_layout_guides bool = true
-	components      []DesignerComponent
-	selected_id     int
-	next_id         int = 1
-	form_name       string = 'Form1'
-	form_width      f64 = default_form_width
-	form_height     f64 = default_form_height
-	form_background u32 = 0xf8fafc
-	project_root    string
-	file_path       string
-	path_input      string
-	active_tab      string = 'designer'
-	inspector_tab   string = 'properties'
-	armed_kind      string
-	source_text     string
-	source_modified bool
-	dirty           bool
-	show_grid       bool = true
-	snap_to_grid    bool = true
-	output_open     bool = true
-	status          string = 'Choose a component, then click the form to place it.'
-	messages        string
+	components         []DesignerComponent
+	selected_id        int
+	next_id            int    = 1
+	form_name          string = 'Form1'
+	form_width         f64    = default_form_width
+	form_height        f64    = default_form_height
+	form_background    u32    = 0xf8fafc
+	project_root       string
+	file_path          string
+	path_input         string
+	active_tab         string = 'designer'
+	inspector_tab      string = 'properties'
+	armed_kind         string
+	source_text        string
+	source_modified    bool
+	dirty              bool
+	show_grid          bool = true
+	snap_to_grid       bool = true
+	show_debug_overlay bool
+	output_open        bool   = true
+	status             string = 'Choose a component, then click the form to place it.'
+	messages           string
 mut:
 	undo_stack         []IdeSnapshot
 	redo_stack         []IdeSnapshot
@@ -91,7 +92,7 @@ fn new_ide_app(root string) IdeApp {
 	real_root := os.real_path(root)
 	mut app := IdeApp{
 		project_root: real_root
-		path_input: os.join_path(real_root, 'form.vml')
+		path_input:   os.join_path(real_root, 'form.vml')
 	}
 	app.sync_source()
 	app.log('Ready. The form is 760 x 520 logical pixels.')
@@ -100,16 +101,16 @@ fn new_ide_app(root string) IdeApp {
 
 fn (app &IdeApp) snapshot() IdeSnapshot {
 	return IdeSnapshot{
-		adaptive: app.adaptive
-		breakpoint_width: app.breakpoint_width
+		adaptive:          app.adaptive
+		breakpoint_width:  app.breakpoint_width
 		breakpoint_height: app.breakpoint_height
-		components: clone_designer_components(app.components)
-		selected_id: app.selected_id
-		next_id: app.next_id
-		form_name: app.form_name
-		form_width: app.form_width
-		form_height: app.form_height
-		form_background: app.form_background
+		components:        clone_designer_components(app.components)
+		selected_id:       app.selected_id
+		next_id:           app.next_id
+		form_name:         app.form_name
+		form_width:        app.form_width
+		form_height:       app.form_height
+		form_background:   app.form_background
 	}
 }
 
@@ -182,6 +183,23 @@ fn component_title(kind string) string {
 		'dropdown' { 'Dropdown' }
 		'rectangle' { 'Rectangle' }
 		'image' { 'Image' }
+		'card' { 'Card' }
+		'divider' { 'Divider' }
+		'chip' { 'Chip' }
+		'badge' { 'Badge' }
+		'fab' { 'Floating action button' }
+		'app_bar' { 'App bar' }
+		'scaffold' { 'Scaffold' }
+		'bottom_nav' { 'Bottom navigation bar' }
+		'drawer' { 'Drawer' }
+		'snackbar' { 'Snack bar' }
+		'list_tile' { 'List tile' }
+		'icon_button' { 'Icon button' }
+		'radio' { 'Radio' }
+		'icon' { 'Icon' }
+		'spacer' { 'Spacer' }
+		'alert_dialog' { 'Alert dialog' }
+		'bottom_sheet' { 'Bottom sheet' }
 		else { kind }
 	}
 }
@@ -196,6 +214,23 @@ fn component_tag(kind string) string {
 		'dropdown' { 'Dropdown' }
 		'rectangle' { 'Rectangle' }
 		'image' { 'Image' }
+		'card' { 'Card' }
+		'divider' { 'Divider' }
+		'chip' { 'Chip' }
+		'badge' { 'Badge' }
+		'fab' { 'FloatingActionButton' }
+		'app_bar' { 'AppBar' }
+		'scaffold' { 'Scaffold' }
+		'bottom_nav' { 'BottomNavigationBar' }
+		'drawer' { 'Drawer' }
+		'snackbar' { 'SnackBar' }
+		'list_tile' { 'ListTile' }
+		'icon_button' { 'IconButton' }
+		'radio' { 'Radio' }
+		'icon' { 'Icon' }
+		'spacer' { 'Spacer' }
+		'alert_dialog' { 'AlertDialog' }
+		'bottom_sheet' { 'BottomSheet' }
 		else { '' }
 	}
 }
@@ -210,6 +245,23 @@ fn tag_component_kind(tag string) string {
 		'Dropdown' { 'dropdown' }
 		'Rectangle', 'View' { 'rectangle' }
 		'Image' { 'image' }
+		'Card' { 'card' }
+		'Divider' { 'divider' }
+		'Chip' { 'chip' }
+		'Badge' { 'badge' }
+		'FloatingActionButton' { 'fab' }
+		'AppBar' { 'app_bar' }
+		'Scaffold' { 'scaffold' }
+		'BottomNavigationBar' { 'bottom_nav' }
+		'Drawer' { 'drawer' }
+		'SnackBar' { 'snackbar' }
+		'ListTile' { 'list_tile' }
+		'IconButton' { 'icon_button' }
+		'Radio' { 'radio' }
+		'Icon' { 'icon' }
+		'Spacer' { 'spacer' }
+		'AlertDialog' { 'alert_dialog' }
+		'BottomSheet' { 'bottom_sheet' }
 		else { '' }
 	}
 }
@@ -224,6 +276,23 @@ fn component_default_size(kind string) (f64, f64) {
 		'dropdown' { 170.0, 36.0 }
 		'rectangle' { 160.0, 100.0 }
 		'image' { 120.0, 100.0 }
+		'card' { 220.0, 140.0 }
+		'divider' { 200.0, 8.0 }
+		'chip' { 96.0, 32.0 }
+		'badge' { 44.0, 22.0 }
+		'fab' { 56.0, 56.0 }
+		'app_bar' { 320.0, 56.0 }
+		'scaffold' { 320.0, 420.0 }
+		'bottom_nav' { 320.0, 56.0 }
+		'drawer' { 240.0, 320.0 }
+		'snackbar' { 300.0, 48.0 }
+		'list_tile' { 260.0, 64.0 }
+		'icon_button' { 40.0, 40.0 }
+		'radio' { 140.0, 30.0 }
+		'icon' { 32.0, 32.0 }
+		'spacer' { 40.0, 40.0 }
+		'alert_dialog' { 320.0, 180.0 }
+		'bottom_sheet' { 320.0, 240.0 }
 		else { 120.0, 36.0 }
 	}
 }
@@ -234,6 +303,20 @@ fn component_default_background(kind string) u32 {
 		'text_field', 'text_area', 'dropdown' { u32(0xffffff) }
 		'rectangle' { u32(0xdbeafe) }
 		'image' { u32(0xe2e8f0) }
+		'card' { u32(0xffffff) }
+		'chip' { u32(0xe2e8f0) }
+		'badge' { u32(0xef4444) }
+		'fab' { u32(0x2563eb) }
+		'app_bar' { u32(0x2563eb) }
+		'scaffold' { u32(0xf8fafc) }
+		'bottom_nav' { u32(0xffffff) }
+		'drawer' { u32(0xffffff) }
+		'snackbar' { u32(0x323232) }
+		'list_tile' { u32(0xffffff) }
+		'icon_button' { u32(0xffffff) }
+		'radio' { u32(0xffffff) }
+		'alert_dialog' { u32(0xffffff) }
+		'bottom_sheet' { u32(0xffffff) }
 		else { u32(0xffffff) }
 	}
 }
@@ -248,6 +331,15 @@ fn component_default_text(kind string, ordinal int) string {
 		'dropdown' { 'Option 1' }
 		'rectangle' { '' }
 		'image' { '' }
+		'chip' { 'Chip ${ordinal}' }
+		'badge' { '${ordinal}' }
+		'fab' { '+' }
+		'app_bar' { 'App bar' }
+		'list_tile' { 'List tile ${ordinal}' }
+		'icon_button' { '+' }
+		'radio' { 'Radio ${ordinal}' }
+		'icon' { '★' }
+		'alert_dialog' { 'Alert' }
 		else { component_title(kind) }
 	}
 }
@@ -290,7 +382,11 @@ fn (app &IdeApp) selected_component() ?DesignerComponent {
 fn (app &IdeApp) inspector_property_ids() []string {
 	if app.inspector_tab == 'layout' {
 		if !app.adaptive { return []string{} }
-		return if app.selected_id == 0 { ['layout_breakpoint_width', 'layout_breakpoint_height'] } else { ['layout_min_width', 'layout_max_width', 'layout_min_height', 'layout_max_height'] }
+		return if app.selected_id == 0 {
+			['layout_breakpoint_width', 'layout_breakpoint_height']
+		} else {
+			['layout_min_width', 'layout_max_width', 'layout_min_height', 'layout_max_height']
+		}
 	}
 	if app.inspector_tab == 'events' {
 		return if app.selected_id > 0 { ['property_event'] } else { []string{} }
@@ -385,16 +481,16 @@ fn (mut app IdeApp) add_component(kind string, x f64, y f64) int {
 	id := app.next_id
 	app.next_id++
 	component := DesignerComponent{
-		id: id
-		kind: kind
-		name: app.unique_component_name(kind)
-		text: component_default_text(kind, ordinal)
-		x: snap_clamped(x, 0, app.form_width - width, app.snap_to_grid)
-		y: snap_clamped(y, 0, app.form_height - height, app.snap_to_grid)
-		width: width
-		height: height
+		id:         id
+		kind:       kind
+		name:       app.unique_component_name(kind)
+		text:       component_default_text(kind, ordinal)
+		x:          snap_clamped(x, 0, app.form_width - width, app.snap_to_grid)
+		y:          snap_clamped(y, 0, app.form_height - height, app.snap_to_grid)
+		width:      width
+		height:     height
 		background: component_default_background(kind)
-		color: if kind == 'button' { u32(0xffffff) } else { u32(0x172033) }
+		color:      if kind == 'button' { u32(0xffffff) } else { u32(0x172033) }
 	}
 	app.components << component
 	app.selected_id = id
@@ -419,10 +515,10 @@ fn (mut app IdeApp) duplicate_selected() {
 	app.next_id++
 	mut copy := DesignerComponent{
 		...original
-		id: id
+		id:   id
 		name: app.unique_component_name(original.kind)
-		x: snap_clamped(original.x + 16, 0, app.form_width - original.width, app.snap_to_grid)
-		y: snap_clamped(original.y + 16, 0, app.form_height - original.height, app.snap_to_grid)
+		x:    snap_clamped(original.x + 16, 0, app.form_width - original.width, app.snap_to_grid)
+		y:    snap_clamped(original.y + 16, 0, app.form_height - original.height, app.snap_to_grid)
 	}
 	copy.variations = original.variations.clone()
 	app.components << copy
@@ -792,6 +888,60 @@ fn component_vml(component DesignerComponent) string {
 				properties << 'source: "${vml_escape(component.text)}"'
 			}
 		}
+		'card' {
+			properties << 'background: ${color_hex(component.background)}'
+			properties << 'corner_radius: 12'
+		}
+		'chip' {
+			properties << 'text: "${vml_escape(component.text)}"'
+			properties << 'background: ${color_hex(component.background)}'
+			properties << 'color: ${color_hex(component.color)}'
+			properties << 'corner_radius: ${component.height / 2:g}'
+		}
+		'badge' {
+			properties << 'text: "${vml_escape(component.text)}"'
+			properties << 'background: ${color_hex(component.background)}'
+			properties << 'color: #FFFFFF'
+		}
+		'fab' {
+			properties << 'text: "${vml_escape(component.text)}"'
+			properties << 'background: ${color_hex(component.background)}'
+			properties << 'color: #FFFFFF'
+			properties << 'corner_radius: ${component.width / 2:g}'
+		}
+		'app_bar' {
+			properties << 'title: "${vml_escape(component.text)}"'
+			properties << 'background: ${color_hex(component.background)}'
+			properties << 'color: ${color_hex(component.color)}'
+		}
+		'snackbar' {
+			properties << 'text: "${vml_escape(component.text)}"'
+			properties << 'background: ${color_hex(component.background)}'
+			properties << 'color: #FFFFFF'
+		}
+		'list_tile' {
+			properties << 'title: "${vml_escape(component.text)}"'
+		}
+		'icon_button' {
+			properties << 'text: "${vml_escape(component.text)}"'
+			properties << 'background: ${color_hex(component.background)}'
+		}
+		'radio' {
+			properties << 'text: "${vml_escape(component.text)}"'
+			properties << 'selected: false'
+		}
+		'icon' {
+			properties << 'text: "${vml_escape(component.text)}"'
+		}
+		'alert_dialog' {
+			properties << 'title: "${vml_escape(component.text)}"'
+			properties << 'text: "Message"'
+			properties << 'background: ${color_hex(component.background)}'
+		}
+		'bottom_sheet' {
+			properties << 'open: false'
+			properties << 'background: ${color_hex(component.background)}'
+		}
 		else {}
 	}
 	if component.event_handler.len > 0 {
@@ -885,24 +1035,24 @@ fn component_from_node(node &ui2.VNode, id int) !DesignerComponent {
 		return error('designer control dimensions must be non-negative')
 	}
 	return DesignerComponent{
-		layout: ui2.adaptive_layout_from_vnode(node)!
-		variations: ui2.adaptive_variations_from_vnode(node)!
-		id: id
-		kind: kind
-		name: name
-		text: text
-		x: node_number(node, 'x', 0)!
-		y: node_number(node, 'y', 0)!
-		width: node_number(node, 'width', default_width)!
-		height: node_number(node, 'height', default_height)!
-		background: node_color(node, 'background', component_default_background(kind))!
-		color: node_color(node, 'color', if kind == 'button' {
+		layout:        ui2.adaptive_layout_from_vnode(node)!
+		variations:    ui2.adaptive_variations_from_vnode(node)!
+		id:            id
+		kind:          kind
+		name:          name
+		text:          text
+		x:             node_number(node, 'x', 0)!
+		y:             node_number(node, 'y', 0)!
+		width:         node_number(node, 'width', default_width)!
+		height:        node_number(node, 'height', default_height)!
+		background:    node_color(node, 'background', component_default_background(kind))!
+		color:         node_color(node, 'color', if kind == 'button' {
 			u32(0xffffff)
 		} else {
 			u32(0x172033)
 		})!
-		font_size: node_number(node, 'font_size', 14)!
-		checked: node.prop_bool('checked')
+		font_size:     node_number(node, 'font_size', 14)!
+		checked:       node.prop_bool('checked')
 		event_handler: if kind in ['text_field', 'text_area', 'dropdown'] {
 			node.prop('on_change')
 		} else {
@@ -947,16 +1097,16 @@ fn document_from_vml(source string) !IdeSnapshot {
 		return error('form dimensions and size-class breakpoints must be positive')
 	}
 	return IdeSnapshot{
-		adaptive: adaptive_raw == 'true'
-		breakpoint_width: bw
+		adaptive:          adaptive_raw == 'true'
+		breakpoint_width:  bw
 		breakpoint_height: bh
-		components: components
-		selected_id: 0
-		next_id: components.len + 1
-		form_name: form_name
-		form_width: width
-		form_height: height
-		form_background: node_color(root, 'background', 0xf8fafc)!
+		components:        components
+		selected_id:       0
+		next_id:           components.len + 1
+		form_name:         form_name
+		form_width:        width
+		form_height:       height
+		form_background:   node_color(root, 'background', 0xf8fafc)!
 	}
 }
 

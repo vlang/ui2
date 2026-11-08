@@ -23,7 +23,7 @@ fn test_flight_booker_validates_calendar_dates() {
 
 fn test_flight_booker_creates_both_confirmation_messages() {
 	mut app := FlightBooker{
-		departure: '5.9.2026'
+		departure:   '5.9.2026'
 		return_date: '12.9.2026'
 	}
 	app.book()
@@ -36,7 +36,7 @@ fn test_flight_booker_creates_both_confirmation_messages() {
 
 fn test_flight_booker_vml_controls_return_field_and_booking() {
 	mut app := FlightBooker{
-		departure: '5.9.2026'
+		departure:   '5.9.2026'
 		return_date: '12.9.2026'
 	}
 	root := ui2.element_from_vml_model(flight_booker_vml_source, app, ui2.rect(0, 0, flight_booker_width, flight_booker_height)) or { panic(err) }

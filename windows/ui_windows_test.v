@@ -47,7 +47,7 @@ $if !ui2_custom_rendering ? {
 			kind: .text_field
 		}
 		secure := Element{
-			kind: .text_field
+			kind:   .text_field
 			secure: true
 		}
 		assert windows_structural_signature(plain) != windows_structural_signature(secure)
@@ -56,13 +56,13 @@ $if !ui2_custom_rendering ? {
 			kind: .text_area
 		}
 		area_without_scroll := Element{
-			kind: .text_area
+			kind:           .text_area
 			disable_scroll: true
 		}
 		assert windows_structural_signature(area) != windows_structural_signature(area_without_scroll)
 
 		styled_button := Element{
-			kind: .button
+			kind:         .button
 			native_style: true
 		}
 		plain_button := Element{
@@ -74,7 +74,7 @@ $if !ui2_custom_rendering ? {
 			kind: .slider
 		}
 		vertical_slider := Element{
-			kind: .slider
+			kind:        .slider
 			orientation: .vertical
 		}
 		assert windows_structural_signature(horizontal_slider) != windows_structural_signature(vertical_slider)
@@ -83,11 +83,11 @@ $if !ui2_custom_rendering ? {
 	fn test_windows_scroll_content_height_uses_child_extent() {
 		children := [
 			Element{
-				kind: .label
+				kind:  .label
 				frame: rect(0, 10, 50, 20)
 			},
 			Element{
-				kind: .button
+				kind:  .button
 				frame: rect(0, 80, 50, 35)
 			},
 		]
@@ -257,8 +257,8 @@ $if !ui2_custom_rendering ? {
 
 	fn test_windows_font_text_covers_every_string_a_control_draws() {
 		field := Element{
-			kind: .text_field
-			text: 'Andr\u00e9'
+			kind:        .text_field
+			text:        'Andr\u00e9'
 			placeholder: 'Name'
 		}
 		assert windows_font_text(field) == 'Andr\u00e9Name'
@@ -267,7 +267,7 @@ $if !ui2_custom_rendering ? {
 			kind: .dropdown
 			text: 'one'
 			menu: [MenuEntry{
-				id: 'two'
+				id:    'two'
 				title: '\u2713 two'
 			}]
 		}
@@ -278,7 +278,7 @@ $if !ui2_custom_rendering ? {
 			kind: .button
 			text: 'Create'
 			menu: [MenuEntry{
-				id: 'copy'
+				id:    'copy'
 				title: 'Copy'
 			}]
 		}

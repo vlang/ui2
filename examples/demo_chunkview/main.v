@@ -8,8 +8,8 @@ const chunkview_vml_source = $embed_file('demo_chunkview.vml').to_string()
 
 pub struct ChunkviewDemo {
 pub mut:
-	first_open  bool = true
-	second_open bool = true
+	first_open  bool   = true
+	second_open bool   = true
 	alignment   string = 'Center'
 	text_align  string = 'center'
 	status      string = 'Both styled chunks are visible.'
@@ -46,9 +46,9 @@ pub fn (mut app ChunkviewDemo) reset_chunks() {
 fn main() {
 	ui2.run_vml[ChunkviewDemo](
 		source: chunkview_vml_source
-		model: ChunkviewDemo{}
-		title: 'Chunk View'
-		width: chunkview_width
+		model:  ChunkviewDemo{}
+		title:  'Chunk View'
+		width:  chunkview_width
 		height: chunkview_height
 	) or {
 		panic(err)

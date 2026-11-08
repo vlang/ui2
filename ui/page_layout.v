@@ -80,7 +80,11 @@ pub fn page_layout_frames(config PageLayoutConfig) ![]Rect {
 				config.border
 			}
 		} else if index == page + 1 {
-			if page == 0 { config.frame.width - config.border } else { config.frame.width - half_border }
+			if page == 0 {
+				config.frame.width - config.border
+			} else {
+				config.frame.width - half_border
+			}
 		} else {
 			config.frame.width
 		}

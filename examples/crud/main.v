@@ -28,8 +28,8 @@ pub mut:
 
 fn crud_person(id int, name string, surname string) CrudPerson {
 	return CrudPerson{
-		id: id
-		name: name
+		id:      id
+		name:    name
 		surname: surname
 		display: '${surname}, ${name}'
 	}
@@ -45,7 +45,7 @@ fn initial_crud() CrudDemo {
 		crud_person(6, 'Wonder', 'Woman'),
 	]
 	return CrudDemo{
-		people: people
+		people:         people
 		visible_people: people.clone()
 	}
 }
@@ -135,9 +135,9 @@ pub fn (mut app CrudDemo) delete_person() {
 fn main() {
 	ui2.run_vml[CrudDemo](
 		source: crud_vml_source
-		model: initial_crud()
-		title: 'CRUD'
-		width: crud_width
+		model:  initial_crud()
+		title:  'CRUD'
+		width:  crud_width
 		height: crud_height
 	) or { panic(err) }
 }

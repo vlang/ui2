@@ -43,11 +43,11 @@ fn resizable_calculator_keys() []CalculatorKey {
 				else { 'digit' }
 			}
 			keys << CalculatorKey{
-				text: text
-				key: 'key-${row}-${column}'
-				row: row
+				text:   text
+				key:    'key-${row}-${column}'
+				row:    row
 				column: column
-				role: role
+				role:   role
 			}
 		}
 	}
@@ -211,9 +211,9 @@ pub fn (mut calc ResizableCalculator) press(key string) {
 fn main() {
 	ui2.run_vml[ResizableCalculator](
 		source: resizable_calc_vml_source
-		model: resizable_calculator()
-		title: 'V Calc (resizable)'
-		width: resizable_calc_width
+		model:  resizable_calculator()
+		title:  'V Calc (resizable)'
+		width:  resizable_calc_width
 		height: resizable_calc_height
 	) or { panic(err) }
 }

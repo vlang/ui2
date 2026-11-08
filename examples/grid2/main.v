@@ -70,9 +70,9 @@ fn grid2_columns() []GridColumn {
 	mut columns := []GridColumn{cap: names.len}
 	for index, entry in names {
 		columns << GridColumn{
-			id: index + 1
-			key: entry[0]
-			name: entry[1]
+			id:    index + 1
+			key:   entry[0]
+			name:  entry[1]
 			index: index
 			label: entry[1]
 		}
@@ -91,12 +91,12 @@ fn grid2_demo() Grid2Demo {
 	csp_pattern := [0, 1, 2]
 	for index in 0 .. grid2_row_count {
 		app.records << GridRecord{
-			id: index + 1
-			v1: v1_values[index % v1_values.len]
-			v2: v2_values[index % v2_values.len]
-			sex: grid2_sex_levels[sex_pattern[index % sex_pattern.len]]
+			id:     index + 1
+			v1:     v1_values[index % v1_values.len]
+			v2:     v2_values[index % v2_values.len]
+			sex:    grid2_sex_levels[sex_pattern[index % sex_pattern.len]]
 			worker: worker_pattern[index % worker_pattern.len]
-			csp: grid2_csp_levels[csp_pattern[index % csp_pattern.len]]
+			csp:    grid2_csp_levels[csp_pattern[index % csp_pattern.len]]
 		}
 	}
 	app.load_selection()
@@ -135,28 +135,36 @@ fn (mut app Grid2Demo) rebuild() {
 		right := app.sort_value(b)
 		mut order := if left < right {
 			-1
-		} else if left > right { 1 } else { 0 }
+		} else if left > right {
+			1
+		} else {
+			0
+		}
 		if order == 0 {
 			// Ties keep the original row order, so a sort never shuffles equals.
 			order = if a.id < b.id {
 				-1
-			} else if a.id > b.id { 1 } else { 0 }
+			} else if a.id > b.id {
+				1
+			} else {
+				0
+			}
 		}
 		return if app.descending { -order } else { order }
 	})
 	mut rows := []GridRow{cap: ordered.len}
 	for index, record in ordered {
 		rows << GridRow{
-			id: record.id
-			key: 'row-${record.id}'
-			number: '${index + 1}'
-			v1: record.v1
-			v2: record.v2
-			sex: record.sex
-			worker: if record.worker { 'yes' } else { 'no' }
-			csp: record.csp
+			id:       record.id
+			key:      'row-${record.id}'
+			number:   '${index + 1}'
+			v1:       record.v1
+			v2:       record.v2
+			sex:      record.sex
+			worker:   if record.worker { 'yes' } else { 'no' }
+			csp:      record.csp
 			selected: record.id == app.selected
-			stripe: if index % 2 == 0 { '#FFFFFF' } else { '#F8FAFC' }
+			stripe:   if index % 2 == 0 { '#FFFFFF' } else { '#F8FAFC' }
 		}
 	}
 	app.rows = rows
@@ -231,9 +239,9 @@ pub fn (mut app Grid2Demo) apply_edits() {
 fn main() {
 	ui2.run_vml[Grid2Demo](
 		source: grid2_vml_source
-		model: grid2_demo()
-		title: 'Grid 2'
-		width: grid2_width
+		model:  grid2_demo()
+		title:  'Grid 2'
+		width:  grid2_width
 		height: grid2_height
 	) or { panic(err) }
 }

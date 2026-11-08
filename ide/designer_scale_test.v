@@ -103,8 +103,7 @@ fn test_designer_keeps_palette_contents_and_handles_when_scaled_down() {
 fn test_designer_narrow_and_short_controls_have_bounded_content_and_selection() {
 	for kind in ['label', 'button', 'text_field', 'text_area', 'checkbox', 'dropdown', 'rectangle',
 		'image'] {
-		for size in [ui2.rect(0, 0, 32, 24), ui2.rect(0, 0, 4, 2),
-			ui2.rect(0, 0, 0.25, 0.5)] {
+		for size in [ui2.rect(0, 0, 32, 24), ui2.rect(0, 0, 4, 2), ui2.rect(0, 0, 0.25, 0.5)] {
 			component := DesignerComponent{
 				id:        1
 				kind:      kind

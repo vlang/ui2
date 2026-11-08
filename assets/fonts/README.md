@@ -12,7 +12,8 @@ and Noto Emoji 3.002 from
 
 The custom renderer draws with these files unless the application overrides them
 (see "Fonts and text sizes" in the top-level README), so a `gg` window looks the
-same on Linux, Android, and macOS or Windows built with `-d ui2_custom_rendering`.
+same on Linux, the BSDs, Android, and macOS or Windows built with
+`-d ui2_custom_rendering`.
 
 `RobotoMono-Regular.ttf` has to keep that name and stay in this directory: gg
 finds its mono face by rewriting `-Regular` to `Mono-Regular` in the path it was

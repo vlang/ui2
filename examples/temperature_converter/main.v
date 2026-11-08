@@ -70,9 +70,9 @@ pub fn (mut app TemperatureConverter) update_from_fahrenheit() {
 fn main() {
 	ui2.run_vml[TemperatureConverter](
 		source: temperature_vml_source
-		model: TemperatureConverter{}
-		title: 'Temperature Converter'
-		width: temperature_width
+		model:  TemperatureConverter{}
+		title:  'Temperature Converter'
+		width:  temperature_width
 		height: temperature_height
 	) or { panic(err) }
 }

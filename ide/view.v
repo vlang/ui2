@@ -58,7 +58,11 @@ fn ide_layout(frame ui2.Rect, app &IdeApp) IdeLayout {
 	}
 	output_height := if app.output_open && body_height > 420 {
 		126.0
-	} else if app.output_open { 86.0 } else { 0.0 }
+	} else if app.output_open {
+		86.0
+	} else {
+		0.0
+	}
 	stage := ui2.rect(center_x, body_y, center_width, body_height - ide_tab_height - output_height)
 	tabs := ui2.rect(center_x, stage.y + stage.height, center_width, ide_tab_height)
 	output := ui2.rect(center_x, tabs.y + tabs.height, center_width, output_height)
@@ -75,27 +79,27 @@ fn ide_layout(frame ui2.Rect, app &IdeApp) IdeLayout {
 	form_width := app.canvas_width() * scale
 	form_height := app.canvas_height() * scale
 	return IdeLayout{
-		frame: frame
-		toolbar: ui2.rect(0, 0, frame.width, ide_toolbar_height)
-		palette: ui2.rect(0, ide_toolbar_height, frame.width, ide_palette_height)
-		left: ui2.rect(0, body_y, left_width, body_height)
+		frame:     frame
+		toolbar:   ui2.rect(0, 0, frame.width, ide_toolbar_height)
+		palette:   ui2.rect(0, ide_toolbar_height, frame.width, ide_palette_height)
+		left:      ui2.rect(0, body_y, left_width, body_height)
 		navigator: ui2.rect(0, body_y, left_width, navigator_height)
 		inspector: ui2.rect(0, body_y + navigator_height + 1, left_width, body_height - navigator_height - 1)
-		center: ui2.rect(center_x, body_y, center_width, body_height)
-		tabs: tabs
-		stage: stage
-		output: output
-		status: ui2.rect(0, status_y, frame.width, ide_status_height)
-		form: ui2.rect(stage.x + (stage.width - form_width) / 2, stage.y + adaptive_height + (stage.height - adaptive_height - form_height) / 2, form_width, form_height)
-		scale: scale
+		center:    ui2.rect(center_x, body_y, center_width, body_height)
+		tabs:      tabs
+		stage:     stage
+		output:    output
+		status:    ui2.rect(0, status_y, frame.width, ide_status_height)
+		form:      ui2.rect(stage.x + (stage.width - form_width) / 2, stage.y + adaptive_height + (stage.height - adaptive_height - form_height) / 2, form_width, form_height)
+		scale:     scale
 	}
 }
 
 fn text_style(size f64, color u32, bold bool) ui2.TextStyle {
 	return ui2.TextStyle{
-		size: size
+		size:  size
 		color: color
-		bold: bold
+		bold:  bold
 	}
 }
 
@@ -107,26 +111,26 @@ fn panel(id string, frame ui2.Rect, background u32, children []ui2.Element) ui2.
 
 fn ide_button(id string, title string, frame ui2.Rect, active bool) ui2.Element {
 	return ui2.with_tooltip(ui2.button(id, title, frame, ui2.BoxStyle{
-		bg: if active { color_primary } else { 0xffffff }
+		bg:     if active { color_primary } else { 0xffffff }
 		radius: 5
 	}, text_style(11, if active { u32(0xffffff) } else { color_text }, active)), title)
 }
 
 fn palette_drag_button(id string, title string, frame ui2.Rect, active bool) ui2.Element {
 	element := ui2.draggable_view_with_cursor(id, frame, ui2.BoxStyle{
-		bg: if active { color_primary } else { 0xffffff }
+		bg:     if active { color_primary } else { 0xffffff }
 		radius: 5
 	}, ui2.cursor_pointing_hand, [
 		ui2.label('', title, ui2.rect(4, 4, frame.width - 8, frame.height - 8), ui2.TextStyle{
-			size: 11
+			size:  11
 			color: if active { u32(0xffffff) } else { color_text }
-			bold: active
+			bold:  active
 			align: .center
 		}),
 	])
 	return ui2.Element{
 		...ui2.with_tooltip(element, 'Drag ${title} onto the form, or click to select it')
-		accessibility_role: 'button'
+		accessibility_role:  'button'
 		accessibility_label: '${title} component tool'
 	}
 }
@@ -134,10 +138,10 @@ fn palette_drag_button(id string, title string, frame ui2.Rect, active bool) ui2
 fn toolbar_icon_button(id string, icon string, tooltip string, frame ui2.Rect, active bool) ui2.Element {
 	return ui2.Element{
 		...ui2.with_tooltip(ui2.button(id, icon, frame, ui2.BoxStyle{
-			bg: if active { color_primary } else { 0xffffff }
+			bg:     if active { color_primary } else { 0xffffff }
 			radius: 5
 		}, text_style(17, if active { u32(0xffffff) } else { color_text }, false)), tooltip)
-		accessibility_role: 'button'
+		accessibility_role:  'button'
 		accessibility_label: tooltip
 	}
 }
@@ -155,7 +159,7 @@ fn source_code_font_family() string {
 fn tiny_button(id string, title string, frame ui2.Rect, enabled bool) ui2.Element {
 	return ui2.Element{
 		...ui2.button(id, title, frame, ui2.BoxStyle{
-			bg: 0xffffff
+			bg:     0xffffff
 			radius: 4
 		}, text_style(10, color_text, false))
 		enabled: enabled
@@ -182,7 +186,7 @@ fn build_toolbar(layout IdeLayout, app &IdeApp) ui2.Element {
 		180.0
 	}
 	children << ui2.text_field_with_change_and_submit('project_path', 'open_path', 'path/to/form.vml', app.path_input, ui2.rect(path_x, 8, path_width, 30), ui2.BoxStyle{
-		bg: 0xffffff
+		bg:     0xffffff
 		radius: 5
 	}, text_style(10, color_text, false), ui2.keyboard_default)
 	children << ide_button('build_project', 'Build', ui2.rect(path_x + path_width + 8, 8, 72, 30), false)
@@ -200,6 +204,19 @@ fn build_palette(layout IdeLayout, app &IdeApp) ui2.Element {
 		['dropdown', 'Dropdown'],
 		['rectangle', 'Rectangle'],
 		['image', 'Image'],
+		['card', 'Card'],
+		['chip', 'Chip'],
+		['badge', 'Badge'],
+		['fab', 'FAB'],
+		['app_bar', 'App bar'],
+		['list_tile', 'List tile'],
+		['divider', 'Divider'],
+		['icon_button', 'Icon btn'],
+		['radio', 'Radio'],
+		['icon', 'Icon'],
+		['spacer', 'Spacer'],
+		['alert_dialog', 'Alert'],
+		['bottom_sheet', 'Sheet'],
 	]
 	mut children := [
 		ui2.label('', 'STANDARD', ui2.rect(14, 7, 82, 16), text_style(9, color_muted, true)),
@@ -242,7 +259,7 @@ fn build_object_tree(layout IdeLayout, app &IdeApp) ui2.Element {
 	mut children := []ui2.Element{}
 	children << ui2.label('', 'OBJECT TREE', ui2.rect(12, 9, 96, 18), text_style(10, color_muted, true))
 	children << ui2.label('', os_name(app.project_root), ui2.rect(112, 9, width - 124, 18), ui2.TextStyle{
-		size: 9
+		size:  9
 		color: color_muted
 		align: .right
 	})
@@ -284,7 +301,7 @@ fn inspector_field(id string, label string, value string, y f64, width f64) []ui
 	return [
 		ui2.label('', label, ui2.rect(4, y + 3, 78, 16), text_style(10, color_muted, false)),
 		ui2.text_field_with_change(id, '', value, ui2.rect(86, y, width - 90, ide_inspector_field_height), ui2.BoxStyle{
-			bg: 0xffffff
+			bg:     0xffffff
 			radius: 2
 		}, text_style(10, color_text, false), ui2.keyboard_default),
 	]
@@ -297,7 +314,7 @@ fn build_form_inspector(width f64, app &IdeApp) []ui2.Element {
 	children << inspector_field('form_property_height', 'Height', int(app.form_height).str(), 4 + ide_inspector_row_height * 2, width)
 	children << inspector_field('form_property_background', 'Background', color_hex(app.form_background), 4 + ide_inspector_row_height * 3, width)
 	children << ui2.label('', 'Select a control or choose one from the palette, then click the form.', ui2.rect(4, 4 + ide_inspector_row_height * 4, width - 8, 40), ui2.TextStyle{
-		size: 10
+		size:  10
 		color: color_muted
 		lines: 3
 	})
@@ -340,14 +357,14 @@ fn component_event_property(component DesignerComponent) string {
 fn build_events_inspector(width f64, app &IdeApp) []ui2.Element {
 	component := app.selected_component() or {
 		return [ui2.label('', 'Screen has no direct event. Select a control to bind an action id.', ui2.rect(4, 4, width - 8, 40), ui2.TextStyle{
-			size: 10
+			size:  10
 			color: color_muted
 			lines: 3
 		})]
 	}
 	mut children := inspector_field('property_event', component_event_property(component), component.event_handler, 4, width)
 	children << ui2.label('', 'The generated action id is emitted by run_window. Handle it in main.v.', ui2.rect(4, 4 + ide_inspector_row_height, width - 8, 40), ui2.TextStyle{
-		size: 10
+		size:  10
 		color: color_muted
 		lines: 3
 	})
@@ -408,9 +425,9 @@ fn palette_drag_preview(layout IdeLayout, app &IdeApp) ui2.Element {
 		u32(0xcbd5e1)
 	}, [
 		ui2.label('', component_title(app.palette_drag_kind), ui2.rect(4, 4, width - 8, height - 8), ui2.TextStyle{
-			size: 10
+			size:  10
 			color: color_text
-			bold: true
+			bold:  true
 			align: .center
 		}),
 	])
@@ -483,7 +500,7 @@ fn designer_component(component DesignerComponent, selected bool, scale f64) ui2
 		}
 		'button' {
 			children << ui2.label('', component.text, ui2.rect(5 * scale, (height - font_size - 3 * scale) / 2, width - 10 * scale, font_size + 5 * scale), ui2.TextStyle{
-				size: font_size
+				size:  font_size
 				color: component.color
 				align: .center
 			})
@@ -493,7 +510,7 @@ fn designer_component(component DesignerComponent, selected bool, scale f64) ui2
 		}
 		'text_area' {
 			children << ui2.label('', component.text, ui2.rect(9 * scale, 7 * scale, width - 18 * scale, height - 14 * scale), ui2.TextStyle{
-				size: font_size
+				size:  font_size
 				color: component.color
 				lines: 4
 			})
@@ -508,7 +525,7 @@ fn designer_component(component DesignerComponent, selected bool, scale f64) ui2
 		'dropdown' {
 			children << ui2.label('', component.text, ui2.rect(9 * scale, (height - font_size - 3 * scale) / 2, width - 32 * scale, font_size + 5 * scale), text_style(font_size, component.color, false))
 			children << ui2.label('', 'v', ui2.rect(width - 24 * scale, (height - font_size - 3 * scale) / 2, 18 * scale, font_size + 5 * scale), ui2.TextStyle{
-				size: font_size
+				size:  font_size
 				color: color_muted
 				align: .center
 			})
@@ -522,10 +539,10 @@ fn designer_component(component DesignerComponent, selected bool, scale f64) ui2
 			} else {
 				'IMAGE'
 			}, ui2.rect(5 * scale, (height - 18 * scale) / 2, width - 10 * scale, 18 * scale), ui2.TextStyle{
-				size: 10 * scale
+				size:  10 * scale
 				color: color_muted
 				align: .center
-				bold: true
+				bold:  true
 			})
 		}
 		else {}
@@ -541,8 +558,8 @@ fn designer_component(component DesignerComponent, selected bool, scale f64) ui2
 	}
 	transparent := component.kind in ['label', 'checkbox']
 	return ui2.draggable_view_with_cursor('cmp_${component.id}', ui2.rect(component.x * scale, component.y * scale, width, height), ui2.BoxStyle{
-		bg: component.background
-		radius: if component.kind in ['button', 'text_field', 'text_area', 'dropdown', 'rectangle'] {
+		bg:          component.background
+		radius:      if component.kind in ['button', 'text_field', 'text_area', 'dropdown', 'rectangle'] {
 			5.0 * scale
 		} else {
 			0
@@ -555,7 +572,7 @@ fn build_designer_form(layout IdeLayout, app &IdeApp) ui2.Element {
 	mut children := grid_children(app, layout.scale)
 	if app.components.len == 0 && layout.form.width > 80 {
 		children << ui2.label('', 'Choose a control from the palette, then click here to place it.', ui2.rect(30, 28, layout.form.width - 60, 28), ui2.TextStyle{
-			size: 12
+			size:  12
 			color: 0x94a3b8
 			align: .center
 		})
@@ -578,8 +595,8 @@ fn preview_component(component DesignerComponent, scale f64) ui2.Element {
 	frame := ui2.rect(component.x * scale, component.y * scale, component.width * scale, component.height * scale)
 	style := text_style(clamp(component.font_size * scale, 8, 32), component.color, false)
 	box := ui2.BoxStyle{
-		bg: component.background
-		radius: 5 * scale
+		bg:          component.background
+		radius:      5 * scale
 		transparent: component.kind in ['label', 'checkbox']
 	}
 	id := 'preview_${component.id}'
@@ -601,7 +618,7 @@ fn preview_component(component DesignerComponent, scale f64) ui2.Element {
 			} else {
 				ui2.view(id, frame, box, [ui2.label('', 'IMAGE', ui2.rect(0, 0, frame.width, frame.height), ui2.TextStyle{
 					color: color_muted
-					size: 10
+					size:  10
 					align: .center
 				})])
 			}
@@ -624,16 +641,16 @@ fn build_source_editor(layout IdeLayout, app &IdeApp) []ui2.Element {
 	padding := 10.0
 	apply_width := 116.0
 	mut editor := ui2.text_area('source_editor', app.source_text, ui2.rect(layout.stage.x + padding, layout.stage.y + padding, layout.stage.width - padding * 2, layout.stage.height - 54), ui2.BoxStyle{
-		bg: 0x0f172a
+		bg:     0x0f172a
 		radius: 5
 	}, ui2.TextStyle{
-		color: 0xe2e8f0
-		size: 12
+		color:       0xe2e8f0
+		size:        12
 		font_family: source_code_font_family()
 	})
 	editor = ui2.Element{
 		...editor
-		action_id: 'source_edit'
+		action_id:   'source_edit'
 		emit_change: true
 	}
 	return [
@@ -651,8 +668,8 @@ fn build_output(layout IdeLayout, app &IdeApp) []ui2.Element {
 	mut output := ui2.text_area('build_output', app.messages, ui2.rect(layout.output.x + 6, layout.output.y + 25, layout.output.width - 12, layout.output.height - 30), ui2.BoxStyle{
 		bg: 0x0f172a
 	}, ui2.TextStyle{
-		color: 0xcbd5e1
-		size: 10
+		color:       0xcbd5e1
+		size:        10
 		font_family: 'Roboto Mono'
 	})
 	output = ui2.Element{
@@ -676,7 +693,7 @@ fn build_status(layout IdeLayout, app &IdeApp) ui2.Element {
 		} else {
 			'off'
 		}}', ui2.rect(layout.status.width - 286, 4, 276, 16), ui2.TextStyle{
-			size: 10
+			size:  10
 			color: color_muted
 			align: .right
 		}),
@@ -704,5 +721,32 @@ fn build_ide(frame ui2.Rect, app &IdeApp) ui2.Element {
 	if app.palette_drag_kind.len > 0 && app.palette_drag_moved {
 		children << palette_drag_preview(layout, app)
 	}
+	if app.show_debug_overlay {
+		children << build_debug_overlay(layout, app)
+	}
 	return ui2.screen(color_window, children)
+}
+
+fn build_debug_overlay(layout IdeLayout, app &IdeApp) ui2.Element {
+	mut children := []ui2.Element{}
+	scale := layout.scale
+	for component in app.components {
+		frame := ui2.rect(layout.form.x + component.x * scale, layout.form.y + component.y * scale,
+			component.width * scale, component.height * scale)
+		children << ui2.view('debug_${component.id}', frame, ui2.BoxStyle{
+			transparent:   true
+			border_color:  0xef4444
+			border_left:   1
+			border_top:    1
+			border_right:  1
+			border_bottom: 1
+			radius:        0
+		}, [
+			ui2.label('debug_label_${component.id}', '${component.kind} #${component.id}', ui2.rect(2, 2, frame.width - 4, 14), ui2.TextStyle{
+				color: 0xef4444
+				size:  9
+			}),
+		])
+	}
+	return ui2.view('debug_overlay', layout.form, ui2.BoxStyle{ transparent: true }, children)
 }

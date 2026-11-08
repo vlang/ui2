@@ -11,9 +11,9 @@ pub struct AnchorLayoutDemo {}
 fn main() {
 	ui2.run_vml[AnchorLayoutDemo](
 		source: anchor_vml_source
-		model: AnchorLayoutDemo{}
-		title: 'Anchor Layout'
-		width: anchor_width
+		model:  AnchorLayoutDemo{}
+		title:  'Anchor Layout'
+		width:  anchor_width
 		height: anchor_height
 	) or { panic(err) }
 }

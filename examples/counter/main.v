@@ -18,9 +18,9 @@ pub fn (mut app CounterApp) increment() {
 fn main() {
 	ui2.run_vml[CounterApp](
 		source: counter_vml_source
-		model: CounterApp{}
-		title: 'Counter'
-		width: counter_width
+		model:  CounterApp{}
+		title:  'Counter'
+		width:  counter_width
 		height: counter_height
 	) or { panic(err) }
 }

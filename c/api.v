@@ -275,7 +275,7 @@ pub fn create(kind int, id &char, x f64, y f64, width f64, height f64) &C.ui2_no
 		fail('widgets may only be created inside build')
 		return unsafe { nil }
 	}
-	if kind < 0 || kind > int(ui2.Kind.toggle_button) {
+	if kind < 0 || kind > int(ui2.Kind.opengl) {
 		fail('unknown widget kind')
 		return unsafe { nil }
 	}

@@ -27,8 +27,8 @@ pub fn spinner(config SpinnerConfig) Element {
 	selected := spinner_selected_text(config.text, config.values, config.text_autoupdate)
 	return Element{
 		...dropdown(config.id, selected, config.values, config.frame, config.box, config.text_style)
-		action_id: config.action_id
-		accessibility_role: 'combobox'
+		action_id:           config.action_id
+		accessibility_role:  'combobox'
 		accessibility_label: 'Spinner'
 		accessibility_value: selected
 	}

@@ -29,20 +29,20 @@ pub fn text_input(config TextInputConfig) !Element {
 	}
 	if config.multiline {
 		return Element{
-			kind: .text_area
-			id: config.id
-			action_id: config.action_id
-			text: config.text
-			placeholder: config.hint_text
-			frame: config.frame
-			box: config.box
-			text_style: config.text_style
-			emit_change: config.action_id.len > 0
-			readonly: config.readonly
+			kind:           .text_area
+			id:             config.id
+			action_id:      config.action_id
+			text:           config.text
+			placeholder:    config.hint_text
+			frame:          config.frame
+			box:            config.box
+			text_style:     config.text_style
+			emit_change:    config.action_id.len > 0
+			readonly:       config.readonly
 			disable_scroll: config.disable_scroll
-			enabled: config.enabled
-			autocorrect: config.autocorrect
-			padding_left: config.padding_left
+			enabled:        config.enabled
+			autocorrect:    config.autocorrect
+			padding_left:   config.padding_left
 		}
 	}
 	mut field := if config.action_id.len > 0 {
@@ -54,11 +54,11 @@ pub fn text_input(config TextInputConfig) !Element {
 	}
 	field = Element{
 		...field
-		action_id: config.action_id
-		secure: config.password
-		readonly: config.readonly
-		enabled: config.enabled
-		autocorrect: config.autocorrect
+		action_id:    config.action_id
+		secure:       config.password
+		readonly:     config.readonly
+		enabled:      config.enabled
+		autocorrect:  config.autocorrect
 		padding_left: config.padding_left
 	}
 	return field
