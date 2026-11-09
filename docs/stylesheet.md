@@ -29,7 +29,8 @@ fn main() {
 
 Start with `examples/stylesheet_demo`, then `examples/stylesheet_gallery`
 (the deep showcase), `examples/stylesheet_responsive` (layout in V, style
-in the sheet) and `examples/stylesheet_theme` (accents times modes).
+in the sheet), `examples/stylesheet_theme` (accents times modes) and
+`examples/stylesheet_plugins` (every plugin hook on a live-reloaded sheet).
 
 ## The three layers
 

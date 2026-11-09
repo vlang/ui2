@@ -261,7 +261,10 @@ Repeater {
 
 A `Button` can be styled directly in VML. Leave `native` unset when the
 application should own its colors and shape; `native: true` requests the
-standard native-style appearance instead.
+standard native-style appearance instead. For one shared look across many
+buttons, prefer a sheet rule (`Button.primary { ... }` in a `Style` block
+or the global sheet, matched with `class: primary`) over repeating props —
+see [Styling](#styling).
 
 ```vml
 Button {
@@ -569,10 +572,17 @@ Label.title { font-size: 22px; font-weight: bold; }
 
 `examples/stylesheet_demo` is the first tour, `examples/stylesheet_gallery`
 the deep showcase, `examples/stylesheet_responsive` splits layout (V) from
-style (sheet), and `examples/stylesheet_theme` is a variable-driven
-accent/mode studio. The full guide — selectors, specificity, every property,
-media/container reference, scoping, the DSL, lint, dark mode, platform
-adaptation, migration and troubleshooting — is [docs/stylesheet.md](docs/stylesheet.md).
+style (sheet), `examples/stylesheet_theme` is a variable-driven
+accent/mode studio, and `examples/stylesheet_plugins` wires every plugin
+hook to a live-reloaded sheet. `with_platform_design` presets cover the
+common per-OS looks (glass on macOS/iOS, Material on Android, one design
+everywhere when forced), VML documents style themselves with in-document
+`Style` blocks (`examples/counter`), and composite components expose
+styleable part classes (`.switch-track`, `.picker-option.selected`,
+`.tab.selected`). The full guide — selectors, specificity, every property,
+media/container reference, scoping, the DSL, plugins, lint, dark mode,
+platform adaptation, VML styling, component classes, migration and
+troubleshooting — is [docs/stylesheet.md](docs/stylesheet.md).
 
 ## Backend capabilities
 
@@ -1248,7 +1258,8 @@ codes for known keys, so command shortcuts are independent of the input source.
 
 Typed-VML ports from `v-ui` include:
 
-- `v run examples/counter/main.v` — the 7GUIs counter.
+- `v run examples/counter/main.v` — the 7GUIs counter, with its look in an
+  in-document VML `Style` block instead of repeated inline props.
 - `v run examples/temperature_converter/main.v` — the two-way 7GUIs
   temperature converter.
 - `v run examples/flight_booker/main.v` — the validated 7GUIs flight booker.

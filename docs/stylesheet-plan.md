@@ -103,7 +103,7 @@ which authored them.
 - **P1 (done, `84cc345`):** `stylesheet_match.v` + `stylesheet_cascade.v`,
   `classes` / `ignore_stylesheet` / `stylesheet` on `Element`,
   `apply_stylesheet()` (global + scoped), `stylesheet_dsl.v`.
-- **P2 (done, this commit):** `stylesheet_window.v` (global sheet storage,
+- **P2 (done):** `stylesheet_window.v` (global sheet storage,
   dark follow/force, `stylesheet_frame_env` / `stylesheet_apply_frame`), live
   env hooks in the custom (`ui_immediate.c.v`) and native Windows
   (`windows/ui_windows.v`) build paths, `examples/stylesheet_demo`.
@@ -122,24 +122,24 @@ which authored them.
   `var(--x, fallback)`, top-level `light-dark()`, full modern color
   (lab/lch/oklab/oklch/hwb/gray/color() + relative `from` syntax),
   docs + gallery var() showcase.
-- **P7 (done, this commit):** Vite-style plugin system  (`ui/stylesheet_plugin.v`): custom value functions (number + color),
+- **P7 (done):** Vite-style plugin system  (`ui/stylesheet_plugin.v`): custom value functions (number + color),
   custom at-rules (parse-time expansion), custom pseudo-classes, custom
   `@media` features, post-cascade transforms, lint rules, `@import` with
   cycle-safe file loading, mtime-based live-reload helpers,
   `examples/stylesheet_plugins`, docs + README updates.
-- **P8 (done, this commit):** predefined per-platform designs
+- **P8 (done):** predefined per-platform designs
   (`ui/stylesheet_platform.v`): `glass` for macOS/iOS, `material` for
   Android, `auto` gating each behind `@media (platform: ...)` with dark
   variants on `(prefers-color-scheme: dark)`; concrete designs apply
   ungated on every platform. `with_platform_design` merges a base sheet
   with the preset, docs updated.
-- **P9 (done, this commit):** stylesheets inside VML (`ui/vml_stylesheet.v`):
+- **P9 (done):** stylesheets inside VML (`ui/vml_stylesheet.v`):
   `Style { ... }` raw-`.vss` blocks as scoped sheets on any node, `class:`
   props, inline `style:` declarations, and cascade application at the
   `element_from_vml` / `element_from_vnode` boundary (in-document sheets
   always, global sheet when set). `examples/counter/counter.vml` migrated
   as the showcase, docs updated.
-- **P10 (done, this commit):** component stylesheet contract: roots and
+- **P10 (done):** component stylesheet contract: roots and
   styleable parts of the interactive core carry classes (slider, switch,
   checkbox/radio (+groups), toggle, button, stepper, rating, select,
   combobox, picker rows, progress, dialog/alert/sheet, popover, tooltip,
