@@ -4,7 +4,7 @@ import os
 
 // P0 stylesheet parser: QSS/CSS-familiar selectors with ui2 extensions.
 //
-// Parses a stylesheet string (or `.u2ss` file via load_stylesheet) into a
+// Parses a stylesheet string (or `.vss` file via load_stylesheet) into a
 // Stylesheet of rules plus variables. Matching and cascading live in
 // stylesheet_match.v / stylesheet_cascade.v; this file never touches an
 // Element or a backend.
@@ -134,7 +134,7 @@ pub fn parse_stylesheet(source string) !Stylesheet {
 	}
 }
 
-// load_stylesheet reads a `.u2ss` file and its `@import` chain, splicing
+// load_stylesheet reads a `.vss` file and its `@import` chain, splicing
 // imported files in place (depth-first, each file once). Imports resolve
 // relative to the importing file; cycles terminate on the second visit.
 pub fn load_stylesheet(path string) !Stylesheet {

@@ -235,10 +235,10 @@ pub fn style_plugin_lint(sheet Stylesheet, mut notes StylesheetLintNotes) {
 // or each build in debug harnesses) and re-load when it changes.
 //
 // ```v
-// mut known := ui2.stylesheet_file_mtime('theme.u2ss')
+// mut known := ui2.stylesheet_file_mtime('theme.vss')
 // // ...later, e.g. on a Reload button:
-// if changed, now := ui2.stylesheet_file_changed('theme.u2ss', known) {
-//     ui2.set_global_stylesheet(ui2.load_stylesheet('theme.u2ss') or { return })
+// if changed, now := ui2.stylesheet_file_changed('theme.vss', known) {
+//     ui2.set_global_stylesheet(ui2.load_stylesheet('theme.vss') or { return })
 //     ui2.refresh()
 //     known = now
 // }

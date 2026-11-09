@@ -4,7 +4,7 @@ import ui2
 
 const gallery_width = 1000
 const gallery_height = 700
-const gallery_sheet_source = $embed_file('gallery.u2ss').to_string()
+const gallery_sheet_source = $embed_file('gallery.vss').to_string()
 
 const gallery_accents = [
 	['#2563eb', '#1d4ed8'],
@@ -54,7 +54,7 @@ fn build_gallery_screen() ui2.Element {
 		ui2.view('topbar', ui2.rect(0, 0, gallery_width, 64), ui2.BoxStyle{}, [
 			ui2.with_classes(ui2.label('title', 'Stylesheet Gallery', ui2.rect(24, 10,
 				500, 28), ui2.TextStyle{}), 'title'),
-			ui2.with_classes(ui2.label('platform', 'u2ss on ${ui2.stylesheet_platform_name()} - one sheet, every backend',
+			ui2.with_classes(ui2.label('platform', 'vss on ${ui2.stylesheet_platform_name()} - one sheet, every backend',
 				ui2.rect(24, 38, 500, 18), ui2.TextStyle{}), 'subtitle'),
 			hoverable(ui2.button('toggle_dark', if state.dark { 'Light' } else { 'Dark' },
 				ui2.rect(gallery_width - 320, 13, 140, 38), ui2.BoxStyle{}, ui2.TextStyle{})),

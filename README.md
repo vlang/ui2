@@ -547,7 +547,7 @@ do not show CoreAnimation shadows, which `cacheDisplayInRect:` does not render.
 
 ## Styling
 
-`ui2` stylesheets (`u2ss`) bring QSS/CSS-style rules to every backend:
+`ui2` stylesheets (`vss`) bring QSS/CSS-style rules to every backend:
 type, `#id` and `.class` selectors, `:hover`/`:disabled` states, `@media`
 and `@container` queries, variables, and light/dark blocks. The cascade is
 theme tokens, then the global sheet, then per-subtree scopes, then inline

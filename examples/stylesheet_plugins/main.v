@@ -14,7 +14,7 @@ const plugins_height = 480
 
 struct PluginsDemo {
 mut:
-	status      string = 'Edit theme.u2ss next to main.v, then press Reload.'
+	status      string = 'Edit theme.vss next to main.v, then press Reload.'
 	known_mtime i64
 	outlines    bool
 }
@@ -94,7 +94,7 @@ fn plugin_no_red(sheet ui2.Stylesheet) ui2.StylesheetLintNotes {
 }
 
 fn plugin_sheet_path() string {
-	return os.join_path(os.dir(@FILE), 'theme.u2ss')
+	return os.join_path(os.dir(@FILE), 'theme.vss')
 }
 
 fn plugin_load_sheet() !ui2.Stylesheet {
@@ -109,7 +109,7 @@ fn build_plugins_screen() ui2.Element {
 			ui2.TextStyle{}), 'title'),
 		ui2.with_classes(ui2.label('s', 'theme() + @supports + :--has-tooltip + lint + reload',
 			ui2.rect(24, 46, 500, 20), ui2.TextStyle{}), 'sub'),
-		ui2.button('reload', 'Reload theme.u2ss', ui2.rect(24, 84, 200, 38),
+		ui2.button('reload', 'Reload theme.vss', ui2.rect(24, 84, 200, 38),
 			ui2.BoxStyle{}, ui2.TextStyle{}),
 		ui2.button('outlines', if state.outlines { 'Outlines: on' } else { 'Outlines: off' },
 			ui2.rect(236, 84, 150, 38), ui2.BoxStyle{}, ui2.TextStyle{}),
@@ -128,7 +128,7 @@ fn handle_plugins_event(event string) {
 		'reload' {
 			known := ui2.stylesheet_file_mtime(plugin_sheet_path())
 			if known == 0 {
-				state.status = 'theme.u2ss not found on disk.'
+				state.status = 'theme.vss not found on disk.'
 			} else if known == state.known_mtime {
 				state.status = 'No changes since last load.'
 			} else {
@@ -139,7 +139,7 @@ fn handle_plugins_event(event string) {
 				}
 				ui2.set_global_stylesheet(sheet)
 				state.known_mtime = known
-				state.status = 'Reloaded theme.u2ss.'
+				state.status = 'Reloaded theme.vss.'
 			}
 		}
 		'outlines' {

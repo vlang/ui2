@@ -1,4 +1,4 @@
-# Styling with stylesheets (u2ss)
+# Styling with stylesheets (vss)
 
 One stylesheet language for every ui2 backend, familiar to QSS and CSS
 users and stricter than both: type, `#id` and `.class` selectors,
@@ -363,14 +363,14 @@ guarded := ui2.style_rule_guarded('Label', {'color': 'white'},
 sheet := ui2.stylesheet_from_rules([rule, guarded], {'@primary': '#2563eb'})
 ```
 
-String/`.u2ss` files (via `parse_stylesheet` / `load_stylesheet`) and the
+String/`.vss` files (via `parse_stylesheet` / `load_stylesheet`) and the
 DSL build the same rule list; the cascade cannot tell them apart. Store the
 parsed sheet in app state and re-apply on changes (`set_global_stylesheet`
 + `refresh()` when the window is already up; nothing needed before
 `run_window`).
 
-Large sheets split across files with `@import "other.u2ss";` (or
-`@import url(other.u2ss);`), resolved relative to the importing file.
+Large sheets split across files with `@import "other.vss";` (or
+`@import url(other.vss);`), resolved relative to the importing file.
 Imports splice in place, depth-first, each file once — cycles terminate on
 the second visit.
 

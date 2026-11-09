@@ -1,4 +1,4 @@
-# ui2 Stylesheet Plan (`u2ss`)
+# ui2 Stylesheet Plan (`vss`)
 
 Familiar to QSS + CSS users, better than both, typed for V.
 
@@ -6,7 +6,7 @@ Locked decisions (2026-11-09):
 1. **Scope: both** — global per-`Window` + per-subtree `View{ stylesheet }`.
 2. **Precedence: inline wins** — theme tokens → global sheet → ancestor scopes (outer→inner) → inline struct props.
 3. **Pseudo-states: all** — interaction + structural.
-4. **Authoring: both** — `string` / `.u2ss` files + V DSL building the same `StyleRule` list.
+4. **Authoring: both** — `string` / `.vss` files + V DSL building the same `StyleRule` list.
 
 ## 1. Syntax (v1)
 
@@ -86,7 +86,7 @@ theme defaults → global Window sheet → ancestor View sheets (outer→inner) 
 ```v
 // strings / files — hot-reloadable
 win.set_stylesheet(parse_stylesheet('@primary: #2563eb; Button { background: @primary; }')!)!
-win.set_stylesheet(load_stylesheet('cards.u2ss')!)!
+win.set_stylesheet(load_stylesheet('cards.vss')!)!
 
 // DSL — compile-time checked, same StyleRule structs
 win.set_stylesheet_rule(style_rule('Button.primary:hover', {'background': '@primary'})!)

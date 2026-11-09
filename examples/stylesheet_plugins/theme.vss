@@ -1,4 +1,4 @@
-@import "palette.u2ss";
+@import "palette.vss";
 
 @accent: #2563eb;
 

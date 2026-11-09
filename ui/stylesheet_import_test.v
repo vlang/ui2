@@ -16,8 +16,8 @@ fn import_test_write(dir string, name string, content string) string {
 
 fn test_import_basic_and_override() {
 	dir := import_test_dir()
-	import_test_write(dir, 'base.u2ss', 'Button { background: #ff0000; color: white; }')
-	main := import_test_write(dir, 'main.u2ss', '@import "base.u2ss";
+	import_test_write(dir, 'base.vss', 'Button { background: #ff0000; color: white; }')
+	main := import_test_write(dir, 'main.vss', '@import "base.vss";
 Button { background: #0000ff; }')
 	sheet := load_stylesheet(main) or { panic(err) }
 	assert sheet.rules.len == 2
@@ -34,27 +34,27 @@ Button { background: #0000ff; }')
 
 fn test_import_cycle_terminates() {
 	dir := import_test_dir()
-	import_test_write(dir, 'a.u2ss', '@import "b.u2ss";
+	import_test_write(dir, 'a.vss', '@import "b.vss";
 Button { background: #ff0000; }')
-	import_test_write(dir, 'b.u2ss', '@import "a.u2ss";
+	import_test_write(dir, 'b.vss', '@import "a.vss";
 Button { color: white; }')
-	sheet := load_stylesheet(os.join_path(dir, 'a.u2ss')) or { panic(err) }
+	sheet := load_stylesheet(os.join_path(dir, 'a.vss')) or { panic(err) }
 	assert sheet.rules.len == 2
 }
 
 fn test_import_missing_file_errors() {
 	dir := import_test_dir()
-	main := import_test_write(dir, 'main.u2ss', '@import "nope.u2ss";
+	main := import_test_write(dir, 'main.vss', '@import "nope.vss";
 Button { background: #ff0000; }')
 	if _ := load_stylesheet(main) {
 		assert false, 'missing import must fail'
 	} else {
-		assert err.msg().contains('nope.u2ss')
+		assert err.msg().contains('nope.vss')
 	}
 }
 
 fn test_import_requires_semicolon() {
-	if _ := parse_stylesheet('@import "x.u2ss"') {
+	if _ := parse_stylesheet('@import "x.vss"') {
 		assert false, 'missing semicolon must fail'
 	} else {
 		assert err.msg().contains(';')
@@ -63,20 +63,20 @@ fn test_import_requires_semicolon() {
 
 fn test_import_url_form() {
 	dir := import_test_dir()
-	import_test_write(dir, 'other.u2ss', 'Button { background: #ff0000; }')
-	main := import_test_write(dir, 'main.u2ss', '@import url(other.u2ss);
+	import_test_write(dir, 'other.vss', 'Button { background: #ff0000; }')
+	main := import_test_write(dir, 'main.vss', '@import url(other.vss);
 Button { color: white; }')
 	sheet := load_stylesheet(main) or { panic(err) }
 	assert sheet.rules.len == 2
 }
 
 fn test_stylesheet_file_mtime_missing() {
-	assert stylesheet_file_mtime('/no/such/file/anywhere.u2ss') == 0
+	assert stylesheet_file_mtime('/no/such/file/anywhere.vss') == 0
 }
 
 fn test_stylesheet_file_changed_tracks_edits() {
 	dir := import_test_dir()
-	path := import_test_write(dir, 'live.u2ss', 'Button { background: red; }')
+	path := import_test_write(dir, 'live.vss', 'Button { background: red; }')
 	known := stylesheet_file_mtime(path)
 	assert known != 0
 	changed, now := stylesheet_file_changed(path, known)

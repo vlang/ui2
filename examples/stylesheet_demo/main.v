@@ -5,7 +5,7 @@ import ui2
 const demo_width = 560
 const demo_height = 520
 
-// demo_sheet is the global u2ss sheet: type, class, id and pseudo-class
+// demo_sheet is the global vss sheet: type, class, id and pseudo-class
 // selectors plus light/dark theme variables. Inline struct props still win;
 // everything here only fills what the builders leave at defaults.
 const demo_sheet = '
@@ -67,7 +67,7 @@ fn build_demo_screen() ui2.Element {
 	state := unsafe { demo_state }
 	return ui2.screen(0xf1f5f9, [
 		ui2.label('title', 'Stylesheet Demo', ui2.rect(24, 16, 512, 30), ui2.TextStyle{}),
-		ui2.with_classes(ui2.label('subtitle', 'u2ss: one sheet for both backends',
+		ui2.with_classes(ui2.label('subtitle', 'vss: one sheet for both backends',
 			ui2.rect(24, 48, 512, 20), ui2.TextStyle{}), 'muted'),
 		hoverable(ui2.with_classes(ui2.button('inc', 'Count: ${state.count}', ui2.rect(24,
 			84, 200, 38), ui2.BoxStyle{}, ui2.TextStyle{}), 'primary')),

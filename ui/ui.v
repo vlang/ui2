@@ -467,7 +467,7 @@ pub:
 	toggle_group              string
 	toggle_allow_no_selection bool = true
 pub mut:
-	// stylesheet hooks (u2ss): classes participate in `.class` selectors,
+	// stylesheet hooks (vss): classes participate in `.class` selectors,
 	// ignore_stylesheet opts out of the cascade for this element, and
 	// stylesheet scopes a parsed sheet to this element's subtree.
 	classes           []string

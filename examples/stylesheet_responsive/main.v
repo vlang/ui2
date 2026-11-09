@@ -126,7 +126,7 @@ fn build_responsive_screen() ui2.Element {
 	screen_bg := if state.dark { u32(0x14121f) } else { u32(0xfaf8ff) }
 	plural := if columns == 1 { '' } else { 's' }
 	mut children := [
-		ui2.with_classes(ui2.label('hero', 'Responsive u2ss', ui2.rect(margin, 24, w -
+		ui2.with_classes(ui2.label('hero', 'Responsive vss', ui2.rect(margin, 24, w -
 			margin * 2, 44), ui2.TextStyle{}), 'hero'),
 		ui2.with_classes(ui2.label('sub', '${columns} column${plural} at ${w:.0f}px - layout in V, style in the sheet',
 			ui2.rect(margin, 70, w - margin * 2, 22), ui2.TextStyle{}), 'sub'),
