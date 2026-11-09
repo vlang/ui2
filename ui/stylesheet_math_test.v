@@ -1,5 +1,7 @@
 module ui2
 
+import math
+
 fn math_px(raw string, ctx StyleLengthCtx) f64 {
 	return style_length_px(raw, ctx) or { panic('math failed for "${raw}"') }
 }
@@ -172,4 +174,56 @@ fn test_color_mix_rejects() {
 	if _ := component_theme_token('color-mix(in srgb, red 0%, blue 0%)') {
 		assert false, 'zero total must fail'
 	}
+}
+
+fn test_math_clamp_min_wins_over_max() {
+	ctx := StyleLengthCtx{
+		win_w: 800
+		win_h: 600
+	}
+	assert math_px('clamp(10px, 20px, 3px)', ctx) == 10.0
+}
+
+fn test_math_bare_numbers_adopt_units_anywhere() {
+	ctx := StyleLengthCtx{
+		win_w: 800
+		win_h: 600
+	}
+	assert math_px('min(1, 10px)', ctx) == 1.0
+	assert math_px('max(1, 10px)', ctx) == 10.0
+	assert math_px('clamp(10px, 5, 20px)', ctx) == 10.0
+	assert math_px('.5px', ctx) == 0.5
+	assert math_px('-.5px', ctx) == -0.5
+}
+
+fn test_math_round_ties_toward_positive_infinity() {
+	ctx := StyleLengthCtx{
+		win_w: 800
+		win_h: 600
+	}
+	assert math_px('round(2.5px, 1px)', ctx) == 3.0
+	assert math_px('round(-2.5px, 1px)', ctx) == -2.0
+}
+
+fn test_math_round_mod_keep_plain_numbers() {
+	ctx := StyleLengthCtx{}
+	rounded := style_math_channel('round(7, 4)', ctx) or { panic('round failed') }
+	assert rounded.dim == .scalar
+	assert rounded.value == 8.0
+	modded := style_math_channel('mod(7, 4)', ctx) or { panic('mod failed') }
+	assert modded.dim == .scalar
+	assert modded.value == 3.0
+}
+
+fn test_math_inverse_trig_yields_angles() {
+	ctx := StyleLengthCtx{}
+	quarter := style_math_channel('asin(1)', ctx) or { panic('asin failed') }
+	assert quarter.dim == .angle
+	assert math.abs(quarter.value - math.pi / 2) < 1e-9
+	diagonal := style_math_channel('atan2(1px, 1px)', ctx) or { panic('atan2 failed') }
+	assert diagonal.dim == .angle
+	// A hue built from asin() is degrees, not raw radians.
+	hue_from_trig := component_theme_token('oklch(0.6 0.15 calc(asin(1)))') or { panic(err) }
+	hue_literal := component_theme_token('oklch(0.6 0.15 90deg)') or { panic(err) }
+	assert hue_from_trig.color == hue_literal.color
 }

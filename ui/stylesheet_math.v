@@ -543,17 +543,10 @@ fn (mut p StyleMathParser) parse_function() !StyleValue {
 			if values.len != 3 {
 				return error('clamp() needs exactly three arguments')
 			}
-			lo := style_math_coerce(values[0], values[1])!
-			hi := style_math_coerce(values[2], values[1])!
-			mid := style_math_coerce(values[1], values[1])!
-			clamped := if mid.value < lo.value {
-				lo.value
-			} else if mid.value > hi.value {
-				hi.value
-			} else {
-				mid.value
-			}
-			return StyleValue{ dim: mid.dim, value: clamped }
+			// CSS: max(MIN, min(VAL, MAX)), so MIN wins when MIN > MAX.
+			dim := style_math_common_dim('clamp', values)!
+			clamped := math.max(values[0].value, math.min(values[1].value, values[2].value))
+			return StyleValue{ dim: dim, value: clamped }
 		}
 		'round' {
 			value := p.parse_round()!
@@ -566,8 +559,11 @@ fn (mut p StyleMathParser) parse_function() !StyleValue {
 			if values.len != 2 {
 				return error('${name}() needs exactly two arguments')
 			}
-			a := style_math_expect_px(values[0])!
-			b := style_math_expect_px(values[1])!
+			// The result keeps the arguments' dimension: two numbers stay a
+			// number, a number beside a length becomes one.
+			dim := style_math_common_dim(name, values)!
+			a := values[0].value
+			b := values[1].value
 			if b == 0 {
 				return error('${name}() division by zero')
 			}
@@ -576,7 +572,7 @@ fn (mut p StyleMathParser) parse_function() !StyleValue {
 			} else {
 				math.trunc(a / b)
 			}
-			return StyleValue{ dim: .px, value: a - b * quotient }
+			return StyleValue{ dim: dim, value: a - b * quotient }
 		}
 		'abs', 'sign' {
 			value := p.parse_expr()!
@@ -638,19 +634,32 @@ fn (mut p StyleMathParser) parse_function() !StyleValue {
 			}
 			return StyleValue{ dim: .scalar, value: math.sqrt(total) }
 		}
-		'sin', 'cos', 'tan', 'asin', 'acos', 'atan' {
+		'sin', 'cos', 'tan' {
 			value := p.parse_expr()!
 			p.expect_op(')')!
 			radians := style_math_angle_rad(value)!
 			result := match name {
 				'sin' { math.sin(radians) }
 				'cos' { math.cos(radians) }
-				'tan' { math.tan(radians) }
-				'asin' { math.asin(radians) }
-				'acos' { math.acos(radians) }
-				else { math.atan(radians) }
+				else { math.tan(radians) }
 			}
 			return StyleValue{ dim: .scalar, value: result }
+		}
+		'asin', 'acos', 'atan' {
+			// Inverse trig takes a plain number and yields an angle, so a
+			// hue like `calc(asin(1))` reads as 90deg, not 1.57deg.
+			value := p.parse_expr()!
+			p.expect_op(')')!
+			number := style_math_expect_scalar(value)!
+			result := match name {
+				'asin' { math.asin(number) }
+				'acos' { math.acos(number) }
+				else { math.atan(number) }
+			}
+			if result != result {
+				return error('${name}() argument is out of range')
+			}
+			return StyleValue{ dim: .angle, value: result }
 		}
 		'atan2' {
 			values := p.parse_csv()!
@@ -658,9 +667,12 @@ fn (mut p StyleMathParser) parse_function() !StyleValue {
 			if values.len != 2 {
 				return error('atan2() needs exactly two arguments')
 			}
-			y := style_math_angle_rad(values[0])!
-			x := style_math_angle_rad(values[1])!
-			return StyleValue{ dim: .scalar, value: math.atan2(y, x) }
+			// Any two values of one dimension; the result is an angle.
+			style_math_common_dim('atan2', values)!
+			return StyleValue{
+				dim:   .angle
+				value: math.atan2(values[0].value, values[1].value)
+			}
 		}
 		else {
 			// Unknown functions belong to plugins. Capture the raw inner
@@ -735,20 +747,33 @@ fn style_math_minmax(name string, values []StyleValue) !StyleValue {
 	if values.len == 0 {
 		return error('${name}() needs at least one argument')
 	}
-	mut dim := values[0].dim
+	dim := style_math_common_dim(name, values)!
 	mut best := values[0].value
-	// A bare number adopts the dimension it is compared against.
 	for value in values[1..] {
-		current_dim := if value.dim == .scalar { dim } else { value.dim }
-		current := value.value
-		if current_dim != dim {
-			return error('${name}() mixes incompatible units')
-		}
-		if (name == 'min' && current < best) || (name == 'max' && current > best) {
-			best = current
+		if (name == 'min' && value.value < best) || (name == 'max' && value.value > best) {
+			best = value.value
 		}
 	}
 	return StyleValue{ dim: dim, value: best }
+}
+
+// style_math_common_dim is the dimension a list of values shares: a bare
+// number adopts whichever real unit the others have (wherever it sits in
+// the list), two different real units are an error, and all-bare stays a
+// plain number.
+fn style_math_common_dim(name string, values []StyleValue) !StyleDim {
+	mut dim := StyleDim.scalar
+	for value in values {
+		if value.dim == .scalar {
+			continue
+		}
+		if dim == .scalar {
+			dim = value.dim
+		} else if value.dim != dim {
+			return error('${name}() mixes incompatible units')
+		}
+	}
+	return dim
 }
 
 // style_math_coerce converts value to target's dimension under the
@@ -761,14 +786,6 @@ fn style_math_coerce(value StyleValue, target StyleValue) !StyleValue {
 		return StyleValue{ dim: target.dim, value: value.value }
 	}
 	return error('mismatched units')
-}
-
-fn style_math_expect_px(value StyleValue) !f64 {
-	coerced := style_math_coerce(value, StyleValue{ dim: .px })!
-	if coerced.dim != .px {
-		return error('expected a length')
-	}
-	return coerced.value
 }
 
 fn style_math_expect_scalar(value StyleValue) !f64 {
@@ -810,8 +827,9 @@ fn (mut p StyleMathParser) parse_round() !StyleValue {
 }
 
 fn style_math_round(strategy string, a StyleValue, b StyleValue) !StyleValue {
-	av := style_math_expect_px(a)!
-	bv := style_math_expect_px(b)!
+	dim := style_math_common_dim('round', [a, b])!
+	av := a.value
+	bv := math.abs(b.value)
 	if bv == 0 {
 		return error('round() division by zero')
 	}
@@ -819,9 +837,10 @@ fn style_math_round(strategy string, a StyleValue, b StyleValue) !StyleValue {
 		'up' { math.ceil(av / bv) }
 		'down' { math.floor(av / bv) }
 		'to-zero' { math.trunc(av / bv) }
-		else { math.round(av / bv) }
+		// CSS breaks `nearest` ties toward +infinity, not away from zero.
+		else { math.floor(av / bv + 0.5) }
 	}
-	return StyleValue{ dim: .px, value: quotient * bv }
+	return StyleValue{ dim: dim, value: quotient * bv }
 }
 
 // parse_env parses env(name[, fallback]) against the platform safe area.
