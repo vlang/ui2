@@ -11,8 +11,8 @@ const demo_height = 520
 const demo_sheet = '
 @accent: #2563eb;
 @accent-hover: #1d4ed8;
-light { @bg: #f1f5f9; @ink: #172033; @muted: #64748b; }
-dark { @bg: #172033; @ink: #f8fafc; @muted: #b4c0d0; }
+light { @bg: #f1f5f9; @surface: #ffffff; @line: #cbd5e1; @ink: #172033; @muted: #64748b; }
+dark { @bg: #0f172a; @surface: #1e293b; @line: #334155; @ink: #f8fafc; @muted: #b4c0d0; }
 
 Button {
 	background: @accent;
@@ -29,11 +29,12 @@ Label.title { font-size: 22px; font-weight: bold; }
 Label.muted { color: @muted; font-size: 13px; }
 @media (max-width: 480px) { Label.title { font-size: 16px; } }
 Label.counter { font-size: 20px; font-weight: bold; }
+Checkbox { color: @ink; }
 Checkbox:checked { color: @accent; }
 View.card {
-	background: white;
+	background: @surface;
 	border-radius: 10px;
-	border-color: #cbd5e1;
+	border-color: @line;
 	border-width: 1px;
 }
 '
@@ -51,6 +52,7 @@ mut:
 	checked    bool
 	dark       bool
 	status     string = 'Hover the buttons, then toggle dark mode.'
+	sheet      ui2.Stylesheet
 	card_sheet ui2.Stylesheet
 }
 
@@ -63,10 +65,20 @@ fn hoverable(el ui2.Element) ui2.Element {
 	}
 }
 
+// demo_screen_bg reads the sheet's @bg for the active mode. screen() takes a
+// plain color, so the builder follows the mode itself, while the sheet stays
+// the one place the palette is written.
+fn demo_screen_bg(sheet ui2.Stylesheet) u32 {
+	value := sheet.resolve_var('@bg', ui2.stylesheet_dark_mode()) or { return 0xf1f5f9 }
+	token := ui2.component_theme_token(value) or { return 0xf1f5f9 }
+	return token.color
+}
+
 fn build_demo_screen() ui2.Element {
 	state := unsafe { demo_state }
-	return ui2.screen(0xf1f5f9, [
-		ui2.label('title', 'Stylesheet Demo', ui2.rect(24, 16, 512, 30), ui2.TextStyle{}),
+	return ui2.screen(demo_screen_bg(state.sheet), [
+		ui2.with_classes(ui2.label('title', 'Stylesheet Demo', ui2.rect(24, 16, 512, 30),
+			ui2.TextStyle{}), 'title'),
 		ui2.with_classes(ui2.label('subtitle', 'vss: one sheet for both backends',
 			ui2.rect(24, 48, 512, 20), ui2.TextStyle{}), 'muted'),
 		hoverable(ui2.with_classes(ui2.button('inc', 'Count: ${state.count}', ui2.rect(24,
@@ -80,16 +92,17 @@ fn build_demo_screen() ui2.Element {
 		},
 		ui2.checkbox('check', 'Accent-checked box', state.checked, ui2.rect(24, 134, 300,
 			28), ui2.TextStyle{}),
-		ui2.with_stylesheet(ui2.view('card', ui2.rect(24, 174, 512, 220), ui2.BoxStyle{}, [
-			ui2.with_classes(ui2.label('card_title', 'Scoped card', ui2.rect(16, 12, 480,
-				24), ui2.TextStyle{}), 'title'),
-			ui2.with_classes(ui2.label('card_note', 'The teal button below comes from the card-scoped sheet, not the global one.',
-				ui2.rect(16, 40, 480, 40), ui2.TextStyle{}), 'muted'),
-			hoverable(ui2.button('scoped', 'Scoped action', ui2.rect(16, 96, 200, 38),
-				ui2.BoxStyle{}, ui2.TextStyle{})),
-			ui2.with_classes(ui2.label('scoped_styled', 'Styled from V code via the DSL constructor.',
-				ui2.rect(16, 146, 480, 24), ui2.TextStyle{}), 'from-dsl'),
-		]), state.card_sheet),
+		ui2.with_stylesheet(ui2.with_classes(ui2.view('card', ui2.rect(24, 174, 512, 220),
+			ui2.BoxStyle{}, [
+				ui2.with_classes(ui2.label('card_title', 'Scoped card', ui2.rect(16, 12, 480,
+					24), ui2.TextStyle{}), 'title'),
+				ui2.with_classes(ui2.label('card_note', 'The teal button below comes from the card-scoped sheet, not the global one.',
+					ui2.rect(16, 40, 480, 40), ui2.TextStyle{}), 'muted'),
+				hoverable(ui2.button('scoped', 'Scoped action', ui2.rect(16, 96, 200, 38),
+					ui2.BoxStyle{}, ui2.TextStyle{})),
+				ui2.with_classes(ui2.label('scoped_styled', 'Styled from V code via the DSL constructor.',
+					ui2.rect(16, 146, 480, 24), ui2.TextStyle{}), 'from-dsl'),
+			]), 'card'), state.card_sheet),
 		ui2.with_classes(ui2.label('status', state.status, ui2.rect(24, 406, 512, 60),
 			ui2.TextStyle{}), 'muted'),
 	])
@@ -137,12 +150,19 @@ fn main() {
 	}) or { panic(err) }
 	mut rules := global.rules.clone()
 	rules << dsl_rule
-	ui2.set_global_stylesheet(ui2.Stylesheet{
+	// Re-index after adding rules: the parsed sheet's index only knows the
+	// rules it was built from.
+	sheet := ui2.Stylesheet{
 		...global
-		rules: rules
-	})
+		rules:      rules
+		rule_index: ui2.stylesheet_index_rules(rules)
+	}
+	ui2.set_global_stylesheet(sheet)
 	mut state := unsafe { demo_state }
+	state.sheet = sheet
 	state.card_sheet = ui2.parse_stylesheet(card_sheet) or { panic(err) }
+	// The mode follows the OS until toggled; start the toggle in sync.
+	state.dark = ui2.stylesheet_dark_mode()
 	ui2.run_window('Stylesheet Demo', demo_width, demo_height, build_demo_screen,
 		handle_demo_event)
 }
