@@ -98,13 +98,14 @@ which authored them.
 
 ## 5. Phases
 
-- **P0 (started):** `stylesheet_parse.v` — selectors, declarations, variables,
-  `light{}/dark{}` blocks, specificity, `file:line:col` errors + tests.
-- **P1:** `stylesheet_match.v` + `stylesheet_cascade.v`, `classes` /
-  `ignore_stylesheet` on `Element`, `set_stylesheet()` (global + scoped).
-- **P2:** state wiring (`hover/press/focus/disable/check/selected`) +
-  structural pseudos (`first/last/nth/only/empty`) + `stylesheet_demo`.
-- **P3:** `load_stylesheet()`, lint helper, `docs/stylesheet.md`, gradient /
+- **P0 (done, `75f17da`):** `stylesheet_parse.v` — selectors, declarations,
+  variables, `light{}/dark{}` blocks, specificity, `file:line:col` errors + tests.
+- **P1 (done, this commit):** `stylesheet_match.v` + `stylesheet_cascade.v`,
+  `classes` / `ignore_stylesheet` / `stylesheet` on `Element`,
+  `apply_stylesheet()` (global + scoped), `stylesheet_dsl.v`.
+- **P2 (next):** state wiring (`hover/press/focus/disable/check/selected` from
+  real events) + Window integration + `stylesheet_demo` example.
+- **P3:** `load_stylesheet()` docs, lint helper, `docs/stylesheet.md`, gradient /
   shadow shorthands polish.
 - Non-goals v1: layout selectors, animations/transitions, `@media`,
   nesting, `!important`.
