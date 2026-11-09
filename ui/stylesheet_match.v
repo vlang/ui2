@@ -88,6 +88,9 @@ pub fn stylesheet_index_rules(rules []StyleRule) StyleRuleIndex {
 
 // stylesheet_index_covers reports whether a sheet carries a usable index.
 // Hand-built sheets (empty index, non-empty rules) fall back to full scan.
+// Keep the bucket list here in sync with StyleRuleIndex: a new bucket left
+// out would make an index holding only that bucket look absent (a safe
+// full scan, but a silent slowdown).
 fn stylesheet_index_covers(sheet Stylesheet) bool {
 	if sheet.rules.len == 0 {
 		return false

@@ -219,7 +219,8 @@ pub fn parse_stylesheet(source string) !Stylesheet {
 
 // load_stylesheet reads a `.vss` file and its `@import` chain, splicing
 // imported files in place (depth-first, each file once): an import's rules
-// and variables land exactly where the `@import` stands. Imports resolve
+// and variables land exactly where the `@import` stands. A partial imported
+// by two files contributes only at its first import. Imports resolve
 // relative to the importing file and must stay inside the directory of
 // the file passed here, so a sheet from an untrusted source cannot read
 // arbitrary files; use load_stylesheet_within to allow a wider root.

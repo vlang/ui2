@@ -97,9 +97,12 @@ View.card {
 ```
 
 `&` splices the parent in (merging when it carries its own type, id,
-classes or states — only a leading `&` is supported); otherwise the child
-descends, or is a direct child after `>`. Nesting composes with `@media`
-and `@container`, which accumulate as usual.
+classes or states — only a leading `&` is supported, so `> &` is an
+error); otherwise the child descends, or is a direct child after `>`. A
+nested rule may start with a type and state (`Button:hover { ... }`): a
+`{` before the next `;` makes it a rule. Nesting composes with `@media`
+and `@container`, which accumulate as usual. Comments may sit anywhere
+whitespace may, including between selector parts and inside values.
 
 ## Pseudo-classes
 
@@ -141,8 +144,15 @@ exists to match. Untracked states simply never match; they are not errors.
 | `box-shadow` (`<color> [blur] [x y] [spread]` / `none`) | drop shadow                             |
 | `padding`, `margin`, `gap`                           | parsed, **not applied yet** (warns)       |
 
-Unknown properties warn instead of failing the build. `opacity` outside
-`0..1` clamps; garbage warns and keeps `1.0`.
+Unknown properties and unparseable values warn instead of failing the
+build, and an invalid value never hides an earlier valid one for the same
+property (CSS drops invalid declarations). `opacity` outside `0..1`
+clamps; garbage warns and keeps `1.0`. `font-weight` takes `normal`,
+`bold`, `bolder`, `lighter` or `1`–`1000` (600 and up renders bold);
+`font-style: oblique` renders italic. `border` needs a width — `border: red`
+warns and draws nothing, as in CSS — and skips style keywords (`solid`,
+`dashed`, …; every border draws solid). `border: none`, `box-shadow: none`
+and `text-decoration: none` clear an earlier sheet value.
 
 ## Values
 
@@ -155,7 +165,11 @@ modern spaces (`lab()`, `lch()`, `oklab()`, `oklch()`, `hwb()`,
 `linear-gradient(135deg, #4f46e5, #06b6d4)` with `to <side>` directions.
 Bare names are Tailwind's 500 shade — `red` is `0xef4444`, not `0xff0000`;
 use hex when you mean exact. `color-mix(in srgb, C1 [p%], C2 [q%])` mixes
-two colors in gamma-encoded sRGB, defaulting to an even split:
+two colors in gamma-encoded sRGB as CSS Color 5 does: the percentage may
+sit before or after each color, a missing one is the rest of 100% (both
+missing is an even split), shares over 100% scale down, shares under 100%
+also scale the result's alpha down, and channels mix premultiplied by
+alpha, so `transparent` fades a color without darkening it:
 
 ```css
 Button.ghost:hover { background: color-mix(in srgb, @accent 12%, @surface); }
@@ -170,11 +184,25 @@ Label.muted { color: hsl(from var(--ink) h s 40%); }
 
 `rgb()`/`hsl()`/`hwb()` take channels in their own space, `lab()`/`lch()`/
 `oklab()`/`oklch()`/`gray()` likewise, and `color()` names its space
-explicitly (`color(from red srgb r g b)`). Omitted trailing channels keep
-the origin's values, so `rgb(from red r g b / 50%)` only changes alpha.
-Channel math (`calc()`, `min()`, …) works on top of origin idents.
+explicitly (`color(from red srgb r g b)`, `x y z` idents in the XYZ
+spaces). Omitted trailing channels keep the origin's values, so
+`rgb(from red r g b / 50%)` only changes alpha, and `alpha` is an ident
+too (`/ calc(alpha / 2)`). Channel math (`calc()`, `min()`, …) works on
+top of origin idents, each in its channel's number scale (`r` is 0–255,
+`s`/`l`/`w`/`b` 0–100).
 
-Translucent colors composite over the background.
+Channel ranges follow CSS: `hwb()` whiteness/blackness take `0`–`100`
+numbers or percentages; `lab()`/`lch()`/`oklab()`/`oklch()` percentages
+map onto the reference ranges (lab a/b: 100% = 125, lch C: 100% = 150,
+oklab a/b and oklch C: 100% = 0.4); negative chroma clamps to 0. Each
+`color()` space uses its own transfer curve (display-p3 shares sRGB's,
+a98-rgb, prophoto-rgb and rec2020 have their own).
+
+A translucent background keeps its color and becomes the box's fill
+opacity, which renderers composite once over whatever lies beneath. It
+multiplies with the `opacity` property (and with a builder-set opacity);
+a later opaque background resets it, and a solid background replaces an
+earlier gradient.
 
 **Lengths** are logical pixels by default: a bare number or a `px` suffix.
 Viewport units resolve against the window — `vw`/`vh`/`vmin`/`vmax` and
@@ -198,7 +226,11 @@ reports real insets; elsewhere the fallback — or zero — applies).
 `clamp()`, `round()` (plus `up`/`down`/`to-zero`), `mod()`, `rem()`,
 `abs()`, `sign()`, `sqrt()`, `hypot()`, `pow()`, `exp()`, `log()`,
 `sin()`, `cos()`, `tan()`, `asin()`, `acos()`, `atan()`, `atan2()`.
-Angles use `deg`/`rad`/`grad`/`turn`:
+Angles use `deg`/`rad`/`grad`/`turn`; the inverse trig functions return
+angles, so they feed hues directly. A bare number adopts the unit of the
+other arguments wherever it sits (`min(1, 10px)`), two plain numbers stay
+plain (`round(7, 4)`), `clamp(MIN, VAL, MAX)` lets MIN win when MIN > MAX,
+and `round()` breaks `nearest` ties toward +∞, all as in CSS:
 
 ```css
 Label.hero { font-size: clamp(18px, 4vw, 32px); }
@@ -229,8 +261,12 @@ Label.card-title { font-size: var(--title-size, 14px); }
 ```
 
 `var()` works anywhere a value goes — colors, lengths, gradients — and
-nests (`var(--a, var(--b, 12px))`). `@name` and `--name` are different
-variables; use one spelling consistently.
+nests (`var(--a, var(--b, 12px))`). The fallback is everything after the
+first comma, so `var(--shadow, #000 2px, 4px)` keeps its commas; a
+variable that cannot resolve (unknown inner name, a cycle) takes the
+fallback. An element's own custom property beats the one it inherits.
+`@name` and `--name` are different variables; use one spelling
+consistently.
 
 `light-dark()` picks a branch by the color scheme, as a lighter alternative
 to full `light {}`/`dark {}` blocks for one-off values (top-level values
@@ -262,9 +298,12 @@ Button { background: green; }            /* same score, later: wins over red */
 Button.primary { background: blue; }     /* (0,1,0): beats both above */
 ```
 
-Specificity outranks source order; order only breaks ties. A scoped sheet
-with equal specificity beats the global one; an inline `bg:` beats the
-whole cascade.
+Specificity outranks source order; order only breaks ties. A selector
+group (`Button.primary, #save`) ranks at its strongest matching selector,
+not its first. A scoped sheet with equal specificity beats the global one;
+an inline `bg:` beats the whole cascade. A global sheet holding only
+variables still feeds scoped sheets' lookups, and scoped sheets apply on
+every backend whether or not a global sheet is set.
 
 Two implementation notes, both invisible unless you measure. Rules are
 indexed by subject (kind, `#id`, `.class` buckets plus a universal one)
@@ -282,7 +321,7 @@ the full scan to pin this.
 ```v
 ui2.set_global_stylesheet(sheet) // whole window
 ui2.with_stylesheet(ui2.view('card', frame, box, children), card_sheet)
-ui2.with_classes(el, 'primary', 'large') // .primary.large matches
+ui2.with_classes(el, 'primary', 'large') // adds to el's classes: .primary.large matches
 ui2.Element{ ...el ignore_stylesheet: true } // opt out (children still cascade)
 ```
 
@@ -299,23 +338,28 @@ its children still cascade.
 @media not (pointer: coarse) { ... }
 @media (prefers-color-scheme: dark) { ... }
 @media (min-resolution: 1.5dppx) { ... }
+@media screen and (max-width: 600px) { ... }
 ```
 
 | Feature                | Values                                              |
 | ---------------------- | --------------------------------------------------- |
-| `orientation`          | `landscape`, `portrait` (from window aspect)        |
+| `orientation`          | `landscape`, `portrait` (portrait when height ≥ width) |
 | `platform`             | `windows`, `macos`, `linux`, `ios`, `android`, …    |
 | `pointer`              | `coarse` (mobile), `fine` (desktop)                 |
 | `prefers-color-scheme` | `dark`, `light` (same source as `dark {}`)          |
 | `min-/max-width/height`| window size in px                                   |
 | `min-/max-resolution`  | device pixels, `Ndppx` or `Nx` (`1.5dppx`, `2x`)    |
 
-Comma means OR, `and` means AND, `not` negates one query. Platform names
-are matched openly — a typo never matches but is not an error; every other
-feature validates values at parse time. Unknown resolution (no frame yet)
-fails closed. Nesting accumulates: a rule in `@media A` containing
-`@container B` needs both. Resizing rebuilds, so media rules re-evaluate
-live with no extra wiring.
+Comma means OR, `and` means AND, `not` negates one query, `only` is
+accepted and ignored. CSS media types work too: `all` and `screen` match
+every window, `print` and the rest never do. Keyword values are
+case-insensitive and may be quoted (`(platform: "windows")`); a unit must
+touch its number (`5 px` is an error). Platform names are matched openly —
+a typo never matches but is not an error; every other feature validates
+values at parse time. Unknown resolution (no frame yet) fails closed.
+Nesting intersects: a rule in `@media A` containing `@media B` (or
+`@container B`) needs both, while commas inside one block stay OR.
+Resizing rebuilds, so media rules re-evaluate live with no extra wiring.
 
 ## Container queries
 
@@ -387,19 +431,24 @@ Screen {
 ```
 
 Several `Style` blocks on one node merge in order. In-document sheets run
-through the same cascade as builder trees when the document builds
-(`element_from_vml` / `element_from_vnode`), including dark-mode and media
-rules; the global sheet applies too when one is set. Individual VML props
+through the same cascade as builder trees. Inside a running window the
+backend's frame pass styles the tree once, with live hover, press, focus
+and dpi, so `:hover` / `:pressed` / `:focused` work in VML exactly as in
+builder trees. Built standalone (`element_from_vml`, `element_from_vnode`,
+`element_from_vml_file` outside a frame, as in tests), the tree is styled
+at that boundary instead: in-document sheets always, the global sheet when
+one is set, with interaction pseudos quiet. Individual VML props
 (`background:`, `font_size:`) beat `style:` on the same property, and both
-beat sheets, matching the inline-wins rule.
+beat sheets, matching the inline-wins rule. `Style` blocks work in
+`adaptive: true` screens too.
 
 Limits: `Style` blocks take plain sheets — `@import` needs a file, so it
 errors with a pointer to inline the sheet instead. Inline `style:` takes
 plain values only (no sheet variables; custom properties belong in a
-`Style` block) and resolves lengths against the node's own frame. The VML
-runtime does not feed pointer interaction into the match env, so `:hover`
-/ `:pressed` / `:focused` stay quiet there; state, structural, media, and
-container queries all work.
+`Style` block), resolves lengths against the node's own frame, and follows
+the live color mode (`light-dark()` works). Like sheet declarations,
+inline values that cannot apply (layout-owned props, typos) warn and skip
+rather than failing the document; only a syntax error fails it.
 
 ## Styling components
 
@@ -473,8 +522,18 @@ parsed sheet in app state and re-apply on changes (`set_global_stylesheet`
 
 Large sheets split across files with `@import "other.vss";` (or
 `@import url(other.vss);`), resolved relative to the importing file.
-Imports splice in place, depth-first, each file once — cycles terminate on
-the second visit.
+Imports splice in place — the imported rules and variables land exactly
+where the `@import` stands, so a variable defined after it overrides the
+import and one defined before it is overridden — depth-first, each file
+once: cycles terminate on the second visit, and a partial imported by two
+files contributes only at its first import. Parse errors name the file
+(`theme.vss:3:1: ...`). A UTF-8 byte order mark is skipped.
+
+`load_stylesheet` confines the import chain to the directory of the file
+it loads (symlinks resolved), so a sheet from an untrusted source cannot
+read arbitrary files through `@import "../../..."` or an absolute path.
+When shared partials live higher up, name the root explicitly:
+`load_stylesheet_within('themes/dark.vss', '.')`.
 
 ## Plugins
 
@@ -500,11 +559,18 @@ ui2.register_style_plugin(ui2.StylePlugin{
 - **Custom value functions** (`functions` + `eval_function`): `theme(primary)`
   or `double(4px)`. The hook gets the raw inner text and the length context
   and returns a number (`StyleValue`) or color (`ComponentThemeToken`).
-  Unknown functions without a plugin are parse errors.
+  Unknown functions without a plugin are parse errors. When several plugins
+  claim one function or at-rule, each is asked in registration order: the
+  first success wins, and the first error reports only if all fail.
 - **Custom at-rules** (`at_rules` + `expand_at_rule`): `@supports (x) { ... }`
   receives the prelude and body as text and returns replacement source,
   which is parsed with the same enclosing `@media`/`@container` context.
   This is a parse-time macro: use it for scoping, static gating, or sugar.
+  The body arrives verbatim (strings and escapes intact, `/* */` comments
+  removed); expansions may nest up to 16 deep, so a plugin that re-emits
+  its own at-rule fails with an error instead of looping. Builtins win:
+  `@import`, `@media`, `@container` and `@name: value;` variables never
+  reach a plugin, and `rgb()`/`hsl()` stay builtin too.
 - **Custom pseudo-classes** (`pseudos` + `match_pseudo`): `:--has-tooltip`
   and friends receive the element, its ancestors and the frame env.
   Unknown pseudo-classes without a plugin are parse errors, as before.
@@ -531,7 +597,12 @@ assert !notes.has_errors()
 ```
 
 Reports unknown properties, unknown variables and layout-owned properties
-before the sheet ever reaches a build.
+before the sheet ever reaches a build, at each declaration's line. Variable
+references are found where the cascade resolves them — anywhere in a value
+and inside `var()` fallbacks. An unknown `@name` is an error (sheet
+variables live in sheets); an unknown `--name` only warns, bare or in
+`var()`, since an ancestor may provide it at runtime. `var()` must name a
+`--` custom property.
 
 ## Dynamic sheets
 
