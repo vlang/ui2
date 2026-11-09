@@ -746,6 +746,38 @@ for native and custom-rendered windows alike. Linux and the BSDs drive
 them has to be installed; Android has no clipboard this layer can reach. Check
 `clipboard_supported()` before offering a copy action.
 
+## Platform integration
+
+`haptic` plays a haptic on phones and Force Touch trackpads, `set_app_badge`
+stamps a number on the application icon, `open_url` opens a link with its
+default handler, and `share_text` opens the platform share sheet. Every call
+reports whether the platform took it, and every family has a `*_supported`
+capability query, after the clipboard and dialog APIs:
+
+```v
+if ui2.haptic_supported() {
+    ui2.haptic(.success)
+}
+ui2.set_app_badge(3) // zero clears the stamp
+if ui2.open_url('https://vlang.io') {
+    // handed to the browser, mail client or owning app
+}
+if ui2.share_text('Look at this') {
+    // the share sheet is up
+}
+```
+
+Only `http`, `https` and `mailto` links with an address are accepted; blank
+share text and negative badge counts are rejected without touching the
+platform. Haptics run on iOS (impact, selection and notification generators),
+macOS (`NSHapticFeedbackManager`) and Android (the vibrator through JNI);
+badges on iOS and macOS dock tiles; links on iOS, macOS, Windows
+(`ShellExecute`), Android (an `ACTION_VIEW` intent) and the Linux and BSD
+desktops (`xdg-open`); the share sheet on iOS (`UIActivityViewController`)
+and Android (`ACTION_SEND` through the chooser). The rest answer unsupported,
+so gate the buttons on the capability queries. Run
+`v run examples/platform_integration/main.v` for a demo.
+
 ## File and folder dialogs
 
 `open_file_dialog`, `save_file_dialog`, and `open_folder_dialog` show the
