@@ -14,6 +14,7 @@ pub:
 	pressed string // id of the pressed element
 	focused string // id of the keyboard-focused element (besides Element.focused)
 	dark    bool   // resolve theme variables for dark mode
+	dpi     f64    // device pixel ratio from the backend; <= 0 means unknown
 }
 
 // StyleAncestor snapshots one ancestor with its position among its siblings,

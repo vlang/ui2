@@ -59,6 +59,8 @@ pub struct StyleRule {
 pub:
 	selectors    []StyleSelector
 	declarations []StyleDeclaration
+	media        []MediaQuery
+	containers   []ContainerQuery
 	line         int
 	col          int
 }
@@ -209,6 +211,18 @@ fn (mut p StyleParser) parse() !Stylesheet {
 		p.skip_space_and_comments()!
 		if p.eof() {
 			break
+		}
+		// Query blocks: `@media ... { }` / `@container ... { }`. Checked
+		// before variables: every `@`-word would otherwise parse as one.
+		// The keyword needs a word boundary so `@mediax` stays a (failing)
+		// variable.
+		if (p.src[p.pos..].starts_with('@media') && style_keyword_end(p.src, p.pos + 6))
+			|| (p.src[p.pos..].starts_with('@container')
+				&& style_keyword_end(p.src, p.pos + 10)) {
+			for rule in p.parse_query_block([]MediaQuery{}, []ContainerQuery{})! {
+				result.rules << rule
+			}
+			continue
 		}
 		// Variable definitions at top level: `@name:` or `--name:`.
 		if p.peek() == `@` || (p.peek() == `-` && p.pos + 1 < p.src.len && p.src[p.pos + 1] == `-`) {
@@ -369,6 +383,10 @@ fn (mut p StyleParser) parse_raw_value() !string {
 }
 
 fn (mut p StyleParser) parse_rule() !StyleRule {
+	return p.parse_rule_guarded([]MediaQuery{}, []ContainerQuery{})!
+}
+
+fn (mut p StyleParser) parse_rule_guarded(media []MediaQuery, containers []ContainerQuery) !StyleRule {
 	start_line := p.line
 	start_col := p.col
 	selectors := p.parse_selector_list()!
@@ -410,6 +428,8 @@ fn (mut p StyleParser) parse_rule() !StyleRule {
 	return StyleRule{
 		selectors:    selectors
 		declarations: declarations
+		media:        media.clone()
+		containers:   containers.clone()
 		line:         start_line
 		col:          start_col
 	}

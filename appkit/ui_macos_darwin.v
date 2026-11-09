@@ -678,7 +678,24 @@ pub fn focus(id string) {
 fn stylesheet_appkit_env() StyleMatchEnv {
 	st := state()
 	hovered := if st.hovered.len > 0 { st.hovered.last() } else { '' }
-	return stylesheet_frame_env(hovered, '', focused_id())
+	env := stylesheet_frame_env(hovered, '', focused_id())
+	return StyleMatchEnv{
+		...env
+		dpi: native_device_scale()
+	}
+}
+
+// native_device_scale reports the window's backing-store scale.
+fn native_device_scale() f64 {
+	st := state()
+	if native_is_nil(st.window) {
+		return 1.0
+	}
+	scale := macos.msg_f64(st.window, 'backingScaleFactor')
+	if scale <= 0 {
+		return 1.0
+	}
+	return scale
 }
 
 // focused_id returns the declarative id of the control that currently owns

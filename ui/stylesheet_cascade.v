@@ -61,11 +61,12 @@ pub fn apply_stylesheet_ex(root Element, global Stylesheet, env StyleMatchEnv) (
 	if global.rules.len > 0 {
 		scopes << global
 	}
-	root_out := cascade_element(root, [], 0, 1, scopes, env, mut warnings)
+	qenv := stylesheet_query_env(env.dark, env.dpi)
+	root_out := cascade_element(root, [], 0, 1, scopes, env, qenv, mut warnings)
 	return root_out, warnings
 }
 
-fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, mut warnings []StylesheetWarning) Element {
+fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, mut warnings []StylesheetWarning) Element {
 	mut active := scopes.clone()
 	if el.stylesheet.rules.len > 0 || el.stylesheet.variables.len > 0
 		|| el.stylesheet.light_vars.len > 0 || el.stylesheet.dark_vars.len > 0 {
@@ -74,7 +75,7 @@ fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, 
 	mut out := if el.ignore_stylesheet {
 		el
 	} else {
-		cascade_props(el, ancestors, index, count, active, env, mut warnings)
+		cascade_props(el, ancestors, index, count, active, env, qenv, mut warnings)
 	}
 	mut children := []Element{cap: el.children.len}
 	for child_index, child in el.children {
@@ -84,7 +85,7 @@ fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, 
 			count: count
 		}]
 		children << cascade_element(child, ancestors_next, child_index, el.children.len,
-			active, env, mut warnings)
+			active, env, qenv, mut warnings)
 	}
 	return Element{
 		...out
@@ -100,10 +101,16 @@ struct StyleCandidate {
 	decl        StyleDeclaration
 }
 
-fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, mut warnings []StylesheetWarning) Element {
+fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, mut warnings []StylesheetWarning) Element {
 	mut candidates := []StyleCandidate{}
 	for scope_level, sheet in scopes {
 		for rule_index, rule in sheet.rules {
+			if !media_list_matches(rule.media, qenv) {
+				continue
+			}
+			if !container_list_matches(rule.containers, ancestors) {
+				continue
+			}
 			for sel in rule.selectors {
 				if stylesheet_selector_matches(sel, el, ancestors, index, count, env) {
 					for decl_index, decl in rule.declarations {

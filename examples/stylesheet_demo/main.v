@@ -27,6 +27,7 @@ Button.ghost { background: @bg; color: @ink; border-color: @accent; border-width
 Label { color: @ink; font-size: 14px; }
 Label.title { font-size: 22px; font-weight: bold; }
 Label.muted { color: @muted; font-size: 13px; }
+@media (max-width: 480px) { Label.title { font-size: 16px; } }
 Label.counter { font-size: 20px; font-weight: bold; }
 Checkbox:checked { color: @accent; }
 View.card {

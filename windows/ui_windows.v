@@ -1043,8 +1043,36 @@ pub fn focused_id() string {
 fn stylesheet_windows_env() StyleMatchEnv {
 	st := windows_state()
 	hovered := if st.hovered.len > 0 { st.hovered.last() } else { '' }
-	return stylesheet_frame_env(hovered, '', focused_id())
+	env := stylesheet_frame_env(hovered, '', focused_id())
+	return StyleMatchEnv{
+		...env
+		dpi: native_device_scale()
+	}
 }
+
+// native_device_scale reports the window's device pixel ratio from the
+// device context's DPI. Without per-monitor calls this is the system DPI,
+// which is what resolution queries need.
+fn native_device_scale() f64 {
+	st := windows_state()
+	if st.root == unsafe { nil } {
+		return 1.0
+	}
+	dc := C.GetDC(st.root)
+	if dc == unsafe { nil } {
+		return 1.0
+	}
+	dpi := C.GetDeviceCaps(dc, 90)
+	C.ReleaseDC(st.root, dc)
+	if dpi <= 0 {
+		return 1.0
+	}
+	return f64(dpi) / 96.0
+}
+
+fn C.GetDC(hwnd voidptr) voidptr
+fn C.GetDeviceCaps(dc voidptr, index int) int
+fn C.ReleaseDC(hwnd voidptr, dc voidptr) int
 
 pub fn focused_text_area_id() string {
 	st := windows_state()

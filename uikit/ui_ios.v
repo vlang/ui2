@@ -307,7 +307,21 @@ pub fn focused_id() string {
 // stylesheet cascade. UIKit tracks focus; hover and press targets are not
 // tracked, so :hover and :pressed stay unmatched here.
 fn stylesheet_uikit_env() StyleMatchEnv {
-	return stylesheet_frame_env('', '', focused_id())
+	env := stylesheet_frame_env('', '', focused_id())
+	return StyleMatchEnv{
+		...env
+		dpi: native_device_scale()
+	}
+}
+
+// native_device_scale reports the main screen's scale.
+fn native_device_scale() f64 {
+	screen := macos.msg_id(macos.get_class('UIScreen'), 'mainScreen')
+	scale := macos.msg_f64(screen, 'scale')
+	if scale <= 0 {
+		return 1.0
+	}
+	return scale
 }
 
 pub fn focused_text_area_id() string {

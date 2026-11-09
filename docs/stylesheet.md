@@ -131,3 +131,39 @@ assert !notes.has_errors()
 Reports unknown properties, unknown variables and layout-owned properties
 before the sheet ever reaches a build. Parse errors already carry
 `line:col` positions.
+
+## Media queries
+
+```css
+@media (orientation: landscape) and (min-width: 700px) { ... }
+@media (platform: windows), (platform: macos) { ... }
+@media not (pointer: coarse) { ... }
+@media (prefers-color-scheme: dark) { ... }
+@media (min-resolution: 1.5dppx) { ... }
+```
+
+Conditions: `orientation` (`landscape`/`portrait`, from the window aspect),
+`platform` (`windows`, `macos`, `linux`, `ios`, `android`, …), `pointer`
+(`coarse` on mobile, `fine` elsewhere), `prefers-color-scheme`
+(`dark`/`light`, same source as the `dark {}` block), window `min-/max-`
+`width`/`height` in px, and `min-/max-` `resolution` in `dppx` (or `x`).
+Comma means OR, `and` means AND, `not` negates. Nesting accumulates:
+a rule in `@media A` containing `@container B` needs both.
+
+Unknown features and values are parse errors. Resizing rebuilds, so media
+rules re-evaluate live. `:pressed` gaps aside, no backend edits were needed:
+size comes from `bounds()`, the pixel ratio rides the frame env.
+
+## Container queries
+
+```css
+@container (min-width: 400px) { .card-title { font-size: 20px; } }
+@container sidebar (max-width: 300px) { Button { font-size: 12px; } }
+@container sidebar { Button { border-radius: 0px; } }  /* ancestry only */
+```
+
+The unnamed query tests the parent element's frame; a named one tests the
+nearest ancestor whose id or class matches. Only `min-/max-`
+`width`/`height` conditions are allowed — sheets cannot change frames, so
+there is no layout feedback loop. Combine with `@media` by nesting.
+From V: `style_rule_guarded(sel, props, '(platform: windows)', 'card (min-width: 400px)')`.

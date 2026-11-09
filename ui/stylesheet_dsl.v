@@ -40,6 +40,27 @@ pub fn style_rule(selector string, props map[string]string) !StyleRule {
 	}
 }
 
+// style_rule_guarded is style_rule plus @media/@container preludes, parsed
+// with the same grammar as the string form. Empty preludes mean no queries.
+pub fn style_rule_guarded(selector string, props map[string]string, media_src string, container_src string) !StyleRule {
+	base := style_rule(selector, props)!
+	media := if media_src.trim_space().len > 0 {
+		parse_media_prelude(media_src)!
+	} else {
+		[]MediaQuery{}
+	}
+	containers := if container_src.trim_space().len > 0 {
+		parse_container_prelude(container_src)!
+	} else {
+		[]ContainerQuery{}
+	}
+	return StyleRule{
+		...base
+		media:      media
+		containers: containers
+	}
+}
+
 // stylesheet_from_rules bundles DSL-built rules into a Stylesheet.
 pub fn stylesheet_from_rules(rules []StyleRule, variables map[string]string) Stylesheet {
 	return Stylesheet{

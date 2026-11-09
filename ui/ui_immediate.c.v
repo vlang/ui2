@@ -1153,7 +1153,11 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	fn stylesheet_immediate_env() StyleMatchEnv {
 		hovered := if g_hovered.len > 0 { g_hovered.last() } else { '' }
 		pressed := if g_touch.down { g_touch.pointer_target.id } else { '' }
-		return stylesheet_frame_env(hovered, pressed, g_focused_field)
+		env := stylesheet_frame_env(hovered, pressed, g_focused_field)
+		return StyleMatchEnv{
+			...env
+			dpi: scale()
+		}
 	}
 
 	fn on_frame(mut app GgApp) {
