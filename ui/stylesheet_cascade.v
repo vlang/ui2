@@ -162,16 +162,31 @@ fn cascade_lookup_var(name string, scopes []Stylesheet, dark bool) ?string {
 
 fn cascade_resolve_value(raw string, scopes []Stylesheet, dark bool) ?string {
 	value := raw.trim_space()
-	if value.starts_with('@') || value.starts_with('--') {
-		key := value.fields()[0]
-		rest := value[key.len..].trim_space()
-		resolved := cascade_lookup_var(key, scopes, dark) or { return none }
-		if rest.len > 0 {
-			return '${resolved} ${rest}'
-		}
-		return resolved
+	if !value.contains('@') && !value.contains('--') {
+		return value
 	}
-	return value
+	// Substitute variables anywhere in the value, so gradients and other
+	// compound values can reference them: `linear-gradient(@accent, ...)`.
+	mut out := []u8{}
+	mut index := 0
+	for index < value.len {
+		is_var := value[index] == `@`
+			|| (value[index] == `-` && index + 1 < value.len && value[index + 1] == `-`)
+		if !is_var {
+			out << value[index]
+			index++
+			continue
+		}
+		mut end := index + if value[index] == `@` { 1 } else { 2 }
+		for end < value.len && is_style_name_char(value[end]) {
+			end++
+		}
+		key := value[index..end]
+		resolved := cascade_lookup_var(key, scopes, dark) or { return none }
+		out << resolved.bytes()
+		index = end
+	}
+	return out.bytestr()
 }
 
 fn cascade_warn(mut warnings []StylesheetWarning, el Element, prop string, message string) {

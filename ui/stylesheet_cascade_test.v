@@ -150,6 +150,23 @@ fn test_cascade_duplicate_property_later_wins() {
 	assert root.children[0].box.bg == 0x0000ff
 }
 
+fn test_cascade_variables_inside_gradient() {
+	sheet := parse_stylesheet('@a: #4f46e5;
+Button { background: linear-gradient(135deg, @a, #06b6d4); }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].box.gradient.stops.len == 2
+	assert root.children[0].box.gradient.stops[0].color == 0x4f46e5
+}
+
+fn test_cascade_unknown_variable_inside_gradient_warns() {
+	sheet := parse_stylesheet('Button { background: linear-gradient(135deg, @nope, #06b6d4); }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	out, warnings := apply_stylesheet_ex(root, sheet, StyleMatchEnv{})
+	assert out.children[0].box.gradient.stops.len == 0
+	assert warnings.any(it.prop == 'background')
+}
+
 fn test_stylesheet_dsl_matches_parser() {
 	rule := style_rule('Button.primary:hover', {
 		'background': '#2563eb'

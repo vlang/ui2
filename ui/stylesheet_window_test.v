@@ -28,6 +28,15 @@ fn test_stylesheet_global_applies_and_clears() {
 	assert plain.box.bg == 0xffffff
 }
 
+fn test_stylesheet_live_dpi_tracks_frames() {
+	clear_global_stylesheet()
+	env := StyleMatchEnv{ dpi: 2.5 }
+	stylesheet_apply_frame(window_test_button('a'), env)
+	assert stylesheet_live_dpi() == 2.5
+	stylesheet_apply_frame(window_test_button('a'), StyleMatchEnv{})
+	assert stylesheet_live_dpi() == 2.5
+}
+
 fn test_stylesheet_dark_mode_flag() {
 	set_stylesheet_follow_system(false)
 	set_stylesheet_dark(true)

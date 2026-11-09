@@ -14,6 +14,7 @@ __global g_stylesheet_global = Stylesheet{}
 __global g_stylesheet_has_global = false
 __global g_stylesheet_follow_system = true
 __global g_stylesheet_force_dark = false
+__global g_stylesheet_last_dpi = 1.0
 
 // set_global_stylesheet installs the process-wide sheet. Call refresh()
 // afterwards when the window is already up; before run_window nothing else
@@ -69,8 +70,21 @@ pub fn stylesheet_frame_env(hovered string, pressed string, focused string) Styl
 // pay one boolean check per build. Element.stylesheet scopes apply inside
 // regardless of which backend built the tree.
 pub fn stylesheet_apply_frame(declared Element, env StyleMatchEnv) Element {
+	if env.dpi > 0 {
+		g_stylesheet_last_dpi = env.dpi
+	}
 	if !g_stylesheet_has_global {
 		return declared
 	}
 	return apply_stylesheet(declared, g_stylesheet_global, env)
+}
+
+// stylesheet_live_dpi reports the device pixel ratio from the most recent
+// styled frame, or 1.0 before the first one. Applications use it for
+// readouts; the cascade itself reads the frame env.
+pub fn stylesheet_live_dpi() f64 {
+	if g_stylesheet_last_dpi <= 0 {
+		return 1.0
+	}
+	return g_stylesheet_last_dpi
 }

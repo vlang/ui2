@@ -25,8 +25,12 @@ fn main() {
 }
 ```
 
-Run `examples/stylesheet_demo` for a live tour: global + scoped + DSL
+Run `examples/stylesheet_demo` for a first tour: global + scoped + DSL
 rules, a light/dark toggle, and hover/disabled/checked states.
+`examples/stylesheet_gallery` is the deep showcase (nav, cards, container
+queries, accents, live query readout), `examples/stylesheet_responsive`
+splits layout (V + bounds) from style (media/container queries), and
+`examples/stylesheet_theme` is a variable-driven accent/mode studio.
 
 ## Selectors
 
