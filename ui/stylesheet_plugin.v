@@ -175,9 +175,14 @@ pub fn style_plugin_match_media(feature string, op string, value string, env Sty
 	return false
 }
 
-// style_plugin_eval_function asks the plugin claiming `name` to compute a
-// value. Unclaimed names are an error, so typos still fail fast.
+// style_plugin_eval_function asks the plugins claiming `name` to compute a
+// value, in registration order: the first success wins, so a second plugin
+// claiming the same name is still consulted when the first declines with
+// an error (like pseudo and media hooks, every claimant gets a say). With
+// every claimant failing, the first error reports. Unclaimed names are an
+// error, so typos still fail fast.
 pub fn style_plugin_eval_function(name string, inner string, ctx StyleLengthCtx) !StyleFnValue {
+	mut first_err := ''
 	for plugin in g_style_plugins {
 		if name !in plugin.functions {
 			continue
@@ -185,14 +190,25 @@ pub fn style_plugin_eval_function(name string, inner string, ctx StyleLengthCtx)
 		if plugin.eval_function == unsafe { nil } {
 			continue
 		}
-		return plugin.eval_function(name, inner, ctx)
+		value := plugin.eval_function(name, inner, ctx) or {
+			if first_err == '' {
+				first_err = err.msg()
+			}
+			continue
+		}
+		return value
+	}
+	if first_err != '' {
+		return error(first_err)
 	}
 	return error('unknown function "${name}()"')
 }
 
 // style_plugin_expand_at_rule expands a custom at-rule block through the
-// plugin that claims it.
+// plugins that claim it, in registration order: the first successful
+// expansion wins; with every claimant failing, the first error reports.
 pub fn style_plugin_expand_at_rule(name string, prelude string, body string) !string {
+	mut first_err := ''
 	for plugin in g_style_plugins {
 		if name !in plugin.at_rules {
 			continue
@@ -200,7 +216,16 @@ pub fn style_plugin_expand_at_rule(name string, prelude string, body string) !st
 		if plugin.expand_at_rule == unsafe { nil } {
 			continue
 		}
-		return plugin.expand_at_rule(name, prelude, body)
+		out := plugin.expand_at_rule(name, prelude, body) or {
+			if first_err == '' {
+				first_err = err.msg()
+			}
+			continue
+		}
+		return out
+	}
+	if first_err != '' {
+		return error(first_err)
 	}
 	return error('unknown at-rule "@${name}"')
 }

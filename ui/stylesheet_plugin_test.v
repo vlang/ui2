@@ -310,3 +310,96 @@ fn test_plugin_reregister_replaces() {
 		assert err.msg().contains('unknown pseudo-class')
 	}
 }
+
+// An at-rule that passes its body through unchanged.
+fn plugin_test_passthrough(name string, prelude string, body string) !string {
+	_ = name
+	_ = prelude
+	return body
+}
+
+// An at-rule whose expansion re-emits itself.
+fn plugin_test_self_wrap(name string, prelude string, body string) !string {
+	_ = prelude
+	return '@${name} { ${body} }'
+}
+
+fn test_plugin_at_rule_body_keeps_strings() {
+	register_style_plugin(StylePlugin{
+		name:           'test-pass'
+		at_rules:       ['pass']
+		expand_at_rule: plugin_test_passthrough
+	})
+	sheet := parse_stylesheet('@pass { Label { font-family: "Inter } \\" x"; background: url(http://x/y.png); } }') or {
+		plugin_test_cleanup('test-pass')
+		panic(err)
+	}
+	plugin_test_cleanup('test-pass')
+	assert sheet.rules.len == 1
+	assert sheet.rules[0].declarations[0].value == '"Inter } \\" x"'
+	assert sheet.rules[0].declarations[1].value == 'url(http://x/y.png)'
+}
+
+fn test_plugin_self_expanding_at_rule_errors() {
+	register_style_plugin(StylePlugin{
+		name:           'test-loop'
+		at_rules:       ['loop']
+		expand_at_rule: plugin_test_self_wrap
+	})
+	if _ := parse_stylesheet('@loop { Button { color: red; } }') {
+		plugin_test_cleanup('test-loop')
+		assert false, 'a self-expanding at-rule must fail'
+	} else {
+		plugin_test_cleanup('test-loop')
+		assert err.msg().contains('expands into itself')
+	}
+}
+
+fn test_plugin_claims_never_shadow_builtins() {
+	register_style_plugin(StylePlugin{
+		name:           'test-shadow'
+		at_rules:       ['import', 'accent']
+		functions:      ['rgb']
+		expand_at_rule: plugin_test_passthrough
+		eval_function:  plugin_test_double
+	})
+	sheet := parse_stylesheet('@import "x.vss"; @accent: #ff0000; Button { color: rgb(0, 0, 255); }') or {
+		plugin_test_cleanup('test-shadow')
+		panic(err)
+	}
+	plugin_test_cleanup('test-shadow')
+	assert sheet.imports == ['x.vss']
+	assert sheet.variables['@accent'] == '#ff0000'
+	token := component_theme_token('rgb(0, 0, 255)') or { panic(err) }
+	assert token.color == 0x0000ff
+}
+
+fn plugin_test_decline(name string, inner string, ctx StyleLengthCtx) !StyleFnValue {
+	_ = name
+	_ = inner
+	_ = ctx
+	return error('declined')
+}
+
+fn test_plugin_second_claimant_is_consulted() {
+	register_style_plugin(StylePlugin{
+		name:          'test-first'
+		functions:     ['double']
+		eval_function: plugin_test_decline
+	})
+	register_style_plugin(StylePlugin{
+		name:          'test-second'
+		functions:     ['double']
+		eval_function: plugin_test_double
+	})
+	sheet := parse_stylesheet('Button { font-size: double(5px); }') or {
+		plugin_test_cleanup('test-first')
+		plugin_test_cleanup('test-second')
+		panic(err)
+	}
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [plugin_test_button('a')])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	plugin_test_cleanup('test-first')
+	plugin_test_cleanup('test-second')
+	assert root.children[0].text_style.size == 10.0
+}

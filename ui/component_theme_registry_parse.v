@@ -106,7 +106,10 @@ pub fn component_theme_token(value string) !ComponentThemeToken {
 		}
 	}
 	split_name, split_inner := style_split_function_call(source)
-	if split_name != '' && style_plugin_has_function(split_name) {
+	// Builtin color functions are never handed to plugins, so a plugin
+	// claim cannot change how existing values parse.
+	if split_name != '' && split_name.to_lower() !in ['rgb', 'rgba', 'hsl', 'hsla']
+		&& style_plugin_has_function(split_name) {
 		result := style_plugin_eval_function(split_name, split_inner, StyleLengthCtx{})!
 		match result {
 			ComponentThemeToken {

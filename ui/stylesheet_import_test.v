@@ -85,3 +85,58 @@ fn test_stylesheet_file_changed_tracks_edits() {
 	changed_again, _ := stylesheet_file_changed(path, known + 1)
 	assert changed_again
 }
+
+fn test_import_splices_variables_in_source_order() {
+	dir := import_test_dir()
+	import_test_write(dir, 'vars.vss', '--x: #0000ff;')
+	before := import_test_write(dir, 'before.vss', '--x: #ff0000;
+@import "vars.vss";')
+	after := import_test_write(dir, 'after.vss', '@import "vars.vss";
+--x: #ff0000;')
+	assert (load_stylesheet(before) or { panic(err) }).variables['--x'] == '#0000ff'
+	assert (load_stylesheet(after) or { panic(err) }).variables['--x'] == '#ff0000'
+}
+
+fn test_import_splices_rules_in_place() {
+	dir := import_test_dir()
+	import_test_write(dir, 'late.vss', 'Button { background: #0000ff; }')
+	main := import_test_write(dir, 'late_main.vss', 'Button { background: #ff0000; }
+@import "late.vss";')
+	sheet := load_stylesheet(main) or { panic(err) }
+	assert sheet.rules.len == 2
+	assert sheet.rules[0].declarations[0].value == '#ff0000'
+	assert sheet.rules[1].declarations[0].value == '#0000ff'
+}
+
+fn test_import_error_names_the_file() {
+	dir := import_test_dir()
+	import_test_write(dir, 'broken.vss', 'Button { color red; }')
+	main := import_test_write(dir, 'broken_main.vss', '@import "broken.vss";')
+	if _ := load_stylesheet(main) {
+		assert false, 'broken import must fail'
+	} else {
+		assert err.msg().contains('broken.vss:1:')
+	}
+}
+
+fn test_import_cannot_leave_the_stylesheet_directory() {
+	dir := import_test_dir()
+	inner := os.join_path(dir, 'confined')
+	os.mkdir_all(inner) or { panic(err) }
+	import_test_write(dir, 'outside.vss', 'Button { color: red; }')
+	main := import_test_write(inner, 'main.vss', '@import "../outside.vss";')
+	if _ := load_stylesheet(main) {
+		assert false, 'escaping import must fail'
+	} else {
+		assert err.msg().contains('outside the stylesheet directory')
+	}
+	absolute := import_test_write(inner, 'abs.vss', '@import "${os.join_path(dir, 'outside.vss')}";')
+	if _ := load_stylesheet(absolute) {
+		assert false, 'absolute import outside the root must fail'
+	} else {
+		assert err.msg().contains('outside the stylesheet directory')
+	}
+	// An explicit wider root allows it.
+	sheet := load_stylesheet_within(main, dir) or { panic(err) }
+	assert sheet.rules.len == 1
+}

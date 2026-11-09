@@ -157,3 +157,62 @@ fn test_stylesheet_value_keeps_functions() {
 	sheet := parse_stylesheet('Card { background: linear-gradient(135deg, #4f46e5, #06b6d4); }')!
 	assert sheet.rules[0].declarations[0].value == 'linear-gradient(135deg, #4f46e5, #06b6d4)'
 }
+
+fn test_stylesheet_nested_type_pseudo_rule() {
+	// `Button:hover {` looks like a declaration until the `{`.
+	sheet := parse_stylesheet('View { Button:hover { color: #ff0000; } color: #00ff00; }')!
+	assert sheet.rules.len == 2
+	assert sheet.rules[0].declarations[0].prop == 'color'
+	nested := sheet.rules[1]
+	assert nested.selectors[0].parts.len == 2
+	assert nested.selectors[0].parts[1].kind == 'button'
+	assert nested.selectors[0].parts[1].pseudos[0].name == 'hover'
+}
+
+fn test_stylesheet_value_drops_comments() {
+	sheet := parse_stylesheet('Button { color: #f00 /* accent */; border: 1px/**/solid red; }')!
+	assert sheet.rules[0].declarations[0].value == '#f00'
+	assert sheet.rules[0].declarations[1].value == '1px solid red'
+}
+
+fn test_stylesheet_value_keeps_escaped_quotes() {
+	sheet := parse_stylesheet('Label { font-family: "A \\"quoted; } name"; color: red; }')!
+	assert sheet.rules[0].declarations.len == 2
+	assert sheet.rules[0].declarations[0].value == '"A \\"quoted; } name"'
+}
+
+fn test_stylesheet_skips_utf8_bom() {
+	sheet := parse_stylesheet('\xef\xbb\xbfButton { color: red; }')!
+	assert sheet.rules.len == 1
+}
+
+fn test_stylesheet_rejects_empty_value() {
+	if _ := parse_stylesheet('Button { color: ; }') {
+		assert false, 'empty value must fail'
+	} else {
+		assert err.msg().contains('empty value')
+	}
+}
+
+fn test_stylesheet_comment_between_compounds() {
+	sheet := parse_stylesheet('View /* c */ Label { color: red; } View/* c */>/* d */Label { color: blue; }')!
+	assert sheet.rules[0].selectors[0].parts.len == 2
+	assert sheet.rules[0].selectors[0].combinators == [StyleCombinator.descendant]
+	assert sheet.rules[1].selectors[0].combinators == [StyleCombinator.child]
+}
+
+fn test_stylesheet_nested_child_ref_is_rejected() {
+	if _ := parse_stylesheet('View { > &:hover { color: red; } }') {
+		assert false, '`> &` must not silently drop the combinator'
+	} else {
+		assert err.msg().contains('> &')
+	}
+}
+
+fn test_stylesheet_nth_child_overflow_is_rejected() {
+	if _ := parse_stylesheet('Button:nth-child(99999999999) { color: red; }') {
+		assert false, 'huge nth-child must fail'
+	} else {
+		assert err.msg().contains('too large')
+	}
+}
