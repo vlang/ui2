@@ -318,12 +318,22 @@ pub fn dismiss_keyboard() {
 	}
 }
 
-pub fn safe_area_top() f64 {
+pub fn safe_area_insets() SafeInsets {
 	if g_root_view == unsafe { nil } {
-		return 0
+		return SafeInsets{}
 	}
+	// UIEdgeInsets lands in a rect as top, left, bottom, right.
 	insets := macos.msg_rect(g_root_view, 'safeAreaInsets')
-	return insets.x
+	return SafeInsets{
+		left:   insets.y
+		top:    insets.x
+		right:  insets.height
+		bottom: insets.width
+	}
+}
+
+pub fn safe_area_top() f64 {
+	return safe_area_insets().top
 }
 
 pub fn start_barcode_scan() {
