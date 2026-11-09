@@ -119,3 +119,78 @@ fn test_color_mix_still_works() {
 	mix := component_theme_token('color-mix(in srgb, red, blue)')!
 	assert mix.color == 0x95639d || mix.color == 0x95639e
 }
+
+fn color_test_fails(value string) bool {
+	if _ := component_theme_token(value) {
+		return false
+	}
+	return true
+}
+
+fn test_color_malformed_values_error_instead_of_panicking() {
+	for bad in ['rgb(from )', 'hsl( from )', 'lch(from  )', 'lab(', 'gray(50', 'oklch(0.5 0.1',
+		'color-mix(in srgb, red, )', 'color-mix(in srgb, , blue)', 'gray(from white light)',
+		'color(srgb 1 0 0 0.5)', 'color-mix(in srgb, red -10%, blue)',
+		'color-mix(in srgb, red 150%, blue)'] {
+		assert color_test_fails(bad), '${bad} must fail'
+	}
+}
+
+fn test_color_hwb_bare_numbers_are_percent_scale() {
+	green := component_theme_token('hwb(120 30 50)')!
+	assert color_close(green.color, 0x4d804d, 1)
+	white := component_theme_token('hwb(from white h w b)')!
+	assert white.color == 0xffffff
+}
+
+fn test_color_relative_alpha_ident() {
+	red := component_theme_token('rgb(from #ff0000 r g b / alpha)')!
+	assert red.color == 0xff0000
+	assert red.opacity == 1.0
+	half := component_theme_token('rgb(from rgba(255, 0, 0, 0.5) r g b / calc(alpha / 2))')!
+	assert half.opacity == 0.25
+}
+
+fn test_color_relative_gray_round_trips() {
+	gray := component_theme_token('gray(from #808080 g)')!
+	assert color_close(gray.color, 0x808080, 1)
+}
+
+fn test_color_wide_gamut_transfer_functions() {
+	rec := component_theme_token('color(rec2020 0.2 0.2 0.2)')!
+	assert color_close(rec.color, 0x434343, 1)
+	p3 := component_theme_token('color(display-p3 0.5 0.5 0.5)')!
+	assert color_close(p3.color, 0x808080, 1)
+	a98 := component_theme_token('color(a98-rgb 0.5 0.5 0.5)')!
+	assert color_close(a98.color, 0x808080, 2)
+	pro := component_theme_token('color(prophoto-rgb 1 1 1)')!
+	assert color_close(pro.color, 0xffffff, 1)
+	p3_red := component_theme_token('color(from #ff0000 display-p3 r g b)')!
+	assert color_close(p3_red.color, 0xff0000, 1)
+}
+
+fn test_color_lab_percent_reference_ranges() {
+	percent := component_theme_token('lab(50% 100% 0)')!
+	number := component_theme_token('lab(50 125 0)')!
+	assert percent.color == number.color
+	chroma_percent := component_theme_token('oklch(60% 50% 30)')!
+	chroma_number := component_theme_token('oklch(0.6 0.2 30)')!
+	assert chroma_percent.color == chroma_number.color
+	negative := component_theme_token('lch(50% -10 90)')!
+	gray := component_theme_token('lch(50% 0 90)')!
+	assert negative.color == gray.color
+}
+
+fn test_color_mix_premultiplies_and_scales() {
+	// A transparent side must not darken the mix.
+	faded := component_theme_token('color-mix(in srgb, transparent, #ff0000)')!
+	assert faded.color == 0xff0000
+	assert faded.opacity == 0.5
+	// Shares under 100% scale the alpha down.
+	thin := component_theme_token('color-mix(in srgb, red 20%, blue 20%)')!
+	assert thin.opacity > 0.39 && thin.opacity < 0.41
+	// A leading percentage works like a trailing one.
+	lead := component_theme_token('color-mix(in srgb, 25% red, blue)')!
+	trail := component_theme_token('color-mix(in srgb, red 25%, blue)')!
+	assert lead.color == trail.color
+}
