@@ -23,7 +23,7 @@ fn color_picker_swatch_box(config ColorPickerConfig, radius f64, highlight bool)
 	} else if config.empty {
 		config.theme.border
 	} else {
-		choice_mix(config.value.rgb(), 0x000000, 0.3)
+		color_mix(config.value.rgb(), 0x000000, 0.3)
 	}
 	return color_picker_border_box(color, if open { 2.0 } else { 1.0 }, radius)
 }

@@ -513,7 +513,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			g_font_metrics = font_file_metrics(font_regular) or { FontMetrics{} }
 		}
 		g_gg_app.ctx = gg.new_context(
-			bg_color: hex_color(0xf4f6f8)
+			bg_color: gg.hex(0xf4f6f8)
 			font_path: font_regular
 			custom_bold_font_path: font_bold
 			width: opts.width
@@ -3976,17 +3976,8 @@ fn page_focused_text_area(direction int) {
 
 	// ── Drawing helpers ────────────────────────────────────────────────
 
-	fn hex_color(hex u32) gg.Color {
-		return gg.Color{
-			r: u8((hex >> 16) & 0xFF)
-			g: u8((hex >> 8) & 0xFF)
-			b: u8(hex & 0xFF)
-			a: 255
-		}
-	}
-
 	fn draw_rect(ctx &gg.Context, x f64, y f64, w f64, h f64, color_hex u32, radius f64) {
-		c := hex_color(color_hex)
+		c := gg.hex(color_hex)
 		if radius > 0 {
 			fill_rounded_rect(ctx, x, y, w, h, radius, c)
 		} else {
@@ -4034,7 +4025,7 @@ fn page_focused_text_area(direction int) {
 			return
 		}
 		c := gg.Color{
-			...hex_color(color_hex)
+			...gg.hex(color_hex)
 			a: u8(math.round(unit_clamp(alpha) * 255))
 		}
 		if radius > 0 {
@@ -4232,7 +4223,7 @@ fn page_focused_text_area(direction int) {
 		if w <= 0 || h <= 0 {
 			return
 		}
-		c := hex_color(color_hex)
+		c := gg.hex(color_hex)
 		if radius > 0 {
 			ctx.draw_rounded_rect_empty(f32(x), f32(y), f32(w), f32(h), f32(radius), c)
 		} else {
@@ -4303,7 +4294,7 @@ fn page_focused_text_area(direction int) {
 			g_outline_inner = inner
 		}
 		count := outer.len / 2
-		c := hex_color(color_hex)
+		c := gg.hex(color_hex)
 		scale := f64(ctx.scale)
 		ctx.r.load_pipeline(ctx.pipeline.alpha)
 		ctx.r.c4b(c.r, c.g, c.b, c.a)
@@ -4389,12 +4380,12 @@ fn page_focused_text_area(direction int) {
 		], false)
 		contours := path_flatten(path, 0.3)
 		triangles := path_stroke_triangles(contours, math.max(1.5, size / 8), .round, .round)
-		shape_triangles(ctx, triangles, x, y, f64(ctx.scale), hex_color(color_hex))
+		shape_triangles(ctx, triangles, x, y, f64(ctx.scale), gg.hex(color_hex))
 	}
 
 	fn draw_chevron_down(ctx &gg.Context, center_x f64, center_y f64, color_hex u32) {
 		pen := gg.PenConfig{
-			color: hex_color(color_hex)
+			color: gg.hex(color_hex)
 			thickness: 1.5
 		}
 		ctx.draw_line_with_config(f32(center_x - 4), f32(center_y - 2), f32(center_x),
@@ -4672,7 +4663,7 @@ fn page_focused_text_area(direction int) {
 		family := text_font_file(style.font_family, style.bold, style.italic)
 		ensure_family_fallbacks(ctx, family)
 		ctx.set_text_cfg(gg.TextCfg{
-			color: hex_color(style.color)
+			color: gg.hex(style.color)
 			size: int(font_render_size(style.size, text_font_metrics(family)) + 0.5)
 			bold: style.bold
 			italic: style.italic
@@ -4748,7 +4739,7 @@ fn page_focused_text_area(direction int) {
 		family := text_font_file(style.font_family, style.bold, style.italic)
 		ensure_family_fallbacks(ctx, family)
 		cfg := gg.TextCfg{
-			color: hex_color(style.color)
+			color: gg.hex(style.color)
 			size: int(font_render_size(style.size, text_font_metrics(family)) + 0.5)
 			bold: style.bold
 			italic: style.italic

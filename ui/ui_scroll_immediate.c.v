@@ -562,7 +562,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	fn text_area_run_cfg(style TextStyle) gg.TextCfg {
 		family := text_font_file(style.font_family, style.bold, style.italic)
 		return gg.TextCfg{
-			color: hex_color(style.color)
+			color: gg.hex(style.color)
 			size: int(font_render_size(style.size, text_font_metrics(family)) + 0.5)
 			bold: style.bold
 			italic: style.italic
@@ -634,7 +634,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		family := text_font_file(style.font_family, style.bold, style.italic)
 		ensure_family_fallbacks(ctx, family)
 		cfg := gg.TextCfg{
-			color: hex_color(style.color)
+			color: gg.hex(style.color)
 			size: int(font_render_size(style.size, text_font_metrics(family)) + 0.5)
 			bold: style.bold
 			italic: style.italic

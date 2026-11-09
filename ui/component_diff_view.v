@@ -441,31 +441,31 @@ fn diff_colors(theme ComponentTheme) DiffColors {
 		text:            theme.foreground
 		muted:           theme.muted_foreground
 		border:          theme.border
-		gutter:          choice_mix(bg, theme.muted, 0.55)
+		gutter:          color_mix(bg, theme.muted, 0.55)
 		header:          theme.muted
-		hunk:            choice_mix(bg, theme.primary, 0.07 * t)
+		hunk:            color_mix(bg, theme.primary, 0.07 * t)
 		hunk_text:       theme.muted_foreground
-		added:           choice_mix(bg, add, 0.10 * t)
-		added_gutter:    choice_mix(bg, add, 0.19 * t)
-		added_strong:    choice_mix(bg, add, 0.30 * t)
-		added_mark:      if dark { add } else { choice_mix(add, theme.foreground, 0.15) }
-		removed:         choice_mix(bg, del, 0.09 * t)
-		removed_gutter:  choice_mix(bg, del, 0.17 * t)
-		removed_strong:  choice_mix(bg, del, 0.27 * t)
-		removed_mark:    if dark { del } else { choice_mix(del, theme.foreground, 0.1) }
-		modified_mark:   if dark { theme.warning } else { choice_mix(theme.warning, 0xb45309, 0.5) }
-		empty:           choice_mix(bg, theme.muted, if dark { 0.45 } else { 0.7 })
-		selected:        choice_mix(bg, theme.primary, 0.13 * t)
-		selected_gutter: choice_mix(bg, theme.primary, 0.26 * t)
+		added:           color_mix(bg, add, 0.10 * t)
+		added_gutter:    color_mix(bg, add, 0.19 * t)
+		added_strong:    color_mix(bg, add, 0.30 * t)
+		added_mark:      if dark { add } else { color_mix(add, theme.foreground, 0.15) }
+		removed:         color_mix(bg, del, 0.09 * t)
+		removed_gutter:  color_mix(bg, del, 0.17 * t)
+		removed_strong:  color_mix(bg, del, 0.27 * t)
+		removed_mark:    if dark { del } else { color_mix(del, theme.foreground, 0.1) }
+		modified_mark:   if dark { theme.warning } else { color_mix(theme.warning, 0xb45309, 0.5) }
+		empty:           color_mix(bg, theme.muted, if dark { 0.45 } else { 0.7 })
+		selected:        color_mix(bg, theme.primary, 0.13 * t)
+		selected_gutter: color_mix(bg, theme.primary, 0.26 * t)
 		accent:          theme.primary
-		ours:            choice_mix(bg, theme.primary, 0.09 * t)
-		ours_heading:    choice_mix(bg, theme.primary, 0.20 * t)
-		theirs:          choice_mix(bg, theirs, 0.09 * t)
-		theirs_heading:  choice_mix(bg, theirs, 0.20 * t)
-		base:            choice_mix(bg, theme.muted_foreground, 0.08 * t)
-		base_heading:    choice_mix(bg, theme.muted_foreground, 0.18 * t)
-		note:            choice_mix(bg, theme.muted, 0.6)
-		note_border:     choice_mix(theme.border, bg, 0.2)
+		ours:            color_mix(bg, theme.primary, 0.09 * t)
+		ours_heading:    color_mix(bg, theme.primary, 0.20 * t)
+		theirs:          color_mix(bg, theirs, 0.09 * t)
+		theirs_heading:  color_mix(bg, theirs, 0.20 * t)
+		base:            color_mix(bg, theme.muted_foreground, 0.08 * t)
+		base_heading:    color_mix(bg, theme.muted_foreground, 0.18 * t)
+		note:            color_mix(bg, theme.muted, 0.6)
+		note_border:     color_mix(theme.border, bg, 0.2)
 	}
 }
 
@@ -719,7 +719,7 @@ fn (b &DiffBuild) look(row DiffRow, line DiffLine, side DiffSide, k int, paired 
 	if b.selected(row, side, k) {
 		look = DiffCellLook{
 			...look
-			bg:       choice_mix(look.bg, c.accent, 0.12)
+			bg:       color_mix(look.bg, c.accent, 0.12)
 			gutter:   c.selected_gutter
 			selected: true
 		}
@@ -1146,7 +1146,7 @@ fn (b &DiffBuild) file_header(r int, row DiffRow, y f64, height f64) Element {
 	status_text, status_tone := diff_status_badge(s, row.file)
 	tone_color := diff_tone_color(b.config.theme, status_tone)
 	badge, badge_w := b.pill(status_text, right, (h - pill_h) / 2, pill_h, tone_color,
-		choice_mix(c.header, tone_color, 0.16), 'status')
+		color_mix(c.header, tone_color, 0.16), 'status')
 	children << badge
 	right -= badge_w + 10
 	total := file.additions + file.deletions
@@ -1290,7 +1290,7 @@ fn (b &DiffBuild) hunk_row(r int, row DiffRow, y f64, height f64) Element {
 	}
 	if b.config.hunk_separator != .simple {
 		children << view('', rect(0, 0, cols.code_x, height), BoxStyle{
-			bg: choice_mix(c.hunk, c.accent, 0.06)
+			bg: color_mix(c.hunk, c.accent, 0.06)
 		}, []Element{})
 		icon := math.round(b.layout.metrics.code_size)
 		children << b.symbol('ellipsis', rect((cols.code_x - icon) / 2, (height - icon) / 2,
@@ -1323,7 +1323,7 @@ fn (b &DiffBuild) fold_row(r int, row DiffRow, y f64, height f64) Element {
 	step := s.expansion_lines
 	mut children := []Element{}
 	children << view('', rect(0, 0, cols.code_x, height), BoxStyle{
-		bg: choice_mix(c.hunk, c.accent, 0.06)
+		bg: color_mix(c.hunk, c.accent, 0.06)
 	}, []Element{})
 	// Reveal buttons in the gutter: down shows the lines under the source
 	// above, up the lines over the source below, both arrows all of them.
@@ -1460,9 +1460,9 @@ fn (b &DiffBuild) conflict_row(r int, row DiffRow, y f64, height f64) Element {
 		right -= bw
 		children << Element{
 			...button('', action[1], rect(right, (height - bh) / 2, bw, bh), BoxStyle{
-				bg:            choice_mix(bg, c.surface, 0.55)
+				bg:            color_mix(bg, c.surface, 0.55)
 				radius:        5
-				border_color:  choice_mix(c.accent, bg, 0.55)
+				border_color:  color_mix(c.accent, bg, 0.55)
 				border_left:   1
 				border_top:    1
 				border_right:  1
@@ -1476,7 +1476,7 @@ fn (b &DiffBuild) conflict_row(r int, row DiffRow, y f64, height f64) Element {
 	return Element{
 		...view('', rect(0, y, w, height), BoxStyle{
 			bg:           bg
-			border_color: choice_mix(bg, c.text, 0.12)
+			border_color: color_mix(bg, c.text, 0.12)
 			border_top:   if row.part in [.ours, .resolved] { 1 } else { 0 }
 		}, children)
 		key:                 'row:${r}'
@@ -1530,7 +1530,7 @@ fn (b &DiffBuild) annotation_row(r int, row DiffRow, y f64, height f64) Element 
 		}
 	}
 	card := view('', rect(x, diff_note_margin, cw, ch), BoxStyle{
-		bg:            choice_mix(c.note, tone, 0.05)
+		bg:            color_mix(c.note, tone, 0.05)
 		radius:        m.radius
 		border_color:  c.note_border
 		border_left:   1

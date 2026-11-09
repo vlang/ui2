@@ -81,13 +81,7 @@ fn special_chart_channel(color u32, shift u32) f64 {
 
 // special_chart_mix blends from `a` (t = 0) to `b` (t = 1), channel by channel.
 pub fn special_chart_mix(a u32, b u32, t f64) u32 {
-	k := math.clamp(t, 0.0, 1.0)
-	mut out := u32(0)
-	for shift in [u32(16), 8, 0] {
-		value := special_chart_channel(a, shift) * (1 - k) + special_chart_channel(b, shift) * k
-		out |= u32(math.round(math.clamp(value, 0.0, 255.0))) << shift
-	}
-	return out
+	return color_mix(a, b, t)
 }
 
 fn special_chart_linear(channel f64) f64 {

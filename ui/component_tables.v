@@ -132,14 +132,14 @@ fn table_colors(theme ComponentTheme) TableColors {
 		text:           theme.foreground
 		muted_text:     theme.muted_foreground
 		dimmed_text:    choice_disabled_text(theme)
-		stripe:         choice_mix(theme.background, theme.muted, 0.55)
-		hover:          choice_mix(theme.muted, theme.border, 0.3)
-		selected:       choice_mix(theme.background, theme.primary, 0.12)
-		selected_hover: choice_mix(theme.background, theme.primary, 0.2)
+		stripe:         color_mix(theme.background, theme.muted, 0.55)
+		hover:          color_mix(theme.muted, theme.border, 0.3)
+		selected:       color_mix(theme.background, theme.primary, 0.12)
+		selected_hover: color_mix(theme.background, theme.primary, 0.2)
 		accent:         theme.primary
 		accent_text:    theme.primary_foreground
 		border:         theme.border
-		row_border:     choice_mix(theme.border, theme.background, 0.4)
+		row_border:     color_mix(theme.border, theme.background, 0.4)
 		skeleton:       shimmer_base_color(theme)
 	}
 }
@@ -303,7 +303,7 @@ fn table_empty_elements(frame Rect, message string, metrics TableMetrics, colors
 	text_height := math.max(0.0, math.min(font_line_height(metrics.font_size) + 4, frame.height -
 		icon_side - gap))
 	top := frame.y + (frame.height - icon_side - gap - text_height) / 2
-	color := choice_mix(colors.muted_text, colors.surface, 0.25)
+	color := color_mix(colors.muted_text, colors.surface, 0.25)
 	return [
 		Element{
 			...image('', 'symbol:tray', rect(frame.x + (frame.width - icon_side) / 2, top,
@@ -337,8 +337,8 @@ fn table_checkbox(frame Rect, side f64, check TableCheckState, enabled bool, col
 	mut fill := if on { colors.accent } else { colors.surface }
 	mut ring := if on { colors.accent } else { colors.border }
 	if !enabled {
-		fill = choice_mix(fill, colors.surface, 0.5)
-		ring = choice_mix(ring, colors.surface, 0.5)
+		fill = color_mix(fill, colors.surface, 0.5)
+		ring = color_mix(ring, colors.surface, 0.5)
 	}
 	mut marks := []Element{}
 	if on {

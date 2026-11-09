@@ -110,7 +110,7 @@ fn feedback_tone_color(theme ComponentTheme, tone ComponentTone) u32 {
 // feedback_track_color is color drawn at 20% over background: the translucent
 // track GPUI draws, flattened because ui2 colors are opaque.
 fn feedback_track_color(color u32, background u32) u32 {
-	return interpolate_color(color, background, 0.8)
+	return color_mix(color, background, 0.8)
 }
 
 fn feedback_validate_length(name string, value f64) ! {
@@ -219,7 +219,7 @@ fn feedback_level_loop(period f64, keys []FeedbackKey, off u32, on u32, channel 
 	mut steps := []Animation{cap: keys.len}
 	for i, key in keys {
 		duration := if i == 0 { 0.0 } else { (key.at - keys[i - 1].at) * period }
-		color := interpolate_color(off, on, math.clamp(key.level, 0, 1))
+		color := color_mix(off, on, math.clamp(key.level, 0, 1))
 		steps << match channel {
 			.background { animation(duration: duration, background: color) }
 			.text_color { animation(duration: duration, text_color: color) }

@@ -202,8 +202,8 @@ fn title_bar_layout(config TitleBarConfig) TitleBarLayout {
 // title_bar_background is GPUI Kit's title bar fill: a vertical gradient from
 // the title bar color mixed toward the background down to the title bar color.
 fn title_bar_background(theme ComponentTheme) Gradient {
-	bar := choice_mix(theme.background, theme.muted, 0.85)
-	return linear_gradient(90, gradient_stop(choice_mix(bar, theme.background, 0.45), 0),
+	bar := color_mix(theme.background, theme.muted, 0.85)
+	return linear_gradient(90, gradient_stop(color_mix(bar, theme.background, 0.45), 0),
 		gradient_stop(bar, 1))
 }
 

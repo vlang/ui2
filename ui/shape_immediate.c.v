@@ -141,7 +141,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 
 	fn shape_color(hex u32, opacity f64) gg.Color {
 		return gg.Color{
-			...hex_color(hex)
+			...gg.hex(hex)
 			a: u8(math.round(unit_clamp(opacity) * 255))
 		}
 	}

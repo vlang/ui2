@@ -93,7 +93,7 @@ fn switch_colors(config StyledSwitchConfig) (u32, u32) {
 		}
 	}
 	if !config.enabled {
-		track = choice_mix(track, theme.background, 0.5)
+		track = color_mix(track, theme.background, 0.5)
 	}
 	return track, thumb
 }

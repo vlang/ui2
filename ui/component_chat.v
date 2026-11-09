@@ -164,10 +164,6 @@ fn chat_is_dark(theme ComponentTheme) bool {
 	return chat_luminance(theme.background) < 0.5
 }
 
-fn chat_mix(from u32, to u32, amount f64) u32 {
-	return interpolate_color(from, to, math.clamp(amount, 0, 1))
-}
-
 // Identity colors: twelve hues, each a pale fill with deep initials in a light
 // theme and a deep fill with pale initials in a dark one, all at least WCAG AA.
 const chat_identity_light = [u32(0xfee2e2), 0x991b1b, 0xffedd5, 0x9a3412, 0xfef3c7, 0x92400e, 0xecfccb,

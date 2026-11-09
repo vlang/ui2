@@ -110,7 +110,7 @@ fn speech_symbol(name string, frame Rect, color u32) Element {
 }
 
 fn speech_tint(color u32, background u32, amount f64) u32 {
-	return interpolate_color(background, color, amount)
+	return color_mix(background, color, amount)
 }
 
 fn speech_centered_square(frame Rect, side f64) Rect {
