@@ -2,6 +2,7 @@
 module ui2
 
 import os
+import hash.fnv1a
 
 // Stylesheet plugins: extend ui2's styling the way Vite plugins extend a
 // build. A plugin is a plain value registered once, usually at startup:
@@ -256,29 +257,61 @@ pub fn style_plugin_lint(sheet Stylesheet, mut notes StylesheetLintNotes) {
 }
 
 // ── Live-reload helpers ───────────────────────────────────────────
-// Hot reload without threads: poll the file's mtime (on a timer, a button,
-// or each build in debug harnesses) and re-load when it changes.
+// Hot reload without threads: poll a stamp (on a timer, a button, or each
+// build in debug harnesses) and re-load when it changes.
 //
 // ```v
-// mut known := ui2.stylesheet_file_mtime('theme.vss')
+// mut known := ui2.stylesheet_file_stamp('theme.vss')
 // // ...later, e.g. on a Reload button:
-// if changed, now := ui2.stylesheet_file_changed('theme.vss', known) {
+// changed, now := ui2.stylesheet_file_changed('theme.vss', known)
+// if changed {
 //     ui2.set_global_stylesheet(ui2.load_stylesheet('theme.vss') or { return })
 //     ui2.refresh()
 //     known = now
 // }
 // ```
 
-// stylesheet_file_mtime reports a stylesheet file's modification time, or 0
-// when it cannot be read.
+// stylesheet_file_mtime reports a stylesheet file's modification time in
+// whole seconds, or 0 when it cannot be read. Two saves within one second
+// share a time; use stylesheet_file_stamp to detect every change.
 pub fn stylesheet_file_mtime(path string) i64 {
 	info := os.stat(path) or { return 0 }
 	return info.mtime
 }
 
-// stylesheet_file_changed reports whether path changed since known, and the
-// current mtime either way (0 when unreadable).
-pub fn stylesheet_file_changed(path string, known i64) (bool, i64) {
-	now := stylesheet_file_mtime(path)
+// stylesheet_file_stamp fingerprints a stylesheet's content plus its
+// `@import` chain, so it changes on every edit — a save half a second
+// after the last load, or an edit to an imported partial — where a
+// whole-second mtime would not. It is 0 when the file cannot be read.
+pub fn stylesheet_file_stamp(path string) u64 {
+	mut visited := []string{}
+	return stylesheet_stamp_file(path, mut visited)
+}
+
+fn stylesheet_stamp_file(path string, mut visited []string) u64 {
+	absolute := os.real_path(path)
+	if absolute in visited {
+		return 0
+	}
+	visited << absolute
+	source := os.read_file(absolute) or { return 0 }
+	mut stamp := fnv1a.sum64_string(source)
+	// A sheet that no longer parses still stamps its own text, so the
+	// broken save registers and the reload can report the error.
+	if sheet := parse_stylesheet(source) {
+		base := os.dir(absolute)
+		for name in sheet.imports {
+			target := if os.is_abs_path(name) { name } else { os.join_path(base, name) }
+			stamp = (stamp ^ stylesheet_stamp_file(target, mut visited)) * 1099511628211
+		}
+	}
+	return if stamp == 0 { 1 } else { stamp }
+}
+
+// stylesheet_file_changed reports whether path (or anything it imports)
+// changed since the known stamp, and the current stamp either way (0 when
+// unreadable).
+pub fn stylesheet_file_changed(path string, known u64) (bool, u64) {
+	now := stylesheet_file_stamp(path)
 	return now != known, now
 }

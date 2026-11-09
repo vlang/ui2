@@ -15,7 +15,7 @@ const plugins_height = 480
 struct PluginsDemo {
 mut:
 	status      string = 'Edit theme.vss next to main.v, then press Reload.'
-	known_mtime i64
+	known_stamp u64
 	outlines    bool
 }
 
@@ -127,10 +127,10 @@ fn handle_plugins_event(event string) {
 	mut state := unsafe { plugins_state }
 	match event {
 		'reload' {
-			known := ui2.stylesheet_file_mtime(plugin_sheet_path())
-			if known == 0 {
+			changed, now := ui2.stylesheet_file_changed(plugin_sheet_path(), state.known_stamp)
+			if now == 0 {
 				state.status = 'theme.vss not found on disk.'
-			} else if known == state.known_mtime {
+			} else if !changed {
 				state.status = 'No changes since last load.'
 			} else {
 				sheet := ui2.load_stylesheet(plugin_sheet_path()) or {
@@ -139,7 +139,7 @@ fn handle_plugins_event(event string) {
 					return
 				}
 				ui2.set_global_stylesheet(sheet)
-				state.known_mtime = known
+				state.known_stamp = now
 				state.status = 'Reloaded theme.vss.'
 			}
 		}
@@ -170,7 +170,7 @@ fn main() {
 	ui2.set_global_stylesheet(sheet)
 	notes := ui2.stylesheet_lint(sheet)
 	mut state := unsafe { plugins_state }
-	state.known_mtime = ui2.stylesheet_file_mtime(plugin_sheet_path())
+	state.known_stamp = ui2.stylesheet_file_stamp(plugin_sheet_path())
 	if notes.warnings.len > 0 {
 		state.status = 'Lint: ${notes.warnings[0]}'
 	}

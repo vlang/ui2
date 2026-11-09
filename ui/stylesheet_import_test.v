@@ -77,13 +77,25 @@ fn test_stylesheet_file_mtime_missing() {
 fn test_stylesheet_file_changed_tracks_edits() {
 	dir := import_test_dir()
 	path := import_test_write(dir, 'live.vss', 'Button { background: red; }')
-	known := stylesheet_file_mtime(path)
+	known := stylesheet_file_stamp(path)
 	assert known != 0
 	changed, now := stylesheet_file_changed(path, known)
 	assert !changed
 	assert now == known
-	changed_again, _ := stylesheet_file_changed(path, known + 1)
+	// A save within the same second still registers.
+	import_test_write(dir, 'live.vss', 'Button { background: blue; }')
+	changed_again, _ := stylesheet_file_changed(path, known)
 	assert changed_again
+}
+
+fn test_stylesheet_file_stamp_follows_imports() {
+	dir := import_test_dir()
+	import_test_write(dir, 'live_part.vss', '--x: #ff0000;')
+	path := import_test_write(dir, 'live_root.vss', '@import "live_part.vss";')
+	known := stylesheet_file_stamp(path)
+	import_test_write(dir, 'live_part.vss', '--x: #0000ff;')
+	changed, _ := stylesheet_file_changed(path, known)
+	assert changed
 }
 
 fn test_import_splices_variables_in_source_order() {

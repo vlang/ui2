@@ -517,7 +517,8 @@ ui2.register_style_plugin(ui2.StylePlugin{
 - **Lint** (`lint`): appends to `StylesheetLintNotes`. See
   `examples/stylesheet_plugins` for all six working together, including a
   file-backed sheet with `@import` and a Reload button that only rebuilds
-  when `stylesheet_file_mtime` changed.
+  when `stylesheet_file_stamp` (the sheet's content plus its `@import`
+  chain) changed.
 
 A missing hook means that extension point stays stock: unclaimed names
 error, unmatched pseudos/queries never match.
