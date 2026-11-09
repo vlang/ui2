@@ -139,7 +139,7 @@ pub fn loading_spinner(config LoadingSpinnerConfig) !Element {
 				}
 				parts << view(part, feedback_ring_cell(diameter / 2, diameter / 2, ring, dot,
 					turn), BoxStyle{
-					bg:     interpolate_color(track, color, spinner_dot_level(-turn))
+					bg:     color_mix(track, color, spinner_dot_level(-turn))
 					radius: dot / 2
 				}, []Element{})
 			}

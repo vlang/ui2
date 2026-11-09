@@ -113,9 +113,9 @@ fn stepper_indicator(frame Rect, index int, item StepperItem, step_state Stepper
 	mut ring := if reached { theme.primary } else { theme.border }
 	mut ink := if reached { theme.primary_foreground } else { theme.muted_foreground }
 	if !enabled {
-		fill = choice_mix(fill, theme.background, 0.45)
-		ring = choice_mix(ring, theme.background, 0.45)
-		ink = choice_mix(ink, fill, 0.35)
+		fill = color_mix(fill, theme.background, 0.45)
+		ring = color_mix(ring, theme.background, 0.45)
+		ink = color_mix(ink, fill, 0.35)
 	}
 	mut children := choice_ring(rect(0, 0, d, d), d / 2, ring, fill, .all, false)
 	if item.icon.len > 0 {

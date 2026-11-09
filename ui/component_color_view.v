@@ -26,7 +26,7 @@ import math
 // color_picker_checker_colors are the light and dark squares behind
 // translucent colors.
 fn color_picker_checker_colors(theme ComponentTheme) (u32, u32) {
-	return theme.background, choice_mix(theme.background, theme.border, 0.75)
+	return theme.background, color_mix(theme.background, theme.border, 0.75)
 }
 
 // color_picker_checker covers frame with a checkerboard of `cell` squares:
@@ -242,7 +242,7 @@ fn color_picker_knob(cx f64, cy f64, d f64, fill u32, theme ComponentTheme) []El
 		view('', rect(cx - d / 2, cy - d / 2, d, d), BoxStyle{
 			bg:            0xffffff
 			radius:        d / 2
-			border_color:  choice_mix(theme.border, 0x000000, 0.3)
+			border_color:  color_mix(theme.border, 0x000000, 0.3)
 			border_left:   1
 			border_top:    1
 			border_right:  1
@@ -278,7 +278,7 @@ fn color_picker_area(config ColorPickerConfig, area Rect, m ColorPickerMetrics) 
 	value := config.value.normalized()
 	g := rect(r, r, area.width, area.height)
 	mut children := color_picker_area_layers(config, g, value.h)
-	children << view('', g, color_picker_border_box(choice_mix(config.theme.border, 0x000000,
+	children << view('', g, color_picker_border_box(color_mix(config.theme.border, 0x000000,
 		0.1), 1, 0), []Element{})
 	if color_picker_focused(config, .area) {
 		children << color_picker_focus_ring(g, config.theme)
@@ -399,7 +399,7 @@ fn color_picker_swatch(config ColorPickerConfig, slot ColorPickerSwatch, selecte
 				border_color:  if selected {
 					config.theme.foreground
 				} else {
-					choice_mix(slot.color, 0x000000, 0.15)
+					color_mix(slot.color, 0x000000, 0.15)
 				}
 				border_left:   edge
 				border_top:    edge

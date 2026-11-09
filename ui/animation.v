@@ -1036,22 +1036,6 @@ fn interpolate(start f64, target f64, progress f64) f64 {
 	return start + (target - start) * progress
 }
 
-fn interpolate_color(start u32, target u32, progress f64) u32 {
-	if progress == 1.0 {
-		return target
-	}
-	start_r := f64((start >> 16) & 0xff)
-	start_g := f64((start >> 8) & 0xff)
-	start_b := f64(start & 0xff)
-	target_r := f64((target >> 16) & 0xff)
-	target_g := f64((target >> 8) & 0xff)
-	target_b := f64(target & 0xff)
-	r := u32(math.round(math.max(0.0, math.min(255.0, interpolate(start_r, target_r, progress)))))
-	g := u32(math.round(math.max(0.0, math.min(255.0, interpolate(start_g, target_g, progress)))))
-	b := u32(math.round(math.max(0.0, math.min(255.0, interpolate(start_b, target_b, progress)))))
-	return (r << 16) | (g << 8) | b
-}
-
 fn apply_animation_targets(start Element, targets AnimationTargets, progress f64) Element {
 	mut x := start.frame.x
 	mut y := start.frame.y
@@ -1080,16 +1064,16 @@ fn apply_animation_targets(start Element, targets AnimationTargets, progress f64
 		rotation = interpolate(rotation, target, progress)
 	}
 	if target := targets.background {
-		background = interpolate_color(background, target, progress)
+		background = color_mix(background, target, progress)
 	}
 	if target := targets.corner_radius {
 		corner_radius = interpolate(corner_radius, target, progress)
 	}
 	if target := targets.text_color {
-		text_color = interpolate_color(text_color, target, progress)
+		text_color = color_mix(text_color, target, progress)
 	}
 	if target := targets.text_background {
-		text_background = interpolate_color(text_background, target, progress)
+		text_background = color_mix(text_background, target, progress)
 	}
 	if target := targets.font_size {
 		font_size = interpolate(font_size, target, progress)
@@ -1126,7 +1110,7 @@ fn apply_animation_targets(start Element, targets AnimationTargets, progress f64
 				set_number_animation_property(result, property.name, interpolate(animation_number_property_value(start, property.name), property.number, progress))
 			}
 			.color {
-				set_color_animation_property(result, property.name, interpolate_color(animation_color_property_value(start, property.name), property.color, progress))
+				set_color_animation_property(result, property.name, color_mix(animation_color_property_value(start, property.name), property.color, progress))
 			}
 		}
 	}

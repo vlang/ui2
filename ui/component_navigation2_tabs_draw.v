@@ -22,18 +22,18 @@ struct TabBarColors {
 }
 
 fn tab_bar_colors(theme ComponentTheme) TabBarColors {
-	bar := popover_blend(theme.background, theme.muted, 0.8)
+	bar := color_mix(theme.background, theme.muted, 0.8)
 	return TabBarColors{
 		bar:          bar
 		track:        theme.muted
 		surface:      theme.background
 		fg:           theme.muted_foreground
 		active:       theme.foreground
-		disabled:     popover_blend(theme.muted_foreground, theme.background, 0.5)
+		disabled:     color_mix(theme.muted_foreground, theme.background, 0.5)
 		border:       theme.border
 		hover:        theme.muted
-		folder_hover: popover_blend(bar, theme.foreground, 0.07)
-		badge:        popover_blend(theme.background, theme.foreground, 0.1)
+		folder_hover: color_mix(bar, theme.foreground, 0.07)
+		badge:        color_mix(theme.background, theme.foreground, 0.1)
 		primary:      theme.primary
 		primary_fg:   theme.primary_foreground
 	}
@@ -98,7 +98,7 @@ struct TabLook {
 fn tab_bar_text_color(variant TabVariant, item TabBarItem, look TabLook, colors TabBarColors) u32 {
 	if !item.enabled {
 		return if look.selected && variant == .pill {
-			popover_blend(colors.primary_fg, colors.primary, 0.5)
+			color_mix(colors.primary_fg, colors.primary, 0.5)
 		} else {
 			colors.disabled
 		}
@@ -155,7 +155,7 @@ fn tab_bar_tab_box(config TabBarConfig, item TabBarItem, look TabLook, frame Rec
 				if item.enabled {
 					colors.primary
 				} else {
-					popover_blend(colors.primary, colors.surface, 0.5)
+					color_mix(colors.primary, colors.surface, 0.5)
 				}
 			} else {
 				colors.border
@@ -194,7 +194,7 @@ fn tab_bar_badge_element(item TabBarItem, frame Rect, m TabBarMetrics, theme Com
 	}
 	return Element{
 		...view('', frame, BoxStyle{
-			bg:     if item.enabled { bg } else { popover_blend(bg, colors.surface, 0.5) }
+			bg:     if item.enabled { bg } else { color_mix(bg, colors.surface, 0.5) }
 			radius: frame.height / 2
 		}, [
 			label('', item.badge, rect(0, 0, frame.width, frame.height), TextStyle{
@@ -359,7 +359,7 @@ fn tab_bar_indicator(config TabBarConfig, item TabBarItem, frame Rect, strip_thi
 				bg:     if enabled {
 					colors.primary
 				} else {
-					popover_blend(colors.primary, colors.surface, 0.5)
+					color_mix(colors.primary, colors.surface, 0.5)
 				}
 				radius: math.min(frame.width, frame.height) / 2
 			}

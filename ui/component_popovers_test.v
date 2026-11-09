@@ -1069,9 +1069,9 @@ fn test_split_dropdown_button() {
 		'', false, .medium)
 }
 
-fn test_popover_blend() {
-	assert popover_blend(0x000000, 0xffffff, 0) == 0x000000
-	assert popover_blend(0x000000, 0xffffff, 1) == 0xffffff
-	assert popover_blend(0x000000, 0xfefefe, 0.5) == 0x7f7f7f
-	assert popover_blend(0x102030, 0x102030, 0.3) == 0x102030
+fn test_color_mix_matches_popover_blend() {
+	assert color_mix(0x000000, 0xffffff, 0) == 0x000000
+	assert color_mix(0x000000, 0xffffff, 1) == 0xffffff
+	assert color_mix(0x000000, 0xfefefe, 0.5) == 0x7f7f7f
+	assert color_mix(0x102030, 0x102030, 0.3) == 0x102030
 }
