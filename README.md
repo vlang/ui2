@@ -545,6 +545,35 @@ gradient's per-stop opacity, and it draws no shadows: Win32 child windows cannot
 paint outside themselves. Screenshots taken with `UI2_SCREENSHOT_PATH` on AppKit
 do not show CoreAnimation shadows, which `cacheDisplayInRect:` does not render.
 
+## Styling
+
+`ui2` stylesheets (`u2ss`) bring QSS/CSS-style rules to every backend:
+type, `#id` and `.class` selectors, `:hover`/`:disabled` states, `@media`
+and `@container` queries, variables, and light/dark blocks. The cascade is
+theme tokens, then the global sheet, then per-subtree scopes, then inline
+`BoxStyle`/`TextStyle` — which always win, so adopting a sheet never breaks
+existing builders.
+
+```v
+ui2.set_global_stylesheet(ui2.parse_stylesheet('
+@accent: #2563eb;
+light { @bg: #f1f5f9; @ink: #172033; }
+dark  { @bg: #172033; @ink: #f8fafc; }
+Button { background: @accent; color: white; border-radius: 6px; }
+Button:hover { opacity: 0.92; }
+Button:disabled { opacity: 0.4; }
+Label.title { font-size: 22px; font-weight: bold; }
+@media (max-width: 560px) { Label.title { font-size: 18px; } }
+') or { panic(err) })
+```
+
+`examples/stylesheet_demo` is the first tour, `examples/stylesheet_gallery`
+the deep showcase, `examples/stylesheet_responsive` splits layout (V) from
+style (sheet), and `examples/stylesheet_theme` is a variable-driven
+accent/mode studio. The full guide — selectors, specificity, every property,
+media/container reference, scoping, the DSL, lint, dark mode, platform
+adaptation, migration and troubleshooting — is [docs/stylesheet.md](docs/stylesheet.md).
+
 ## Backend capabilities
 
 Call `control_support(kind)` to query support. macOS implements every shared
@@ -1345,6 +1374,16 @@ Typed-VML ports from `v-ui` include:
 - `v run examples/custom_window/main.v` — a borderless desktop widget with
   ui2-drawn chrome, draggable content, and genuinely transparent space between
   its rounded surfaces on the native macOS and Windows backends.
+- `v run examples/stylesheet_demo/main.v` — the stylesheet first tour:
+  global, scoped and DSL-built rules, light/dark toggle, hover, disabled and
+  checked states.
+- `v run examples/stylesheet_gallery/main.v` — the deep stylesheet showcase:
+  section nav, container queries on two card widths, an accent cycler, and a
+  live query readout.
+- `v run examples/stylesheet_responsive/main.v` — bounds-driven columns in V
+  with media and container breakpoints in the sheet.
+- `v run examples/stylesheet_theme/main.v` — four accents times
+  light/dark/system from one variable sheet with a gradient hero.
 
 Run the calculator demo with:
 
