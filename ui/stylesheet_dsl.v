@@ -63,8 +63,10 @@ pub fn style_rule_guarded(selector string, props map[string]string, media_src st
 
 // stylesheet_from_rules bundles DSL-built rules into a Stylesheet.
 pub fn stylesheet_from_rules(rules []StyleRule, variables map[string]string) Stylesheet {
+	indexed := stylesheet_index_rules(rules)
 	return Stylesheet{
-		rules:     rules.clone()
-		variables: variables.clone()
+		rules:      rules.clone()
+		variables:  variables.clone()
+		rule_index: indexed
 	}
 }

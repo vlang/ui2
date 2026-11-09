@@ -74,6 +74,7 @@ fn v_style_sheet(node &VNode) !Stylesheet {
 		variables:  variables
 		light_vars: light_vars
 		dark_vars:  dark_vars
+		rule_index: stylesheet_index_rules(rules)
 	}
 }
 
@@ -109,6 +110,7 @@ fn v_inline_style(node &VNode, el Element, frame Rect) !Element {
 	mut warnings := []StylesheetWarning{}
 	mut color_cache := map[string]ComponentThemeToken{}
 	mut len_cache := map[string]f64{}
+	mut split_cache := map[string][]string{}
 	mut out := el
 	for decl in sheet.rules[0].declarations {
 		if decl.prop.starts_with('--') {
@@ -118,7 +120,7 @@ fn v_inline_style(node &VNode, el Element, frame Rect) !Element {
 			return error('invalid `style` on <${node.tag}> (line ${node.line}): ${err.msg()}')
 		}
 		out = apply_declaration(&el, out, decl.prop, value, lctx, mut warnings,
-			mut color_cache, mut len_cache)
+			mut color_cache, mut len_cache, mut split_cache)
 	}
 	if warnings.len > 0 {
 		first := warnings[0]

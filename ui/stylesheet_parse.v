@@ -73,7 +73,8 @@ pub mut:
 	variables  map[string]string
 	light_vars map[string]string
 	dark_vars  map[string]string
-	imports    []string // `@import` paths in source order, for load_stylesheet
+	imports    []string       // `@import` paths in source order, for load_stylesheet
+	rule_index StyleRuleIndex // subject buckets; empty on hand-built sheets
 }
 
 // resolve_var reads a `@name` or `--name` variable: dark-mode value first
@@ -131,6 +132,7 @@ pub fn parse_stylesheet(source string) !Stylesheet {
 		light_vars: parser.light_vars
 		dark_vars:  parser.dark_vars
 		imports:    parser.imports
+		rule_index: stylesheet_index_rules(rules)
 	}
 }
 
@@ -192,6 +194,7 @@ fn load_stylesheet_file(path string, mut visited []string) !Stylesheet {
 		light_vars: light_vars
 		dark_vars:  dark_vars
 		imports:    sheet.imports.clone()
+		rule_index: stylesheet_index_rules(rules)
 	}
 }
 

@@ -26,6 +26,76 @@ pub:
 	count int // number of siblings including self
 }
 
+// StyleRuleIndex files a sheet's rules by their selectors' subject (the
+// rightmost compound): kind, id, and class buckets plus a universal bucket
+// for subjects constraining none of those. Per element the cascade gathers
+// only the buckets the element can match instead of attempting every rule.
+// Built once per sheet at construction; sheets assembled by hand (tests,
+// ad-hoc literals) carry an empty index and fall back to a full scan.
+pub struct StyleRuleIndex {
+pub:
+	by_kind   map[string][]int
+	by_id     map[string][]int
+	by_class  map[string][]int
+	universal []int
+}
+
+// stylesheet_index_rules files rule indices by subject. Every rule lands in
+// at least one bucket, so a non-empty index always covers a non-empty sheet.
+pub fn stylesheet_index_rules(rules []StyleRule) StyleRuleIndex {
+	mut by_kind := map[string][]int{}
+	mut by_id := map[string][]int{}
+	mut by_class := map[string][]int{}
+	mut universal := []int{}
+	for rule_index, rule in rules {
+		for sel in rule.selectors {
+			if sel.parts.len == 0 {
+				universal << rule_index
+				continue
+			}
+			subject := sel.parts[sel.parts.len - 1]
+			mut filed := false
+			if subject.id.len > 0 {
+				mut slot := by_id[subject.id] or { []int{} }
+				slot << rule_index
+				by_id[subject.id] = slot
+				filed = true
+			}
+			for class in subject.classes {
+				mut slot := by_class[class] or { []int{} }
+				slot << rule_index
+				by_class[class] = slot
+				filed = true
+			}
+			if !subject.universal && subject.kind.len > 0 {
+				mut slot := by_kind[subject.kind] or { []int{} }
+				slot << rule_index
+				by_kind[subject.kind] = slot
+				filed = true
+			}
+			if !filed {
+				universal << rule_index
+			}
+		}
+	}
+	return StyleRuleIndex{
+		by_kind:   by_kind
+		by_id:     by_id
+		by_class:  by_class
+		universal: universal
+	}
+}
+
+// stylesheet_index_covers reports whether a sheet carries a usable index.
+// Hand-built sheets (empty index, non-empty rules) fall back to full scan.
+fn stylesheet_index_covers(sheet Stylesheet) bool {
+	if sheet.rules.len == 0 {
+		return false
+	}
+	return sheet.rule_index.universal.len > 0 || sheet.rule_index.by_kind.len > 0
+		|| sheet.rule_index.by_id.len > 0 || sheet.rule_index.by_class.len > 0
+}
+
 // stylesheet_selector_matches reports whether sel matches el.
 pub fn stylesheet_selector_matches(sel StyleSelector, el Element, ancestors []StyleAncestor, index int, count int, env StyleMatchEnv) bool {
 	// Rightmost part matches the element itself; walk left through ancestors.
