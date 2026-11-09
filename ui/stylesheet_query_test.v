@@ -85,7 +85,7 @@ fn test_media_rejects_unclosed_block() {
 	if _ := parse_stylesheet('@media (platform: windows) { Button { background: red; }') {
 		assert false, 'unclosed @media must fail'
 	} else {
-		assert err.msg().contains('unclosed query block')
+		assert err.msg().contains('unclosed')
 	}
 }
 

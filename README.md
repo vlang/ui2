@@ -1384,6 +1384,10 @@ Typed-VML ports from `v-ui` include:
   with media and container breakpoints in the sheet.
 - `v run examples/stylesheet_theme/main.v` — four accents times
   light/dark/system from one variable sheet with a gradient hero.
+- `v run examples/stylesheet_plugins/main.v` — the plugin system:
+  a custom `theme()` function, `@supports` at-rules, a `:--has-tooltip`
+  pseudo-class, a debug transform, a lint rule, `@import` across files,
+  and mtime-gated live reload.
 
 Run the calculator demo with:
 

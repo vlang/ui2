@@ -73,6 +73,7 @@ pub mut:
 	variables  map[string]string
 	light_vars map[string]string
 	dark_vars  map[string]string
+	imports    []string // `@import` paths in source order, for load_stylesheet
 }
 
 // resolve_var reads a `@name` or `--name` variable: dark-mode value first
@@ -105,23 +106,93 @@ const style_pseudo_with_arg = ['nth-child']
 struct StyleParser {
 	src string
 mut:
-	pos  int
-	line int = 1
-	col  int = 1
+	pos        int
+	line       int = 1
+	col        int = 1
+	variables  map[string]string
+	light_vars map[string]string
+	dark_vars  map[string]string
+	imports    []string
 }
 
 // parse_stylesheet parses a stylesheet string into a Stylesheet.
 pub fn parse_stylesheet(source string) !Stylesheet {
 	mut parser := StyleParser{
-		src: source
+		src:        source
+		variables:  map[string]string{}
+		light_vars: map[string]string{}
+		dark_vars:  map[string]string{}
+		imports:    []string{}
 	}
-	return parser.parse()!
+	rules := parser.parse_block([]MediaQuery{}, []ContainerQuery{}, true)!
+	return Stylesheet{
+		rules:      rules
+		variables:  parser.variables
+		light_vars: parser.light_vars
+		dark_vars:  parser.dark_vars
+		imports:    parser.imports
+	}
 }
 
-// load_stylesheet reads a `.u2ss` file and parses it.
+// load_stylesheet reads a `.u2ss` file and its `@import` chain, splicing
+// imported files in place (depth-first, each file once). Imports resolve
+// relative to the importing file; cycles terminate on the second visit.
 pub fn load_stylesheet(path string) !Stylesheet {
-	source := os.read_file(path) or { return error('stylesheet: cannot read "${path}": ${err.msg()}') }
-	return parse_stylesheet(source)!
+	mut visited := []string{}
+	return load_stylesheet_file(path, mut visited)!
+}
+
+fn load_stylesheet_file(path string, mut visited []string) !Stylesheet {
+	absolute := os.real_path(path)
+	if absolute == '' {
+		return error('stylesheet: cannot resolve "${path}"')
+	}
+	if absolute in visited {
+		return Stylesheet{}
+	}
+	visited << absolute
+	source := os.read_file(path) or {
+		return error('stylesheet: cannot read "${path}": ${err.msg()}')
+	}
+	sheet := parse_stylesheet(source)!
+	if sheet.imports.len == 0 {
+		return sheet
+	}
+	base := os.dir(absolute)
+	mut rules := []StyleRule{}
+	mut variables := map[string]string{}
+	mut light_vars := map[string]string{}
+	mut dark_vars := map[string]string{}
+	for name in sheet.imports {
+		sub := load_stylesheet_file(os.join_path(base, name), mut visited)!
+		rules << sub.rules
+		for key, value in sub.variables {
+			variables[key] = value
+		}
+		for key, value in sub.light_vars {
+			light_vars[key] = value
+		}
+		for key, value in sub.dark_vars {
+			dark_vars[key] = value
+		}
+	}
+	rules << sheet.rules
+	for key, value in sheet.variables {
+		variables[key] = value
+	}
+	for key, value in sheet.light_vars {
+		light_vars[key] = value
+	}
+	for key, value in sheet.dark_vars {
+		dark_vars[key] = value
+	}
+	return Stylesheet{
+		rules:      rules
+		variables:  variables
+		light_vars: light_vars
+		dark_vars:  dark_vars
+		imports:    sheet.imports.clone()
+	}
 }
 
 fn style_err(line int, col int, msg string) string {
@@ -203,57 +274,258 @@ fn (mut p StyleParser) skip_space_and_comments() ! {
 	}
 }
 
-fn (mut p StyleParser) parse() !Stylesheet {
-	mut result := Stylesheet{
-		variables:  map[string]string{}
-		light_vars: map[string]string{}
-		dark_vars:  map[string]string{}
-	}
+// parse_block parses rules until `}` or the end of input. At the top level
+// it also takes variables, theme blocks and `@import`s; inside query blocks
+// only rules and nested blocks belong. Plugin at-rules expand to replacement
+// source parsed recursively with the same media/container context.
+fn (mut p StyleParser) parse_block(media []MediaQuery, containers []ContainerQuery, top_level bool) ![]StyleRule {
+	return p.parse_block_inner(media, containers, top_level, top_level)
+}
+
+// parse_block_inner is parse_block with an independent EOF rule: fragments
+// (at-rule expansions) end at EOF like top-level sheets, but only take
+// rules and nested blocks like query bodies.
+fn (mut p StyleParser) parse_block_inner(media []MediaQuery, containers []ContainerQuery, top_level bool, eof_ok bool) ![]StyleRule {
+	mut rules := []StyleRule{}
 	for {
 		p.skip_space_and_comments()!
 		if p.eof() {
+			if eof_ok {
+				break
+			}
+			return error(style_err(p.line, p.col, 'unclosed block'))
+		}
+		if p.peek() == `}` {
+			if top_level {
+				return error(style_err(p.line, p.col, 'unexpected `}`'))
+			}
+			p.advance()
 			break
 		}
-		// Query blocks: `@media ... { }` / `@container ... { }`. Checked
-		// before variables: every `@`-word would otherwise parse as one.
-		// The keyword needs a word boundary so `@mediax` stays a (failing)
-		// variable.
-		if (p.src[p.pos..].starts_with('@media') && style_keyword_end(p.src, p.pos + 6))
-			|| (p.src[p.pos..].starts_with('@container')
-				&& style_keyword_end(p.src, p.pos + 10)) {
-			for rule in p.parse_query_block([]MediaQuery{}, []ContainerQuery{})! {
-				result.rules << rule
-			}
-			continue
-		}
-		// Variable definitions at top level: `@name:` or `--name:`.
 		if p.peek() == `@` || (p.peek() == `-` && p.pos + 1 < p.src.len && p.src[p.pos + 1] == `-`) {
-			name, value := p.parse_variable_def()!
-			result.variables[name] = value
-			continue
+			if (p.src[p.pos..].starts_with('@media') && style_keyword_end(p.src, p.pos + 6))
+				|| (p.src[p.pos..].starts_with('@container')
+					&& style_keyword_end(p.src, p.pos + 10)) {
+				for rule in p.parse_query_block(media, containers)! {
+					rules << rule
+				}
+				continue
+			}
+			if name := p.plugin_at_rule_name() {
+				prelude, body := p.capture_at_block(name)!
+				replacement := style_plugin_expand_at_rule(name, prelude, body)!
+				for rule in p.parse_fragment(replacement, media, containers)! {
+					rules << rule
+				}
+				continue
+			}
+			if top_level {
+				if p.src[p.pos..].starts_with('@import') && style_keyword_end(p.src, p.pos + 7) {
+					p.imports << p.parse_import()!
+					continue
+				}
+				if p.peek() == `@`
+					|| (p.peek() == `-` && p.pos + 1 < p.src.len && p.src[p.pos + 1] == `-`) {
+					name, value := p.parse_variable_def()!
+					p.variables[name] = value
+					continue
+				}
+			}
+			if top_level {
+				// Theme blocks and plain rules follow below.
+			} else {
+				return error(style_err(p.line, p.col,
+					'only rules and query blocks belong inside a query block'))
+			}
 		}
 		// Theme blocks: `light { ... }` / `dark { ... }`. The keyword needs a
 		// word boundary so a type selector that merely starts with those
 		// letters (e.g. `lights`) parses as a rule instead.
 		if (p.src[p.pos..].starts_with('light') && style_keyword_end(p.src, p.pos + 5))
 			|| (p.src[p.pos..].starts_with('dark') && style_keyword_end(p.src, p.pos + 4)) {
+			if !top_level {
+				return error(style_err(p.line, p.col,
+					'only rules and query blocks belong inside a query block'))
+			}
 			mode, vars := p.parse_theme_block()!
 			if mode == 'light' {
 				for key, value in vars {
-					result.light_vars[key] = value
+					p.light_vars[key] = value
 				}
 			} else {
 				for key, value in vars {
-					result.dark_vars[key] = value
+					p.dark_vars[key] = value
 				}
 			}
 			continue
 		}
-		for rule in p.parse_rule()! {
-			result.rules << rule
+		for rule in p.parse_rule_guarded(media, containers)! {
+			rules << rule
 		}
 	}
-	return result
+	return rules
+}
+
+// parse_fragment parses replacement source from an at-rule expansion with
+// the enclosing query context. Only rules and nested query blocks belong in
+// an expansion; variables and imports stay at the top level.
+fn (mut p StyleParser) parse_fragment(source string, media []MediaQuery, containers []ContainerQuery) ![]StyleRule {
+	mut sub := StyleParser{
+		src: source
+	}
+	return sub.parse_block_inner(media, containers, false, true)
+}
+
+// plugin_at_rule_name reports the claimed `@name` at pos, or none when the
+// `@`-word is a builtin, an unknown at-rule, or not an at-rule at all.
+fn (mut p StyleParser) plugin_at_rule_name() ?string {
+	if p.eof() || p.peek() != `@` {
+		return none
+	}
+	mut end := p.pos + 1
+	for end < p.src.len && is_style_name_char(p.src[end]) {
+		end++
+	}
+	name := p.src[p.pos + 1..end]
+	if name == '' || !style_plugin_has_at_rule(name) {
+		return none
+	}
+	return name
+}
+
+// capture_at_block consumes `@name`, its prelude, and its balanced `{...}`
+// body, returning both as text. Braces inside strings and comments do not
+// count.
+fn (mut p StyleParser) capture_at_block(name string) !(string, string) {
+	for _ in 0 .. name.len + 1 {
+		p.advance()
+	}
+	mut prelude := []u8{}
+	for !p.eof() && p.peek() != `{` {
+		prelude << p.advance()
+	}
+	if p.eof() {
+		return error(style_err(p.line, p.col, 'expected `{` after "@${name}"'))
+	}
+	p.advance()
+	mut body := []u8{}
+	mut depth := 1
+	mut quote := u8(0)
+	mut line_comment := false
+	for !p.eof() && depth > 0 {
+		ch := p.peek()
+		if line_comment {
+			p.advance()
+			if ch == `\n` {
+				line_comment = false
+			}
+			continue
+		}
+		if quote != 0 {
+			p.advance()
+			if ch == quote {
+				quote = 0
+			}
+			continue
+		}
+		if ch == `"` || ch == `'` {
+			quote = ch
+			body << p.advance()
+			continue
+		}
+		if ch == `/` && p.pos + 1 < p.src.len && p.src[p.pos + 1] == `/` {
+			line_comment = true
+			p.advance()
+			continue
+		}
+		if ch == `/` && p.pos + 1 < p.src.len && p.src[p.pos + 1] == `*` {
+			p.advance()
+			p.advance()
+			mut closed := false
+			for !p.eof() {
+				if p.peek() == `*` && p.pos + 1 < p.src.len && p.src[p.pos + 1] == `/` {
+					p.advance()
+					p.advance()
+					closed = true
+					break
+				}
+				p.advance()
+			}
+			if !closed {
+				return error(style_err(p.line, p.col, 'unclosed comment'))
+			}
+			continue
+		}
+		if ch == `{` {
+			depth++
+		} else if ch == `}` {
+			depth--
+			if depth == 0 {
+				p.advance()
+				break
+			}
+		}
+		body << p.advance()
+	}
+	if depth != 0 {
+		return error(style_err(p.line, p.col, 'unclosed "@${name}" block'))
+	}
+	return prelude.bytestr().trim_space(), body.bytestr()
+}
+
+// parse_import parses `@import "path";` or `@import url(path);`. Paths
+// resolve relative to the importing file when loaded from disk.
+fn (mut p StyleParser) parse_import() !string {
+	for _ in 0 .. '@import'.len {
+		p.advance()
+	}
+	p.skip_space_and_comments()!
+	if p.eof() {
+		return error(style_err(p.line, p.col, 'expected a path after "@import"'))
+	}
+	mut path := ''
+	if p.peek() == `"` || p.peek() == `'` {
+		quote := p.advance()
+		mut out := []u8{}
+		for !p.eof() && p.peek() != quote {
+			out << p.advance()
+		}
+		if p.eof() {
+			return error(style_err(p.line, p.col, 'unclosed "@import" path'))
+		}
+		p.advance()
+		path = out.bytestr().trim_space()
+	} else {
+		word := p.parse_ident()!.to_lower()
+		if word != 'url' || p.eof() || p.peek() != `(` {
+			return error(style_err(p.line, p.col, 'expected `"path"` or `url(path)` after "@import"'))
+		}
+		p.advance()
+		mut out := []u8{}
+		for !p.eof() && p.peek() != `)` {
+			out << p.advance()
+		}
+		if p.eof() {
+			return error(style_err(p.line, p.col, 'unclosed `url()` in "@import"'))
+		}
+		p.advance()
+		trimmed := out.bytestr().trim_space()
+		if (trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len >= 2)
+			|| (trimmed.starts_with("'") && trimmed.ends_with("'") && trimmed.len >= 2) {
+			path = trimmed[1..trimmed.len - 1].trim_space()
+		} else {
+			path = trimmed
+		}
+	}
+	if path == '' {
+		return error(style_err(p.line, p.col, 'empty "@import" path'))
+	}
+	p.skip_space_and_comments()!
+	if p.eof() || p.peek() != `;` {
+		return error(style_err(p.line, p.col, 'expected `;` after "@import" path'))
+	}
+	p.advance()
+	return path
 }
 
 // parse_variable_def parses `@name: value;` or `--name: value;`.
@@ -383,10 +655,6 @@ fn (mut p StyleParser) parse_raw_value() !string {
 		out << p.advance()
 	}
 	return error(style_err(p.line, p.col, 'unexpected end inside a value'))
-}
-
-fn (mut p StyleParser) parse_rule() ![]StyleRule {
-	return p.parse_rule_guarded([]MediaQuery{}, []ContainerQuery{})!
 }
 
 // parse_rule_guarded parses one rule plus any nested rules, flattening the
@@ -722,7 +990,7 @@ fn (mut p StyleParser) parse_compound() !StyleSelectorPart {
 			name := p.parse_ident()!.to_lower()
 			mut arg := ''
 			if !p.eof() && p.peek() == `(` {
-				if name !in style_pseudo_with_arg {
+				if name !in style_pseudo_with_arg && !style_plugin_has_pseudo(name) {
 					return error(style_err(p.line, p.col, '`:${name}` takes no argument'))
 				}
 				p.advance()
@@ -730,7 +998,8 @@ fn (mut p StyleParser) parse_compound() !StyleSelectorPart {
 			} else if name in style_pseudo_with_arg {
 				return error(style_err(p.line, p.col, '`:${name}` needs an argument'))
 			}
-			if name !in style_pseudo_no_arg && name !in style_pseudo_with_arg {
+			if name !in style_pseudo_no_arg && name !in style_pseudo_with_arg
+				&& !style_plugin_has_pseudo(name) {
 				return error(style_err(p.line, p.col, 'unknown pseudo-class `:${name}`'))
 			}
 			if name == 'nth-child' {

@@ -78,6 +78,21 @@ fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, 
 		out, child_inherited = cascade_props(el, ancestors, index, count, active, env,
 			qenv, inherited, mut warnings)
 	}
+	// Plugin transforms run post-cascade, top-down: children see the
+	// transformed parent. Identity and kind are pinned so a transform
+	// cannot break reconciliation or dispatch; children are replaced
+	// below regardless.
+	transformed := style_plugin_transform(out, env)
+	if transformed.id != out.id || transformed.kind != out.kind {
+		// Keep the tree valid even for a misbehaving plugin.
+		out = Element{
+			...transformed
+			id:   out.id
+			kind: out.kind
+		}
+	} else {
+		out = transformed
+	}
 	mut children := []Element{cap: el.children.len}
 	for child_index, child in el.children {
 		ancestors_next := [...ancestors, StyleAncestor{

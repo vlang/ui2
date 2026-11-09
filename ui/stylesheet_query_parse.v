@@ -144,7 +144,19 @@ fn (mut p StyleParser) parse_condition_value() !string {
 fn style_validate_condition(feature string, op string, value string, in_container bool) !MediaCondition {
 	if feature !in ['orientation', 'platform', 'pointer', 'prefers-color-scheme', 'width', 'height',
 		'resolution'] {
-		return error('unknown query feature "${feature}"')
+		if in_container || !style_plugin_has_media(feature) {
+			return error('unknown query feature "${feature}"')
+		}
+		// Plugin-owned features pass through untouched: the plugin validates
+		// the value at match time.
+		if value.len == 0 {
+			return error('"${feature}" needs a value')
+		}
+		return MediaCondition{
+			feature: feature
+			op:      op
+			value:   value.to_lower()
+		}
 	}
 	if in_container && feature !in ['width', 'height'] {
 		return error('"${feature}" is a media feature; containers test width/height only')
@@ -327,34 +339,5 @@ fn (mut p StyleParser) parse_query_block(m_acc []MediaQuery, c_acc []ContainerQu
 		return error(style_err(p.line, p.col, 'expected `{` after the query'))
 	}
 	p.advance()
-	mut rules := []StyleRule{}
-	for {
-		p.skip_space_and_comments()!
-		if p.eof() {
-			return error(style_err(p.line, p.col, 'unclosed query block'))
-		}
-		if p.peek() == `}` {
-			p.advance()
-			break
-		}
-		if p.peek() == `@` {
-			if (p.src[p.pos..].starts_with('@media') && style_keyword_end(p.src, p.pos + 6))
-				|| (p.src[p.pos..].starts_with('@container')
-					&& style_keyword_end(p.src, p.pos + 10)) {
-				for rule in p.parse_query_block(media, containers)! {
-					rules << rule
-				}
-				continue
-			}
-			return error(style_err(p.line, p.col, 'only rules and query blocks belong inside a query block'))
-		}
-		if (p.src[p.pos..].starts_with('light') && style_keyword_end(p.src, p.pos + 5))
-			|| (p.src[p.pos..].starts_with('dark') && style_keyword_end(p.src, p.pos + 4)) {
-			return error(style_err(p.line, p.col, 'only rules and query blocks belong inside a query block'))
-		}
-		for rule in p.parse_rule_guarded(media, containers)! {
-			rules << rule
-		}
-	}
-	return rules
+	return p.parse_block(media, containers, false)
 }

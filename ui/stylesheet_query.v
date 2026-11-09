@@ -168,7 +168,8 @@ fn media_condition_matches(condition MediaCondition, env StyleQueryEnv) bool {
 			return query_resolution_matches(condition.op, condition.value, env.dpi)
 		}
 		else {
-			return false
+			return style_plugin_match_media(condition.feature, condition.op, condition.value,
+				env)
 		}
 	}
 }

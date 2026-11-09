@@ -118,10 +118,16 @@ which authored them.
   (`vw/vh/vmin/vmax` + `sv-/lv-/dv-`), container units (`cqw/cqh/cqmin/cqmax`),
   `env(safe-area-inset-*, fallback)` with per-backend insets, `calc()` family
   + trig, `color-mix(in srgb)`, selector nesting with `&`; `stylesheet_math.v`.
-- **P6 (done, this commit):** CSS custom properties with inheritance,
+- **P6 (done):** CSS custom properties with inheritance,
   `var(--x, fallback)`, top-level `light-dark()`, full modern color
   (lab/lch/oklab/oklch/hwb/gray/color() + relative `from` syntax),
   docs + gallery var() showcase.
+- **P7 (done, this commit):** Vite-style plugin system
+  (`ui/stylesheet_plugin.v`): custom value functions (number + color),
+  custom at-rules (parse-time expansion), custom pseudo-classes, custom
+  `@media` features, post-cascade transforms, lint rules, `@import` with
+  cycle-safe file loading, mtime-based live-reload helpers,
+  `examples/stylesheet_plugins`, docs + README updates.
 - Non-goals v1: layout selectors, animations/transitions,
   `!important`. `refresh_element` (AppKit) intentionally bypasses
   the sheet: it reconciles a caller-supplied subtree, not a fresh build.

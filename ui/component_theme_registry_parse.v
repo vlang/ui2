@@ -105,11 +105,38 @@ pub fn component_theme_token(value string) !ComponentThemeToken {
 			return style_parse_function_color(function, inner)!
 		}
 	}
+	split_name, split_inner := style_split_function_call(source)
+	if split_name != '' && style_plugin_has_function(split_name) {
+		result := style_plugin_eval_function(split_name, split_inner, StyleLengthCtx{})!
+		match result {
+			ComponentThemeToken {
+				return result
+			}
+			else {
+				return error('"${split_name}()" is not a color')
+			}
+		}
+	}
 	color, alpha := theme_parse_color(source)!
 	return ComponentThemeToken{
 		color:   color
 		opacity: alpha
 	}
+}
+
+// style_split_function_call splits `name(inner)` into its parts, or returns
+// empty strings when the value is not a plain function call.
+fn style_split_function_call(source string) (string, string) {
+	trimmed := source.trim_space()
+	open := trimmed.index('(') or { return '', '' }
+	if !trimmed.ends_with(')') {
+		return '', ''
+	}
+	name := trimmed[..open].trim_space().to_lower()
+	if name == '' || name.contains(' ') || name.contains('\t') {
+		return '', ''
+	}
+	return name, trimmed[open + 1..trimmed.len - 1]
 }
 
 // style_is_relative_function reports whether a whole value is a relative

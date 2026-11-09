@@ -30,7 +30,7 @@ pub:
 pub fn stylesheet_selector_matches(sel StyleSelector, el Element, ancestors []StyleAncestor, index int, count int, env StyleMatchEnv) bool {
 	// Rightmost part matches the element itself; walk left through ancestors.
 	right := sel.parts.len - 1
-	if !style_part_matches(sel.parts[right], el, index, count, env) {
+	if !style_part_matches(sel.parts[right], el, ancestors, index, count, env) {
 		return false
 	}
 	mut ancestor_pos := ancestors.len - 1
@@ -41,7 +41,7 @@ pub fn stylesheet_selector_matches(sel StyleSelector, el Element, ancestors []St
 		}
 		if combinator == .child {
 			ancestor := ancestors[ancestor_pos]
-			if !style_part_matches(sel.parts[part_index], ancestor.el, ancestor.index,
+			if !style_part_matches(sel.parts[part_index], ancestor.el, ancestors, ancestor.index,
 				ancestor.count, env) {
 				return false
 			}
@@ -50,7 +50,7 @@ pub fn stylesheet_selector_matches(sel StyleSelector, el Element, ancestors []St
 			mut found := false
 			for ancestor_pos >= 0 {
 				ancestor := ancestors[ancestor_pos]
-				if style_part_matches(sel.parts[part_index], ancestor.el, ancestor.index,
+				if style_part_matches(sel.parts[part_index], ancestor.el, ancestors, ancestor.index,
 					ancestor.count, env) {
 					found = true
 					ancestor_pos--
@@ -66,7 +66,7 @@ pub fn stylesheet_selector_matches(sel StyleSelector, el Element, ancestors []St
 	return true
 }
 
-fn style_part_matches(part StyleSelectorPart, el Element, index int, count int, env StyleMatchEnv) bool {
+fn style_part_matches(part StyleSelectorPart, el Element, ancestors []StyleAncestor, index int, count int, env StyleMatchEnv) bool {
 	if !part.universal && part.kind.len > 0 {
 		if part.kind.to_lower() != el.kind.str() {
 			return false
@@ -81,7 +81,7 @@ fn style_part_matches(part StyleSelectorPart, el Element, index int, count int, 
 		}
 	}
 	for pseudo in part.pseudos {
-		if !style_pseudo_matches(pseudo, el, index, count, env) {
+		if !style_pseudo_matches(pseudo, el, ancestors, index, count, env) {
 			return false
 		}
 	}
@@ -101,7 +101,7 @@ fn style_id_matches(el Element, want string) bool {
 	return el.action_id.len > 0 && el.action_id == want
 }
 
-fn style_pseudo_matches(pseudo StylePseudo, el Element, index int, count int, env StyleMatchEnv) bool {
+fn style_pseudo_matches(pseudo StylePseudo, el Element, ancestors []StyleAncestor, index int, count int, env StyleMatchEnv) bool {
 	match pseudo.name {
 		'hover' { return style_id_matches(el, env.hovered) }
 		'pressed' { return style_id_matches(el, env.pressed) }
@@ -117,7 +117,9 @@ fn style_pseudo_matches(pseudo StylePseudo, el Element, index int, count int, en
 		'nth-child' {
 			return style_nth_matches(pseudo.arg, index)
 		}
-		else { return false }
+		else {
+			return style_plugin_match_pseudo(pseudo, el, ancestors, index, count, env)
+		}
 	}
 }
 

@@ -17,8 +17,8 @@ import math
 // StyleLengthCtx carries everything a length can resolve against. The
 // container basis is the matched query container, else the parent frame,
 // else the window (the CSS small-viewport fallback).
-struct StyleLengthCtx {
-mut:
+pub struct StyleLengthCtx {
+pub mut:
 	win_w  f64
 	win_h  f64
 	cont_w f64
@@ -115,27 +115,34 @@ pub fn query_plain_number(raw string) ?f64 {
 	return if value != value { none } else { value }
 }
 
-enum StyleDim {
+// StyleDim tags a computed math value. Plugins building custom value
+// functions return these.
+pub enum StyleDim {
 	px
 	scalar
 	percent
 	angle
 }
 
-struct StyleValue {
+// StyleValue is one computed math value: pixels, a plain number, a
+// percentage, or radians.
+pub struct StyleValue {
+pub mut:
 	dim   StyleDim
-	value f64 // px, plain number, or radians
+	value f64
 }
 
 struct StyleMathToken {
-	kind string // 'num', 'ident', 'op'
+	kind string // 'num', 'ident', 'op', 'end'
 	num  f64
 	unit string
 	text string
+	at   int // byte offset in the source string
 }
 
 struct StyleMathParser {
-	tokens []StyleMathToken
+	raw_source string
+	tokens     []StyleMathToken
 mut:
 	pos int
 	ctx StyleLengthCtx
@@ -145,9 +152,11 @@ mut:
 // its dimension (scalar, percent or angle). Lengths resolve but are
 // rejected: they are not valid color channels.
 pub fn style_math_channel(raw string, ctx StyleLengthCtx) ?StyleValue {
+	trimmed := raw.trim_space()
 	mut parser := StyleMathParser{
-		tokens: style_math_tokenize(raw.trim_space()) or { return none }
-		ctx:    ctx
+		raw_source: trimmed
+		tokens:     style_math_tokenize(trimmed) or { return none }
+		ctx:        ctx
 	}
 	value := parser.parse_expr() or { return none }
 	if !parser.eof() {
@@ -161,9 +170,11 @@ pub fn style_math_channel(raw string, ctx StyleLengthCtx) ?StyleValue {
 
 // style_length_px resolves a declaration value to logical pixels.
 pub fn style_length_px(raw string, ctx StyleLengthCtx) ?f64 {
+	trimmed := raw.trim_space()
 	mut parser := StyleMathParser{
-		tokens: style_math_tokenize(raw.trim_space()) or { return none }
-		ctx:    ctx
+		raw_source: trimmed
+		tokens:     style_math_tokenize(trimmed) or { return none }
+		ctx:        ctx
 	}
 	value := parser.parse_expr() or { return none }
 	if !parser.eof() {
@@ -285,6 +296,7 @@ fn style_math_tokenize(source string) ![]StyleMathToken {
 				kind: 'num'
 				num:  value
 				unit: source[end..unit_end].to_lower()
+				at:   i
 			}
 			i = unit_end
 			continue
@@ -305,6 +317,7 @@ fn style_math_tokenize(source string) ![]StyleMathToken {
 			tokens << StyleMathToken{
 				kind: 'ident'
 				text: source[i..end].to_lower()
+				at:   i
 			}
 			i = end
 			continue
@@ -314,6 +327,7 @@ fn style_math_tokenize(source string) ![]StyleMathToken {
 			tokens << StyleMathToken{
 				kind: 'op'
 				text: source[i..i + 1]
+				at:   i
 			}
 			i++
 			continue
@@ -505,6 +519,7 @@ fn style_math_number(token StyleMathToken, ctx StyleLengthCtx) !StyleValue {
 
 fn (mut p StyleMathParser) parse_function() !StyleValue {
 	name := p.next().text
+	open := p.peek()
 	p.expect_op('(')!
 	match name {
 		'calc' {
@@ -648,7 +663,50 @@ fn (mut p StyleMathParser) parse_function() !StyleValue {
 			return StyleValue{ dim: .scalar, value: math.atan2(y, x) }
 		}
 		else {
-			return error('unknown function "${name}()"')
+			// Unknown functions belong to plugins. Capture the raw inner
+			// text by token positions so the plugin sees exactly what the
+			// author wrote, including nested calls and comments. `open`
+			// was peeked before `expect_op` consumed it.
+			if !style_plugin_has_function(name) {
+				return error('unknown function "${name}()"')
+			}
+			if open.kind != 'op' || open.text != '(' {
+				return error('expected `(` after "${name}"')
+			}
+			inner_start := open.at + 1
+			// Depth starts at one: the opening `(` was already consumed
+			// by `expect_op` above.
+			mut depth := 1
+			mut close_at := -1
+			for index := p.pos; index < p.tokens.len; index++ {
+				token := p.tokens[index]
+				if token.kind != 'op' {
+					continue
+				}
+				if token.text == '(' {
+					depth++
+				} else if token.text == ')' {
+					depth--
+					if depth == 0 {
+						close_at = token.at
+						p.pos = index + 1
+						break
+					}
+				}
+			}
+			if close_at < 0 {
+				return error('unclosed "${name}()" call')
+			}
+			inner := p.raw_source[inner_start..close_at]
+			result := style_plugin_eval_function(name, inner, p.ctx)!
+			match result {
+				StyleValue {
+					return result
+				}
+				ComponentThemeToken {
+					return error('"${name}()" is not a number')
+				}
+			}
 		}
 	}
 }

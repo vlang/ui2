@@ -17,7 +17,7 @@ module ui2
 // prints them in debug output, and CI can gate on errors.
 
 pub struct StylesheetLintNotes {
-pub:
+pub mut:
 	errors   []string
 	warnings []string
 }
@@ -53,10 +53,12 @@ pub fn stylesheet_lint(sheet Stylesheet) StylesheetLintNotes {
 			stylesheet_lint_value(sheet, decl.value, position, mut warnings, mut errors)
 		}
 	}
-	return StylesheetLintNotes{
+	mut notes := StylesheetLintNotes{
 		errors:   errors
 		warnings: warnings
 	}
+	style_plugin_lint(sheet, mut notes)
+	return notes
 }
 
 // stylesheet_lint_value checks one value's variable references against the

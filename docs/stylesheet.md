@@ -352,6 +352,57 @@ parsed sheet in app state and re-apply on changes (`set_global_stylesheet`
 + `refresh()` when the window is already up; nothing needed before
 `run_window`).
 
+Large sheets split across files with `@import "other.u2ss";` (or
+`@import url(other.u2ss);`), resolved relative to the importing file.
+Imports splice in place, depth-first, each file once — cycles terminate on
+the second visit.
+
+## Plugins
+
+Plugins extend the engine the way Vite plugins extend a build: same
+`register once, hook everywhere` shape, but compiled in — V has no runtime
+module loading, so there are no remote or lazily-loaded plugins. Register
+before parsing (unknown names fail fast without a plugin that claims them):
+
+```v
+ui2.register_style_plugin(ui2.StylePlugin{
+	name:           'demo-kit'
+	functions:      ['theme']
+	eval_function:  theme_lookup
+	at_rules:       ['supports']
+	expand_at_rule: expand_supports
+	pseudos:        ['--has-tooltip']
+	match_pseudo:   has_tooltip
+	transform:      debug_outlines
+	lint:           no_red_literals
+})
+```
+
+- **Custom value functions** (`functions` + `eval_function`): `theme(primary)`
+  or `double(4px)`. The hook gets the raw inner text and the length context
+  and returns a number (`StyleValue`) or color (`ComponentThemeToken`).
+  Unknown functions without a plugin are parse errors.
+- **Custom at-rules** (`at_rules` + `expand_at_rule`): `@supports (x) { ... }`
+  receives the prelude and body as text and returns replacement source,
+  which is parsed with the same enclosing `@media`/`@container` context.
+  This is a parse-time macro: use it for scoping, static gating, or sugar.
+- **Custom pseudo-classes** (`pseudos` + `match_pseudo`): `:--has-tooltip`
+  and friends receive the element, its ancestors and the frame env.
+  Unknown pseudo-classes without a plugin are parse errors, as before.
+- **Custom media features** (`media_features` + `match_media`): gate rules
+  on anything a boolean can express (`@media (brand: acme)`).
+- **Transform** (`transform`): a per-element post pass after the cascade,
+  run top-down so children see the transformed parent. It can only touch
+  existing `Element` fields; `id` and `kind` are pinned to keep
+  reconciliation and dispatch intact.
+- **Lint** (`lint`): appends to `StylesheetLintNotes`. See
+  `examples/stylesheet_plugins` for all six working together, including a
+  file-backed sheet with `@import` and a Reload button that only rebuilds
+  when `stylesheet_file_mtime` changed.
+
+A missing hook means that extension point stays stock: unclaimed names
+error, unmatched pseudos/queries never match.
+
 ## Lint
 
 ```v

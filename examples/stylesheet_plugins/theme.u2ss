@@ -1,0 +1,31 @@
+@import "palette.u2ss";
+
+@accent: #2563eb;
+
+Button {
+	background: theme(primary);
+	color: white;
+	border-radius: 6px;
+	font-size: 14px;
+}
+Button:hover { opacity: 0.92; }
+Button:disabled { opacity: 0.4; }
+Label { color: @ink; font-size: 14px; }
+Label.title { font-size: 22px; font-weight: bold; }
+Label.sub { color: @muted; font-size: 13px; }
+Label.readout { color: @muted; font-size: 12px; }
+View.card {
+	background: @surface;
+	border-radius: 10px;
+	border-color: @line;
+	border-width: 1px;
+}
+
+@supports (container-queries) {
+	View.card { border-radius: 16px; }
+}
+
+Label.help:--has-tooltip {
+	color: @accent;
+	font-weight: bold;
+}
