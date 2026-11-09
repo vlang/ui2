@@ -87,11 +87,24 @@ fn style_part_matches(part StyleSelectorPart, el Element, index int, count int, 
 	return true
 }
 
+// style_id_matches compares a state id against an element. Backends track the
+// hover/press/focus chain by action id (the event identity, falling back to
+// the element id), so either one matches.
+fn style_id_matches(el Element, want string) bool {
+	if want.len == 0 {
+		return false
+	}
+	if el.id == want {
+		return true
+	}
+	return el.action_id.len > 0 && el.action_id == want
+}
+
 fn style_pseudo_matches(pseudo StylePseudo, el Element, index int, count int, env StyleMatchEnv) bool {
 	match pseudo.name {
-		'hover' { return env.hovered.len > 0 && env.hovered == el.id }
-		'pressed' { return env.pressed.len > 0 && env.pressed == el.id }
-		'focused' { return el.focused || (env.focused.len > 0 && env.focused == el.id) }
+		'hover' { return style_id_matches(el, env.hovered) }
+		'pressed' { return style_id_matches(el, env.pressed) }
+		'focused' { return el.focused || style_id_matches(el, env.focused) }
 		'disabled' { return !el.enabled }
 		'enabled' { return el.enabled }
 		'checked' { return el.checked }

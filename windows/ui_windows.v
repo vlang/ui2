@@ -757,7 +757,7 @@ pub fn refresh() {
 	if st.root == unsafe { nil } || st.rendering || voidptr(st.build_screen) == unsafe { nil } {
 		return
 	}
-	declared := st.build_screen()
+	declared := stylesheet_apply_frame(st.build_screen(), stylesheet_windows_env())
 	root := windows_symbol_images_as_labels(apply_widget_animations(declared))
 	validate_element_tree(root) or {
 		eprintln('ui2: ${err}')
@@ -1035,6 +1035,15 @@ pub fn focused_id() string {
 	}
 	key := st.handle_keys[windows_handle_id(focused)] or { return '' }
 	return st.node_ids[key] or { '' }
+}
+
+// stylesheet_windows_env reads this frame's interaction state for the
+// stylesheet cascade. The native backend tracks hover and focus; it has no
+// press-target tracking, so :pressed stays unmatched here.
+fn stylesheet_windows_env() StyleMatchEnv {
+	st := windows_state()
+	hovered := if st.hovered.len > 0 { st.hovered.last() } else { '' }
+	return stylesheet_frame_env(hovered, '', focused_id())
 }
 
 pub fn focused_text_area_id() string {

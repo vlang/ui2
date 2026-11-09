@@ -100,13 +100,15 @@ which authored them.
 
 - **P0 (done, `75f17da`):** `stylesheet_parse.v` — selectors, declarations,
   variables, `light{}/dark{}` blocks, specificity, `file:line:col` errors + tests.
-- **P1 (done, this commit):** `stylesheet_match.v` + `stylesheet_cascade.v`,
+- **P1 (done, `84cc345`):** `stylesheet_match.v` + `stylesheet_cascade.v`,
   `classes` / `ignore_stylesheet` / `stylesheet` on `Element`,
   `apply_stylesheet()` (global + scoped), `stylesheet_dsl.v`.
-- **P2 (next):** state wiring (`hover/press/focus/disable/check/selected` from
-  real events) + Window integration + `stylesheet_demo` example.
-- **P3:** `load_stylesheet()` docs, lint helper, `docs/stylesheet.md`, gradient /
-  shadow shorthands polish.
+- **P2 (done, this commit):** `stylesheet_window.v` (global sheet storage,
+  dark follow/force, `stylesheet_frame_env` / `stylesheet_apply_frame`), live
+  env hooks in the custom (`ui_immediate.c.v`) and native Windows
+  (`windows/ui_windows.v`) build paths, `examples/stylesheet_demo`.
+- **P3 (next):** AppKit/UIKit hooks (same 3-line pattern), lint helper,
+  `docs/stylesheet.md` user guide, gradient/shadow shorthands polish.
 - Non-goals v1: layout selectors, animations/transitions, `@media`,
   nesting, `!important`.
 

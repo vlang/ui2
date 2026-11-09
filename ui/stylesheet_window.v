@@ -1,0 +1,76 @@
+@[has_globals]
+module ui2
+
+// P2 window wiring: one process-wide global sheet plus the per-frame glue.
+//
+// The application owns the sheet: set it before run_window (or at any time
+// and call refresh()), scope tighter rules with with_stylesheet on any View,
+// and inline struct props always win. Backends feed live interaction state
+// through stylesheet_frame_env and call stylesheet_apply_frame on the tree
+// the build function returns; both custom-rendered and native backends use
+// the same cascade, so a sheet behaves identically on either.
+
+__global g_stylesheet_global = Stylesheet{}
+__global g_stylesheet_has_global = false
+__global g_stylesheet_follow_system = true
+__global g_stylesheet_force_dark = false
+
+// set_global_stylesheet installs the process-wide sheet. Call refresh()
+// afterwards when the window is already up; before run_window nothing else
+// is needed.
+pub fn set_global_stylesheet(sheet Stylesheet) {
+	g_stylesheet_global = sheet
+	g_stylesheet_has_global = true
+}
+
+// clear_global_stylesheet removes the process-wide sheet. Call refresh()
+// afterwards when the window is already up.
+pub fn clear_global_stylesheet() {
+	g_stylesheet_global = Stylesheet{}
+	g_stylesheet_has_global = false
+}
+
+// set_stylesheet_follow_system resumes (or stops) tracking the operating
+// system's appearance for stylesheet dark mode. It is on by default.
+pub fn set_stylesheet_follow_system(follow bool) {
+	g_stylesheet_follow_system = follow
+}
+
+// set_stylesheet_dark forces dark (or light) mode for the stylesheet and
+// stops following the system; set_stylesheet_follow_system(true) resumes.
+pub fn set_stylesheet_dark(dark bool) {
+	g_stylesheet_force_dark = dark
+	g_stylesheet_follow_system = false
+}
+
+// stylesheet_dark_mode reports the mode the cascade resolves theme variables
+// with right now.
+pub fn stylesheet_dark_mode() bool {
+	if g_stylesheet_follow_system {
+		return system_appearance() == .dark
+	}
+	return g_stylesheet_force_dark
+}
+
+// stylesheet_frame_env builds the frame's match environment from the live
+// interaction state the backend passes in. Only ids are needed; dark mode
+// comes from stylesheet_dark_mode.
+pub fn stylesheet_frame_env(hovered string, pressed string, focused string) StyleMatchEnv {
+	return StyleMatchEnv{
+		hovered: hovered
+		pressed: pressed
+		focused: focused
+		dark:    stylesheet_dark_mode()
+	}
+}
+
+// stylesheet_apply_frame runs the global sheet over the built tree. Without
+// a global sheet it returns the tree untouched, so unstyled applications
+// pay one boolean check per build. Element.stylesheet scopes apply inside
+// regardless of which backend built the tree.
+pub fn stylesheet_apply_frame(declared Element, env StyleMatchEnv) Element {
+	if !g_stylesheet_has_global {
+		return declared
+	}
+	return apply_stylesheet(declared, g_stylesheet_global, env)
+}
