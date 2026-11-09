@@ -193,7 +193,7 @@ fn tab_bar_badge_element(item TabBarItem, frame Rect, m TabBarMetrics, theme Com
 		theme.colors(item.badge_tone)
 	}
 	return Element{
-		...view('', frame, BoxStyle{
+		...with_classes(view('', frame, BoxStyle{
 			bg:     if item.enabled { bg } else { popover_blend(bg, colors.surface, 0.5) }
 			radius: frame.height / 2
 		}, [
@@ -202,7 +202,7 @@ fn tab_bar_badge_element(item TabBarItem, frame Rect, m TabBarMetrics, theme Com
 				size:  m.small
 				align: .center
 			}),
-		])
+		]), 'tab-badge')
 		key:                 'badge'
 		accessibility_role:  'status'
 		accessibility_label: item.badge
@@ -225,16 +225,16 @@ fn tab_bar_tab_element(config TabBarConfig, item TabBarItem, frame Rect, look Ta
 	mut children := []Element{}
 	if item.icon.len > 0 {
 		children << Element{
-			...tab_bar_symbol(item.icon, pieces.icon, color)
+			...with_classes(tab_bar_symbol(item.icon, pieces.icon, color), 'tab-icon')
 			key: 'icon'
 		}
 	}
 	if item.label.len > 0 {
 		children << Element{
-			...label('', item.label, pieces.label, TextStyle{
+			...with_classes(label('', item.label, pieces.label, TextStyle{
 				color: color
 				size:  m.font
-			})
+			}), 'tab-label')
 			key: 'label'
 		}
 	}
@@ -246,13 +246,13 @@ fn tab_bar_tab_element(config TabBarConfig, item TabBarItem, frame Rect, look Ta
 		mark := math.round(m.close * 0.6)
 		close := pieces.close
 		children << Element{
-			...button_view(tab_bar_close_action(config.id, item.id), close, BoxStyle{
+			...with_classes(button_view(tab_bar_close_action(config.id, item.id), close, BoxStyle{
 				transparent: true
 				radius:      4
 			}, [
 				tab_bar_symbol('xmark', rect(math.round((close.width - mark) / 2), math.round((close.height - mark) / 2),
 					mark, mark), if item.enabled { colors.fg } else { colors.disabled }),
-			])
+			]), 'tab-close')
 			key:                 'close'
 			enabled:             item.enabled
 			tooltip:             'Close'
@@ -270,8 +270,13 @@ fn tab_bar_tab_element(config TabBarConfig, item TabBarItem, frame Rect, look Ta
 	}
 	tab := button_view(tab_bar_tab_action(config.id, item.id), frame, tab_bar_tab_box(config,
 		item, look, frame, horizontal, m, colors), children)
+	styled_tab := if look.selected {
+		with_classes(tab, 'tab', 'selected')
+	} else {
+		with_classes(tab, 'tab')
+	}
 	return Element{
-		...tab
+		...styled_tab
 		action_id:           if item.action_id.len > 0 { item.action_id } else { tab.id }
 		key:                 'tab:' + item.id
 		enabled:             item.enabled
@@ -610,7 +615,8 @@ pub fn tab_bar(config TabBarConfig) !Element {
 		children << tab_bar_slot(layout.suffix, config.suffix, 'suffix')
 	}
 	return component_finish(Element{
-		...view(config.id, config.frame, tab_bar_box(config.variant, colors, m), children)
+		...with_classes(view(config.id, config.frame, tab_bar_box(config.variant, colors, m), children),
+			'tab-bar')
 		accessibility_role:  'tablist'
 		accessibility_label: config.accessibility_label
 	})

@@ -389,6 +389,61 @@ runtime does not feed pointer interaction into the match env, so `:hover`
 / `:pressed` / `:focused` stay quiet there; state, structural, media, and
 container queries all work.
 
+## Styling components
+
+Composite components tag their roots and styleable parts with classes, so
+sheets can target them the same way they target builder-built trees. Type
+selectors already match leaf components (`Text_field`, `Slider`,
+`Switch_control`, …); the classes below cover composite innards that share
+the generic `View`/`Label` kinds:
+
+| Component      | Root class        | Part classes |
+|----------------|-------------------|--------------|
+| Slider         | `slider`          | `slider-track`, `slider-bar`, `slider-fill`, `slider-mark`, `slider-mark-label`, `slider-thumb`, `slider-bubble`, `slider-bubble-text` |
+| Switch         | `switch`          | `switch-track`, `switch-thumb` |
+| Checkbox       | `styled-checkbox` | `checkbox-indicator` |
+| Checkbox group | `checkbox-group`  | `checkbox-option` (keeps `styled-checkbox`) |
+| Radio          | `radio`           | `radio-indicator`, `radio-dot`, `radio-label`, `radio-description` |
+| Radio group    | `radio-group`     | `radio-option` (plus the radio part classes inside) |
+| Toggle         | `toggle`          | — |
+| Button         | `styled-button`   | — |
+| Stepper        | `stepper`         | `stepper-step`, `stepper-connector`, `stepper-indicator` |
+| Rating         | `rating`          | `rating-star` |
+| Select         | `select`          | `select-trigger`, `select-value`, `select-placeholder`, `select-chevron`, `select-clear` |
+| Combobox       | `combobox`        | `combobox-field`, `combobox-icon`, `combobox-clear`, `combobox-toggle` |
+| Picker rows    | —                 | `picker-option`, plus `selected` on the chosen row (select, combobox and command palette popups) |
+| Linear progress| `linear-progress` | `linear-progress-track`, `linear-progress-indicator` |
+| Dialog         | `dialog`          | `dialog-surface`, `dialog-icon`, `dialog-title`, `dialog-description`, `dialog-body`, `dialog-button`, `dialog-button-<primary\|danger\|ghost>`, `dialog-close` |
+| Alert dialog   | `alert-dialog`    | everything `dialog` has |
+| Sheet          | `sheet`           | `sheet-panel`, plus the `dialog-*` panel parts |
+| Popover        | `popover`         | — |
+| Tooltip        | `tooltip`         | `tooltip-surface` |
+| Toolbar        | `toolbar`         | `toolbar-item` |
+| Title bar      | `titlebar`        | `titlebar-item`, `titlebar-title`, `titlebar-window-button` |
+| Status bar     | `statusbar`       | `statusbar-item` |
+| Tab bar        | `tab-bar`         | `tab` (plus `selected` on the active tab), `tab-icon`, `tab-label`, `tab-badge`, `tab-close` |
+| Badge          | `badge`           | `badge-text` |
+| Avatar         | `avatar`          | `avatar-image`, `avatar-initials` |
+| Tag            | `tag`             | `tag-text`, `tag-close` |
+| Number input   | `number-input`    | `number-input-button`, `number-input-divider` (the text area answers to `Text_field`) |
+| OTP input      | `otp-input`       | `otp-input-cell`, `otp-input-separator` (cells are `Text_field`s) |
+
+```vss
+.switch-track { border-color: #2563eb; border-width: 2px; }
+.slider-fill { opacity: 0.75; }
+.picker-option.selected { font-weight: bold; }
+.tab.selected { border-color: #2563eb; }
+```
+
+Two rules of the road. First, builder-set fields still win: sheets can
+only fill properties the builder left at their defaults, so theme-driven
+fills (track backgrounds, thumb colors) stay put while borders,
+box-shadows, opacity, radii and text where unset are all styleable, as are
+descendant and state-qualified rules (`.dialog .slider-track`,
+`Button:disabled`). Second, component state that lives in ids and
+accessibility values (`:checked`, `:selected`) is not a pseudo-class —
+match it with the `selected` classes above instead.
+
 ## Authoring from V
 
 ```v

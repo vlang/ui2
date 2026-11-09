@@ -826,17 +826,23 @@ fn picker_option_row(spec PickerListSpec, row PickerRow, icon_column bool) Eleme
 		})
 	}
 	part := picker_option_part(option.value)
+	row_el := with_classes(button_view(component_part_id(spec.id, part), frame, if highlighted {
+		BoxStyle{
+			bg:     theme.muted
+			radius: m.row_radius
+		}
+	} else {
+		BoxStyle{
+			transparent: true
+		}
+	}, children), 'picker-option')
+	styled := if selected {
+		with_classes(row_el, 'picker-option', 'selected')
+	} else {
+		with_classes(row_el, 'picker-option')
+	}
 	return Element{
-		...button_view(component_part_id(spec.id, part), frame, if highlighted {
-			BoxStyle{
-				bg:     theme.muted
-				radius: m.row_radius
-			}
-		} else {
-			BoxStyle{
-				transparent: true
-			}
-		}, children)
+		...styled
 		key:                 part
 		hoverable:           true
 		enabled:             enabled

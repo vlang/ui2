@@ -138,7 +138,15 @@ which authored them.
   props, inline `style:` declarations, and cascade application at the
   `element_from_vml` / `element_from_vnode` boundary (in-document sheets
   always, global sheet when set). `examples/counter/counter.vml` migrated
-  as the showcase, docs updated.- Non-goals v1: layout selectors, animations/transitions,
+  as the showcase, docs updated.
+- **P10 (done, this commit):** component stylesheet contract: roots and
+  styleable parts of the interactive core carry classes (slider, switch,
+  checkbox/radio (+groups), toggle, button, stepper, rating, select,
+  combobox, picker rows, progress, dialog/alert/sheet, popover, tooltip,
+  toolbar/titlebar/statusbar (+items), tab bar (+tabs), badge, avatar, tag,
+  number/otp inputs) with `selected` state classes where the state is not
+  a pseudo; leaf kinds keep matching by type. Builder-set fields still win
+  over sheets; `ui/component_stylesheet_test.v` pins the contract.- Non-goals v1: layout selectors, animations/transitions,
   `!important`. `refresh_element` (AppKit) intentionally bypasses
   the sheet: it reconciles a caller-supplied subtree, not a fresh build.
 

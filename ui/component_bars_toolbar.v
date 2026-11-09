@@ -72,10 +72,12 @@ pub fn toolbar(config ToolbarConfig) !Element {
 		hovered:    config.hovered
 		focused:    config.focused
 		vertical:   layout.vertical
+		item_class: 'toolbar-item'
 	}
 	children << bars_items(config.items, layout.placements, layout.breadth, look)
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{ transparent: true }, children)
+		...with_classes(view(config.id, config.frame, BoxStyle{ transparent: true }, children),
+			'toolbar')
 		accessibility_role:  'toolbar'
 		accessibility_label: config.label
 	})
