@@ -352,8 +352,9 @@ fn (mut p StyleParser) parse_query_block(m_acc []MediaQuery, c_acc []ContainerQu
 			|| (p.src[p.pos..].starts_with('dark') && style_keyword_end(p.src, p.pos + 4)) {
 			return error(style_err(p.line, p.col, 'only rules and query blocks belong inside a query block'))
 		}
-		rule := p.parse_rule_guarded(media, containers)!
-		rules << rule
+		for rule in p.parse_rule_guarded(media, containers)! {
+			rules << rule
+		}
 	}
 	return rules
 }

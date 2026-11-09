@@ -1160,6 +1160,18 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		}
 	}
 
+	// native_device_scale reports the backing-store pixel ratio.
+	fn native_device_scale() f64 {
+		return scale()
+	}
+
+	// native_safe_insets reports the display safe area. The custom renderer
+	// has no cutout API wired (even on Android), so there is none to report
+	// and env() uses its fallback.
+	fn native_safe_insets() ?SafeInsets {
+		return none
+	}
+
 	fn on_frame(mut app GgApp) {
 		if app.scheduler.is_closed() || app.ctx == unsafe { nil } || app.draining_tasks {
 			return

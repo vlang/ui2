@@ -26,8 +26,6 @@ Label.title { font-size: 22px; font-weight: bold; }
 Label.subtitle { color: @muted; font-size: 13px; }
 Label.h2 { font-size: 16px; font-weight: bold; }
 Label.readout { color: @muted; font-size: 12px; }
-Label.card-title { font-size: 14px; font-weight: bold; }
-Label.card-note { color: @muted; font-size: 13px; }
 Label.dsl-badge { color: @muted; font-size: 12px; font-style: italic; }
 
 Button {
@@ -44,6 +42,10 @@ Button.ghost {
 	color: @accent;
 	border-color: @accent;
 	border-width: 1px;
+}
+Button.ghost:hover {
+	background: color-mix(in srgb, @accent 12%, @surface);
+	opacity: 1;
 }
 Button.danger { background: @danger; }
 Button.danger:hover { background: @danger-hover; opacity: 1; }
@@ -74,10 +76,13 @@ View.card {
 	border-radius: 10px;
 	border-color: @line;
 	border-width: 1px;
+
+	Label.card-title { font-size: 14px; font-weight: bold; }
+	Label.card-note { color: @muted; font-size: 13px; }
 }
 @container card (min-width: 280px) {
-	Label.card-title { font-size: 18px; }
-	Label.card-note { font-size: 14px; }
+	View.card Label.card-title { font-size: 18px; }
+	View.card Label.card-note { font-size: 14px; }
 }
 Checkbox:checked { color: @accent; }
 

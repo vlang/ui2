@@ -324,6 +324,20 @@ fn native_device_scale() f64 {
 	return scale
 }
 
+// native_safe_insets reports the main screen's safe area. safeAreaInsets
+// arrives as (top, left, bottom, right), the same order safe_area_top
+// already reads its first field from.
+fn native_safe_insets() ?SafeInsets {
+	screen := macos.msg_id(macos.get_class('UIScreen'), 'mainScreen')
+	insets := macos.msg_rect(screen, 'safeAreaInsets')
+	return SafeInsets{
+		top:    insets.x
+		right:  insets.height
+		bottom: insets.width
+		left:   insets.y
+	}
+}
+
 pub fn focused_text_area_id() string {
 	for id, native in g_views {
 		if (g_view_kinds[id] or { Kind.view }) == .text_area && macos.msg_bool(native, 'isFirstResponder') {

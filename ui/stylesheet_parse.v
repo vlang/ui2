@@ -32,12 +32,14 @@ pub:
 pub struct StyleSelectorPart {
 pub:
 	// kind is the type name (`Button`, `View`, ...) or '' when the compound
-	// has no type. universal is set for `*`.
-	kind      string
-	universal bool
-	id        string
-	classes   []string
-	pseudos   []StylePseudo
+	// has no type. universal is set for `*`. parent_ref marks a leading `&`
+	// in a nested rule, replaced by the parent selector when flattening.
+	kind       string
+	universal  bool
+	id         string
+	classes    []string
+	pseudos    []StylePseudo
+	parent_ref bool
 }
 
 pub struct StyleSelector {
@@ -247,8 +249,9 @@ fn (mut p StyleParser) parse() !Stylesheet {
 			}
 			continue
 		}
-		rule := p.parse_rule()!
-		result.rules << rule
+		for rule in p.parse_rule()! {
+			result.rules << rule
+		}
 	}
 	return result
 }
@@ -382,20 +385,37 @@ fn (mut p StyleParser) parse_raw_value() !string {
 	return error(style_err(p.line, p.col, 'unexpected end inside a value'))
 }
 
-fn (mut p StyleParser) parse_rule() !StyleRule {
+fn (mut p StyleParser) parse_rule() ![]StyleRule {
 	return p.parse_rule_guarded([]MediaQuery{}, []ContainerQuery{})!
 }
 
-fn (mut p StyleParser) parse_rule_guarded(media []MediaQuery, containers []ContainerQuery) !StyleRule {
+// parse_rule_guarded parses one rule plus any nested rules, flattening the
+// nested selectors onto their parents: `Card { Button { } }` behaves as
+// `Card Button { }`, and a leading `&` splices the parent in (`&:hover` is
+// the parent hovered). Only a leading `&` is supported.
+fn (mut p StyleParser) parse_rule_guarded(media []MediaQuery, containers []ContainerQuery) ![]StyleRule {
 	start_line := p.line
 	start_col := p.col
 	selectors := p.parse_selector_list()!
+	for selector in selectors {
+		for part in selector.parts {
+			if part.parent_ref {
+				return error(style_err(start_line, start_col,
+					'`&` only makes sense nested inside another rule'))
+			}
+		}
+	}
 	p.skip_space_and_comments()!
 	if p.eof() || p.peek() != `{` {
 		return error(style_err(p.line, p.col, 'expected `{` after selector'))
 	}
 	p.advance()
+	return p.parse_rule_body(selectors, start_line, start_col, media, containers)!
+}
+
+fn (mut p StyleParser) parse_rule_body(selectors []StyleSelector, start_line int, start_col int, media []MediaQuery, containers []ContainerQuery) ![]StyleRule {
 	mut declarations := []StyleDeclaration{}
+	mut nested := []StyleRule{}
 	for {
 		p.skip_space_and_comments()!
 		if p.eof() {
@@ -404,6 +424,12 @@ fn (mut p StyleParser) parse_rule_guarded(media []MediaQuery, containers []Conta
 		if p.peek() == `}` {
 			p.advance()
 			break
+		}
+		if p.nested_rule_start()! {
+			for rule in p.parse_nested_rule(selectors, media, containers)! {
+				nested << rule
+			}
+			continue
 		}
 		decl_line := p.line
 		decl_col := p.col
@@ -422,16 +448,171 @@ fn (mut p StyleParser) parse_rule_guarded(media []MediaQuery, containers []Conta
 			col:   decl_col
 		}
 	}
-	if declarations.len == 0 {
+	if declarations.len == 0 && nested.len == 0 {
 		return error(style_err(start_line, start_col, 'rule has no declarations'))
 	}
-	return StyleRule{
-		selectors:    selectors
-		declarations: declarations
-		media:        media.clone()
-		containers:   containers.clone()
-		line:         start_line
-		col:          start_col
+	mut rules := []StyleRule{}
+	if declarations.len > 0 {
+		rules << StyleRule{
+			selectors:    selectors
+			declarations: declarations
+			media:        media.clone()
+			containers:   containers.clone()
+			line:         start_line
+			col:          start_col
+		}
+	}
+	rules << nested
+	return rules
+}
+
+// nested_rule_start reports whether a rule body continues with a nested
+// rule rather than a declaration: `&`, `.class`, `#id`, `:state`, `*`, `>`
+// or a type name that is not followed by `:`.
+fn (mut p StyleParser) nested_rule_start() !bool {
+	if p.eof() {
+		return false
+	}
+	ch := p.peek()
+	if ch == `&` || ch == `.` || ch == `#` || ch == `:` || ch == `*` || ch == `>` {
+		return true
+	}
+	if !is_style_name_start(ch) {
+		return false
+	}
+	saved_pos := p.pos
+	saved_line := p.line
+	saved_col := p.col
+	p.parse_ident() or {
+		p.pos = saved_pos
+		p.line = saved_line
+		p.col = saved_col
+		return false
+	}
+	p.skip_space_and_comments() or {
+		p.pos = saved_pos
+		p.line = saved_line
+		p.col = saved_col
+		return false
+	}
+	is_decl := !p.eof() && p.peek() == `:`
+	p.pos = saved_pos
+	p.line = saved_line
+	p.col = saved_col
+	return !is_decl
+}
+
+// parse_nested_rule parses one nested rule after its parent's selectors,
+// combining each nested selector with each parent selector.
+fn (mut p StyleParser) parse_nested_rule(parents []StyleSelector, media []MediaQuery, containers []ContainerQuery) ![]StyleRule {
+	start_line := p.line
+	start_col := p.col
+	mut explicit_child := false
+	if !p.eof() && p.peek() == `>` {
+		p.advance()
+		p.skip_space_and_comments()!
+		explicit_child = true
+	}
+	child := p.parse_selector_list()!
+	p.skip_space_and_comments()!
+	if p.eof() || p.peek() != `{` {
+		return error(style_err(p.line, p.col, 'expected `{` after nested selector'))
+	}
+	p.advance()
+	mut selectors := []StyleSelector{}
+	for parent in parents {
+		for part in child {
+			selectors << style_combine_selectors(parent, part, explicit_child)!
+		}
+	}
+	return p.parse_rule_body(selectors, start_line, start_col, media, containers)!
+}
+
+// style_combine_selectors flattens one nested selector onto its parent. A
+// leading `&` splices the parent in (merging when the `&` compound carries
+// its own type, id, classes or states); otherwise the child descends from
+// the parent, or is its direct child after an explicit `>`.
+fn style_combine_selectors(parent StyleSelector, child StyleSelector, explicit_child bool) !StyleSelector {
+	if child.parts.len == 0 {
+		return error('empty nested selector')
+	}
+	for part in child.parts[1..] {
+		if part.parent_ref {
+			return error('only a leading `&` is supported in nested selectors')
+		}
+	}
+	if !child.parts[0].parent_ref {
+		mut parts := parent.parts.clone()
+		parts << child.parts
+		mut combinators := parent.combinators.clone()
+		combinators << if explicit_child {
+			StyleCombinator.child
+		} else {
+			StyleCombinator.descendant
+		}
+		combinators << child.combinators
+		return new_style_selector(parts, combinators)!
+	}
+	ref := child.parts[0]
+	rest := child.parts[1..].clone()
+	if ref.kind.len == 0 && ref.id.len == 0 && !ref.universal && ref.classes.len == 0
+		&& ref.pseudos.len == 0 {
+		// Bare `&`: splice the whole parent in.
+		mut parts := parent.parts.clone()
+		parts << rest
+		mut combinators := parent.combinators.clone()
+		if rest.len > 0 {
+			combinators << if explicit_child {
+				StyleCombinator.child
+			} else {
+				child.combinators[0]
+			}
+			combinators << child.combinators[1..]
+		}
+		return new_style_selector(parts, combinators)!
+	}
+	// `&` with its own type/id/classes/states: merge into the parent's last
+	// compound, e.g. `&:hover` is the parent hovered.
+	if parent.parts.len == 0 {
+		return error('`&` has no parent selector')
+	}
+	merged := style_merge_compounds(parent.parts.last(), ref)!
+	mut parts := parent.parts[..parent.parts.len - 1].clone()
+	parts << merged
+	parts << rest
+	mut combinators := parent.combinators.clone()
+	if rest.len > 0 {
+		combinators << child.combinators[0]
+		combinators << child.combinators[1..]
+	}
+	return new_style_selector(parts, combinators)!
+}
+
+fn style_merge_compounds(a StyleSelectorPart, b StyleSelectorPart) !StyleSelectorPart {
+	mut kind := a.kind
+	if b.kind.len > 0 {
+		if a.kind.len > 0 && a.kind != b.kind {
+			return error('nested `&` redefines the type "${a.kind}" as "${b.kind}"')
+		}
+		kind = b.kind
+	}
+	mut id := a.id
+	if b.id.len > 0 {
+		if a.id.len > 0 && a.id != b.id {
+			return error('nested `&` redefines `#${a.id}` as `#${b.id}`')
+		}
+		id = b.id
+	}
+	mut classes := a.classes.clone()
+	classes << b.classes
+	mut pseudos := a.pseudos.clone()
+	pseudos << b.pseudos
+	return StyleSelectorPart{
+		kind:      kind
+		universal: a.universal && b.universal && kind.len == 0
+		id:        id
+		classes:   classes
+		pseudos:   pseudos
 	}
 }
 
@@ -481,9 +662,11 @@ fn (mut p StyleParser) parse_selector() !StyleSelector {
 		}
 		if saw_space {
 			// A compound must follow; anything else ends the selector so the
-			// caller can report the real error (e.g. missing `{`).
+			// caller can report the real error (e.g. missing `{`). `&` is a
+			// compound start too, so a non-leading `&` reaches the combiner
+			// and fails there with a precise error.
 			if p.peek() == `*` || is_style_name_start(p.peek()) || p.peek() == `#`
-				|| p.peek() == `.` || p.peek() == `:` {
+				|| p.peek() == `.` || p.peek() == `:` || p.peek() == `&` {
 				combinators << .descendant
 				parts << p.parse_compound()!
 				continue
@@ -505,10 +688,15 @@ fn (mut p StyleParser) parse_compound() !StyleSelectorPart {
 	}
 	mut kind := ''
 	mut universal := false
+	mut parent_ref := false
+	if p.peek() == `&` {
+		p.advance()
+		parent_ref = true
+	}
 	if p.peek() == `*` {
 		p.advance()
 		universal = true
-	} else if is_style_name_start(p.peek()) {
+	} else if !p.eof() && is_style_name_start(p.peek()) {
 		kind = p.parse_ident()!
 	}
 	mut id := ''
@@ -556,15 +744,17 @@ fn (mut p StyleParser) parse_compound() !StyleSelectorPart {
 			break
 		}
 	}
-	if kind.len == 0 && !universal && id.len == 0 && classes.len == 0 && pseudos.len == 0 {
+	if kind.len == 0 && !universal && !parent_ref && id.len == 0 && classes.len == 0
+		&& pseudos.len == 0 {
 		return error(style_err(p.line, p.col, 'expected a type, `#id`, `.class` or `:state`'))
 	}
 	return StyleSelectorPart{
-		kind:      kind
-		universal: universal
-		id:        id
-		classes:   classes
-		pseudos:   pseudos
+		kind:       kind
+		universal:  universal
+		id:         id
+		classes:    classes
+		pseudos:    pseudos
+		parent_ref: parent_ref
 	}
 }
 

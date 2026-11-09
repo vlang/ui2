@@ -91,6 +91,68 @@ fn test_stylesheet_parses_type_prefixing_theme_keyword_as_rule() {
 	assert sheet.dark_vars.len == 0
 }
 
+fn test_stylesheet_nesting_implicit_descendant() {
+	sheet := parse_stylesheet('View.card { background: white; Label.title { font-size: 20px; } }')!
+	assert sheet.rules.len == 2
+	assert sheet.rules[0].selectors[0].parts.len == 1
+	inner := sheet.rules[1].selectors[0]
+	assert inner.parts.len == 2
+	assert inner.parts[0].kind == 'View'
+	assert inner.parts[1].kind == 'Label'
+	assert inner.combinators == [.descendant]
+	assert sheet.rules[1].declarations[0].prop == 'font-size'
+}
+
+fn test_stylesheet_nesting_parent_ref() {
+	sheet := parse_stylesheet('Button.primary { color: white; &:hover { background: red; } &.ghost { color: blue; } }')!
+	assert sheet.rules.len == 3
+	hover := sheet.rules[1].selectors[0]
+	assert hover.parts.len == 1
+	assert hover.parts[0].kind == 'Button'
+	assert hover.parts[0].classes == ['primary']
+	assert hover.parts[0].pseudos.map(it.name) == ['hover']
+	ghost := sheet.rules[2].selectors[0]
+	assert ghost.parts[0].classes == ['primary', 'ghost']
+}
+
+fn test_stylesheet_nesting_explicit_child() {
+	sheet := parse_stylesheet('View { > Button { background: red; } }')!
+	inner := sheet.rules[0].selectors[0]
+	assert inner.parts.len == 2
+	assert inner.combinators == [.child]
+}
+
+fn test_stylesheet_nesting_rejects_nonleading_ref() {
+	if _ := parse_stylesheet('View { Button & { background: red; } }') {
+		assert false, 'non-leading & must fail'
+	} else {
+		assert err.msg().contains('leading `&`')
+	}
+}
+
+fn test_stylesheet_nesting_rejects_conflicting_merge() {
+	if _ := parse_stylesheet('Button { &Label { background: red; } }') {
+		assert false, 'conflicting type merge must fail'
+	} else {
+		assert err.msg().contains('redefines the type')
+	}
+}
+
+fn test_stylesheet_nesting_rejects_top_level_ref() {
+	if _ := parse_stylesheet('& Button { background: red; }') {
+		assert false, 'top-level & must fail'
+	} else {
+		assert err.msg().contains('nested inside another rule')
+	}
+}
+
+fn test_stylesheet_nesting_composes_with_queries() {
+	sheet := parse_stylesheet('@media (platform: windows) { View.card { Label.title { font-size: 18px; } } }')!
+	assert sheet.rules.len == 1
+	assert sheet.rules[0].media.len == 1
+	assert sheet.rules[0].selectors[0].parts.len == 2
+}
+
 fn test_stylesheet_value_keeps_functions() {
 	sheet := parse_stylesheet('Card { background: linear-gradient(135deg, #4f46e5, #06b6d4); }')!
 	assert sheet.rules[0].declarations[0].value == 'linear-gradient(135deg, #4f46e5, #06b6d4)'

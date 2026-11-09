@@ -167,6 +167,52 @@ fn test_cascade_unknown_variable_inside_gradient_warns() {
 	assert warnings.any(it.prop == 'background')
 }
 
+fn test_cascade_container_units_use_query_target() {
+	sheet := parse_stylesheet('@container wide (min-width: 200px) { Button { font-size: 10cqw; } }')!
+	wide_card := with_classes(view('card1', rect(0, 0, 500, 100), BoxStyle{}, [
+		cascade_test_button('a'),
+	]), 'wide')
+	plain_card := view('card2', rect(0, 0, 500, 100), BoxStyle{}, [cascade_test_button('b')])
+	mut root := view('root', rect(0, 0, 1000, 100), BoxStyle{}, [wide_card, plain_card])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].children[0].text_style.size == 50.0
+	assert root.children[1].children[0].text_style.size == 15.0
+}
+
+fn test_cascade_calc_values() {
+	parsed := parse_stylesheet('Button { font-size: calc(2 * 7px); border-radius: min(4px, 2px); }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	root = apply_stylesheet(root, parsed, StyleMatchEnv{})
+	assert root.children[0].text_style.size == 14.0
+	assert root.children[0].box.radius == 2.0
+}
+
+fn test_cascade_color_mix_background() {
+	sheet := parse_stylesheet('Button { background: color-mix(in srgb, #ff0000, #0000ff); }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].box.bg == 0x800080
+}
+
+fn test_cascade_nested_base_loses_to_matching_container() {
+	sheet := parse_stylesheet('View.card { Label.card-title { font-size: 14px; } } @container card (min-width: 280px) { View.card Label.card-title { font-size: 18px; } }')!
+	// The outer View.card block carries no declarations itself, so only the
+	// flattened nested rule and the container rule remain.
+	assert sheet.rules.len == 2
+	wide := with_classes(view('wide', rect(0, 0, 500, 100), BoxStyle{}, [
+		with_classes(label('t', 'Wide', rect(0, 0, 100, 20), TextStyle{}), 'card-title'),
+	]), 'card')
+	narrow := with_classes(view('narrow', rect(0, 0, 200, 100), BoxStyle{}, [
+		with_classes(label('u', 'Narrow', rect(0, 0, 100, 20), TextStyle{}), 'card-title'),
+	]), 'card')
+	mut root := view('root', rect(0, 0, 1000, 100), BoxStyle{}, [wide, narrow])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	// Nested base (0,1,2) vs container override (0,1,2, later): the wide
+	// card matches the container and takes 18px, the narrow one keeps 14px.
+	assert root.children[0].children[0].text_style.size == 18.0
+	assert root.children[1].children[0].text_style.size == 14.0
+}
+
 fn test_stylesheet_dsl_matches_parser() {
 	rule := style_rule('Button.primary:hover', {
 		'background': '#2563eb'

@@ -110,10 +110,14 @@ which authored them.
 - **P3 (done):** AppKit/UIKit hooks (same pattern),
   `stylesheet_lint.v`, `docs/stylesheet.md` user guide, `background-gradient`
   alias + `border` shorthand polish.
-- **P4 (done, this commit):** `@media` (orientation, platform, pointer,
+- **P4 (done):** `@media` (orientation, platform, pointer,
   window size, resolution, color-scheme) + `@container` (ancestor sizes,
-  optional names) with nesting, `StyleQueryEnv`, per-backend `dpi` in the
+  optional names), `StyleQueryEnv`, per-backend `dpi` in the
   frame env, `style_rule_guarded` DSL, docs + demo rule.
+- **P5 (done, this commit):** modern values — viewport units
+  (`vw/vh/vmin/vmax` + `sv-/lv-/dv-`), container units (`cqw/cqh/cqmin/cqmax`),
+  `env(safe-area-inset-*, fallback)` with per-backend insets, `calc()` family
+  + trig, `color-mix(in srgb)`, selector nesting with `&`; `stylesheet_math.v`.
 - Non-goals v1: layout selectors, animations/transitions,
   `!important`. `refresh_element` (AppKit) intentionally bypasses
   the sheet: it reconciles a caller-supplied subtree, not a fresh build.

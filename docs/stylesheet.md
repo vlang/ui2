@@ -83,6 +83,23 @@ Specificity outranks source order; order only breaks ties. A scoped sheet
 with equal specificity beats the global one; an inline `bg:` beats the
 whole cascade.
 
+Nesting flattens child rules onto their parents at parse time, so the
+cascade sees ordinary selectors:
+
+```css
+View.card {
+	background: @surface;
+	Label.card-title { font-size: 14px; font-weight: bold; }
+	&:hover { border-color: @accent; }
+	> Button { border-radius: 0px; }
+}
+```
+
+`&` splices the parent in (merging when it carries its own type, id,
+classes or states — only a leading `&` is supported); otherwise the child
+descends, or is a direct child after `>`. Nesting composes with `@media`
+and `@container`, which accumulate as usual.
+
 ## Pseudo-classes
 
 Interaction: `:hover :pressed :focused :disabled :enabled :checked
@@ -133,11 +150,43 @@ Unknown properties warn instead of failing the build. `opacity` outside
 (`blue`, `blue-600`, `blue-600/50`, `black`, `white`, `transparent`) and
 `linear-gradient(135deg, #4f46e5, #06b6d4)` with `to <side>` directions.
 Bare names are Tailwind's 500 shade — `red` is `0xef4444`, not `0xff0000`;
-use hex when you mean exact. Translucent colors composite over the
-background.
+use hex when you mean exact. `color-mix(in srgb, C1 [p%], C2 [q%])` mixes
+two colors in gamma-encoded sRGB, defaulting to an even split:
 
-**Lengths** are logical pixels: a bare number or a `px` suffix. `em`, `%`
-and other units are rejected with a position.
+```css
+Button.ghost:hover { background: color-mix(in srgb, @accent 12%, @surface); }
+```
+
+Translucent colors composite over the background.
+
+**Lengths** are logical pixels by default: a bare number or a `px` suffix.
+Viewport units resolve against the window — `vw`/`vh`/`vmin`/`vmax` and
+their `sv-`/`lv-`/`dv-` small/large/dynamic variants, which coincide because
+ui2 windows have no collapsing browser chrome. Container units resolve
+against the query container (`cqw`/`cqh`/`cqmin`/`cqmax`); outside any
+`@container` they use the parent frame, else the window. Percentages,
+font-relative and dpi units are rejected: they need a layout or font
+context the cascade does not have.
+
+`env()` reads the display safe area, with an optional fallback:
+
+```css
+Bar { padding-top: env(safe-area-inset-top, 20px); }
+```
+
+`safe-area-inset-top/right/bottom/left` come from the platform (iOS
+reports real insets; elsewhere the fallback — or zero — applies).
+
+**Math** works anywhere a length is accepted: `calc()`, `min()`, `max()`,
+`clamp()`, `round()` (plus `up`/`down`/`to-zero`), `mod()`, `rem()`,
+`abs()`, `sign()`, `sqrt()`, `hypot()`, `pow()`, `exp()`, `log()`,
+`sin()`, `cos()`, `tan()`, `asin()`, `acos()`, `atan()`, `atan2()`.
+Angles use `deg`/`rad`/`grad`/`turn`:
+
+```css
+Label.hero { font-size: clamp(18px, 4vw, 32px); }
+View.card { border-radius: max(4px, 1cqw + 2px); }
+```
 
 **Variables** start with `@` or `--` and substitute anywhere in a value,
 including inside `linear-gradient(...)`:

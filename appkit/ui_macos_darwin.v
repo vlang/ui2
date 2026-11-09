@@ -698,6 +698,12 @@ fn native_device_scale() f64 {
 	return scale
 }
 
+// native_safe_insets reports the display safe area. Desktop windows are
+// full rectangles, so there is none and env() uses its fallback.
+fn native_safe_insets() ?SafeInsets {
+	return none
+}
+
 // focused_id returns the declarative id of the control that currently owns
 // keyboard focus. NSTextField edits through a shared field editor, so compare
 // that responder with each field's currentEditor as well as direct responders.

@@ -42,6 +42,7 @@ pub:
 	platform string
 	coarse   bool
 	dark     bool
+	insets   ?SafeInsets // none = unsupported platform; env() falls back
 }
 
 // stylesheet_platform_name reports the running OS for `(platform: ...)`
@@ -83,6 +84,16 @@ pub fn stylesheet_is_coarse_pointer() bool {
 	}
 }
 
+// SafeInsets carries the display safe area (notch, camera, rounded corners)
+// in logical pixels: how far content must stay from each window edge.
+pub struct SafeInsets {
+pub:
+	top    f64
+	right  f64
+	bottom f64
+	left   f64
+}
+
 // stylesheet_query_env builds the media environment for this evaluation.
 // bounds() is backend-provided and nil-safe; dpi comes from the frame's
 // interaction env, filled in by each backend.
@@ -95,6 +106,7 @@ pub fn stylesheet_query_env(dark bool, dpi f64) StyleQueryEnv {
 		platform: stylesheet_platform_name()
 		coarse:   stylesheet_is_coarse_pointer()
 		dark:     dark
+		insets:   native_safe_insets()
 	}
 }
 
@@ -228,16 +240,25 @@ pub fn container_query_matches(query ContainerQuery, ancestors []StyleAncestor) 
 	return true
 }
 
+// container_match_target returns the frame source for the first matching
+// query in the list, or none when nothing matches.
+pub fn container_match_target(queries []ContainerQuery, ancestors []StyleAncestor) ?Element {
+	for query in queries {
+		if container_query_matches(query, ancestors) {
+			return container_query_target(query, ancestors)
+		}
+	}
+	return none
+}
+
 // container_list_matches reports whether any query in a @container list
 // holds. An empty list (no @container) always applies.
 pub fn container_list_matches(queries []ContainerQuery, ancestors []StyleAncestor) bool {
 	if queries.len == 0 {
 		return true
 	}
-	for query in queries {
-		if container_query_matches(query, ancestors) {
-			return true
-		}
+	if _ := container_match_target(queries, ancestors) {
+		return true
 	}
 	return false
 }

@@ -99,6 +99,7 @@ struct StyleCandidate {
 	rule_order  int
 	decl_index  int
 	decl        StyleDeclaration
+	length      StyleLengthCtx
 }
 
 fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, mut warnings []StylesheetWarning) Element {
@@ -108,9 +109,7 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 			if !media_list_matches(rule.media, qenv) {
 				continue
 			}
-			if !container_list_matches(rule.containers, ancestors) {
-				continue
-			}
+			lctx := cascade_length_ctx(rule.containers, ancestors, qenv) or { continue }
 			for sel in rule.selectors {
 				if stylesheet_selector_matches(sel, el, ancestors, index, count, env) {
 					for decl_index, decl in rule.declarations {
@@ -120,6 +119,7 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 							rule_order:  rule_index
 							decl_index:  decl_index
 							decl:        decl
+							length:      lctx
 						}
 					}
 					break
@@ -146,9 +146,35 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 	})
 	mut out := el
 	for candidate in candidates {
-		out = apply_declaration(el, out, candidate.decl, scopes, env, mut warnings)
+		out = apply_declaration(el, out, candidate.decl, scopes, env, candidate.length,
+			mut warnings)
 	}
 	return out
+}
+
+// cascade_length_ctx builds the length basis for one rule: the window from
+// the query env, the container from the rule's matched query, else the
+// parent frame, else the window (the CSS small-viewport fallback).
+fn cascade_length_ctx(containers []ContainerQuery, ancestors []StyleAncestor, qenv StyleQueryEnv) ?StyleLengthCtx {
+	mut cont_w := qenv.width
+	mut cont_h := qenv.height
+	if ancestors.len > 0 {
+		parent := ancestors.last().el
+		cont_w = parent.frame.width
+		cont_h = parent.frame.height
+	}
+	if containers.len > 0 {
+		target := container_match_target(containers, ancestors) or { return none }
+		cont_w = target.frame.width
+		cont_h = target.frame.height
+	}
+	return StyleLengthCtx{
+		win_w:  qenv.width
+		win_h:  qenv.height
+		cont_w: cont_w
+		cont_h: cont_h
+		insets: qenv.insets
+	}
 }
 
 fn cascade_lookup_var(name string, scopes []Stylesheet, dark bool) ?string {
@@ -200,7 +226,7 @@ fn cascade_warn(mut warnings []StylesheetWarning, el Element, prop string, messa
 // Inline wins is read off base (the pre-cascade element): checks below look
 // at base, writes accumulate onto out, so later (stronger) sheet rules still
 // override earlier ones while builder-set properties survive.
-fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []Stylesheet, env StyleMatchEnv, mut warnings []StylesheetWarning) Element {
+fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []Stylesheet, env StyleMatchEnv, lctx StyleLengthCtx, mut warnings []StylesheetWarning) Element {
 	value := cascade_resolve_value(decl.value, scopes, env.dark) or {
 		cascade_warn(mut warnings, out, decl.prop, 'unknown variable "${decl.value}"')
 		return out
@@ -254,8 +280,8 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 			if base.text_style.size != 15.0 {
 				return out
 			}
-			size := cascade_length(value) or {
-				cascade_warn(mut warnings, out, decl.prop, 'expected a px length')
+			size := style_length_px(value, lctx) or {
+				cascade_warn(mut warnings, out, decl.prop, 'expected a length')
 				return out
 			}
 			return Element{
@@ -361,9 +387,9 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 			}
 			mut width := ?f64(none)
 			mut color := ?u32(none)
-			for part in value.fields() {
+			for part in style_split_value(value) {
 				if width == none {
-					if w := cascade_length(part) {
+					if w := style_length_px(part, lctx) {
 						width = w
 						continue
 					}
@@ -399,8 +425,8 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 			if base.box.radius != 0 {
 				return out
 			}
-			radius := cascade_length(value) or {
-				cascade_warn(mut warnings, out, decl.prop, 'expected a px length')
+			radius := style_length_px(value, lctx) or {
+				cascade_warn(mut warnings, out, decl.prop, 'expected a length')
 				return out
 			}
 			return Element{
@@ -432,8 +458,8 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 				|| base.box.border_bottom != 0 {
 				return out
 			}
-			width := cascade_length(value) or {
-				cascade_warn(mut warnings, out, decl.prop, 'expected a px length')
+			width := style_length_px(value, lctx) or {
+				cascade_warn(mut warnings, out, decl.prop, 'expected a length')
 				return out
 			}
 			return Element{
@@ -453,7 +479,7 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 			}
 			trimmed := value.trim_space()
 			raw := if trimmed.ends_with('%') { trimmed[..trimmed.len - 1] } else { trimmed }
-			number := cascade_length(raw) or {
+			number := query_plain_number(raw) or {
 				cascade_warn(mut warnings, out, decl.prop, 'expected a number or percentage')
 				return out
 			}
@@ -473,7 +499,7 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 			if base.box.shadow.opacity != 0 {
 				return out
 			}
-			shadow := cascade_shadow(value) or {
+			shadow := cascade_shadow(value, lctx) or {
 				cascade_warn(mut warnings, out, decl.prop, 'expected `<color> [blur] [x y] [spread]`')
 				return out
 			}
@@ -496,26 +522,8 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 	}
 }
 
-fn cascade_length(raw string) ?f64 {
-	lower := raw.trim_space().to_lower()
-	number := if lower.ends_with('px') { lower[..lower.len - 2] } else { lower }
-	if number.contains(' ') || number.len == 0 {
-		return none
-	}
-	value := number.f64()
-	if value != value || value < 0 || value > 100000 {
-		return none
-	}
-	// f64() yields 0 for garbage; reject non-numeric text that is not zero.
-	if value == 0 && number != '0' && !number.starts_with('0.') && number != '.0'
-		&& number != '0.0' {
-		return none
-	}
-	return value
-}
-
-fn cascade_shadow(raw string) ?BoxShadow {
-	parts := raw.trim_space().fields()
+fn cascade_shadow(raw string, lctx StyleLengthCtx) ?BoxShadow {
+	parts := style_split_value(raw.trim_space())
 	if parts.len == 0 {
 		return none
 	}
@@ -531,7 +539,7 @@ fn cascade_shadow(raw string) ?BoxShadow {
 				continue
 			}
 		}
-		numbers << cascade_length(part) or { return none }
+		numbers << style_length_px(part, lctx) or { return none }
 	}
 	solid := color or { return none }
 	mut blur := 0.0

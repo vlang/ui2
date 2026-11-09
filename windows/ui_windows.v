@@ -1070,6 +1070,12 @@ fn native_device_scale() f64 {
 	return f64(dpi) / 96.0
 }
 
+// native_safe_insets reports the display safe area. Win32 windows are
+// rectangular, so there is none and env() uses its fallback.
+fn native_safe_insets() ?SafeInsets {
+	return none
+}
+
 fn C.GetDC(hwnd voidptr) voidptr
 fn C.GetDeviceCaps(dc voidptr, index int) int
 fn C.ReleaseDC(hwnd voidptr, dc voidptr) int
