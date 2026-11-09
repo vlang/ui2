@@ -110,14 +110,7 @@ fn gradient_sorted_stops(gradient Gradient) []GradientStop {
 
 // slider_faded_color is a disabled slider part's color: halfway to the track.
 fn slider_faded_color(color u32, track u32) u32 {
-	return mix_channel(color, track, 16, 0.5) | mix_channel(color, track, 8, 0.5) | mix_channel(color,
-		track, 0, 0.5)
-}
-
-fn mix_channel(a u32, b u32, shift u32, t f64) u32 {
-	ca := f64((a >> shift) & 0xff)
-	cb := f64((b >> shift) & 0xff)
-	return u32(math.round(ca + (cb - ca) * t)) << shift
+	return color_mix(color, track, 0.5)
 }
 
 // gradient_color_at returns the color and opacity a gradient has at `t` along
@@ -136,8 +129,7 @@ fn gradient_color_at(stops []GradientStop, t f64) (u32, f64) {
 			prev := stops[i - 1]
 			span := next.position - prev.position
 			f := if span <= 0 { 1.0 } else { (t - prev.position) / span }
-			color := mix_channel(prev.color, next.color, 16, f) | mix_channel(prev.color,
-				next.color, 8, f) | mix_channel(prev.color, next.color, 0, f)
+			color := color_mix(prev.color, next.color, f)
 			return color, prev.opacity + (next.opacity - prev.opacity) * f
 		}
 	}
@@ -221,15 +213,5 @@ fn scrollbar_colors(backdrop u32) (u32, u32) {
 	if 0.2126 * r + 0.7152 * g + 0.0722 * b >= 0.5 {
 		return u32(0xf1f5f9), u32(0xcbd5e1)
 	}
-	return scrollbar_tint(backdrop, 0.06), scrollbar_tint(backdrop, 0.3)
-}
-
-// scrollbar_tint moves a color `amount` of the way to white.
-fn scrollbar_tint(color u32, amount f64) u32 {
-	mut out := u32(0)
-	for shift in [u32(16), 8, 0] {
-		channel := f64((color >> shift) & 0xff)
-		out |= u32(channel + (255 - channel) * amount + 0.5) << shift
-	}
-	return out
+	return color_tint(backdrop, 0.06), color_tint(backdrop, 0.3)
 }

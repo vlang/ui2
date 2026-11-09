@@ -13,7 +13,7 @@ struct TreeRowLook {
 }
 
 fn tree_view_guide_color(theme ComponentTheme) u32 {
-	return popover_blend(theme.border, theme.background, 0.35)
+	return color_mix(theme.border, theme.background, 0.35)
 }
 
 fn tree_view_symbol(name string, frame Rect, color u32) Element {
@@ -37,8 +37,8 @@ fn tree_view_checkbox(side f64, check TableCheckState, enabled bool, theme Compo
 	mut fill := if on { theme.primary } else { theme.background }
 	mut ring := if on { theme.primary } else { theme.border }
 	if !enabled {
-		fill = popover_blend(fill, theme.background, 0.5)
-		ring = popover_blend(ring, theme.background, 0.5)
+		fill = color_mix(fill, theme.background, 0.5)
+		ring = color_mix(ring, theme.background, 0.5)
 	}
 	mut marks := []Element{}
 	if on {
@@ -90,7 +90,7 @@ fn tree_view_row_element(config TreeViewConfig, entry TreeViewEntry, frame Rect,
 	height := frame.height
 	dim := !enabled || look.dragged
 	fg := if dim {
-		popover_blend(theme.muted_foreground, theme.background, 0.35)
+		color_mix(theme.muted_foreground, theme.background, 0.35)
 	} else {
 		theme.foreground
 	}
@@ -178,7 +178,7 @@ fn tree_view_row_element(config TreeViewConfig, entry TreeViewEntry, frame Rect,
 		right -= width
 		children << Element{
 			...label('', node.trailing, rect(right, 0, width, height), TextStyle{
-				color: popover_blend(theme.muted_foreground, theme.background, if dim {
+				color: color_mix(theme.muted_foreground, theme.background, if dim {
 					0.35
 				} else {
 					0.0

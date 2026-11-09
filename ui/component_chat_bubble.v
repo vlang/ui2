@@ -241,16 +241,16 @@ fn bubble_variant_colors(variant BubbleVariant, theme ComponentTheme) (u32, u32)
 			return theme.muted, theme.foreground
 		}
 		.muted {
-			return chat_mix(theme.muted, theme.background, 0.4), theme.muted_foreground
+			return color_mix(theme.muted, theme.background, 0.4), theme.muted_foreground
 		}
 		.tinted {
-			return chat_mix(theme.background, theme.primary, if dark { 0.24 } else { 0.12 }), theme.foreground
+			return color_mix(theme.background, theme.primary, if dark { 0.24 } else { 0.12 }), theme.foreground
 		}
 		.outline, .ghost {
 			return theme.background, theme.foreground
 		}
 		.destructive {
-			return chat_mix(theme.background, theme.danger, if dark { 0.2 } else { 0.1 }), theme.danger
+			return color_mix(theme.background, theme.danger, if dark { 0.2 } else { 0.1 }), theme.danger
 		}
 	}
 }
@@ -350,7 +350,7 @@ fn bubble_reactions(config BubbleConfig, region Rect, m BubbleMetrics) Element {
 	mut children := chat_surface(component_local(region), theme.muted, ring_color, m.reaction_ring,
 		region.height / 2, region.height / 2, ChatCorners{})
 	emoji_box := math.round(font_em_pixels(m.reaction_font) * 1.4)
-	selected_fill := chat_mix(theme.muted, theme.primary, if dark { 0.3 } else { 0.16 })
+	selected_fill := color_mix(theme.muted, theme.primary, if dark { 0.3 } else { 0.16 })
 	for index, chip in chips {
 		adding := index >= config.reactions.len
 		mut parts := []Element{}

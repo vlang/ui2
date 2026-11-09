@@ -28,20 +28,20 @@ pub:
 // primary color.
 pub fn sidebar_colors(theme ComponentTheme) SidebarColors {
 	dark := feedback_is_dark(theme)
-	background := popover_blend(theme.background, theme.muted, 0.5)
+	background := color_mix(theme.background, theme.muted, 0.5)
 	return SidebarColors{
 		background:        background
 		foreground:        theme.foreground
 		muted:             theme.muted_foreground
-		disabled:          popover_blend(theme.muted_foreground, background, 0.45)
-		border:            popover_blend(theme.border, background, if dark { 0.35 } else { 0.3 })
-		hover:             popover_blend(background, theme.foreground, if dark {
+		disabled:          color_mix(theme.muted_foreground, background, 0.45)
+		border:            color_mix(theme.border, background, if dark { 0.35 } else { 0.3 })
+		hover:             color_mix(background, theme.foreground, if dark {
 			0.08
 		} else {
 			0.05
 		})
-		pressed:           popover_blend(background, theme.foreground, if dark { 0.14 } else { 0.1 })
-		active:            popover_blend(background, theme.primary, if dark { 0.22 } else { 0.12 })
+		pressed:           color_mix(background, theme.foreground, if dark { 0.14 } else { 0.1 })
+		active:            color_mix(background, theme.primary, if dark { 0.22 } else { 0.12 })
 		active_foreground: theme.primary
 		ring:              theme.primary
 		logo:              theme.primary
@@ -641,7 +641,7 @@ pub fn sidebar_toggle_button(config SidebarToggleButtonConfig) !Element {
 	hover_fill := if config.on_sidebar {
 		c.hover
 	} else {
-		popover_blend(config.theme.background, config.theme.foreground, 0.06)
+		color_mix(config.theme.background, config.theme.foreground, 0.06)
 	}
 	glyph := math.min(math.round(metrics.font_size * 1.15), math.min(config.frame.width,
 		config.frame.height))

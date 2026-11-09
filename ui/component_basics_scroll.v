@@ -380,12 +380,12 @@ pub fn scrollbar(config ScrollbarConfig) !Element {
 	start, thumb := scrollbar_thumb(config)
 	thickness := math.min(across, if wide { 10.0 } else { 6.0 })
 	side := (across - thickness) / 2
-	knob := popover_blend(config.theme.foreground, config.theme.background, if wide {
+	knob := color_mix(config.theme.foreground, config.theme.background, if wide {
 		0.35
 	} else {
 		0.55
 	})
-	track_color := popover_blend(config.theme.foreground, config.theme.background, 0.92)
+	track_color := color_mix(config.theme.foreground, config.theme.background, 0.92)
 	span := fn [vertical] (at f64, along f64, side f64, thick f64) Rect {
 		return if vertical { rect(side, at, thick, along) } else { rect(at, side, along, thick) }
 	}

@@ -819,7 +819,7 @@ fn dock_special_group(config DockAreaConfig, layout DockLayout, placement DockPl
 // ── Drawing ─────────────────────────────────────────────────────────
 
 fn dock_bar_color(theme ComponentTheme) u32 {
-	return popover_blend(theme.background, theme.muted, 0.6)
+	return color_mix(theme.background, theme.muted, 0.6)
 }
 
 fn dock_line(frame Rect, color u32, key string) Element {

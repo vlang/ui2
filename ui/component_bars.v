@@ -574,7 +574,7 @@ fn bars_is_dark(theme ComponentTheme) bool {
 // bars_divider is the line color of a bar's edge: the theme border, softened
 // toward the background so a bar reads as part of the window.
 fn bars_divider(theme ComponentTheme) u32 {
-	return choice_mix(theme.border, theme.background, if bars_is_dark(theme) { 0.2 } else { 0.35 })
+	return color_mix(theme.border, theme.background, if bars_is_dark(theme) { 0.2 } else { 0.35 })
 }
 
 fn bars_disabled(theme ComponentTheme) u32 {

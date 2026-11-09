@@ -471,7 +471,7 @@ fn chat_message_action(config ChatMessageConfig, action MessageAction, index int
 	color := if enabled {
 		theme.muted_foreground
 	} else {
-		chat_mix(theme.muted_foreground, theme.background, 0.5)
+		color_mix(theme.muted_foreground, theme.background, 0.5)
 	}
 	height := math.min(m.action, frame.height)
 	local := rect(0, 0, frame.width, height)
