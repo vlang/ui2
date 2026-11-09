@@ -51,47 +51,78 @@ fn (mut p StyleParser) parse_media_queries() ![]MediaQuery {
 	return queries
 }
 
+// parse_media_query parses one comma-free query: an optional `not` or
+// `only`, an optional media type (`all`, `screen`, `print`, ...), then
+// `(feature: value)` conditions joined by `and`. A media type needs `and`
+// before its first condition, as in CSS.
 fn (mut p StyleParser) parse_media_query() !MediaQuery {
 	mut negate := false
+	mut media_type := ''
 	mut conditions := []MediaCondition{}
 	p.skip_space_and_comments()!
-	if p.eof() || p.peek() != `(` {
-		word := p.parse_ident()!.to_lower()
-		if word != 'not' {
-			return error(style_err(p.line, p.col, 'expected `not` or a `(...)` condition'))
+	if !p.eof() && p.peek() != `(` {
+		mut word_line := p.line
+		mut word_col := p.col
+		mut word := p.parse_ident() or {
+			return error(style_err(p.line, p.col, 'expected `not`, a media type or a `(...)` condition'))
+		}.to_lower()
+		if word == 'not' || word == 'only' {
+			negate = word == 'not'
+			p.skip_space_and_comments()!
+			if !p.eof() && p.peek() != `(` {
+				word_line = p.line
+				word_col = p.col
+				word = p.parse_ident()!.to_lower()
+			} else {
+				word = ''
+			}
 		}
-		negate = true
-		p.skip_space_and_comments()!
+		if word != '' {
+			if word !in style_media_types {
+				return error(style_err(word_line, word_col, 'unknown media type "${word}"'))
+			}
+			media_type = word
+			p.skip_space_and_comments()!
+			if !p.media_and_follows()! {
+				return MediaQuery{
+					negate:     negate
+					media_type: media_type
+				}
+			}
+		}
 	}
 	for {
 		p.skip_space_and_comments()!
 		conditions << p.parse_media_condition()!
 		p.skip_space_and_comments()!
-		if p.eof() {
+		if !p.media_and_follows()! {
 			break
 		}
-		if is_style_name_start(p.peek()) {
-			saved_pos := p.pos
-			saved_line := p.line
-			saved_col := p.col
-			word := p.parse_ident()!.to_lower()
-			if word == 'and' {
-				continue
-			}
-			p.pos = saved_pos
-			p.line = saved_line
-			p.col = saved_col
-			break
-		}
-		break
-	}
-	if conditions.len == 0 {
-		return error(style_err(p.line, p.col, 'a media query needs at least one condition'))
 	}
 	return MediaQuery{
 		negate:     negate
+		media_type: media_type
 		conditions: conditions
 	}
+}
+
+// media_and_follows consumes an `and` keyword when one is next and reports
+// whether it did; anything else is left for the caller.
+fn (mut p StyleParser) media_and_follows() !bool {
+	if p.eof() || !is_style_name_start(p.peek()) {
+		return false
+	}
+	saved_pos := p.pos
+	saved_line := p.line
+	saved_col := p.col
+	word := p.parse_ident()!.to_lower()
+	if word == 'and' {
+		return true
+	}
+	p.pos = saved_pos
+	p.line = saved_line
+	p.col = saved_col
+	return false
 }
 
 fn (mut p StyleParser) parse_media_condition() !MediaCondition {
@@ -141,7 +172,7 @@ fn (mut p StyleParser) parse_condition_value() !string {
 	return out.bytestr().trim_space()
 }
 
-fn style_validate_condition(feature string, op string, value string, in_container bool) !MediaCondition {
+fn style_validate_condition(feature string, op string, raw_value string, in_container bool) !MediaCondition {
 	if feature !in ['orientation', 'platform', 'pointer', 'prefers-color-scheme', 'width', 'height',
 		'resolution'] {
 		if in_container || !style_plugin_has_media(feature) {
@@ -149,13 +180,13 @@ fn style_validate_condition(feature string, op string, value string, in_containe
 		}
 		// Plugin-owned features pass through untouched: the plugin validates
 		// the value at match time.
-		if value.len == 0 {
+		if raw_value.len == 0 {
 			return error('"${feature}" needs a value')
 		}
 		return MediaCondition{
 			feature: feature
 			op:      op
-			value:   value.to_lower()
+			value:   raw_value.to_lower()
 		}
 	}
 	if in_container && feature !in ['width', 'height'] {
@@ -164,8 +195,16 @@ fn style_validate_condition(feature string, op string, value string, in_containe
 	if op != '' && feature !in ['width', 'height', 'resolution'] {
 		return error('"${op}-${feature}" is not a query: min-/max- apply to width, height and resolution')
 	}
-	if value.len == 0 {
+	if raw_value.len == 0 {
 		return error('"${feature}" needs a value')
+	}
+	// Keywords compare ASCII-case-insensitively, as in CSS; a quoted
+	// keyword is accepted too, so `(platform: "windows")` does not turn
+	// into a condition that can never hold.
+	value := if feature in ['orientation', 'platform', 'pointer', 'prefers-color-scheme'] {
+		style_unquote(raw_value).to_lower()
+	} else {
+		raw_value
 	}
 	match feature {
 		'orientation' {
@@ -244,23 +283,14 @@ fn (mut p StyleParser) parse_container_query() !ContainerQuery {
 		}
 		conditions << p.parse_container_condition()!
 		p.skip_space_and_comments()!
-		if p.eof() {
+		if !p.media_and_follows()! {
 			break
 		}
-		if is_style_name_start(p.peek()) {
-			saved_pos := p.pos
-			saved_line := p.line
-			saved_col := p.col
-			word := p.parse_ident()!.to_lower()
-			if word == 'and' {
-				continue
-			}
-			p.pos = saved_pos
-			p.line = saved_line
-			p.col = saved_col
-			break
+		// `and` must lead to another condition.
+		p.skip_space_and_comments()!
+		if p.eof() || p.peek() != `(` {
+			return error(style_err(p.line, p.col, 'expected a `(size: value)` condition after `and`'))
 		}
-		break
 	}
 	if name.len == 0 && conditions.len == 0 {
 		return error(style_err(p.line, p.col,
@@ -340,4 +370,20 @@ fn (mut p StyleParser) parse_query_block(q StyleQueryCtx) ![]StyleRule {
 		media:      media
 		containers: containers
 	}, false)
+}
+
+// style_media_types are the CSS media types. `all` and `screen` match
+// every ui2 window; the rest (print, speech and the deprecated ones) never
+// match, as CSS treats them on a screen.
+const style_media_types = ['all', 'screen', 'print', 'speech', 'tty', 'tv', 'projection', 'handheld',
+	'braille', 'embossed', 'aural']
+
+// style_unquote strips one pair of matching quotes around text.
+fn style_unquote(text string) string {
+	trimmed := text.trim_space()
+	if trimmed.len >= 2 && ((trimmed[0] == `"` && trimmed[trimmed.len - 1] == `"`)
+		|| (trimmed[0] == `'` && trimmed[trimmed.len - 1] == `'`)) {
+		return trimmed[1..trimmed.len - 1].trim_space()
+	}
+	return trimmed
 }

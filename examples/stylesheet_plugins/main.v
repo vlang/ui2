@@ -62,11 +62,12 @@ fn plugin_theme_lookup(name string, inner string, ctx ui2.StyleLengthCtx) !ui2.S
 }
 
 // @supports wraps its body in a global @media when the feature is known,
-// and drops the block otherwise.
+// and drops the block otherwise. The prelude is written `(feature)`.
 fn plugin_supports(name string, prelude string, body string) !string {
 	_ = name
 	known := ['container-queries', 'color-mix', 'nesting', 'custom-props', 'cqw-units']
-	if prelude.trim_space().to_lower() in known {
+	feature := prelude.trim_space().trim_string_left('(').trim_string_right(')').trim_space()
+	if feature.to_lower() in known {
 		return '@media all { ${body} }'
 	}
 	return ''

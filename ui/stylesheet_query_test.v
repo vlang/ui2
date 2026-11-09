@@ -334,3 +334,48 @@ fn test_dsl_guarded_rule() {
 		assert err.msg().contains('orientation')
 	}
 }
+
+fn test_media_types() {
+	sheet := parse_stylesheet('@media all { A { color: red; } } @media screen and (min-width: 100px) { B { color: red; } } @media print { C { color: red; } } @media not print { D { color: red; } } @media only screen { E { color: red; } }')!
+	env := query_test_env()
+	assert media_list_matches(sheet.rules[0].media, env)
+	assert media_list_matches(sheet.rules[1].media, env)
+	assert !media_list_matches(sheet.rules[2].media, env)
+	assert media_list_matches(sheet.rules[3].media, env)
+	assert media_list_matches(sheet.rules[4].media, env)
+	if _ := parse_stylesheet('@media sreen { A { color: red; } }') {
+		assert false, 'unknown media type must fail'
+	} else {
+		assert err.msg().contains('media type')
+	}
+}
+
+fn test_media_square_window_is_portrait() {
+	square := StyleQueryEnv{
+		...query_test_env()
+		width:  500
+		height: 500
+	}
+	assert media_query_orientation(square) == 'portrait'
+}
+
+fn test_media_keywords_ignore_case_and_quotes() {
+	sheet := parse_stylesheet('@media (orientation: LANDSCAPE) and (platform: "windows") { A { color: red; } }')!
+	assert media_list_matches(sheet.rules[0].media, query_test_env())
+}
+
+fn test_media_unit_must_touch_number() {
+	if _ := parse_stylesheet('@media (min-width: 5 px) { A { color: red; } }') {
+		assert false, 'spaced unit must fail'
+	} else {
+		assert err.msg().contains('not a length')
+	}
+}
+
+fn test_container_rejects_dangling_and() {
+	if _ := parse_stylesheet('@container (min-width: 5px) and { A { color: red; } }') {
+		assert false, 'dangling and must fail'
+	} else {
+		assert err.msg().contains('after `and`')
+	}
+}

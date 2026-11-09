@@ -22,6 +22,7 @@ pub:
 pub struct MediaQuery {
 pub:
 	negate     bool
+	media_type string // '' when none was written; see style_media_types
 	conditions []MediaCondition
 }
 
@@ -110,14 +111,18 @@ pub fn stylesheet_query_env(dark bool, dpi f64) StyleQueryEnv {
 	}
 }
 
-// media_query_matches reports whether one media query holds. An empty
-// condition list never matches (the parser rejects it anyway).
+// media_query_matches reports whether one media query holds: its media
+// type (when written) and every condition. A query with neither never
+// matches (the parser never produces one).
 pub fn media_query_matches(query MediaQuery, env StyleQueryEnv) bool {
-	if query.conditions.len == 0 {
+	if query.conditions.len == 0 && query.media_type.len == 0 {
 		return false
 	}
-	mut holds := true
+	mut holds := query.media_type.len == 0 || query.media_type in ['all', 'screen']
 	for condition in query.conditions {
+		if !holds {
+			break
+		}
 		if !media_condition_matches(condition, env) {
 			holds = false
 			break
@@ -140,8 +145,10 @@ pub fn media_list_matches(queries []MediaQuery, env StyleQueryEnv) bool {
 	return false
 }
 
+// media_query_orientation follows CSS: portrait when the height is at least
+// the width, so a square window is portrait.
 fn media_query_orientation(env StyleQueryEnv) string {
-	return if env.width >= env.height { 'landscape' } else { 'portrait' }
+	return if env.height >= env.width { 'portrait' } else { 'landscape' }
 }
 
 fn media_condition_matches(condition MediaCondition, env StyleQueryEnv) bool {
@@ -186,6 +193,10 @@ fn query_length_matches(op string, raw string, size f64) bool {
 fn query_css_length(raw string) ?f64 {
 	lower := raw.trim_space().to_lower()
 	number := if lower.ends_with('px') { lower[..lower.len - 2] } else { lower }
+	// The unit must touch its number: `5 px` is not a length.
+	if number.len == 0 || is_style_space(number[number.len - 1]) {
+		return none
+	}
 	value := query_plain_number(number) or { return none }
 	if value < 0 || value > 1000000 {
 		return none
@@ -212,6 +223,9 @@ fn query_resolution_value(raw string) ?f64 {
 	} else if lower.ends_with('x') {
 		lower[..lower.len - 1]
 	} else {
+		return none
+	}
+	if number.len == 0 || is_style_space(number[number.len - 1]) {
 		return none
 	}
 	value := query_plain_number(number) or { return none }
