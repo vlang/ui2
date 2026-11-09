@@ -146,8 +146,11 @@ Unknown properties warn instead of failing the build. `opacity` outside
 ## Values
 
 **Colors** reuse the theme grammar: `#rgb`, `#rrggbb`, `#rrggbbaa`,
-`rgb()`/`hsl()` in both comma and space forms, Tailwind palette names
-(`blue`, `blue-600`, `blue-600/50`, `black`, `white`, `transparent`) and
+`rgb()`/`hsl()` in comma and space forms, Tailwind palette names
+(`blue`, `blue-600`, `blue-600/50`, `black`, `white`, `transparent`),
+modern spaces (`lab()`, `lch()`, `oklab()`, `oklch()`, `hwb()`,
+`gray()`, `color()` with `srgb`, `srgb-linear`, `display-p3`, `a98-rgb`,
+`prophoto-rgb`, `rec2020`, `xyz`, `xyz-d50`, `xyz-d65`), and
 `linear-gradient(135deg, #4f46e5, #06b6d4)` with `to <side>` directions.
 Bare names are Tailwind's 500 shade — `red` is `0xef4444`, not `0xff0000`;
 use hex when you mean exact. `color-mix(in srgb, C1 [p%], C2 [q%])` mixes
@@ -156,6 +159,19 @@ two colors in gamma-encoded sRGB, defaulting to an even split:
 ```css
 Button.ghost:hover { background: color-mix(in srgb, @accent 12%, @surface); }
 ```
+
+Relative colors derive from any other color, per channel:
+
+```css
+Button:hover { background: rgb(from @accent r g b / 80%); }
+Label.muted { color: hsl(from var(--ink) h s 40%); }
+```
+
+`rgb()`/`hsl()`/`hwb()` take channels in their own space, `lab()`/`lch()`/
+`oklab()`/`oklch()`/`gray()` likewise, and `color()` names its space
+explicitly (`color(from red srgb r g b)`). Omitted trailing channels keep
+the origin's values, so `rgb(from red r g b / 50%)` only changes alpha.
+Channel math (`calc()`, `min()`, …) works on top of origin idents.
 
 Translucent colors composite over the background.
 
@@ -202,6 +218,27 @@ Unknown variables warn per element and skip the declaration. Variable
 lookup runs innermost scope first, then outward, then global — a card can
 override `@accent` for its subtree with its own `light {}`/`dark {}` vars.
 
+Custom properties (`--*`) live on rules and inherit down the tree, like
+CSS. `var()` reads them with an optional fallback; unknown names without a
+fallback warn and skip the declaration:
+
+```css
+View.card { --title-size: 18px; }
+Label.card-title { font-size: var(--title-size, 14px); }
+```
+
+`var()` works anywhere a value goes — colors, lengths, gradients — and
+nests (`var(--a, var(--b, 12px))`). `@name` and `--name` are different
+variables; use one spelling consistently.
+
+`light-dark()` picks a branch by the color scheme, as a lighter alternative
+to full `light {}`/`dark {}` blocks for one-off values (top-level values
+only — it does not nest inside other functions):
+
+```css
+Label.hint { color: light-dark(#64748b, #94a3b8); }
+```
+
 **Theme blocks** scope variables by mode:
 
 ```css
@@ -219,15 +256,14 @@ Inline props are read off the pre-cascade element and never overwritten.
 A worked example:
 
 ```css
-Button { background: red; }              /* specificity 1 */
-View Button { background: blue; }        /* specificity 2: wins */
-Button { background: green; }            /* same as first, but later: wins over red */
+Button { background: red; }              /* (0,0,1) */
+Button { background: green; }            /* same score, later: wins over red */
+Button.primary { background: blue; }     /* (0,1,0): beats both above */
 ```
 
-...resolves to green for a `Button` directly inside a `View` — wait, no:
-`View Button` (specificity 2) beats both. Specificity outranks order; order
-only breaks ties. A scoped sheet with the same specificity beats the global
-one; an inline `bg:` beats everything.
+Specificity outranks source order; order only breaks ties. A scoped sheet
+with equal specificity beats the global one; an inline `bg:` beats the
+whole cascade.
 
 ## Scoping
 
@@ -380,5 +416,19 @@ warn until layout reads them.
 ## Non-goals (v1)
 
 Layout selectors, animations/transitions, `!important`, and container units
-(`cqw`). `refresh_element` (AppKit) bypasses the sheet: it reconciles a
-caller-supplied subtree.
+beyond lengths (`cqw` etc. work as values; container *queries* are the
+`@container` rules above). `refresh_element` (AppKit) bypasses the sheet:
+it reconciles a caller-supplied subtree, not a fresh build.
+
+Deliberately unsupported CSS (the cascade parses values, it does not lay
+out or paint): gradients other than `linear-gradient()` (no
+`radial-`/`conic-gradient()` backends), `color-contrast()` and
+`contrast-color()` (spec still churning; use `color-mix()` with white or
+black instead), `palette-mix()` (no palette infra), `anchor()` /
+`position-try` (no anchor positioning), filter functions (`blur()`,
+`brightness()`, … — no filter stage), transform functions (`rotate()`,
+`scale()`, `translate()` — transforms are animation targets, not style),
+`image-set()` / `cross-fade()` (no image URLs in stylesheets), `attr()`
+(no element-attribute bridge), counters, `sibling-index()` and `if()`
+(use `@media`), and non-sRGB output gamuts (everything renders through
+sRGB with clamping).

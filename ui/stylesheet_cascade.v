@@ -62,20 +62,21 @@ pub fn apply_stylesheet_ex(root Element, global Stylesheet, env StyleMatchEnv) (
 		scopes << global
 	}
 	qenv := stylesheet_query_env(env.dark, env.dpi)
-	root_out := cascade_element(root, [], 0, 1, scopes, env, qenv, mut warnings)
+	root_out := cascade_element(root, [], 0, 1, scopes, env, qenv, map[string]string{}, mut warnings)
 	return root_out, warnings
 }
 
-fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, mut warnings []StylesheetWarning) Element {
+fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, inherited map[string]string, mut warnings []StylesheetWarning) Element {
 	mut active := scopes.clone()
 	if el.stylesheet.rules.len > 0 || el.stylesheet.variables.len > 0
 		|| el.stylesheet.light_vars.len > 0 || el.stylesheet.dark_vars.len > 0 {
 		active << el.stylesheet
 	}
-	mut out := if el.ignore_stylesheet {
-		el
-	} else {
-		cascade_props(el, ancestors, index, count, active, env, qenv, mut warnings)
+	mut out := el
+	mut child_inherited := inherited.clone()
+	if !el.ignore_stylesheet {
+		out, child_inherited = cascade_props(el, ancestors, index, count, active, env,
+			qenv, inherited, mut warnings)
 	}
 	mut children := []Element{cap: el.children.len}
 	for child_index, child in el.children {
@@ -85,7 +86,7 @@ fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, 
 			count: count
 		}]
 		children << cascade_element(child, ancestors_next, child_index, el.children.len,
-			active, env, qenv, mut warnings)
+			active, env, qenv, child_inherited, mut warnings)
 	}
 	return Element{
 		...out
@@ -102,7 +103,7 @@ struct StyleCandidate {
 	length      StyleLengthCtx
 }
 
-fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, mut warnings []StylesheetWarning) Element {
+fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, inherited map[string]string, mut warnings []StylesheetWarning) (Element, map[string]string) {
 	mut candidates := []StyleCandidate{}
 	for scope_level, sheet in scopes {
 		for rule_index, rule in sheet.rules {
@@ -128,7 +129,7 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 		}
 	}
 	if candidates.len == 0 {
-		return el
+		return el, inherited
 	}
 	candidates.sort_with_compare(fn (a &StyleCandidate, b &StyleCandidate) int {
 		if a.specificity != b.specificity {
@@ -144,12 +145,40 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 		// the sort algorithm's stability.
 		return a.decl_index - b.decl_index
 	})
+	// Custom properties resolve in cascade order and pass down the tree;
+	// normal declarations resolve against them.
+	mut raw := map[string]string{}
+	for candidate in candidates {
+		if candidate.decl.prop.starts_with('--') {
+			raw[candidate.decl.prop] = candidate.decl.value
+		}
+	}
+	mut scope := StyleVarScope{
+		scopes:    scopes
+		dark:      env.dark
+		inherited: inherited
+		raw:       raw
+	}
 	mut out := el
 	for candidate in candidates {
-		out = apply_declaration(el, out, candidate.decl, scopes, env, candidate.length,
+		if candidate.decl.prop.starts_with('--') {
+			continue
+		}
+		value := cascade_resolve_inner(candidate.decl.value, mut scope) or {
+			cascade_warn(mut warnings, el, candidate.decl.prop, 'unknown variable in "${candidate.decl.value}"')
+			continue
+		}
+		out = apply_declaration(el, out, candidate.decl.prop, value, candidate.length,
 			mut warnings)
 	}
-	return out
+	mut merged := inherited.clone()
+	for key, value in raw {
+		merged[key] = value
+	}
+	for key, value in scope.resolved {
+		merged[key] = value
+	}
+	return out, merged
 }
 
 // cascade_length_ctx builds the length basis for one rule: the window from
@@ -186,33 +215,156 @@ fn cascade_lookup_var(name string, scopes []Stylesheet, dark bool) ?string {
 	return none
 }
 
-fn cascade_resolve_value(raw string, scopes []Stylesheet, dark bool) ?string {
-	value := raw.trim_space()
-	if !value.contains('@') && !value.contains('--') {
+// style_var_scope resolves `var()` references and `@`/`--` names against
+// custom properties (nearest definition wins, inherited down the tree) and
+// the in-scope theme variables. Lookups memoize; depth caps cycles.
+struct StyleVarScope {
+	scopes    []Stylesheet
+	dark      bool
+	inherited map[string]string
+	raw       map[string]string
+mut:
+	resolved map[string]string
+	depth    int
+}
+
+fn (mut s StyleVarScope) lookup(name string) !string {
+	if value := s.resolved[name] {
 		return value
 	}
-	// Substitute variables anywhere in the value, so gradients and other
-	// compound values can reference them: `linear-gradient(@accent, ...)`.
+	if value := s.inherited[name] {
+		return value
+	}
+	if raw_value := s.raw[name] {
+		if s.depth >= 16 {
+			return error('variable cycle through "${name}"')
+		}
+		s.depth++
+		value := cascade_resolve_inner(raw_value, mut s) or {
+			s.depth--
+			return err
+		}
+		s.depth--
+		s.resolved[name] = value
+		return value
+	}
+	return cascade_lookup_var(name, s.scopes, s.dark) or {
+		return error('unknown variable "${name}"')
+	}
+}
+
+// cascade_resolve_value resolves `var()` references plus `@name`/`--name`
+// names anywhere in a value, then applies a top-level `light-dark()`.
+fn cascade_resolve_value(raw string, scopes []Stylesheet, dark bool, inherited map[string]string, raw_custom map[string]string) !string {
+	mut scope := StyleVarScope{
+		scopes:    scopes
+		dark:      dark
+		inherited: inherited.clone()
+		raw:       raw_custom.clone()
+	}
+	return cascade_resolve_inner(raw, mut scope)
+}
+
+fn cascade_resolve_inner(raw string, mut scope StyleVarScope) !string {
+	trimmed := raw.trim_space()
+	if trimmed.to_lower().starts_with('light-dark(') && trimmed.ends_with(')') {
+		inner := trimmed['light-dark('.len..trimmed.len - 1]
+		parts := theme_split_commas(inner)
+		if parts.len != 2 {
+			return error('light-dark() needs exactly two branches')
+		}
+		branch := if scope.dark { parts[1] } else { parts[0] }
+		return cascade_resolve_inner(branch, mut scope)
+	}
+	value := raw.trim_space()
+	if !value.contains('@') && !value.contains('--') && !value.contains('var(')
+		&& !value.contains('var (') {
+		return value
+	}
 	mut out := []u8{}
 	mut index := 0
 	for index < value.len {
-		is_var := value[index] == `@`
-			|| (value[index] == `-` && index + 1 < value.len && value[index + 1] == `-`)
-		if !is_var {
-			out << value[index]
-			index++
+		word := style_var_word_at(value, index)
+		if word == '@' || word == '--' {
+			mut end := index + word.len
+			for end < value.len && is_style_name_char(value[end]) {
+				end++
+			}
+			key := value[index..end]
+			resolved := scope.lookup(key) or { return error('unknown variable "${key}"') }
+			out << resolved.bytes()
+			index = end
 			continue
 		}
-		mut end := index + if value[index] == `@` { 1 } else { 2 }
-		for end < value.len && is_style_name_char(value[end]) {
-			end++
+		if word == 'var' {
+			end, replacement := style_var_function(value, index, mut scope) or {
+				return error('unresolvable var() in "${value}"')
+			}
+			out << replacement.bytes()
+			index = end
+			continue
 		}
-		key := value[index..end]
-		resolved := cascade_lookup_var(key, scopes, dark) or { return none }
-		out << resolved.bytes()
-		index = end
+		out << value[index]
+		index++
 	}
 	return out.bytestr()
+}
+
+// style_var_word_at classifies the token at pos: `@`, `--`, `var` (only
+// when followed by `(`), or '' for anything else. A `var` that is part of
+// a longer identifier (e.g. `myvar(`) is not a function.
+fn style_var_word_at(value string, pos int) string {
+	if value[pos] == `@` {
+		return '@'
+	}
+	if value[pos] == `-` && pos + 1 < value.len && value[pos + 1] == `-` {
+		return '--'
+	}
+	if value[pos] == `v` && pos + 3 < value.len && value[pos..pos + 3] == 'var'
+		&& value[pos + 3] == `(` {
+		if pos > 0 && (is_style_name_char(value[pos - 1]) || value[pos - 1] == `-`) {
+			return ''
+		}
+		return 'var'
+	}
+	return ''
+}
+
+// style_var_function parses `var(--name[, fallback])` at pos and returns the
+// end position plus the substituted text.
+fn style_var_function(value string, pos int, mut scope StyleVarScope) !(int, string) {
+	mut depth := 0
+	mut index := pos + 3 // past `var`
+	for index < value.len {
+		if value[index] == `(` {
+			depth++
+		} else if value[index] == `)` {
+			depth--
+			if depth == 0 {
+				break
+			}
+		}
+		index++
+	}
+	if index >= value.len {
+		return error('unclosed var()')
+	}
+	inner := value[pos + 4..index]
+	parts := theme_split_commas(inner)
+	if parts.len == 0 || parts.len > 2 {
+		return error('var() needs a name and optional fallback')
+	}
+	name := parts[0].trim_space()
+	if !name.starts_with('--') || name.len <= 2 {
+		return error('"${name}" is not a custom property')
+	}
+	if resolved := scope.lookup(name) {
+		return index + 1, cascade_resolve_inner(resolved, mut scope)!
+	}
+	if parts.len == 2 {
+		return index + 1, cascade_resolve_inner(parts[1], mut scope)!
+	}
+	return error('unknown variable "${name}"')
 }
 
 fn cascade_warn(mut warnings []StylesheetWarning, el Element, prop string, message string) {
@@ -226,18 +378,14 @@ fn cascade_warn(mut warnings []StylesheetWarning, el Element, prop string, messa
 // Inline wins is read off base (the pre-cascade element): checks below look
 // at base, writes accumulate onto out, so later (stronger) sheet rules still
 // override earlier ones while builder-set properties survive.
-fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []Stylesheet, env StyleMatchEnv, lctx StyleLengthCtx, mut warnings []StylesheetWarning) Element {
-	value := cascade_resolve_value(decl.value, scopes, env.dark) or {
-		cascade_warn(mut warnings, out, decl.prop, 'unknown variable "${decl.value}"')
-		return out
-	}
-	match decl.prop {
+fn apply_declaration(base Element, out Element, prop string, value string, lctx StyleLengthCtx, mut warnings []StylesheetWarning) Element {
+	match prop {
 		'background', 'background-color', 'background-gradient' {
 			if base.box.bg != 0xffffff || base.box.gradient.stops.len > 0 {
 				return out // inline wins
 			}
 			token := component_theme_token(value) or {
-				cascade_warn(mut warnings, out, decl.prop, 'unparseable color: ${err.msg()}')
+				cascade_warn(mut warnings, out, prop, 'unparseable color: ${err.msg()}')
 				return out
 			}
 			if token.has_gradient() {
@@ -265,7 +413,7 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 				return out
 			}
 			token := component_theme_token(value) or {
-				cascade_warn(mut warnings, out, decl.prop, 'unparseable color: ${err.msg()}')
+				cascade_warn(mut warnings, out, prop, 'unparseable color: ${err.msg()}')
 				return out
 			}
 			return Element{
@@ -281,7 +429,7 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 				return out
 			}
 			size := style_length_px(value, lctx) or {
-				cascade_warn(mut warnings, out, decl.prop, 'expected a length')
+				cascade_warn(mut warnings, out, prop, 'expected a length')
 				return out
 			}
 			return Element{
@@ -343,7 +491,7 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 				'center' { Align.center }
 				'right' { Align.right }
 				else {
-					cascade_warn(mut warnings, out, decl.prop, 'expected left, center or right')
+					cascade_warn(mut warnings, out, prop, 'expected left, center or right')
 					return out
 				}
 			}
@@ -369,7 +517,7 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 			underline := lower.contains('underline')
 			strike := lower.contains('line-through') || lower.contains('strikethrough')
 			if !underline && !strike {
-				cascade_warn(mut warnings, out, decl.prop, 'expected underline, line-through or none')
+				cascade_warn(mut warnings, out, prop, 'expected underline, line-through or none')
 				return out
 			}
 			return Element{
@@ -401,7 +549,7 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 				}
 			}
 			if width == none && color == none {
-				cascade_warn(mut warnings, out, decl.prop, 'expected `<width> [style] <color>`')
+				cascade_warn(mut warnings, out, prop, 'expected `<width> [style] <color>`')
 				return out
 			}
 			w := width or { base.box.border_left }
@@ -426,7 +574,7 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 				return out
 			}
 			radius := style_length_px(value, lctx) or {
-				cascade_warn(mut warnings, out, decl.prop, 'expected a length')
+				cascade_warn(mut warnings, out, prop, 'expected a length')
 				return out
 			}
 			return Element{
@@ -442,7 +590,7 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 				return out
 			}
 			token := component_theme_token(value) or {
-				cascade_warn(mut warnings, out, decl.prop, 'unparseable color: ${err.msg()}')
+				cascade_warn(mut warnings, out, prop, 'unparseable color: ${err.msg()}')
 				return out
 			}
 			return Element{
@@ -459,7 +607,7 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 				return out
 			}
 			width := style_length_px(value, lctx) or {
-				cascade_warn(mut warnings, out, decl.prop, 'expected a length')
+				cascade_warn(mut warnings, out, prop, 'expected a length')
 				return out
 			}
 			return Element{
@@ -480,7 +628,7 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 			trimmed := value.trim_space()
 			raw := if trimmed.ends_with('%') { trimmed[..trimmed.len - 1] } else { trimmed }
 			number := query_plain_number(raw) or {
-				cascade_warn(mut warnings, out, decl.prop, 'expected a number or percentage')
+				cascade_warn(mut warnings, out, prop, 'expected a number or percentage')
 				return out
 			}
 			opacity := if trimmed.ends_with('%') { number / 100 } else { number }
@@ -500,7 +648,7 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 				return out
 			}
 			shadow := cascade_shadow(value, lctx) or {
-				cascade_warn(mut warnings, out, decl.prop, 'expected `<color> [blur] [x y] [spread]`')
+				cascade_warn(mut warnings, out, prop, 'expected `<color> [blur] [x y] [spread]`')
 				return out
 			}
 			return Element{
@@ -512,11 +660,11 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 			}
 		}
 		'padding', 'margin', 'gap' {
-			cascade_warn(mut warnings, out, decl.prop, 'layout-owned in v1: parsed, not applied yet')
+			cascade_warn(mut warnings, out, prop, 'layout-owned in v1: parsed, not applied yet')
 			return out
 		}
 		else {
-			cascade_warn(mut warnings, out, decl.prop, 'unknown property')
+			cascade_warn(mut warnings, out, prop, 'unknown property')
 			return out
 		}
 	}

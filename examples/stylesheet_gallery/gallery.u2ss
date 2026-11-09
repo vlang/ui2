@@ -77,7 +77,8 @@ View.card {
 	border-color: @line;
 	border-width: 1px;
 
-	Label.card-title { font-size: 14px; font-weight: bold; }
+	--title-boost: 2px;
+	Label.card-title { font-size: calc(14px + var(--title-boost, 0px)); font-weight: bold; }
 	Label.card-note { color: @muted; font-size: 13px; }
 }
 @container card (min-width: 280px) {

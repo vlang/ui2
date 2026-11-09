@@ -226,3 +226,66 @@ fn test_stylesheet_dsl_matches_parser() {
 	})
 	assert out.children[0].box.bg == 0x2563eb
 }
+
+fn test_cascade_var_function() {
+	sheet := parse_stylesheet('@base: 12px;
+Button { font-size: var(--size, @base); }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].text_style.size == 12.0
+}
+
+fn test_cascade_var_fallback_chain() {
+	sheet := parse_stylesheet('Button { font-size: var(--missing, var(--also-missing, 20px)); }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].text_style.size == 20.0
+}
+
+fn test_cascade_custom_property_inherits() {
+	sheet := parse_stylesheet('View { --pad: 30px; } Button { font-size: var(--pad); }')!
+	inner := view('inner', rect(0, 0, 400, 100), BoxStyle{}, [cascade_test_button('a')])
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [inner])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].children[0].text_style.size == 30.0
+}
+
+fn test_cascade_custom_property_inner_wins() {
+	sheet := parse_stylesheet('View { --pad: 30px; } View.inner { --pad: 18px; } Button { font-size: var(--pad); }')!
+	inner := with_classes(view('inner', rect(0, 0, 400, 100), BoxStyle{}, [
+		cascade_test_button('a'),
+	]), 'inner')
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [inner])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].children[0].text_style.size == 18.0
+}
+
+fn test_cascade_unknown_custom_property_warns() {
+	sheet := parse_stylesheet('Button { font-size: var(--nope); }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	out, warnings := apply_stylesheet_ex(root, sheet, StyleMatchEnv{})
+	assert out.children[0].text_style.size == 15.0
+	assert warnings.any(it.prop == 'font-size')
+}
+
+fn test_cascade_light_dark_function() {
+	sheet := parse_stylesheet('Button { background: light-dark(#eeeeee, #111111); }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	light := apply_stylesheet(root, sheet, StyleMatchEnv{ dark: false })
+	dark := apply_stylesheet(root, sheet, StyleMatchEnv{ dark: true })
+	assert light.children[0].box.bg == 0xeeeeee
+	assert dark.children[0].box.bg == 0x111111
+}
+
+fn test_cascade_nested_rule_applies() {
+	sheet := parse_stylesheet('View.card { Label.card-title { font-size: 19px; } &:hover { border-color: red; } }')!
+	card := with_classes(view('card', rect(0, 0, 300, 100), BoxStyle{}, [
+		with_classes(label('t', 'Hi', rect(0, 0, 100, 20), TextStyle{}), 'card-title'),
+	]), 'card')
+	mut root := view('root', rect(0, 0, 1000, 100), BoxStyle{}, [card])
+	plain := apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert plain.children[0].children[0].text_style.size == 19.0
+	hovered := apply_stylesheet(root, sheet, StyleMatchEnv{ hovered: 'card' })
+	assert hovered.children[0].box.border_color == 0xef4444
+	// The container rule from the queries test still matches: covered there.
+}

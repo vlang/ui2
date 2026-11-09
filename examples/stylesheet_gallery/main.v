@@ -152,7 +152,7 @@ fn gallery_cards_section(state &GalleryDemo) []ui2.Element {
 			ui2.TextStyle{}), 'h2'),
 		gallery_card('card_wide', 'Wide card', 'At 320px the container query grows this title.',
 			'run_wide', ui2.rect(0, 38, 320, 160)),
-		gallery_card('card_narrow', 'Narrow card', 'At 220px the base 14px title applies.',
+		gallery_card('card_narrow', 'Narrow card', 'At 220px the boosted 16px title applies.',
 			'run_narrow', ui2.rect(332, 38, 220, 160)),
 		ui2.with_classes(ui2.label('hint', 'Both cards share one sheet; only the frame widths differ.',
 			ui2.rect(0, 210, 700, 22), ui2.TextStyle{}), 'subtitle'),

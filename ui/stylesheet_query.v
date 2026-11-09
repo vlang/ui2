@@ -185,14 +185,8 @@ fn query_length_matches(op string, raw string, size f64) bool {
 fn query_css_length(raw string) ?f64 {
 	lower := raw.trim_space().to_lower()
 	number := if lower.ends_with('px') { lower[..lower.len - 2] } else { lower }
-	if number.contains(' ') || number.len == 0 {
-		return none
-	}
-	value := number.f64()
-	if value != value || value < 0 || value > 1000000 {
-		return none
-	}
-	if value == 0 && number != '0' && !number.starts_with('0.') {
+	value := query_plain_number(number) or { return none }
+	if value < 0 || value > 1000000 {
 		return none
 	}
 	return value
@@ -219,8 +213,8 @@ fn query_resolution_value(raw string) ?f64 {
 	} else {
 		return none
 	}
-	value := number.f64()
-	if value != value || value <= 0 || value > 100 {
+	value := query_plain_number(number) or { return none }
+	if value <= 0 || value > 100 {
 		return none
 	}
 	return value

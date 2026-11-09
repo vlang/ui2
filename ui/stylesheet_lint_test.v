@@ -35,6 +35,23 @@ fn test_stylesheet_lint_empty_is_error() {
 	assert notes.has_errors()
 }
 
+fn test_stylesheet_lint_custom_property_skipped() {
+	notes := stylesheet_lint_source('View { --gap: 12px; } Button { background: red; }')!
+	assert !notes.has_errors()
+	assert notes.warnings.len == 0
+}
+
+fn test_stylesheet_lint_var_needs_tree_or_fallback() {
+	tree := stylesheet_lint_source('Button { font-size: var(--pad); }')!
+	assert !tree.has_errors()
+	assert tree.warnings.any(it.contains('--pad'))
+	fallback := stylesheet_lint_source('Button { font-size: var(--pad, red); }')!
+	assert fallback.warnings.any(it.contains('--pad'))
+	// @pad and --pad are different variables; matching names stay quiet.
+	known := stylesheet_lint_source('--pad: 12px; Button { font-size: var(--pad); }')!
+	assert known.warnings.len == 0
+}
+
 fn test_stylesheet_border_shorthand() {
 	sheet := parse_stylesheet('Button { border: 2px solid #123456; }')!
 	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [

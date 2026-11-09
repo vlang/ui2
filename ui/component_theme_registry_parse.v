@@ -91,11 +91,50 @@ pub fn component_theme_token(value string) !ComponentThemeToken {
 	if lower_head.starts_with('color-mix(') {
 		return theme_parse_color_mix(source)
 	}
+	if style_is_relative_function(source) {
+		return style_parse_relative_color_value(source)!
+	}
+	for name in ['lab(', 'lch(', 'oklab(', 'oklch(', 'hwb(', 'gray(', 'color('] {
+		if lower_head.starts_with(name) {
+			open := source.index('(') or { return error('"${source}" is not a color') }
+			inner := source[open + 1..source.len - 1]
+			function := name[..name.len - 1]
+			if style_is_relative(inner) {
+				return style_parse_relative_color(function, inner)!
+			}
+			return style_parse_function_color(function, inner)!
+		}
+	}
 	color, alpha := theme_parse_color(source)!
 	return ComponentThemeToken{
 		color:   color
 		opacity: alpha
 	}
+}
+
+// style_is_relative_function reports whether a whole value is a relative
+// color: fn-name followed by `(from ...`.
+fn style_is_relative_function(source string) bool {
+	lower := source.trim_space().to_lower()
+	open := lower.index('(') or { return false }
+	name := lower[..open].trim_space()
+	if name !in ['rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'gray', 'color'] {
+		return false
+	}
+	return style_is_relative(source[open + 1..])
+}
+
+// style_parse_relative_color_value dispatches a whole relative value to the
+// function-specific relative parser.
+fn style_parse_relative_color_value(source string) !ComponentThemeToken {
+	trimmed := source.trim_space()
+	open := trimmed.index('(') or { return error('"${source}" is not a color') }
+	mut function := trimmed[..open].trim_space().to_lower()
+	if function in ['rgba', 'hsla'] {
+		function = function[..3]
+	}
+	inner := trimmed[open + 1..trimmed.len - 1]
+	return style_parse_relative_color(function, inner)!
 }
 
 fn theme_parse_color(source string) !(u32, f64) {

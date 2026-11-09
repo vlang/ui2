@@ -114,10 +114,14 @@ which authored them.
   window size, resolution, color-scheme) + `@container` (ancestor sizes,
   optional names), `StyleQueryEnv`, per-backend `dpi` in the
   frame env, `style_rule_guarded` DSL, docs + demo rule.
-- **P5 (done, this commit):** modern values — viewport units
+- **P5 (done):** modern values — viewport units
   (`vw/vh/vmin/vmax` + `sv-/lv-/dv-`), container units (`cqw/cqh/cqmin/cqmax`),
   `env(safe-area-inset-*, fallback)` with per-backend insets, `calc()` family
   + trig, `color-mix(in srgb)`, selector nesting with `&`; `stylesheet_math.v`.
+- **P6 (done, this commit):** CSS custom properties with inheritance,
+  `var(--x, fallback)`, top-level `light-dark()`, full modern color
+  (lab/lch/oklab/oklch/hwb/gray/color() + relative `from` syntax),
+  docs + gallery var() showcase.
 - Non-goals v1: layout selectors, animations/transitions,
   `!important`. `refresh_element` (AppKit) intentionally bypasses
   the sheet: it reconciles a caller-supplied subtree, not a fresh build.

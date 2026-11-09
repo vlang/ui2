@@ -83,25 +83,42 @@ pub fn style_split_value(raw string) []string {
 	return parts
 }
 
-// query_plain_number reads a bare decimal for unitless properties.
+// query_plain_number reads a bare decimal for unitless properties. The whole
+// string must be numeric: V's f64() accepts leading-number prefixes, so
+// garbage like `0.0)` or `12px` must not slip through here.
 pub fn query_plain_number(raw string) ?f64 {
 	text := raw.trim_space()
-	if text.len == 0 || text.contains(' ') {
+	if text.len == 0 {
+		return none
+	}
+	mut digits := 0
+	mut points := 0
+	mut index := 0
+	if text[0] == `-` || text[0] == `+` {
+		index = 1
+	}
+	for index < text.len {
+		ch := text[index]
+		if ch >= `0` && ch <= `9` {
+			digits++
+		} else if ch == `.` {
+			points++
+		} else {
+			return none
+		}
+		index++
+	}
+	if digits == 0 || points > 1 {
 		return none
 	}
 	value := text.f64()
-	if value != value {
-		return none
-	}
-	if value == 0 && text != '0' && !text.starts_with('0.') && text != '.0' {
-		return none
-	}
-	return value
+	return if value != value { none } else { value }
 }
 
 enum StyleDim {
 	px
 	scalar
+	percent
 	angle
 }
 
@@ -122,6 +139,24 @@ struct StyleMathParser {
 mut:
 	pos int
 	ctx StyleLengthCtx
+}
+
+// style_math_channel evaluates a color-channel expression to a value and
+// its dimension (scalar, percent or angle). Lengths resolve but are
+// rejected: they are not valid color channels.
+pub fn style_math_channel(raw string, ctx StyleLengthCtx) ?StyleValue {
+	mut parser := StyleMathParser{
+		tokens: style_math_tokenize(raw.trim_space()) or { return none }
+		ctx:    ctx
+	}
+	value := parser.parse_expr() or { return none }
+	if !parser.eof() {
+		return none
+	}
+	if value.dim == .px {
+		return none
+	}
+	return value
 }
 
 // style_length_px resolves a declaration value to logical pixels.
@@ -146,10 +181,83 @@ fn style_value_to_px(value StyleValue) ?f64 {
 			// A bare number in length position is pixels, the ui2 convention.
 			return value.value
 		}
-		.angle {
+		else {
+			// Percentages and angles have no meaning as lengths here.
 			return none
 		}
 	}
+}
+
+// style_math_number evaluates one tokenized number against the length
+// context. Percentages stay percentages for color channels to interpret;
+// lengths reject them in style_length_px.
+
+// style_scan_number scans a decimal with optional exponent and unit from i.
+// It returns the end of the number and the end of the unit, or none when
+// the text is not a number. A leading `-` belongs to the number only when
+// directly followed by a digit or `.digit` (whitespace around binary `-`
+// and `+` stays mandatory, as in CSS); `--name` stays an identifier.
+fn style_scan_number(source string, i int) !(int, int) {
+	mut end := i
+	if source[end] == `-` {
+		end++
+	}
+	mut points := 0
+	for end < source.len
+		&& ((source[end] >= `0` && source[end] <= `9`) || source[end] == `.`) {
+		if source[end] == `.` {
+			points++
+		}
+		end++
+	}
+	if points > 1 {
+		return error('not a number')
+	}
+	// Exponent: e/E, optional sign, then digits. `1em` keeps its unit
+	// because `m` is not a digit; `1e5` and `1e-5` fold into the number.
+	if end < source.len && (source[end] == `e` || source[end] == `E`) {
+		mut exp := end + 1
+		if exp < source.len && (source[exp] == `-` || source[exp] == `+`) {
+			exp++
+		}
+		if exp < source.len && source[exp] >= `0` && source[exp] <= `9` {
+			for exp < source.len && source[exp] >= `0` && source[exp] <= `9` {
+				exp++
+			}
+			end = exp
+		}
+	}
+	if end == i || (end == i + 1 && (source[i] == `.` || source[i] == `-`)) {
+		return error('not a number')
+	}
+	if end == i + 2 && source[i] == `-` && source[i + 1] == `.` {
+		return error('not a number')
+	}
+	mut unit_end := end
+	for unit_end < source.len
+		&& ((source[unit_end] >= `a` && source[unit_end] <= `z`)
+			|| (source[unit_end] >= `A` && source[unit_end] <= `Z`) || source[unit_end] == `%`) {
+		unit_end++
+	}
+	return end, unit_end
+}
+
+fn style_scan_number_here(source string, i int) bool {
+	if i >= source.len {
+		return false
+	}
+	ch := source[i]
+	if (ch >= `0` && ch <= `9`) || ch == `.` {
+		return true
+	}
+	if ch != `-` || i + 1 >= source.len {
+		return false
+	}
+	next := source[i + 1]
+	if next >= `0` && next <= `9` {
+		return true
+	}
+	return next == `.` && i + 2 < source.len && source[i + 2] >= `0` && source[i + 2] <= `9`
 }
 
 fn style_math_tokenize(source string) ![]StyleMathToken {
@@ -164,64 +272,11 @@ fn style_math_tokenize(source string) ![]StyleMathToken {
 			i++
 			continue
 		}
-		if (ch >= `0` && ch <= `9`) || ch == `.` {
-			mut end := i
-			mut points := 0
-			for end < source.len
-				&& ((source[end] >= `0` && source[end] <= `9`) || source[end] == `.`) {
-				if source[end] == `.` {
-					points++
-				}
-				end++
-			}
-			mut unit_end := end
-			for unit_end < source.len
-				&& ((source[unit_end] >= `a` && source[unit_end] <= `z`)
-					|| (source[unit_end] >= `A` && source[unit_end] <= `Z`) || source[unit_end] == `%`) {
-				unit_end++
+		if style_scan_number_here(source, i) {
+			end, unit_end := style_scan_number(source, i) or {
+				return error('"${source}" is not a number')
 			}
 			number := source[i..end]
-			if number == '.' || points > 1 {
-				return error('"${source}" is not a number')
-			}
-			value := number.f64()
-			if value != value {
-				return error('"${source}" is not a number')
-			}
-			tokens << StyleMathToken{
-				kind: 'num'
-				num:  value
-				unit: source[end..unit_end].to_lower()
-			}
-			i = unit_end
-			continue
-		}
-		if ch == `-` && i + 1 < source.len
-			&& ((source[i + 1] >= `0` && source[i + 1] <= `9`)
-				|| (source[i + 1] == `.` && i + 2 < source.len && source[i + 2] >= `0`
-					&& source[i + 2] <= `9`)) {
-			// A `-` directly before a number belongs to it (`-4px`, `10px-4px`
-			// would then misparse — but like CSS, `calc` needs whitespace
-			// around `-` and `+`, so that stays an error downstream).
-			mut end := i + 1
-			mut points := 0
-			for end < source.len
-				&& ((source[end] >= `0` && source[end] <= `9`) || source[end] == `.`) {
-				if source[end] == `.` {
-					points++
-				}
-				end++
-			}
-			mut unit_end := end
-			for unit_end < source.len
-				&& ((source[unit_end] >= `a` && source[unit_end] <= `z`)
-					|| (source[unit_end] >= `A` && source[unit_end] <= `Z`) || source[unit_end] == `%`) {
-				unit_end++
-			}
-			number := source[i..end]
-			if points > 1 {
-				return error('"${source}" is not a number')
-			}
 			value := number.f64()
 			if value != value {
 				return error('"${source}" is not a number')
@@ -313,6 +368,13 @@ fn style_math_add(a StyleValue, b StyleValue, op string) !StyleValue {
 		// numeric and callers convert once.
 		combined := if op == '+' { a.value + b.value } else { a.value - b.value }
 		return StyleValue{ dim: .angle, value: combined }
+	}
+	if a.dim == .percent || b.dim == .percent {
+		if a.dim != b.dim {
+			return error('cannot mix percentages with other units here')
+		}
+		combined := if op == '+' { a.value + b.value } else { a.value - b.value }
+		return StyleValue{ dim: .percent, value: combined }
 	}
 	if a.dim == .px || b.dim == .px {
 		if a.dim != .scalar && b.dim != .scalar && a.dim != b.dim {
@@ -428,6 +490,12 @@ fn style_math_number(token StyleMathToken, ctx StyleLengthCtx) !StyleValue {
 		}
 		'turn' {
 			return StyleValue{ dim: .angle, value: token.num * 2 * math.pi }
+		}
+		'dppx', 'dpi', 'dpcm' {
+			return error('"${token.unit}" needs a resolution context stylesheets do not have')
+		}
+		'%' {
+			return StyleValue{ dim: .percent, value: token.num }
 		}
 		else {
 			return error('"${token.unit}" needs a layout or font context stylesheets do not have')
