@@ -555,7 +555,9 @@ type, `#id` and `.class` selectors, `:hover`/`:disabled` states, `@media`
 and `@container` queries, variables, and light/dark blocks. The cascade is
 theme tokens, then the global sheet, then per-subtree scopes, then inline
 `BoxStyle`/`TextStyle` — which always win, so adopting a sheet never breaks
-existing builders.
+existing builders. Rules index by subject at parse time, so large sheets
+stay cheap; see [docs/stylesheet.md](docs/stylesheet.md) for the full
+guide.
 
 ```v
 ui2.set_global_stylesheet(ui2.parse_stylesheet('

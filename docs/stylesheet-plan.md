@@ -146,7 +146,13 @@ which authored them.
   toolbar/titlebar/statusbar (+items), tab bar (+tabs), badge, avatar, tag,
   number/otp inputs) with `selected` state classes where the state is not
   a pseudo; leaf kinds keep matching by type. Builder-set fields still win
-  over sheets; `ui/component_stylesheet_test.v` pins the contract.- Non-goals v1: layout selectors, animations/transitions,
+  over sheets; `ui/component_stylesheet_test.v` pins the contract.
+- **Follow-ups (done):** cascade optimization in two rounds — per-run
+  color/length caches, in-order sort skip, then a parse-time subject index
+  plus same-property folding (`ui/stylesheet_index_test.v` diffs indexed
+  against full scan); VML build path profiled, stylesheet plumbing ~5% of
+  build, no change shipped.
+- Non-goals v1: layout selectors, animations/transitions,
   `!important`. `refresh_element` (AppKit) intentionally bypasses
   the sheet: it reconciles a caller-supplied subtree, not a fresh build.
 

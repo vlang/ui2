@@ -266,6 +266,17 @@ Specificity outranks source order; order only breaks ties. A scoped sheet
 with equal specificity beats the global one; an inline `bg:` beats the
 whole cascade.
 
+Two implementation notes, both invisible unless you measure. Rules are
+indexed by subject (kind, `#id`, `.class` buckets plus a universal one)
+when the sheet is built, so each element attempts only the rules it can
+match — sheets assembled by hand as `Stylesheet{...}` literals skip the
+index and take the full scan instead. And a repeated property applies
+once (its last resolved candidate) rather than once per override, except
+`background*`, `text-decoration`, and layout-owned/unknown props, which
+keep every application for their side effects and per-declaration
+warnings. `ui/stylesheet_index_test.v` diffs the indexed cascade against
+the full scan to pin this.
+
 ## Scoping
 
 ```v
