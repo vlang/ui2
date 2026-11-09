@@ -307,16 +307,16 @@ pub fn otp_input(config OtpInputConfig) !Element {
 			&& otp_input_group_of(config, index) != otp_input_group_of(config, index - 1) {
 			previous := frames[index - 1]
 			children << Element{
-				...label('', config.separator, rect(previous.x + previous.width, frame.y,
+				...with_classes(label('', config.separator, rect(previous.x + previous.width, frame.y,
 					frame.x - previous.x - previous.width, frame.height), TextStyle{
 					color: theme.muted_foreground
 					size:  m.font_size
 					align: .center
-				})
+				}), 'otp-input-separator')
 				key: 'separator:${index}'
 			}
 		}
-		children << inputs_field(
+		children << with_classes(inputs_field(
 			id:                otp_input_cell_id(config.id, index)
 			text:              otp_input_cell_text(code, index)
 			frame:             frame
@@ -339,10 +339,11 @@ pub fn otp_input(config OtpInputConfig) !Element {
 			theme:             theme
 			// Each cell stands alone, so it keeps the native field frame.
 			standalone_radius: component_metrics(config.size).radius
-		)
+		), 'otp-input-cell')
 	}
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{ transparent: true }, children)
+		...with_classes(view(config.id, config.frame, BoxStyle{ transparent: true }, children),
+			'otp-input')
 		accessibility_role:  'group'
 		accessibility_label: config.accessibility_label
 		accessibility_value: '${code.runes().len} of ${config.length} entered'

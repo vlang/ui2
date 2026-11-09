@@ -757,7 +757,7 @@ pub fn refresh() {
 	if st.root == unsafe { nil } || st.rendering || voidptr(st.build_screen) == unsafe { nil } {
 		return
 	}
-	declared := st.build_screen()
+	declared := stylesheet_apply_frame(stylesheet_frame_build(st.build_screen), stylesheet_windows_env())
 	root := windows_symbol_images_as_labels(apply_widget_animations(declared))
 	validate_element_tree(root) or {
 		eprintln('ui2: ${err}')
@@ -1036,6 +1036,49 @@ pub fn focused_id() string {
 	key := st.handle_keys[windows_handle_id(focused)] or { return '' }
 	return st.node_ids[key] or { '' }
 }
+
+// stylesheet_windows_env reads this frame's interaction state for the
+// stylesheet cascade. The native backend tracks hover and focus; it has no
+// press-target tracking, so :pressed stays unmatched here.
+fn stylesheet_windows_env() StyleMatchEnv {
+	st := windows_state()
+	hovered := if st.hovered.len > 0 { st.hovered.last() } else { '' }
+	env := stylesheet_frame_env(hovered, '', focused_id())
+	return StyleMatchEnv{
+		...env
+		dpi: native_device_scale()
+	}
+}
+
+// native_device_scale reports the window's device pixel ratio from the
+// device context's DPI. Without per-monitor calls this is the system DPI,
+// which is what resolution queries need.
+fn native_device_scale() f64 {
+	st := windows_state()
+	if st.root == unsafe { nil } {
+		return 1.0
+	}
+	dc := C.GetDC(st.root)
+	if dc == unsafe { nil } {
+		return 1.0
+	}
+	dpi := C.GetDeviceCaps(dc, 90)
+	C.ReleaseDC(st.root, dc)
+	if dpi <= 0 {
+		return 1.0
+	}
+	return f64(dpi) / 96.0
+}
+
+// native_safe_insets reports the display safe area. Win32 windows are
+// rectangular, so there is none and env() uses its fallback.
+fn native_safe_insets() ?SafeInsets {
+	return none
+}
+
+fn C.GetDC(hwnd voidptr) voidptr
+fn C.GetDeviceCaps(dc voidptr, index int) int
+fn C.ReleaseDC(hwnd voidptr, dc voidptr) int
 
 pub fn focused_text_area_id() string {
 	st := windows_state()

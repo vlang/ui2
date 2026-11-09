@@ -106,7 +106,7 @@ pub fn alert_dialog(config AlertDialogConfig) !Element {
 		alert_dialog_confirm_id
 	})
 	return component_finish(alert_dialog_mark_default(Element{
-		...el
+		...with_classes(el, 'dialog', 'alert-dialog')
 		accessibility_role: 'alertdialog'
 	}, default_id))
 }

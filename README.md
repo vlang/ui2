@@ -261,7 +261,10 @@ Repeater {
 
 A `Button` can be styled directly in VML. Leave `native` unset when the
 application should own its colors and shape; `native: true` requests the
-standard native-style appearance instead.
+standard native-style appearance instead. For one shared look across many
+buttons, prefer a sheet rule (`Button.primary { ... }` in a `Style` block
+or the global sheet, matched with `class: primary`) over repeating props —
+see [Styling](#styling).
 
 ```vml
 Button {
@@ -544,6 +547,44 @@ fill opacity and gradients with `AlphaBlend` and `GradientFill`, but not a
 gradient's per-stop opacity, and it draws no shadows: Win32 child windows cannot
 paint outside themselves. Screenshots taken with `UI2_SCREENSHOT_PATH` on AppKit
 do not show CoreAnimation shadows, which `cacheDisplayInRect:` does not render.
+
+## Styling
+
+`ui2` stylesheets (`vss`) bring QSS/CSS-style rules to every backend:
+type, `#id` and `.class` selectors, `:hover`/`:disabled` states, `@media`
+and `@container` queries, variables, and light/dark blocks. The cascade is
+theme tokens, then the global sheet, then per-subtree scopes, then inline
+`BoxStyle`/`TextStyle` — which always win, so adopting a sheet never breaks
+existing builders. Rules index by subject at parse time, so large sheets
+stay cheap; see [docs/stylesheet.md](docs/stylesheet.md) for the full
+guide.
+
+```v
+ui2.set_global_stylesheet(ui2.parse_stylesheet('
+@accent: #2563eb;
+light { @bg: #f1f5f9; @ink: #172033; }
+dark  { @bg: #172033; @ink: #f8fafc; }
+Button { background: @accent; color: white; border-radius: 6px; }
+Button:hover { opacity: 0.92; }
+Button:disabled { opacity: 0.4; }
+Label.title { font-size: 22px; font-weight: bold; }
+@media (max-width: 560px) { Label.title { font-size: 18px; } }
+') or { panic(err) })
+```
+
+`examples/stylesheet_demo` is the first tour, `examples/stylesheet_gallery`
+the deep showcase, `examples/stylesheet_responsive` splits layout (V) from
+style (sheet), `examples/stylesheet_theme` is a variable-driven
+accent/mode studio, and `examples/stylesheet_plugins` wires every plugin
+hook to a live-reloaded sheet. `with_platform_design` presets cover the
+common per-OS looks (glass on macOS/iOS, Material on Android, one design
+everywhere when forced), VML documents style themselves with in-document
+`Style` blocks (`examples/counter`), and composite components expose
+styleable part classes (`.switch-track`, `.picker-option.selected`,
+`.tab.selected`). The full guide — selectors, specificity, every property,
+media/container reference, scoping, the DSL, plugins, lint, dark mode,
+platform adaptation, VML styling, component classes, migration and
+troubleshooting — is [docs/stylesheet.md](docs/stylesheet.md).
 
 ## Backend capabilities
 
@@ -1219,7 +1260,8 @@ codes for known keys, so command shortcuts are independent of the input source.
 
 Typed-VML ports from `v-ui` include:
 
-- `v run examples/counter/main.v` — the 7GUIs counter.
+- `v run examples/counter/main.v` — the 7GUIs counter, with its look in an
+  in-document VML `Style` block instead of repeated inline props.
 - `v run examples/temperature_converter/main.v` — the two-way 7GUIs
   temperature converter.
 - `v run examples/flight_booker/main.v` — the validated 7GUIs flight booker.
@@ -1345,6 +1387,20 @@ Typed-VML ports from `v-ui` include:
 - `v run examples/custom_window/main.v` — a borderless desktop widget with
   ui2-drawn chrome, draggable content, and genuinely transparent space between
   its rounded surfaces on the native macOS and Windows backends.
+- `v run examples/stylesheet_demo/main.v` — the stylesheet first tour:
+  global, scoped and DSL-built rules, light/dark toggle, hover, disabled and
+  checked states.
+- `v run examples/stylesheet_gallery/main.v` — the deep stylesheet showcase:
+  section nav, container queries on two card widths, an accent cycler, and a
+  live query readout.
+- `v run examples/stylesheet_responsive/main.v` — bounds-driven columns in V
+  with media and container breakpoints in the sheet.
+- `v run examples/stylesheet_theme/main.v` — four accents times
+  light/dark/system from one variable sheet with a gradient hero.
+- `v run examples/stylesheet_plugins/main.v` — the plugin system:
+  a custom `theme()` function, `@supports` at-rules, a `:--has-tooltip`
+  pseudo-class, a debug transform, a lint rule, `@import` across files,
+  and mtime-gated live reload.
 
 Run the calculator demo with:
 

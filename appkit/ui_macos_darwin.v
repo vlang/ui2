@@ -270,7 +270,7 @@ pub fn refresh() {
 		return
 	}
 	st.rendering = true
-	root := st.build_screen()
+	root := stylesheet_apply_frame(stylesheet_frame_build(st.build_screen), stylesheet_appkit_env())
 	render_root(root)
 	st.rendering = false
 	if st.refresh_pending {
@@ -670,6 +670,38 @@ pub fn focus(id string) {
 	if !native_focus(native) {
 		return
 	}
+}
+
+// stylesheet_appkit_env reads this frame's interaction state for the
+// stylesheet cascade. AppKit tracks hover and focus; it has no press-target
+// tracking, so :pressed stays unmatched here.
+fn stylesheet_appkit_env() StyleMatchEnv {
+	st := state()
+	hovered := if st.hovered.len > 0 { st.hovered.last() } else { '' }
+	env := stylesheet_frame_env(hovered, '', focused_id())
+	return StyleMatchEnv{
+		...env
+		dpi: native_device_scale()
+	}
+}
+
+// native_device_scale reports the window's backing-store scale.
+fn native_device_scale() f64 {
+	st := state()
+	if native_is_nil(st.window) {
+		return 1.0
+	}
+	scale := macos.msg_f64(st.window, 'backingScaleFactor')
+	if scale <= 0 {
+		return 1.0
+	}
+	return scale
+}
+
+// native_safe_insets reports the display safe area. Desktop windows are
+// full rectangles, so there is none and env() uses its fallback.
+fn native_safe_insets() ?SafeInsets {
+	return none
 }
 
 // focused_id returns the declarative id of the control that currently owns

@@ -159,7 +159,9 @@ fn v_adaptive_children(node &VNode, available Rect) ![]Element {
 	hc := adaptive_size_class(available.height, bh)
 	mut children := []Element{}
 	for child in node.children {
-		if child.tag in ['MenuItem', 'Option'] {
+		// Style blocks are the Screen's scoped sheet (node_to_element reads
+		// them), not views to place.
+		if child.tag in ['MenuItem', 'Option', 'Style'] {
 			continue
 		}
 		if child.tag == 'LayoutVariation' {

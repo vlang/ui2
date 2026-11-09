@@ -98,7 +98,21 @@ __global g_view_translation_x = map[voidptr]f64{}
 
 // ── Public API ─────────────────────────────────────────────────────
 
+// bounds is the app's own area: the root view's bounds, which follow iPad
+// Split View and Slide Over, falling back to the screen before the window
+// exists (launch sizes the window from it).
 pub fn bounds() Rect {
+	if g_root_view != unsafe { nil } {
+		view := macos.msg_rect(g_root_view, 'bounds')
+		if view.width > 0 && view.height > 0 {
+			return Rect{
+				x:      view.x
+				y:      view.y
+				width:  view.width
+				height: view.height
+			}
+		}
+	}
 	b := macos.msg_rect(macos.msg_id(macos.get_class('UIScreen'), 'mainScreen'), 'bounds')
 	return Rect{
 		x:      b.x
@@ -133,7 +147,7 @@ pub fn refresh() {
 		return
 	}
 	g_ios_rendering = true
-	root := g_build_screen()
+	root := stylesheet_apply_frame(stylesheet_frame_build(g_build_screen), stylesheet_uikit_env())
 	render_root(root)
 	g_ios_rendering = false
 	if g_ios_refresh_pending {
@@ -301,6 +315,46 @@ pub fn focused_id() string {
 		}
 	}
 	return ''
+}
+
+// stylesheet_uikit_env reads this frame's interaction state for the
+// stylesheet cascade. UIKit tracks focus; hover and press targets are not
+// tracked, so :hover and :pressed stay unmatched here.
+fn stylesheet_uikit_env() StyleMatchEnv {
+	env := stylesheet_frame_env('', '', focused_id())
+	return StyleMatchEnv{
+		...env
+		dpi: native_device_scale()
+	}
+}
+
+// native_device_scale reports the main screen's scale.
+fn native_device_scale() f64 {
+	screen := macos.msg_id(macos.get_class('UIScreen'), 'mainScreen')
+	scale := macos.msg_f64(screen, 'scale')
+	if scale <= 0 {
+		return 1.0
+	}
+	return scale
+}
+
+// native_safe_insets reports the main screen's safe area. safeAreaInsets
+// arrives as (top, left, bottom, right), the same order safe_area_top
+// already reads its first field from.
+// native_safe_insets reads the root view's safe area, the same rectangle
+// bounds() reports (UIScreen has no safeAreaInsets). UIEdgeInsets comes
+// back in Rect's slots as top, left, bottom, right, as in safe_area_top.
+fn native_safe_insets() ?SafeInsets {
+	if g_root_view == unsafe { nil } {
+		return none
+	}
+	insets := macos.msg_rect(g_root_view, 'safeAreaInsets')
+	return SafeInsets{
+		top:    insets.x
+		right:  insets.height
+		bottom: insets.width
+		left:   insets.y
+	}
 }
 
 pub fn focused_text_area_id() string {
