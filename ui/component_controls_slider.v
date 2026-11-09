@@ -504,25 +504,25 @@ fn slider_bar(l SliderLayout, a f64, b f64, color u32) Element {
 }
 
 fn styled_slider_track(config StyledSliderConfig, l SliderLayout, colors SliderColors, fa f64, fb f64) Element {
-	mut parts := [slider_bar(l, 0, 1, colors.track)]
+	mut parts := [with_classes(slider_bar(l, 0, 1, colors.track), 'slider-bar')]
 	if fb - fa > 1e-9 {
-		parts << slider_bar(l, fa, fb, colors.accent)
+		parts << with_classes(slider_bar(l, fa, fb, colors.accent), 'slider-bar', 'slider-fill')
 	}
 	dot := math.max(2.0, math.round(l.m.track * 0.6))
 	for mark in styled_slider_marks(config) {
 		f := slider_scale_fraction(mark.value, config.min, config.max, config.scale)
 		x, y := slider_point(l, f)
 		on := f >= fa - 1e-9 && f <= fb + 1e-9 && fb - fa > 1e-9
-		parts << view('', rect(x - l.band.x - dot / 2, y - l.band.y - dot / 2, dot, dot),
+		parts << with_classes(view('', rect(x - l.band.x - dot / 2, y - l.band.y - dot / 2, dot, dot),
 			BoxStyle{
 				bg:     if on { colors.dot_on } else { colors.dot_off }
 				radius: dot / 2
-			}, []Element{})
+			}, []Element{}), 'slider-mark')
 	}
 	return Element{
-		...draggable_view(styled_slider_track_id(config.id), l.band, BoxStyle{
+		...with_classes(draggable_view(styled_slider_track_id(config.id), l.band, BoxStyle{
 			transparent: true
-		}, parts)
+		}, parts), 'slider-track')
 		key:     'track'
 		enabled: config.enabled
 	}
@@ -551,10 +551,10 @@ fn styled_slider_mark_labels(config StyledSliderConfig, l SliderLayout, colors S
 		}
 		// The frame is centered on the mark and exactly as wide as the text, which
 		// is left-aligned in it: AppKit truncates centered text in so tight a frame.
-		out << label('', mark.label, choice_fit(frame, width, height), TextStyle{
+		out << with_classes(label('', mark.label, choice_fit(frame, width, height), TextStyle{
 			color: colors.mark_text
 			size:  l.m.font
-		})
+		}), 'slider-mark-label')
 	}
 	return out
 }
@@ -582,11 +582,11 @@ fn styled_slider_thumb(config StyledSliderConfig, l SliderLayout, colors SliderC
 		.end { ' maximum' }
 	}
 	parts << Element{
-		...draggable_view(styled_slider_thumb_id(config.id, thumb), frame, BoxStyle{
+		...with_classes(draggable_view(styled_slider_thumb_id(config.id, thumb), frame, BoxStyle{
 			bg:     colors.accent
 			radius: d / 2
 			shadow: if config.enabled { box_shadow(0x000000, 0.16, 2, 0) } else { BoxShadow{} }
-		}, [inner])
+		}, [inner]), 'slider-thumb')
 		key:                 'thumb:${thumb}'
 		enabled:             config.enabled
 		accessibility_role:  'slider'
@@ -627,17 +627,17 @@ fn slider_value_bubble(config StyledSliderConfig, l SliderLayout, colors SliderC
 			fill: colors.bubble
 		}),
 		Element{
-			...view('', choice_fit(bubble_box, width, height), BoxStyle{
+			...with_classes(view('', choice_fit(bubble_box, width, height), BoxStyle{
 				bg:     colors.bubble
 				radius: 4
 				shadow: component_card_shadow()
 			}, [
-				label('', text, rect(0, 0, bubble_box.width, bubble_box.height), TextStyle{
+				with_classes(label('', text, rect(0, 0, bubble_box.width, bubble_box.height), TextStyle{
 					color: colors.bubble_text
 					size:  l.m.font
 					align: .center
-				}),
-			])
+				}), 'slider-bubble-text'),
+			]), 'slider-bubble')
 			key: 'bubble:${key}'
 		},
 	]
@@ -717,7 +717,8 @@ pub fn styled_slider(config StyledSliderConfig) !Element {
 	}
 	children << styled_slider_bubbles(config, l, colors, lo, hi, fa, fb)
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{ transparent: true }, children)
+		...with_classes(view(config.id, config.frame, BoxStyle{ transparent: true }, children),
+			'slider')
 		accessibility_role:  'group'
 		accessibility_label: config.accessibility_label
 		accessibility_value: if config.range {

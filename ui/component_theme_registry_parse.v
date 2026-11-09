@@ -84,14 +84,93 @@ pub fn component_theme_token(value string) !ComponentThemeToken {
 	if source.len == 0 {
 		return error('empty color value')
 	}
-	if source.to_lower().starts_with('linear-gradient(') {
+	lower_head := source.to_lower()
+	if lower_head.starts_with('linear-gradient(') {
 		return theme_parse_gradient(source)
+	}
+	if lower_head.starts_with('color-mix(') {
+		return theme_parse_color_mix(source)
+	}
+	if style_is_relative_function(source) {
+		return style_parse_relative_color_value(source)!
+	}
+	for name in ['lab(', 'lch(', 'oklab(', 'oklch(', 'hwb(', 'gray(', 'color('] {
+		if lower_head.starts_with(name) {
+			open := source.index('(') or { return error('"${source}" is not a color') }
+			if !source.ends_with(')') {
+				return error('"${source}" does not close its color function')
+			}
+			inner := source[open + 1..source.len - 1]
+			function := name[..name.len - 1]
+			if style_is_relative(inner) {
+				return style_parse_relative_color(function, inner)!
+			}
+			return style_parse_function_color(function, inner)!
+		}
+	}
+	split_name, split_inner := style_split_function_call(source)
+	// Builtin color functions are never handed to plugins, so a plugin
+	// claim cannot change how existing values parse.
+	if split_name != '' && split_name.to_lower() !in ['rgb', 'rgba', 'hsl', 'hsla']
+		&& style_plugin_has_function(split_name) {
+		result := style_plugin_eval_function(split_name, split_inner, StyleLengthCtx{})!
+		match result {
+			ComponentThemeToken {
+				return result
+			}
+			else {
+				return error('"${split_name}()" is not a color')
+			}
+		}
 	}
 	color, alpha := theme_parse_color(source)!
 	return ComponentThemeToken{
 		color:   color
 		opacity: alpha
 	}
+}
+
+// style_split_function_call splits `name(inner)` into its parts, or returns
+// empty strings when the value is not a plain function call.
+fn style_split_function_call(source string) (string, string) {
+	trimmed := source.trim_space()
+	open := trimmed.index('(') or { return '', '' }
+	if !trimmed.ends_with(')') {
+		return '', ''
+	}
+	name := trimmed[..open].trim_space().to_lower()
+	if name == '' || name.contains(' ') || name.contains('\t') {
+		return '', ''
+	}
+	return name, trimmed[open + 1..trimmed.len - 1]
+}
+
+// style_is_relative_function reports whether a whole value is a relative
+// color: fn-name followed by `(from ...`.
+fn style_is_relative_function(source string) bool {
+	lower := source.trim_space().to_lower()
+	open := lower.index('(') or { return false }
+	name := lower[..open].trim_space()
+	if name !in ['rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'gray', 'color'] {
+		return false
+	}
+	return style_is_relative(source[open + 1..])
+}
+
+// style_parse_relative_color_value dispatches a whole relative value to the
+// function-specific relative parser.
+fn style_parse_relative_color_value(source string) !ComponentThemeToken {
+	trimmed := source.trim_space()
+	open := trimmed.index('(') or { return error('"${source}" is not a color') }
+	if !trimmed.ends_with(')') {
+		return error('"${source}" does not close its color function')
+	}
+	mut function := trimmed[..open].trim_space().to_lower()
+	if function in ['rgba', 'hsla'] {
+		function = function[..3]
+	}
+	inner := trimmed[open + 1..trimmed.len - 1]
+	return style_parse_relative_color(function, inner)!
 }
 
 fn theme_parse_color(source string) !(u32, f64) {
@@ -397,6 +476,95 @@ fn theme_parse_gradient(source string) !ComponentThemeToken {
 			stops: stops
 		}
 	}
+}
+
+// theme_parse_color_mix reads `color-mix(in srgb, C1 [p%], C2 [q%])` and
+// mixes the two colors in gamma-encoded sRGB, the way CSS mixes `in srgb`.
+// Percentages default to an even split and are normalized when they do not
+// sum to 100. Only the sRGB space is supported; anything else is an error.
+// theme_parse_color_mix mixes two colors in sRGB the way CSS Color 5 does:
+// percentages may sit before or after each color; one missing share is the
+// rest of 100%, both missing is 50/50; shares summing past 100% scale down,
+// and a sum under 100% scales up while scaling the result's alpha down by
+// the same factor. Negative or >100% shares, and a zero sum, are invalid.
+// Channels interpolate premultiplied by alpha, so a transparent color does
+// not drag the mix toward its (invisible) channels.
+fn theme_parse_color_mix(source string) !ComponentThemeToken {
+	if !source.ends_with(')') {
+		return error('"${source}" does not close its color mix')
+	}
+	parts := theme_split_commas(source['color-mix('.len..source.len - 1])
+	if parts.len != 3 {
+		return error('"${source}" mixes exactly two colors: color-mix(in srgb, C1, C2)')
+	}
+	if parts[0].trim_space().to_lower().fields() != ['in', 'srgb'] {
+		return error('"${parts[0].trim_space()}" is not a supported mix space; use "in srgb"')
+	}
+	mut tokens := []ComponentThemeToken{cap: 2}
+	mut shares := []?f64{cap: 2}
+	for part in parts[1..] {
+		trimmed := part.trim_space()
+		words := trimmed.fields()
+		if words.len == 0 {
+			return error('"${source}" has an empty color')
+		}
+		mut color_text := trimmed
+		mut share := ?f64(none)
+		if words.len > 1 && words.last().ends_with('%') {
+			share = theme_mix_share(words.last(), source)!
+			color_text = words[..words.len - 1].join(' ')
+		} else if words.len > 1 && words[0].ends_with('%') {
+			share = theme_mix_share(words[0], source)!
+			color_text = words[1..].join(' ')
+		}
+		tokens << component_theme_token(color_text)!
+		shares << share
+	}
+	mut p1 := 0.5
+	mut p2 := 0.5
+	if first := shares[0] {
+		p1 = first
+		p2 = shares[1] or { 1 - first }
+	} else if second := shares[1] {
+		p2 = second
+		p1 = 1 - second
+	}
+	total := p1 + p2
+	if total <= 0 {
+		return error('"${source}" mixes to nothing')
+	}
+	alpha_scale := if total < 1 { total } else { 1.0 }
+	p1 /= total
+	p2 /= total
+	a1 := unit_clamp(tokens[0].opacity)
+	a2 := unit_clamp(tokens[1].opacity)
+	alpha := a1 * p1 + a2 * p2
+	mut mixed := u32(0)
+	for shift in [16, 8, 0] {
+		c1 := f64((tokens[0].color >> u32(shift)) & 0xff) / 255
+		c2 := f64((tokens[1].color >> u32(shift)) & 0xff) / 255
+		channel := if alpha > 0 {
+			(c1 * a1 * p1 + c2 * a2 * p2) / alpha
+		} else {
+			c1 * p1 + c2 * p2
+		}
+		mixed = (mixed << 8) | u32(color_channel_byte(unit_clamp(channel)))
+	}
+	return ComponentThemeToken{
+		color:   mixed
+		opacity: unit_clamp(alpha * alpha_scale)
+	}
+}
+
+// theme_mix_share parses one color-mix percentage as a 0..1 share.
+fn theme_mix_share(raw string, source string) !f64 {
+	value := theme_fraction(raw, 1) or {
+		return error('"${source}" has a malformed mix percentage')
+	}
+	if value < 0 || value > 1 {
+		return error('"${source}": mix percentages run from 0% to 100%')
+	}
+	return value
 }
 
 fn theme_spread_positions(mut positions []f64, given []bool) {

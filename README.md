@@ -15,6 +15,199 @@ content := ui2.safe_area(
 )!
 ```
 
+For VML that ships with the application, the v3 compiler can lower the document
+straight to V expressions that construct `ui2.Element` values. Name the model
+parameter `app`, use `$vml` in a build function, and pass it to
+`run_compiled_vml`:
+
+```v
+fn build(app &App) ui2.Element {
+    return $vml('app.vml')
+}
+
+fn main() {
+    ui2.run_compiled_vml[App](
+        model: App{}
+        build: build
+        title: 'My app'
+        width: 780
+        height: 420
+    )!
+}
+```
+
+`$vml` reads and validates the document during compilation, then emits direct
+element constructors and V loops for repeaters. Refreshes evaluate model
+expressions and build the element tree without parsing VML or interpreting an
+expression AST. Typed actions and `bind.text`/`bind.checked`/`bind.active`/
+`bind.value` are handled by the compiled runner. Keep using `run_vml` when the
+VML source must be loaded or edited at runtime.
+
+The compile-time form currently requires the v3 compiler. The included benchmark
+caches parsing for the runtime-VML baseline, so it compares steady-state tree
+building rather than charging runtime VML for repeatedly parsing the file:
+
+```sh
+/path/to/vnew -nocache -prod \
+    -path "$(dirname "$PWD")|@vlib|@vmodules" \
+    -o /tmp/ui2-vml-build-bench benchmarks/vml_build/main.v
+/tmp/ui2-vml-build-bench
+```
+
+Ordinary properties are one-way expressions. `bind.text` and `bind.checked`
+write control edits back to a public mutable model field, including nested struct
+paths such as `bind.text: app.profile.name`. Every field along the path must be
+public and mutable. Boolean and numeric bindings validate the leaf field type.
+Public model methods with no arguments, one `int`, or one `string` argument can be used as
+actions:
+
+```vml
+TextField { bind.text: app.name }
+Button {
+    text: "Add"
+    enabled: app.users.len < app.max_users
+    on_tap: app.add_user()
+}
+```
+
+On macOS, set `native: true` on a `Button` (or wrap a V-built button with
+`with_native_style`) to let AppKit own its bezel, font, hover, and pressed
+appearance. Its declared colors remain the fallback for the custom renderer.
+
+Runtime VML event handlers (`run_vml` and `VmlApp`) can also assign an ordinary
+VML expression to a public mutable top-level model field, which is useful for
+simple state transitions that do not need a dedicated model method:
+
+```vml
+Button { text: "Home" on_tap: app.screen_name = "home" }
+```
+
+Action arguments and assignment values are evaluated when the event is
+dispatched, after any two-way binding on that event has written the control
+value into the model.
+
+Expressions support property paths, arithmetic, comparisons, boolean operators,
+conditionals, parentheses, and string interpolation. They are side-effect-free
+outside event handlers; calls and assignments are restricted to event handlers.
+Unknown model paths, non-writable binding targets, and invalid action signatures
+fail document loading.
+
+Compile-time `$vml` supports typed method actions and two-way bindings, but not
+event assignments; use a public model method for those transitions.
+Validation traverses every expression branch and repeater item schema without
+executing expressions against the model's initial values.
+
+Use a keyed `Repeater` for model collections. `item` and `index` are scoped to
+each instance, and the evaluated key becomes `Element.key` for reconciliation:
+
+```vml
+Repeater {
+    model: app.users
+    key: item.id
+
+    Label { text: "${item.name}" }
+}
+```
+
+## Custom buttons
+
+A `Button` can be styled directly in VML. Leave `native` unset when the
+application should own its colors and shape; `native: true` requests the
+standard native-style appearance instead. For one shared look across many
+buttons, prefer a sheet rule (`Button.primary { ... }` in a `Style` block
+or the global sheet, matched with `class: primary`) over repeating props —
+see [Styling](#styling).
+
+```vml
+Button {
+    id: save
+    text: "Save"
+    on_tap: app.save()
+    x: 20
+    y: 20
+    width: 120
+    height: 40
+    background: #2563EB
+    border_color: #1D4ED8
+    border_width: 1
+    corner_radius: 8
+    color: #FFFFFF
+    bold: true
+}
+```
+
+When the button needs arbitrary content rather than a single caption, compose
+it from a `Rectangle` (or `View`) and opt the container into button activation
+with `button_behavior: true`. The whole rectangle is the activation target;
+noninteractive children such as its `Label` do not block the tap:
+
+```vml
+Rectangle {
+    id: save_card
+    button_behavior: true
+    on_tap: app.save()
+    x: 20
+    y: 20
+    width: 180
+    height: 56
+    background: #2563EB
+    corner_radius: 8
+    cursor: "pointing_hand"
+
+    Label {
+        text: "Save changes"
+        x: 16
+        y: 16
+        width: 148
+        height: 24
+        align: center
+        color: #FFFFFF
+        bold: true
+    }
+}
+```
+
+`button_behavior` emits the ordinary `on_tap` action once when a press starts
+on the element and is released inside without becoming a drag or scroll
+gesture. It also gives the composite the default accessibility role `button`
+and derives its accessibility label from the first visible, noninteractive
+descendant with a label or text; set `accessibility_role` or
+`accessibility_label` explicitly to override those defaults.
+
+This adds activation semantics without requesting a native bezel or pressed
+visuals—the rectangle and its children remain application-drawn. The native
+Windows backend exposes the composite as a focusable button to accessibility
+tools and supports Enter/Space activation; the other renderers do not add
+native keyboard focus treatment. Use `Button` when a platform-drawn bezel and
+pressed state are required.
+
+This is deliberately separate from `clickable: true`. A clickable view is a
+low-level pointer surface that reports `pointer:down:...` and `pointer:up:...`
+events (and can be combined with `draggable`) for code that needs coordinates
+or gesture phases. Use `button_behavior` for a normal action-bearing composite
+control. If both flags are set, the surface emits the raw pointer phases and
+then its ordinary action after a successful tap.
+
+### Hover
+
+`hoverable: true` (or `ui2.with_hover(el)`) makes any element report
+`pointer:enter:<action>:<x>:<y>` when the pointer comes over it and
+`pointer:leave:...` when it goes, so a hover card can open or a row can
+highlight. `ui2.parse_pointer_event(event)` decodes these and the other
+pointer phases, including actions that contain colons.
+
+Hover follows the CSS `:hover` rule on AppKit, Windows and the custom renderer
+alike: an element is hovered while the topmost element under the pointer is it
+or one of its descendants. Moving onto a child keeps its hoverable ancestors
+hovered, an element covered by another one is not hovered, and hover is checked
+again after every render, so content moving under a still pointer is reported
+too. Leaves are reported innermost first and enters outermost first. Touch
+platforms (iOS, Android) have no hover.
+
+To reuse that style, put the defaults in a sibling VML module. `PrimaryButton`
+can live in `PrimaryButton.vml` or the conventional snake-case
+`primary_button.vml`:
+
 ```vml
 SafeArea {
     id: safe
@@ -63,6 +256,170 @@ ui2.scaffold(
     snackbar:          ui2.label('snack', 'Saved', ui2.rect(0, 0, 100, 40), snack_text)
 )!
 ```
+
+The other file-backed entry points are `new_vml_app_file` and
+`element_from_vml_model_file`. Source-string `run_vml` and compile-time `$vml`
+do not expand imports. Imported VML files are read at runtime, so deploy them
+beside the document that imports them.
+
+In V code, the equivalent reusable control is an ordinary function returning
+an `Element`:
+
+```v
+fn primary_button(id string, title string, frame ui2.Rect) ui2.Element {
+    return ui2.button(
+        id,
+        title,
+        frame,
+        ui2.BoxStyle{
+            bg: 0x2563eb
+            radius: 8
+            border_color: 0x1d4ed8
+            border_left: 1
+            border_top: 1
+            border_right: 1
+            border_bottom: 1
+        },
+        ui2.TextStyle{
+            color: 0xffffff
+            bold: true
+        },
+    )
+}
+```
+
+A button emits its `id` by default. Wrap it with `with_action` when its lookup
+identity and action name should differ; `button_with_image`, `with_tooltip`, and
+`with_native_style` can be composed in the same way.
+
+For arbitrary child elements, use `button_view` instead. Child frames are
+relative to the view, just as they are for an ordinary `view`:
+
+```v
+fn save_card(id string, action string, frame ui2.Rect) ui2.Element {
+    caption := ui2.label(
+        '${id}_caption',
+        'Save changes',
+        ui2.rect(16, 16, frame.width - 32, 24),
+        ui2.TextStyle{ color: 0xffffff, bold: true, align: .center },
+    )
+    return ui2.with_action(
+        ui2.button_view(
+            id,
+            frame,
+            ui2.BoxStyle{ bg: 0x2563eb, radius: 8 },
+            [caption],
+        ),
+        action,
+    )
+}
+```
+
+`with_button_behavior(existing_view)` is the modifier form when the composite
+already exists. `button_view` and `with_button_behavior` leave the raw
+`clickable` flag unset.
+
+## Box effects
+
+`BoxStyle` can fade, shade and color a box beyond its solid `bg`:
+
+```v
+card := ui2.view('card', ui2.rect(20, 20, 280, 160), ui2.BoxStyle{
+	bg:     0xffffff
+	radius: 12
+	shadow: ui2.box_shadow(0x000000, 0.18, 24, 8) // color, opacity, blur, y offset
+}, children)
+
+backdrop := ui2.view('backdrop', ui2.rect(0, 0, w, h), ui2.BoxStyle{
+	bg:      0x000000
+	opacity: 0.4 // the fill only; borders and children keep theirs
+}, [])
+
+banner := ui2.view('banner', ui2.rect(0, 0, w, 120), ui2.BoxStyle{
+	gradient: ui2.linear_gradient(90, ui2.gradient_stop(0x2563eb, 0),
+		ui2.gradient_stop(0x9333ea, 1))
+}, [])
+```
+
+- `opacity` (0 to 1) fades the fill and nothing else.
+- `gradient` replaces `bg` on a view with a linear gradient: `angle` in degrees
+  (0 runs left to right, 90 top to bottom) and two or more stops, each with a
+  position from 0 to 1 and an optional opacity. Like CSS `linear-gradient`, it
+  spans the box corner to corner along its angle. Buttons keep their solid fill
+  (a native button draws its title beneath any gradient layer); make a gradient
+  button from a view with `button_behavior`.
+- `shadow` draws a drop shadow beneath the box: `color`, `opacity`, `blur`,
+  offset `x`/`y` and `spread`, as in CSS `box-shadow`. A box that casts a shadow
+  does not clip its children to its rounded corners on AppKit and UIKit, since a
+  layer masking to its bounds masks its shadow away too.
+
+All three are animatable through `animation_number_property('box.opacity', ...)`
+and the like. AppKit and UIKit use CoreAnimation (`NSShadow`/layer shadows and a
+`CAGradientLayer`), and the custom renderer draws them itself. Windows draws
+fill opacity and gradients with `AlphaBlend` and `GradientFill`, but not a
+gradient's per-stop opacity, and it draws no shadows: Win32 child windows cannot
+paint outside themselves. Screenshots taken with `UI2_SCREENSHOT_PATH` on AppKit
+do not show CoreAnimation shadows, which `cacheDisplayInRect:` does not render.
+
+## Styling
+
+`ui2` stylesheets (`vss`) bring QSS/CSS-style rules to every backend:
+type, `#id` and `.class` selectors, `:hover`/`:disabled` states, `@media`
+and `@container` queries, variables, and light/dark blocks. The cascade is
+theme tokens, then the global sheet, then per-subtree scopes, then inline
+`BoxStyle`/`TextStyle` — which always win, so adopting a sheet never breaks
+existing builders. Rules index by subject at parse time, so large sheets
+stay cheap; see [docs/stylesheet.md](docs/stylesheet.md) for the full
+guide.
+
+```v
+ui2.set_global_stylesheet(ui2.parse_stylesheet('
+@accent: #2563eb;
+light { @bg: #f1f5f9; @ink: #172033; }
+dark  { @bg: #172033; @ink: #f8fafc; }
+Button { background: @accent; color: white; border-radius: 6px; }
+Button:hover { opacity: 0.92; }
+Button:disabled { opacity: 0.4; }
+Label.title { font-size: 22px; font-weight: bold; }
+@media (max-width: 560px) { Label.title { font-size: 18px; } }
+') or { panic(err) })
+```
+
+`examples/stylesheet_demo` is the first tour, `examples/stylesheet_gallery`
+the deep showcase, `examples/stylesheet_responsive` splits layout (V) from
+style (sheet), `examples/stylesheet_theme` is a variable-driven
+accent/mode studio, and `examples/stylesheet_plugins` wires every plugin
+hook to a live-reloaded sheet. `with_platform_design` presets cover the
+common per-OS looks (glass on macOS/iOS, Material on Android, one design
+everywhere when forced), VML documents style themselves with in-document
+`Style` blocks (`examples/counter`), and composite components expose
+styleable part classes (`.switch-track`, `.picker-option.selected`,
+`.tab.selected`). The full guide — selectors, specificity, every property,
+media/container reference, scoping, the DSL, plugins, lint, dark mode,
+platform adaptation, VML styling, component classes, migration and
+troubleshooting — is [docs/stylesheet.md](docs/stylesheet.md).
+
+## Backend capabilities
+
+Call `control_support(kind)` to query support. macOS implements every shared
+control kind. iOS implements every kind, with text areas reported as `partial`
+because rich runs are currently rendered as plain text. Linux, the BSDs,
+Android, and opt-in custom desktop builds implement every kind through custom
+rendering; dropdowns and text areas are `partial` because the dropdown list is
+drawn by the renderer instead of a native menu and rich text-area runs are
+rendered as plain text.
+
+A button marked `native` asks the platform for the standard bezel and hands it
+the interaction styling. AppKit and Win32 supply theirs; the custom renderer
+draws one, including a pressed shade while the pointer is held on it, so the
+button does not come out as a bare caption. A button the application gave its
+own background keeps it, since the platform styling stops where the
+application's own begins.
+
+Box-backed elements (`Rectangle`/`View`, `Button`, `Scroll`, `Dropdown`,
+`TextField`, and `TextArea`) can draw each border edge independently. Widths use
+the same logical units as frames and corner radii, so native and custom
+renderers scale them with the rest of the element:
 
 ```vml
 Scaffold {
@@ -752,7 +1109,8 @@ codes for known keys, so command shortcuts are independent of the input source.
 
 Typed-VML ports from `v-ui` include:
 
-- `v run examples/counter/main.v` — the 7GUIs counter.
+- `v run examples/counter/main.v` — the 7GUIs counter, with its look in an
+  in-document VML `Style` block instead of repeated inline props.
 - `v run examples/temperature_converter/main.v` — the two-way 7GUIs
   temperature converter.
 - `v run examples/flight_booker/main.v` — the validated 7GUIs flight booker.
@@ -878,6 +1236,20 @@ Typed-VML ports from `v-ui` include:
 - `v run examples/custom_window/main.v` — a borderless desktop widget with
   ui2-drawn chrome, draggable content, and genuinely transparent space between
   its rounded surfaces on the native macOS and Windows backends.
+- `v run examples/stylesheet_demo/main.v` — the stylesheet first tour:
+  global, scoped and DSL-built rules, light/dark toggle, hover, disabled and
+  checked states.
+- `v run examples/stylesheet_gallery/main.v` — the deep stylesheet showcase:
+  section nav, container queries on two card widths, an accent cycler, and a
+  live query readout.
+- `v run examples/stylesheet_responsive/main.v` — bounds-driven columns in V
+  with media and container breakpoints in the sheet.
+- `v run examples/stylesheet_theme/main.v` — four accents times
+  light/dark/system from one variable sheet with a gradient hero.
+- `v run examples/stylesheet_plugins/main.v` — the plugin system:
+  a custom `theme()` function, `@supports` at-rules, a `:--has-tooltip`
+  pseudo-class, a debug transform, a lint rule, `@import` across files,
+  and mtime-gated live reload.
 
 Run the calculator demo with:
 

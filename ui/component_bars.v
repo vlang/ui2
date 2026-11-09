@@ -565,6 +565,7 @@ struct BarLook {
 	focused    string
 	vertical   bool
 	region     string // Prefixes keys, so items of different regions never share one.
+	item_class string // Stylesheet class for command, label and separator items.
 }
 
 fn bars_is_dark(theme ComponentTheme) bool {
@@ -718,8 +719,8 @@ fn bars_command(item BarItem, frame Rect, look BarLook) Element {
 			look.theme.foreground, opacity)
 	}
 	children << bars_content(item, local, color, m, true)
-	el := button_view(component_part_id(look.bar_id, choice_item_part('item:', item.id)),
-		frame, BoxStyle{ transparent: true }, children)
+	el := with_classes(button_view(component_part_id(look.bar_id, choice_item_part('item:', item.id)),
+		frame, BoxStyle{ transparent: true }, children), look.item_class)
 	return Element{
 		...el
 		key:                 look.region + 'item:' + item.id
@@ -737,8 +738,8 @@ fn bars_label(item BarItem, frame Rect, look BarLook, index int) Element {
 	color := if item.muted { look.muted } else { look.foreground }
 	name := if item.id.len > 0 { 'label:' + item.id } else { 'label#${index}' }
 	return Element{
-		...view('', frame, BoxStyle{ transparent: true }, bars_content(item, component_local(frame),
-			color, look.metrics, look.vertical))
+		...with_classes(view('', frame, BoxStyle{ transparent: true }, bars_content(item, component_local(frame),
+			color, look.metrics, look.vertical)), look.item_class)
 		key:                 look.region + name
 		accessibility_role:  'text'
 		accessibility_label: if item.accessibility_label.len > 0 {
@@ -759,11 +760,11 @@ fn bars_separator(frame Rect, look BarLook, index int) Element {
 		rect(math.floor(frame.width / 2), math.round((frame.height - length) / 2), 1, length)
 	}
 	return Element{
-		...view('', frame, BoxStyle{ transparent: true }, [
+		...with_classes(view('', frame, BoxStyle{ transparent: true }, [
 			view('', choice_fit(line, frame.width, frame.height), BoxStyle{
 				bg: bars_divider(look.theme)
 			}, []Element{}),
-		])
+		]), look.item_class)
 		key:                look.region + 'separator#${index}'
 		accessibility_role: 'separator'
 	}

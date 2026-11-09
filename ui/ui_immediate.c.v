@@ -1151,6 +1151,31 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		return deadline
 	}
 
+	// stylesheet_immediate_env reads this frame's interaction state for the
+	// stylesheet cascade: the innermost hovered action, the pressed pointer
+	// target while down, and the focused field.
+	fn stylesheet_immediate_env() StyleMatchEnv {
+		hovered := if g_hovered.len > 0 { g_hovered.last() } else { '' }
+		pressed := if g_touch.down { g_touch.pointer_target.id } else { '' }
+		env := stylesheet_frame_env(hovered, pressed, g_focused_field)
+		return StyleMatchEnv{
+			...env
+			dpi: scale()
+		}
+	}
+
+	// native_device_scale reports the backing-store pixel ratio.
+	fn native_device_scale() f64 {
+		return scale()
+	}
+
+	// native_safe_insets reports the display safe area. The custom renderer
+	// has no cutout API wired (even on Android), so there is none to report
+	// and env() uses its fallback.
+	fn native_safe_insets() ?SafeInsets {
+		return none
+	}
+
 	fn on_frame(mut app GgApp) {
 		if app.scheduler.is_closed() || app.ctx == unsafe { nil } || app.draining_tasks {
 			return
@@ -1213,12 +1238,12 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		}
 		if work.build && voidptr(g_build_screen) != unsafe { nil } {
 			app.scheduler.record_build()
-			declared := g_build_screen()
-			validate_element_tree(declared) or {
+			built := stylesheet_frame_build(g_build_screen)
+			validate_element_tree(built) or {
 				eprintln('ui2: ${err}')
 				return
 			}
-			app.declared_root = declared
+			app.declared_root = stylesheet_apply_frame(built, stylesheet_immediate_env())
 			app.has_root = true
 		}
 		// A background window runs its frames while hidden (the drains and

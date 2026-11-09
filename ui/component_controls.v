@@ -274,7 +274,8 @@ fn checkbox_indicator(frame Rect, mark_id string, checked bool, indeterminate bo
 	if focused && enabled {
 		parts << controls_focus_ring(frame, radius, theme.primary, theme)
 	}
-	parts << view('', frame, BoxStyle{ transparent: true }, box_children)
+	parts << with_classes(view('', frame, BoxStyle{ transparent: true }, box_children),
+		'checkbox-indicator')
 	return parts
 }
 
@@ -334,7 +335,8 @@ fn styled_checkbox_element(config StyledCheckboxConfig, frame Rect) Element {
 	children << controls_row_children(row, dy, config.label, config.description, cm.font,
 		label_color, detail_color, frame.width, frame.height)
 	el := Element{
-		...button_view(config.id, frame, BoxStyle{ transparent: true }, children)
+		...with_classes(button_view(config.id, frame, BoxStyle{ transparent: true }, children),
+			'styled-checkbox')
 		action_id:           checkbox_action(config)
 		enabled:             config.enabled
 		accessibility_role:  'checkbox'
@@ -521,7 +523,7 @@ pub fn checkbox_group(config CheckboxGroupConfig) !Element {
 		all, some := checkbox_group_all_state(config)
 		has_enabled := config.options.any(it.enabled)
 		children << Element{
-			...styled_checkbox_element(StyledCheckboxConfig{
+			...with_classes(styled_checkbox_element(StyledCheckboxConfig{
 				id:            checkbox_group_select_all_action_id(config.id)
 				label:         config.select_all
 				checked:       all
@@ -529,7 +531,7 @@ pub fn checkbox_group(config CheckboxGroupConfig) !Element {
 				enabled:       config.enabled && has_enabled
 				size:          config.size
 				theme:         config.theme
-			}, frames[0])
+			}, frames[0]), 'styled-checkbox', 'checkbox-option')
 			key: 'all'
 		}
 		index = 1
@@ -541,7 +543,7 @@ pub fn checkbox_group(config CheckboxGroupConfig) !Element {
 			selected_labels << option.label
 		}
 		children << Element{
-			...styled_checkbox_element(StyledCheckboxConfig{
+			...with_classes(styled_checkbox_element(StyledCheckboxConfig{
 				id:          checkbox_group_action_id(config.id, values[i])
 				label:       option.label
 				description: option.description
@@ -549,12 +551,13 @@ pub fn checkbox_group(config CheckboxGroupConfig) !Element {
 				enabled:     config.enabled && option.enabled
 				size:        config.size
 				theme:       config.theme
-			}, frames[index + i])
+			}, frames[index + i]), 'styled-checkbox', 'checkbox-option')
 			key: 'option:' + values[i]
 		}
 	}
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{ transparent: true }, children)
+		...with_classes(view(config.id, config.frame, BoxStyle{ transparent: true }, children),
+			'checkbox-group')
 		accessibility_role:  'group'
 		accessibility_label: config.accessibility_label
 		accessibility_value: selected_labels.join(', ')

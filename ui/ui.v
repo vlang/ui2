@@ -466,6 +466,13 @@ pub:
 	toggle_down_text_style    TextStyle
 	toggle_group              string
 	toggle_allow_no_selection bool = true
+pub mut:
+	// stylesheet hooks (vss): classes participate in `.class` selectors,
+	// ignore_stylesheet opts out of the cascade for this element, and
+	// stylesheet scopes a parsed sheet to this element's subtree.
+	classes           []string
+	ignore_stylesheet bool
+	stylesheet        Stylesheet
 }
 
 pub enum BackendSupport {

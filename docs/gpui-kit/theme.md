@@ -332,6 +332,16 @@ Upstream ships twenty-one theme files; all of them (38 themes, with their
 - Native buttons, checkboxes and switches keep the platform look; AppKit's
   switch is gray while the window is inactive, as in screenshots.
 
+## Stylesheets
+
+`ComponentTheme` is what components take; [stylesheets](../stylesheet.md)
+are how plain elements get styled. The two compose: a sheet fills in what
+the builders leave at defaults, and `@variables` with `light {}`/`dark {}`
+blocks (resolved against the system appearance, same source as
+`ComponentThemeMode.system`) theme a whole window without touching the
+registry. `examples/stylesheet_theme` is the variable-driven counterpart
+of the `gpui_theme` studio above.
+
 ## Verification
 
 ```sh

@@ -1,0 +1,7 @@
+@accent: #2563eb;
+@accent-ink: white;
+@bg: #f1f5f9;
+@surface: #ffffff;
+@ink: #172033;
+@muted: #64748b;
+@line: #cbd5e1;
