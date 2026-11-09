@@ -45,8 +45,41 @@ fn test_media_parses_and_not_and_or() {
 
 fn test_media_nesting_accumulates() {
 	sheet := parse_stylesheet('@media (platform: windows) { @media (orientation: landscape) { Button { background: red; } } }')!
-	media := sheet.rules[0].media
-	assert media.len == 2
+	rule := sheet.rules[0]
+	assert rule.media.len == 1
+	assert rule.media[0].conditions[0].feature == 'orientation'
+	assert rule.outer_media.len == 1
+	assert rule.outer_media[0][0].conditions[0].feature == 'platform'
+}
+
+fn test_media_nesting_intersects() {
+	// Nested blocks need both levels to hold, not either.
+	sheet := parse_stylesheet('@media (platform: windows) { @media (orientation: portrait) { Button { background: #ff0000; } } }')!
+	mut root := view('root', rect(0, 0, 800, 600), BoxStyle{}, [query_test_button('b')])
+	env := query_test_env() // windows, landscape
+	assert !rule_media_matches(sheet.rules[0], env)
+	portrait := StyleQueryEnv{
+		...env
+		width:  400
+		height: 800
+	}
+	assert rule_media_matches(sheet.rules[0], portrait)
+	other := StyleQueryEnv{
+		...portrait
+		platform: 'macos'
+	}
+	assert !rule_media_matches(sheet.rules[0], other)
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	_ = root
+}
+
+fn test_container_nesting_intersects() {
+	sheet := parse_stylesheet('@container (min-width: 300px) { @container (min-height: 500px) { Button { background: #ff0000; } } }')!
+	assert sheet.rules[0].outer_containers.len == 1
+	tall := view('root', rect(0, 0, 400, 600), BoxStyle{}, [query_test_button('b')])
+	short := view('root', rect(0, 0, 400, 200), BoxStyle{}, [query_test_button('b')])
+	assert apply_stylesheet(tall, sheet, StyleMatchEnv{}).children[0].box.bg == 0xff0000
+	assert apply_stylesheet(short, sheet, StyleMatchEnv{}).children[0].box.bg == 0xffffff
 }
 
 fn test_media_rejects_unknown_feature() {

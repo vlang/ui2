@@ -28,13 +28,14 @@ module ui2
 //     Like any inline value it beats sheets; individual VML props
 //     (`background:`, `font_size:`) beat it in turn.
 //
-// A VML tree runs through the same cascade as builder trees when it is
-// built (`element_from_vml` / `element_from_vnode`): in-document sheets
-// always apply, and the global sheet applies when one is set. Interaction
-// pseudos (`:hover`, `:pressed`) stay quiet — the VML runtime does not feed
-// interaction ids into the match env — while state, structural, media, and
-// container queries work. Inline `style:` takes plain values only: no
-// sheet variables, and lengths resolve against the node's own frame.
+// A VML tree runs through the same cascade as builder trees. Built inside a
+// running window, the backend's frame pass styles it with live hover,
+// press, focus and dpi, so interaction pseudos work like on builder trees.
+// Built standalone (`element_from_vml` / `element_from_vnode` outside a
+// frame, e.g. in tests), it is styled at that boundary: in-document sheets
+// always, the global sheet when set; interaction pseudos stay quiet there.
+// Inline `style:` takes plain values only: no sheet variables, and lengths
+// resolve against the node's own frame.
 
 // v_classes splits a node's `class:` prop into stylesheet classes.
 fn v_classes(node &VNode) []string {
@@ -81,7 +82,10 @@ fn v_style_sheet(node &VNode) !Stylesheet {
 // v_inline_style applies a node's `style: "..."` declarations as inline
 // values on top of the builder-set props. Individual VML props already
 // filled their fields, and inline wins only fills defaults, so on a shared
-// property the VML prop keeps precedence.
+// property the VML prop keeps precedence. Like sheet declarations, values
+// that do not apply (layout-owned props, unparseable values) are skipped,
+// not fatal; only a syntax error fails the document. Values resolve in the
+// live color mode and device scale, so `light-dark()` follows the sheet.
 fn v_inline_style(node &VNode, el Element, frame Rect) !Element {
 	raw := node.prop('style').trim_space()
 	if raw == '' {
@@ -93,7 +97,8 @@ fn v_inline_style(node &VNode, el Element, frame Rect) !Element {
 	if sheet.rules.len == 0 {
 		return el
 	}
-	qenv := stylesheet_query_env(false, 0)
+	dark := stylesheet_dark_mode()
+	qenv := stylesheet_query_env(dark, stylesheet_live_dpi())
 	lctx := StyleLengthCtx{
 		win_w:  qenv.width
 		win_h:  qenv.height
@@ -103,7 +108,7 @@ fn v_inline_style(node &VNode, el Element, frame Rect) !Element {
 	}
 	mut scope := StyleVarScope{
 		scopes:    []
-		dark:      false
+		dark:      dark
 		inherited: map[string]string{}
 		raw:       map[string]string{}
 	}
@@ -111,6 +116,7 @@ fn v_inline_style(node &VNode, el Element, frame Rect) !Element {
 	mut color_cache := map[string]ComponentThemeToken{}
 	mut len_cache := map[string]f64{}
 	mut split_cache := map[string][]string{}
+	mut fill := StyleFill{}
 	mut out := el
 	for decl in sheet.rules[0].declarations {
 		if decl.prop.starts_with('--') {
@@ -119,21 +125,26 @@ fn v_inline_style(node &VNode, el Element, frame Rect) !Element {
 		value := cascade_resolve_inner(decl.value, mut scope) or {
 			return error('invalid `style` on <${node.tag}> (line ${node.line}): ${err.msg()}')
 		}
-		out = apply_declaration(&el, out, decl.prop, value, lctx, mut warnings,
-			mut color_cache, mut len_cache, mut split_cache)
+		out = apply_declaration(&el, out, decl.prop, value, lctx, mut fill, mut warnings, mut
+			color_cache, mut len_cache, mut split_cache)
 	}
-	if warnings.len > 0 {
-		first := warnings[0]
-		return error('invalid `style` on <${node.tag}> (line ${node.line}): `${first.prop}` ${first.message}')
-	}
-	return out
+	return style_fill_finish(&el, out, fill)
 }
 
 // vml_styled_tree runs a freshly built VML tree through the cascade: the
 // global sheet when one is set, in-document `Style` scopes regardless.
 // Without either it is a plain walk that changes nothing, so unstyled
 // documents pay almost nothing for the feature existing.
+//
+// Inside a backend's build (stylesheet_frame_build) the tree is returned
+// unstyled: the backend's frame pass styles it once, with live hover,
+// press, focus and dpi. Styling it here too would run plugin transforms
+// twice and leave first-pass values looking like inline props, which
+// interaction pseudos could then never override.
 fn vml_styled_tree(el Element) Element {
+	if g_stylesheet_frame_building > 0 {
+		return el
+	}
 	global := if g_stylesheet_has_global { g_stylesheet_global } else { Stylesheet{} }
 	return apply_stylesheet(el, global, StyleMatchEnv{
 		dark: stylesheet_dark_mode()

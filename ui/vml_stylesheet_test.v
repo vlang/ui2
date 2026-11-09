@@ -129,12 +129,57 @@ fn test_vml_inline_style_bad_decl_errors() {
 	}
 }
 
-fn test_vml_inline_style_unknown_prop_errors() {
-	if _ := element_from_vml(vml_style_doc('\tButton {\n\t\tid: b\n\t\tstyle: "frobnicate: 1;"\n\t}'), rect(0, 0, 400, 300)) {
-		assert false, 'unknown inline prop must fail'
-	} else {
-		assert err.msg().contains('frobnicate')
+fn test_vml_inline_style_unknown_prop_is_skipped() {
+	// Like a `Style` block, inline declarations warn and skip; a typo does
+	// not fail the whole document.
+	root := element_from_vml(vml_style_doc('\tButton {\n\t\tid: b\n\t\tstyle: "frobnicate: 1; border-radius: 9px;"\n\t}'), rect(0, 0, 400, 300)) or {
+		panic(err)
 	}
+	assert root.children[0].box.radius == 9.0
+}
+
+fn test_vml_inline_style_layout_prop_is_skipped() {
+	root := element_from_vml(vml_style_doc('\tButton {\n\t\tid: b\n\t\tstyle: "margin: 8px; opacity: 0.5;"\n\t}'), rect(0, 0, 400, 300)) or {
+		panic(err)
+	}
+	assert root.children[0].box.opacity == 0.5
+}
+
+fn test_vml_inline_style_follows_dark_mode() {
+	set_stylesheet_dark(true)
+	root := element_from_vml(vml_style_doc('\tButton {\n\t\tid: b\n\t\tstyle: "background: light-dark(#ffffff, #101010);"\n\t}'), rect(0, 0, 400, 300)) or {
+		set_stylesheet_follow_system(true)
+		panic(err)
+	}
+	set_stylesheet_follow_system(true)
+	assert root.children[0].box.bg == 0x101010
+}
+
+fn test_vml_style_block_in_adaptive_screen_is_not_a_view() {
+	doc := 'Screen {\n\tid: root\n\tadaptive: true\n\twidth: 400\n\theight: 300\n\tStyle {\n\t\tButton { background: #123456; }\n\t}\n\tButton {\n\t\tid: b\n\t\ttext: "b"\n\t}\n}'
+	root := element_from_vml(doc, rect(0, 0, 400, 300)) or { panic(err) }
+	assert root.children.len == 1
+	assert root.children[0].id == 'b'
+	assert root.children[0].box.bg == 0x123456
+}
+
+fn test_vml_tree_built_in_frame_is_styled_once() {
+	// Inside a backend build the VML boundary defers to the frame pass, so
+	// interaction pseudos can still override base rules.
+	set_global_stylesheet(parse_stylesheet('Button { background: #111111; } Button:hover { background: #222222; }') or {
+		panic(err)
+	})
+	built := stylesheet_frame_build(fn () Element {
+		return element_from_vml(vml_style_doc('\tButton {\n\t\tid: b\n\t}'), rect(0, 0, 400, 300)) or {
+			panic(err)
+		}
+	})
+	assert built.children[0].box.bg == 0xffffff
+	hovered := stylesheet_apply_frame(built, stylesheet_frame_env('b', '', ''))
+	plain := stylesheet_apply_frame(built, stylesheet_frame_env('', '', ''))
+	clear_global_stylesheet()
+	assert hovered.children[0].box.bg == 0x222222
+	assert plain.children[0].box.bg == 0x111111
 }
 
 fn test_vml_inline_style_custom_prop_errors() {

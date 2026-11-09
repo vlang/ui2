@@ -326,3 +326,178 @@ fn test_cascade_nested_rule_applies() {
 	assert hovered.children[0].box.border_color == 0xef4444
 	// The container rule from the queries test still matches: covered there.
 }
+
+fn test_cascade_translucent_background_keeps_raw_color() {
+	// The alpha becomes fill opacity once; the color is not pre-blended.
+	sheet := parse_stylesheet('Button { background: rgba(255, 0, 0, 0.5); }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].box.bg == 0xff0000
+	assert root.children[0].box.opacity == 0.5
+}
+
+fn test_cascade_later_opaque_background_resets_alpha() {
+	sheet := parse_stylesheet('Button { background: rgba(255, 0, 0, 0.5); } Button.solid { background: #00ff00; }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [
+		with_classes(cascade_test_button('a'), 'solid'),
+	])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].box.bg == 0x00ff00
+	assert root.children[0].box.opacity == 1.0
+}
+
+fn test_cascade_solid_background_clears_gradient() {
+	sheet := parse_stylesheet('Button { background: linear-gradient(#ff0000, #0000ff); } Button.primary { background: #ff0000; }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [
+		with_classes(cascade_test_button('a'), 'primary'),
+	])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].box.gradient.stops.len == 0
+	assert root.children[0].box.bg == 0xff0000
+}
+
+fn test_cascade_background_alpha_keeps_inline_opacity() {
+	sheet := parse_stylesheet('Button { background: rgba(0, 0, 255, 0.5); opacity: 0.2; }')!
+	el := Element{
+		kind:    .button
+		id:      'a'
+		enabled: true
+		box:     BoxStyle{
+			opacity: 0.8
+		}
+	}
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [el])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	// Builder opacity survives (the sheet's `opacity` loses) and still
+	// multiplies the color's alpha.
+	assert root.children[0].box.opacity > 0.39 && root.children[0].box.opacity < 0.41
+}
+
+fn test_cascade_opacity_and_background_alpha_multiply() {
+	sheet := parse_stylesheet('Button { opacity: 0.5; background: rgba(0, 0, 255, 0.5); }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].box.opacity == 0.25
+}
+
+fn test_cascade_invalid_later_value_keeps_earlier() {
+	// CSS drops an invalid declaration; folding must not let it hide the
+	// earlier valid one.
+	sheet := parse_stylesheet('Button { color: #ff0000; } Button { color: notacolor; }')!
+	root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	styled, warnings := apply_stylesheet_ex(root, sheet, StyleMatchEnv{})
+	assert styled.children[0].text_style.color == 0xff0000
+	assert warnings.len == 1
+}
+
+fn test_cascade_text_decoration_none_resets() {
+	sheet := parse_stylesheet('Label { text-decoration: underline; } Label.plain { text-decoration: none; }')!
+	label := Element{
+		kind:    .label
+		id:      'l'
+		classes: ['plain']
+	}
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [label])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert !root.children[0].text_style.underline
+}
+
+fn test_cascade_font_weight_and_style_validate() {
+	sheet := parse_stylesheet('Label { font-weight: banana; font-style: oblique; }')!
+	label := Element{
+		kind: .label
+		id:   'l'
+	}
+	root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [label])
+	styled, warnings := apply_stylesheet_ex(root, sheet, StyleMatchEnv{})
+	assert !styled.children[0].text_style.bold
+	assert styled.children[0].text_style.italic
+	assert warnings.len == 1
+	assert warnings[0].prop == 'font-weight'
+}
+
+fn test_cascade_border_without_width_warns() {
+	sheet := parse_stylesheet('Button { border: red; }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	_, warnings := apply_stylesheet_ex(root, sheet, StyleMatchEnv{})
+	assert warnings.len == 1
+	assert warnings[0].message.contains('width')
+	solid := parse_stylesheet('Button { border: 2px solid #ff0000; }')!
+	root = apply_stylesheet(root, solid, StyleMatchEnv{})
+	assert root.children[0].box.border_left == 2.0
+	assert root.children[0].box.border_color == 0xff0000
+}
+
+fn test_cascade_element_custom_property_beats_inherited() {
+	sheet := parse_stylesheet('View { --pad: 30px; } Button { --pad: 18px; font-size: var(--pad); }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].text_style.size == 18.0
+}
+
+fn test_cascade_var_fallback_keeps_commas() {
+	sheet := parse_stylesheet('Button { box-shadow: var(--missing, #000000 4px 0 2px); }')!
+	root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	styled, warnings := apply_stylesheet_ex(root, sheet, StyleMatchEnv{})
+	assert warnings.len == 0
+	assert styled.children[0].box.shadow.blur == 4.0
+	first, rest := style_split_first_comma('--x, 2px, 4px')
+	assert first == '--x'
+	assert rest or { '' } == ' 2px, 4px'
+}
+
+fn test_cascade_bare_variable_rescans() {
+	sheet := parse_stylesheet('--base: #123456; @accent: var(--base); Button { background: @accent; }')!
+	root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	styled, warnings := apply_stylesheet_ex(root, sheet, StyleMatchEnv{})
+	assert warnings.len == 0
+	assert styled.children[0].box.bg == 0x123456
+}
+
+fn test_cascade_inherited_cycle_terminates() {
+	sheet := parse_stylesheet('View { --a: var(--a); } Button { color: var(--a, #ff0000); }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].text_style.color == 0xff0000
+}
+
+fn test_cascade_group_uses_best_matching_specificity() {
+	// `#save` matches with id specificity even though `Button.primary` is
+	// listed first, so the group beats the later class rule.
+	sheet := parse_stylesheet('Button.primary, #save { background: #00ff00; } Button.cta { background: #ff0000; }')!
+	el := Element{
+		kind:    .button
+		id:      'save'
+		enabled: true
+		classes: ['primary', 'cta']
+	}
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [el])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].box.bg == 0x00ff00
+}
+
+fn test_with_classes_appends() {
+	el := with_classes(with_classes(cascade_test_button('a'), 'one'), 'two', 'one')
+	assert el.classes == ['one', 'two']
+}
+
+fn test_cascade_variables_only_global_feeds_scopes() {
+	global := parse_stylesheet('--brand: #abcdef;')!
+	scoped := parse_stylesheet('Button { background: var(--brand); }')!
+	root := with_stylesheet(view('root', rect(0, 0, 100, 100), BoxStyle{}, [
+		cascade_test_button('a'),
+	]), scoped)
+	styled, warnings := apply_stylesheet_ex(root, global, StyleMatchEnv{})
+	assert warnings.len == 0
+	assert styled.children[0].box.bg == 0xabcdef
+}
+
+fn test_stylesheet_apply_frame_runs_scopes_without_global() {
+	clear_global_stylesheet()
+	scoped := parse_stylesheet('Button { background: #345678; }')!
+	root := with_stylesheet(view('root', rect(0, 0, 100, 100), BoxStyle{}, [
+		cascade_test_button('a'),
+	]), scoped)
+	out := stylesheet_apply_frame(root, stylesheet_frame_env('', '', ''))
+	assert out.children[0].box.bg == 0x345678
+}

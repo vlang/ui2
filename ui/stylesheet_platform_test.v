@@ -85,8 +85,9 @@ fn test_platform_forced_glass_dark() {
 	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [platform_test_card('c')])
 	root = apply_stylesheet(root, sheet, StyleMatchEnv{ dark: true })
 	card := root.children[0]
-	// rgba(30, 30, 32, 0.6) composited over white by token.over().
-	assert card.box.bg == 0x787879
+	// rgba(30, 30, 32, 0.6): the raw color, its alpha as fill opacity, so
+	// renderers composite it once over whatever lies beneath.
+	assert card.box.bg == 0x1e1e20
 	assert card.box.opacity > 0.59 && card.box.opacity < 0.61
 }
 

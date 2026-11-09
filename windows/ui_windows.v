@@ -757,7 +757,7 @@ pub fn refresh() {
 	if st.root == unsafe { nil } || st.rendering || voidptr(st.build_screen) == unsafe { nil } {
 		return
 	}
-	declared := stylesheet_apply_frame(st.build_screen(), stylesheet_windows_env())
+	declared := stylesheet_apply_frame(stylesheet_frame_build(st.build_screen), stylesheet_windows_env())
 	root := windows_symbol_images_as_labels(apply_widget_animations(declared))
 	validate_element_tree(root) or {
 		eprintln('ui2: ${err}')

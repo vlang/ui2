@@ -1234,7 +1234,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		}
 		if work.build && voidptr(g_build_screen) != unsafe { nil } {
 			app.scheduler.record_build()
-			built := g_build_screen()
+			built := stylesheet_frame_build(g_build_screen)
 			validate_element_tree(built) or {
 				eprintln('ui2: ${err}')
 				return

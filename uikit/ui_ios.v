@@ -133,7 +133,7 @@ pub fn refresh() {
 		return
 	}
 	g_ios_rendering = true
-	root := stylesheet_apply_frame(g_build_screen(), stylesheet_uikit_env())
+	root := stylesheet_apply_frame(stylesheet_frame_build(g_build_screen), stylesheet_uikit_env())
 	render_root(root)
 	g_ios_rendering = false
 	if g_ios_refresh_pending {

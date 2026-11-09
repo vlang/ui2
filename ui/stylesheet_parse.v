@@ -61,10 +61,49 @@ pub struct StyleRule {
 pub:
 	selectors    []StyleSelector
 	declarations []StyleDeclaration
-	media        []MediaQuery
-	containers   []ContainerQuery
-	line         int
-	col          int
+	// media and containers are the innermost query lists (comma = OR). A
+	// rule inside nested query blocks also carries every enclosing level,
+	// outermost first; each level must hold, since nesting intersects.
+	media            []MediaQuery
+	containers       []ContainerQuery
+	outer_media      [][]MediaQuery
+	outer_containers [][]ContainerQuery
+	line             int
+	col              int
+}
+
+// StyleQueryCtx is the query nesting the parser is inside, outermost level
+// first. Each `@media` / `@container` block pushes one level.
+struct StyleQueryCtx {
+	media      [][]MediaQuery
+	containers [][]ContainerQuery
+}
+
+// rule builds a rule under this nesting: the innermost level of each kind
+// becomes the rule's own list, the rest its outer levels.
+fn (q StyleQueryCtx) rule(selectors []StyleSelector, declarations []StyleDeclaration, line int, col int) StyleRule {
+	return StyleRule{
+		selectors:        selectors
+		declarations:     declarations
+		media:            if q.media.len > 0 { q.media.last().clone() } else { []MediaQuery{} }
+		containers:       if q.containers.len > 0 {
+			q.containers.last().clone()
+		} else {
+			[]ContainerQuery{}
+		}
+		outer_media:      if q.media.len > 1 {
+			q.media[..q.media.len - 1].clone()
+		} else {
+			[][]MediaQuery{}
+		}
+		outer_containers: if q.containers.len > 1 {
+			q.containers[..q.containers.len - 1].clone()
+		} else {
+			[][]ContainerQuery{}
+		}
+		line:             line
+		col:              col
+	}
 }
 
 pub struct Stylesheet {
@@ -125,7 +164,7 @@ pub fn parse_stylesheet(source string) !Stylesheet {
 		dark_vars:  map[string]string{}
 		imports:    []string{}
 	}
-	rules := parser.parse_block([]MediaQuery{}, []ContainerQuery{}, true)!
+	rules := parser.parse_block(StyleQueryCtx{}, true)!
 	return Stylesheet{
 		rules:      rules
 		variables:  parser.variables
@@ -281,14 +320,14 @@ fn (mut p StyleParser) skip_space_and_comments() ! {
 // it also takes variables, theme blocks and `@import`s; inside query blocks
 // only rules and nested blocks belong. Plugin at-rules expand to replacement
 // source parsed recursively with the same media/container context.
-fn (mut p StyleParser) parse_block(media []MediaQuery, containers []ContainerQuery, top_level bool) ![]StyleRule {
-	return p.parse_block_inner(media, containers, top_level, top_level)
+fn (mut p StyleParser) parse_block(q StyleQueryCtx, top_level bool) ![]StyleRule {
+	return p.parse_block_inner(q, top_level, top_level)
 }
 
 // parse_block_inner is parse_block with an independent EOF rule: fragments
 // (at-rule expansions) end at EOF like top-level sheets, but only take
 // rules and nested blocks like query bodies.
-fn (mut p StyleParser) parse_block_inner(media []MediaQuery, containers []ContainerQuery, top_level bool, eof_ok bool) ![]StyleRule {
+fn (mut p StyleParser) parse_block_inner(q StyleQueryCtx, top_level bool, eof_ok bool) ![]StyleRule {
 	mut rules := []StyleRule{}
 	for {
 		p.skip_space_and_comments()!
@@ -309,7 +348,7 @@ fn (mut p StyleParser) parse_block_inner(media []MediaQuery, containers []Contai
 			if (p.src[p.pos..].starts_with('@media') && style_keyword_end(p.src, p.pos + 6))
 				|| (p.src[p.pos..].starts_with('@container')
 					&& style_keyword_end(p.src, p.pos + 10)) {
-				for rule in p.parse_query_block(media, containers)! {
+				for rule in p.parse_query_block(q)! {
 					rules << rule
 				}
 				continue
@@ -317,7 +356,7 @@ fn (mut p StyleParser) parse_block_inner(media []MediaQuery, containers []Contai
 			if name := p.plugin_at_rule_name() {
 				prelude, body := p.capture_at_block(name)!
 				replacement := style_plugin_expand_at_rule(name, prelude, body)!
-				for rule in p.parse_fragment(replacement, media, containers)! {
+				for rule in p.parse_fragment(replacement, q)! {
 					rules << rule
 				}
 				continue
@@ -362,7 +401,7 @@ fn (mut p StyleParser) parse_block_inner(media []MediaQuery, containers []Contai
 			}
 			continue
 		}
-		for rule in p.parse_rule_guarded(media, containers)! {
+		for rule in p.parse_rule_guarded(q)! {
 			rules << rule
 		}
 	}
@@ -372,11 +411,11 @@ fn (mut p StyleParser) parse_block_inner(media []MediaQuery, containers []Contai
 // parse_fragment parses replacement source from an at-rule expansion with
 // the enclosing query context. Only rules and nested query blocks belong in
 // an expansion; variables and imports stay at the top level.
-fn (mut p StyleParser) parse_fragment(source string, media []MediaQuery, containers []ContainerQuery) ![]StyleRule {
+fn (mut p StyleParser) parse_fragment(source string, q StyleQueryCtx) ![]StyleRule {
 	mut sub := StyleParser{
 		src: source
 	}
-	return sub.parse_block_inner(media, containers, false, true)
+	return sub.parse_block_inner(q, false, true)
 }
 
 // plugin_at_rule_name reports the claimed `@name` at pos, or none when the
@@ -664,7 +703,7 @@ fn (mut p StyleParser) parse_raw_value() !string {
 // nested selectors onto their parents: `Card { Button { } }` behaves as
 // `Card Button { }`, and a leading `&` splices the parent in (`&:hover` is
 // the parent hovered). Only a leading `&` is supported.
-fn (mut p StyleParser) parse_rule_guarded(media []MediaQuery, containers []ContainerQuery) ![]StyleRule {
+fn (mut p StyleParser) parse_rule_guarded(q StyleQueryCtx) ![]StyleRule {
 	start_line := p.line
 	start_col := p.col
 	selectors := p.parse_selector_list()!
@@ -681,10 +720,10 @@ fn (mut p StyleParser) parse_rule_guarded(media []MediaQuery, containers []Conta
 		return error(style_err(p.line, p.col, 'expected `{` after selector'))
 	}
 	p.advance()
-	return p.parse_rule_body(selectors, start_line, start_col, media, containers)!
+	return p.parse_rule_body(selectors, start_line, start_col, q)!
 }
 
-fn (mut p StyleParser) parse_rule_body(selectors []StyleSelector, start_line int, start_col int, media []MediaQuery, containers []ContainerQuery) ![]StyleRule {
+fn (mut p StyleParser) parse_rule_body(selectors []StyleSelector, start_line int, start_col int, q StyleQueryCtx) ![]StyleRule {
 	mut declarations := []StyleDeclaration{}
 	mut nested := []StyleRule{}
 	for {
@@ -697,7 +736,7 @@ fn (mut p StyleParser) parse_rule_body(selectors []StyleSelector, start_line int
 			break
 		}
 		if p.nested_rule_start()! {
-			for rule in p.parse_nested_rule(selectors, media, containers)! {
+			for rule in p.parse_nested_rule(selectors, q)! {
 				nested << rule
 			}
 			continue
@@ -712,6 +751,9 @@ fn (mut p StyleParser) parse_rule_body(selectors []StyleSelector, start_line int
 		p.advance()
 		p.skip_space_and_comments()!
 		value := p.parse_raw_value()!
+		if value.trim_space().len == 0 {
+			return error(style_err(decl_line, decl_col, 'property "${prop}" has an empty value'))
+		}
 		declarations << StyleDeclaration{
 			prop:  prop.to_lower()
 			value: value.trim_space()
@@ -724,14 +766,7 @@ fn (mut p StyleParser) parse_rule_body(selectors []StyleSelector, start_line int
 	}
 	mut rules := []StyleRule{}
 	if declarations.len > 0 {
-		rules << StyleRule{
-			selectors:    selectors
-			declarations: declarations
-			media:        media.clone()
-			containers:   containers.clone()
-			line:         start_line
-			col:          start_col
-		}
+		rules << q.rule(selectors, declarations, start_line, start_col)
 	}
 	rules << nested
 	return rules
@@ -775,7 +810,7 @@ fn (mut p StyleParser) nested_rule_start() !bool {
 
 // parse_nested_rule parses one nested rule after its parent's selectors,
 // combining each nested selector with each parent selector.
-fn (mut p StyleParser) parse_nested_rule(parents []StyleSelector, media []MediaQuery, containers []ContainerQuery) ![]StyleRule {
+fn (mut p StyleParser) parse_nested_rule(parents []StyleSelector, q StyleQueryCtx) ![]StyleRule {
 	start_line := p.line
 	start_col := p.col
 	mut explicit_child := false
@@ -796,7 +831,7 @@ fn (mut p StyleParser) parse_nested_rule(parents []StyleSelector, media []MediaQ
 			selectors << style_combine_selectors(parent, part, explicit_child)!
 		}
 	}
-	return p.parse_rule_body(selectors, start_line, start_col, media, containers)!
+	return p.parse_rule_body(selectors, start_line, start_col, q)!
 }
 
 // style_combine_selectors flattens one nested selector onto its parent. A

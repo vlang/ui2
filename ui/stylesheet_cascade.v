@@ -30,11 +30,18 @@ pub:
 	message string
 }
 
-// with_classes returns el with stylesheet classes attached.
+// with_classes returns el with stylesheet classes added to the ones it
+// already carries, so wrapping a pre-classed element keeps its classes.
 pub fn with_classes(el Element, classes ...string) Element {
+	mut merged := el.classes.clone()
+	for class in classes {
+		if class.len > 0 && class !in merged {
+			merged << class
+		}
+	}
 	return Element{
 		...el
-		classes: classes.clone()
+		classes: merged
 	}
 }
 
@@ -58,7 +65,8 @@ pub fn apply_stylesheet(root Element, global Stylesheet, env StyleMatchEnv) Elem
 pub fn apply_stylesheet_ex(root Element, global Stylesheet, env StyleMatchEnv) (Element, []StylesheetWarning) {
 	mut warnings := []StylesheetWarning{}
 	mut scopes := []Stylesheet{}
-	if global.rules.len > 0 {
+	// A variables-only global sheet still feeds scoped sheets' lookups.
+	if !stylesheet_is_empty(global) {
 		scopes << global
 	}
 	qenv := stylesheet_query_env(env.dark, env.dpi)
@@ -72,10 +80,31 @@ pub fn apply_stylesheet_ex(root Element, global Stylesheet, env StyleMatchEnv) (
 	return root_out, warnings
 }
 
+// stylesheet_is_empty reports whether a sheet has neither rules nor
+// variables of any mode, so it can contribute nothing to a cascade.
+fn stylesheet_is_empty(sheet Stylesheet) bool {
+	return sheet.rules.len == 0 && sheet.variables.len == 0 && sheet.light_vars.len == 0
+		&& sheet.dark_vars.len == 0
+}
+
+// element_has_scoped_stylesheet reports whether any element in the tree
+// carries its own sheet. It stops at the first one, so styled trees pay
+// little and unstyled trees one allocation-free walk.
+fn element_has_scoped_stylesheet(el Element) bool {
+	if !stylesheet_is_empty(el.stylesheet) {
+		return true
+	}
+	for child in el.children {
+		if element_has_scoped_stylesheet(child) {
+			return true
+		}
+	}
+	return false
+}
+
 fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, inherited map[string]string, mut warnings []StylesheetWarning, mut color_cache map[string]ComponentThemeToken, mut len_cache map[string]f64, mut split_cache map[string][]string) Element {
 	// No clone when the element brings no scoped sheet: scopes is only read.
-	has_scoped := el.stylesheet.rules.len > 0 || el.stylesheet.variables.len > 0
-		|| el.stylesheet.light_vars.len > 0 || el.stylesheet.dark_vars.len > 0
+	has_scoped := !stylesheet_is_empty(el.stylesheet)
 	mut active := scopes
 	if has_scoped {
 		active = scopes.clone()
@@ -192,11 +221,11 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 	mut out := el
 	// Resolve pass: every candidate resolves in order (warnings keep their
 	// sequence), then the apply pass runs only survivors. A repeated
-	// value-setting property applies once — its last resolved candidate —
-	// instead of copying the whole element per override. Exempt props keep
-	// every application: backgrounds fold an opacity side effect into later
-	// rules, `text-decoration: none` keeps earlier decoration, and
-	// layout-owned/unknown props warn per declaration.
+	// value-setting property applies once — its last candidate that
+	// applies cleanly — instead of copying the whole element per override.
+	// An invalid later value is dropped like CSS drops it, so the earlier
+	// valid one still wins. Layout-owned and unknown props warn per
+	// declaration and stay unfolded.
 	mut resolved := []string{len: candidates.len}
 	mut failed := []bool{len: candidates.len}
 	for i, candidate in candidates {
@@ -209,28 +238,17 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 			continue
 		}
 	}
+	apply := cascade_fold_survivors(&el, candidates, resolved, failed, mut color_cache, mut
+		len_cache, mut split_cache)
+	mut fill := StyleFill{}
 	for i, candidate in candidates {
-		if candidate.decl.prop.starts_with('--') {
+		if !apply[i] {
 			continue
 		}
-		if failed[i] {
-			continue
-		}
-		if cascade_foldable(candidate.decl.prop) {
-			mut superseded := false
-			for j := i + 1; j < candidates.len; j++ {
-				if !failed[j] && candidates[j].decl.prop == candidate.decl.prop {
-					superseded = true
-					break
-				}
-			}
-			if superseded {
-				continue
-			}
-		}
-		out = apply_declaration(&el, out, candidate.decl.prop, resolved[i], candidate.length,
-			mut warnings, mut color_cache, mut len_cache, mut split_cache)
+		out = apply_declaration(&el, out, candidate.decl.prop, resolved[i], candidate.length, mut
+			fill, mut warnings, mut color_cache, mut len_cache, mut split_cache)
 	}
+	out = style_fill_finish(&el, out, fill)
 	if raw.len == 0 && scope.resolved.len == 0 {
 		// No custom properties produced: the inherited map passes through
 		// shared instead of cloned.
@@ -246,30 +264,145 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 	return out, merged
 }
 
-// cascade_rule_candidates appends one rule's declarations for the first
-// matching selector. Media gates are element-independent but cheap; the
-// length context (container lookup) is built only after a selector
-// matches, so non-matching rules cost just the match attempt.
+// cascade_fold_survivors marks which candidates the apply pass runs. For
+// a foldable property only the last candidate that applies cleanly
+// survives (plus every failing later one, so its warning still reports);
+// a later invalid value never hides an earlier valid one. Validation is a
+// dry run against the base element and only happens when a property
+// repeats, so the common single-declaration case costs nothing extra.
+fn cascade_fold_survivors(base &Element, candidates []StyleCandidate, resolved []string, failed []bool, mut color_cache map[string]ComponentThemeToken, mut len_cache map[string]f64, mut split_cache map[string][]string) []bool {
+	mut apply := []bool{len: candidates.len}
+	mut first := map[string]int{}
+	for i, candidate in candidates {
+		prop := candidate.decl.prop
+		if prop.starts_with('--') || failed[i] || !cascade_foldable(prop) {
+			continue
+		}
+		if prop !in first {
+			first[prop] = i
+		}
+	}
+	mut settled := map[string]bool{}
+	for i := candidates.len - 1; i >= 0; i-- {
+		candidate := candidates[i]
+		prop := candidate.decl.prop
+		if prop.starts_with('--') || failed[i] {
+			continue
+		}
+		if !cascade_foldable(prop) {
+			apply[i] = true
+			continue
+		}
+		if settled[prop] {
+			continue
+		}
+		apply[i] = true
+		if first[prop] == i {
+			settled[prop] = true
+			continue
+		}
+		mut scratch := []StylesheetWarning{}
+		mut scratch_fill := StyleFill{}
+		apply_declaration(base, *base, prop, resolved[i], candidate.length, mut scratch_fill, mut
+			scratch, mut color_cache, mut len_cache, mut split_cache)
+		if scratch.len == 0 {
+			settled[prop] = true
+		}
+	}
+	return apply
+}
+
+// StyleFill collects what a cascade contributes to the box's fill opacity.
+// A background color's alpha and the `opacity` property are separate in
+// CSS, but BoxStyle carries one fill opacity, so both are tracked here and
+// multiplied once all declarations have applied: the last background's
+// alpha replaces earlier ones instead of lingering, and neither clobbers a
+// builder-set opacity.
+struct StyleFill {
+mut:
+	alpha       f64 = 1.0
+	alpha_set   bool
+	opacity     f64 = 1.0
+	opacity_set bool
+}
+
+// style_fill_finish folds the collected fill opacity into out. A builder
+// opacity (base not at the default) stands in for the `opacity` property,
+// which inline-wins skipped, and still multiplies the sheet's color alpha.
+fn style_fill_finish(base &Element, out Element, fill StyleFill) Element {
+	if !fill.alpha_set && !fill.opacity_set {
+		return out
+	}
+	opacity := if fill.opacity_set { fill.opacity } else { base.box.opacity }
+	alpha := if fill.alpha_set { fill.alpha } else { 1.0 }
+	return Element{
+		...out
+		box: BoxStyle{
+			...out.box
+			opacity: unit_clamp(opacity * alpha)
+		}
+	}
+}
+
+// cascade_rule_candidates appends one rule's declarations when any of its
+// selectors matches, ranked at the highest matching selector's
+// specificity (CSS ranks a selector group by its best match, not its
+// first). Media gates are element-independent but cheap; the container
+// gate and length context (container lookup) run only after a selector
+// matches, so non-matching rules cost just the match attempts.
 fn cascade_rule_candidates(rule StyleRule, rule_index int, scope_level int, el Element, ancestors []StyleAncestor, index int, count int, env StyleMatchEnv, qenv StyleQueryEnv, mut candidates []StyleCandidate) {
-	if !media_list_matches(rule.media, qenv) {
+	if !rule_media_matches(rule, qenv) {
 		return
 	}
+	mut specificity := -1
 	for sel in rule.selectors {
+		if sel.specificity <= specificity {
+			continue
+		}
 		if stylesheet_selector_matches(sel, el, ancestors, index, count, env) {
-			lctx := cascade_length_ctx(rule.containers, ancestors, qenv) or { return }
-			for decl_index, decl in rule.declarations {
-				candidates << StyleCandidate{
-					specificity: sel.specificity
-					scope_level: scope_level
-					rule_order:  rule_index
-					decl_index:  decl_index
-					decl:        decl
-					length:      lctx
-				}
-			}
+			specificity = sel.specificity
+		}
+	}
+	if specificity < 0 {
+		return
+	}
+	// Container gate: every enclosing `@container` level must hold. The
+	// innermost level's matched container is the length basis.
+	for level in rule.outer_containers {
+		if !container_list_matches(level, ancestors) {
 			return
 		}
 	}
+	mut target := ?Element(none)
+	if rule.containers.len > 0 {
+		target = container_match_target(rule.containers, ancestors) or { return }
+	}
+	lctx := cascade_length_ctx(target, ancestors, qenv)
+	for decl_index, decl in rule.declarations {
+		candidates << StyleCandidate{
+			specificity: specificity
+			scope_level: scope_level
+			rule_order:  rule_index
+			decl_index:  decl_index
+			decl:        decl
+			length:      lctx
+		}
+	}
+}
+
+// rule_media_matches reports whether a rule's media gates hold: its own
+// (innermost) query list plus every enclosing `@media` level, since nested
+// blocks intersect.
+fn rule_media_matches(rule StyleRule, qenv StyleQueryEnv) bool {
+	if !media_list_matches(rule.media, qenv) {
+		return false
+	}
+	for level in rule.outer_media {
+		if !media_list_matches(level, qenv) {
+			return false
+		}
+	}
+	return true
 }
 
 // cascade_indexed_candidates runs only the rules an element can match: the
@@ -337,20 +470,18 @@ fn candidates_in_order(candidates []StyleCandidate) bool {
 }
 
 // cascade_length_ctx builds the length basis for one rule: the window from
-// the query env, the container from the rule's matched query, else the
+// the query env, the container the rule's query matched (target), else the
 // parent frame, else the window (the CSS small-viewport fallback).
-fn cascade_length_ctx(containers []ContainerQuery, ancestors []StyleAncestor, qenv StyleQueryEnv) ?StyleLengthCtx {
+fn cascade_length_ctx(target ?Element, ancestors []StyleAncestor, qenv StyleQueryEnv) StyleLengthCtx {
 	mut cont_w := qenv.width
 	mut cont_h := qenv.height
-	if ancestors.len > 0 {
+	if container := target {
+		cont_w = container.frame.width
+		cont_h = container.frame.height
+	} else if ancestors.len > 0 {
 		parent := ancestors.last().el
 		cont_w = parent.frame.width
 		cont_h = parent.frame.height
-	}
-	if containers.len > 0 {
-		target := container_match_target(containers, ancestors) or { return none }
-		cont_w = target.frame.width
-		cont_h = target.frame.height
 	}
 	return StyleLengthCtx{
 		win_w:  qenv.width
@@ -362,15 +493,16 @@ fn cascade_length_ctx(containers []ContainerQuery, ancestors []StyleAncestor, qe
 }
 
 // cascade_foldable reports whether a property applies purely — later
-// declarations fully overwrite earlier ones — so only the last resolved
-// candidate needs applying. Backgrounds carry an opacity side effect into
-// later rules, `text-decoration: none` preserves earlier decoration, and
-// layout-owned/unknown props warn per declaration, so those stay unfolded.
+// declarations fully overwrite earlier ones — so only the last valid
+// candidate needs applying. Layout-owned and unknown props warn per
+// declaration, so those stay unfolded.
 fn cascade_foldable(prop string) bool {
 	return prop == 'color' || prop == 'font-size' || prop == 'font-family'
 		|| prop == 'font-weight' || prop == 'font-style' || prop == 'text-align'
 		|| prop == 'border' || prop == 'border-radius' || prop == 'border-color'
 		|| prop == 'border-width' || prop == 'opacity' || prop == 'box-shadow'
+		|| prop == 'background' || prop == 'background-color'
+		|| prop == 'background-gradient' || prop == 'text-decoration'
 }
 
 fn cascade_lookup_var(name string, scopes []Stylesheet, dark bool) ?string {
@@ -456,29 +588,39 @@ mut:
 	depth    int
 }
 
+// lookup resolves one name: the element's own custom property first (the
+// nearest definition wins, as in CSS), then the value inherited from
+// ancestors, then the in-scope sheets' variables.
 fn (mut s StyleVarScope) lookup(name string) !string {
 	if value := s.resolved[name] {
+		return value
+	}
+	if raw_value := s.raw[name] {
+		value := s.expand(raw_value, name)!
+		s.resolved[name] = value
 		return value
 	}
 	if value := s.inherited[name] {
 		return value
 	}
-	if raw_value := s.raw[name] {
-		if s.depth >= 16 {
-			return error('variable cycle through "${name}"')
-		}
-		s.depth++
-		value := cascade_resolve_inner(raw_value, mut s) or {
-			s.depth--
-			return err
-		}
-		s.depth--
-		s.resolved[name] = value
-		return value
-	}
 	return cascade_lookup_var(name, s.scopes, s.dark) or {
 		return error('unknown variable "${name}"')
 	}
+}
+
+// expand resolves a substituted value's own references. Depth caps cycles,
+// including ones that only close through inherited values.
+fn (mut s StyleVarScope) expand(value string, name string) !string {
+	if s.depth >= 32 {
+		return error('variable cycle through "${name}"')
+	}
+	s.depth++
+	out := cascade_resolve_inner(value, mut s) or {
+		s.depth--
+		return err
+	}
+	s.depth--
+	return out
 }
 
 // cascade_resolve_value resolves `var()` references plus `@name`/`--name`
@@ -522,7 +664,10 @@ fn cascade_resolve_inner(raw string, mut scope StyleVarScope) !string {
 				end++
 			}
 			key := value[index..end]
-			resolved := scope.lookup(key) or { return error('unknown variable "${key}"') }
+			found := scope.lookup(key) or { return error('unknown variable "${key}"') }
+			// The substituted text may reference further variables, like a
+			// `var()` substitution does.
+			resolved := scope.expand(found, key)!
 			out << resolved.bytes()
 			index = end
 			continue
@@ -603,21 +748,60 @@ fn style_var_function(value string, pos int, mut scope StyleVarScope) !(int, str
 		return error('unclosed var()')
 	}
 	inner := value[pos + 4..index]
-	parts := theme_split_commas(inner)
-	if parts.len == 0 || parts.len > 2 {
-		return error('var() needs a name and optional fallback')
-	}
-	name := parts[0].trim_space()
+	// The fallback is everything after the first top-level comma, commas
+	// included: `var(--x, 2px, 4px)` falls back to `2px, 4px`.
+	raw_name, fallback := style_split_first_comma(inner)
+	name := raw_name.trim_space()
 	if !name.starts_with('--') || name.len <= 2 {
 		return error('"${name}" is not a custom property')
 	}
-	if resolved := scope.lookup(name) {
-		return index + 1, cascade_resolve_inner(resolved, mut scope)!
+	if found := scope.lookup(name) {
+		// A value that cannot resolve (a cycle, an unknown inner name) is
+		// invalid, and an invalid custom property takes the fallback.
+		mut valid := true
+		expanded := scope.expand(found, name) or {
+			if fallback == none {
+				return err
+			}
+			valid = false
+			''
+		}
+		if valid {
+			return index + 1, expanded
+		}
 	}
-	if parts.len == 2 {
-		return index + 1, cascade_resolve_inner(parts[1], mut scope)!
+	if fb := fallback {
+		return index + 1, scope.expand(fb, name)!
 	}
 	return error('unknown variable "${name}"')
+}
+
+// style_split_first_comma splits text at its first comma outside
+// parentheses and quotes; the second part is none without one.
+fn style_split_first_comma(text string) (string, ?string) {
+	mut depth := 0
+	mut quote := u8(0)
+	for i in 0 .. text.len {
+		ch := text[i]
+		if quote != 0 {
+			if ch == quote {
+				quote = 0
+			}
+			continue
+		}
+		if ch == `"` || ch == `'` {
+			quote = ch
+		} else if ch == `(` {
+			depth++
+		} else if ch == `)` {
+			if depth > 0 {
+				depth--
+			}
+		} else if ch == `,` && depth == 0 {
+			return text[..i], ?string(text[i + 1..])
+		}
+	}
+	return text, none
 }
 
 fn cascade_warn(mut warnings []StylesheetWarning, el Element, prop string, message string) {
@@ -630,13 +814,11 @@ fn cascade_warn(mut warnings []StylesheetWarning, el Element, prop string, messa
 
 // Inline wins is read off base (the pre-cascade element): checks below look
 // at base, writes accumulate onto out, so later (stronger) sheet rules still
-// override earlier ones while builder-set properties survive.
-// Inline wins is read off base (the pre-cascade element): checks below look
-// at base, writes accumulate onto out, so later (stronger) sheet rules still
 // override earlier ones while builder-set properties survive. base travels
 // by reference: declarations apply per element per rule, and it is only
-// ever read.
-fn apply_declaration(base &Element, out Element, prop string, value string, lctx StyleLengthCtx, mut warnings []StylesheetWarning, mut color_cache map[string]ComponentThemeToken, mut len_cache map[string]f64, mut split_cache map[string][]string) Element {
+// ever read. Fill opacity contributions go to fill; style_fill_finish
+// folds them in once every declaration has applied.
+fn apply_declaration(base &Element, out Element, prop string, value string, lctx StyleLengthCtx, mut fill StyleFill, mut warnings []StylesheetWarning, mut color_cache map[string]ComponentThemeToken, mut len_cache map[string]f64, mut split_cache map[string][]string) Element {
 	match prop {
 		'background', 'background-color', 'background-gradient' {
 			if base.box.bg != 0xffffff || base.box.gradient.stops.len > 0 {
@@ -647,22 +829,32 @@ fn apply_declaration(base &Element, out Element, prop string, value string, lctx
 				return out
 			}
 			if token.has_gradient() {
+				// Stops carry their own alpha; an earlier color's alpha must
+				// not dim the gradient.
+				fill.alpha = 1.0
+				fill.alpha_set = true
 				return Element{
 					...out
 					box: BoxStyle{
 						...out.box
+						bg:       token.color & 0xffffff
 						gradient: token.gradient
 					}
 				}
 			}
-			bg := token.over(0xffffff)
-			opacity := if token.opacity < 1.0 { token.opacity } else { out.box.opacity }
+			// The raw color plus its alpha as fill opacity, like
+			// ComponentThemeToken.box: renderers composite the fill over
+			// whatever is beneath, so pre-blending against white here would
+			// apply the alpha twice. A solid clears an earlier gradient,
+			// which renderers would otherwise keep drawing.
+			fill.alpha = token.opacity
+			fill.alpha_set = true
 			return Element{
 				...out
 				box: BoxStyle{
 					...out.box
-					bg:      bg
-					opacity: opacity
+					bg:       token.color & 0xffffff
+					gradient: Gradient{}
 				}
 			}
 		}
@@ -711,13 +903,9 @@ fn apply_declaration(base &Element, out Element, prop string, value string, lctx
 			}
 		}
 		'font-weight' {
-			lower := value.to_lower()
-			bold := if lower in ['bold', 'bolder'] {
-				true
-			} else if lower == 'normal' || lower == 'lighter' {
-				false
-			} else {
-				(lower.int() >= 600)
+			bold := style_font_weight_bold(value) or {
+				cascade_warn(mut warnings, out, prop, 'expected normal, bold, bolder, lighter or 1-1000')
+				return out
 			}
 			if base.text_style.bold {
 				return out // inline wins
@@ -731,7 +919,16 @@ fn apply_declaration(base &Element, out Element, prop string, value string, lctx
 			}
 		}
 		'font-style' {
-			italic := value.to_lower() == 'italic'
+			// No separate oblique face exists: oblique renders as italic.
+			lower := value.trim_space().to_lower()
+			italic := if lower == 'italic' || lower == 'oblique' || lower.starts_with('oblique ') {
+				true
+			} else if lower == 'normal' {
+				false
+			} else {
+				cascade_warn(mut warnings, out, prop, 'expected normal, italic or oblique')
+				return out
+			}
 			if base.text_style.italic {
 				return out // inline wins (default false)
 			}
@@ -766,18 +963,16 @@ fn apply_declaration(base &Element, out Element, prop string, value string, lctx
 		}
 		'text-decoration' {
 			lower := value.to_lower()
-			if lower == 'none' {
-				return out
-			}
 			if base.text_style.underline || base.text_style.strikethrough {
 				return out // inline wins
 			}
 			underline := lower.contains('underline')
 			strike := lower.contains('line-through') || lower.contains('strikethrough')
-			if !underline && !strike {
+			if lower.trim_space() != 'none' && !underline && !strike {
 				cascade_warn(mut warnings, out, prop, 'expected underline, line-through or none')
 				return out
 			}
+			// `none` clears an earlier sheet decoration.
 			return Element{
 				...out
 				text_style: TextStyle{
@@ -788,12 +983,30 @@ fn apply_declaration(base &Element, out Element, prop string, value string, lctx
 			}
 		}
 		'border' {
-			if value.to_lower() == 'none' {
-				return out
+			if base.box.border_left != 0 || base.box.border_color != 0 {
+				return out // inline wins
+			}
+			lower := value.trim_space().to_lower()
+			if lower == 'none' || lower == 'hidden' {
+				// Clears an earlier sheet border, as the shorthand resets
+				// every side.
+				return Element{
+					...out
+					box: BoxStyle{
+						...out.box
+						border_left:   0
+						border_top:    0
+						border_right:  0
+						border_bottom: 0
+					}
+				}
 			}
 			mut width := ?f64(none)
 			mut color := ?u32(none)
 			for part in cascade_split_value(value, mut split_cache) {
+				if part.to_lower() in style_border_styles {
+					continue // every border draws solid
+				}
 				if width == none {
 					if w := cascade_length_px(part, lctx, mut len_cache) {
 						width = w
@@ -803,18 +1016,21 @@ fn apply_declaration(base &Element, out Element, prop string, value string, lctx
 				if color == none {
 					if token := cascade_token(part, mut color_cache) {
 						color = token.over(0xffffff)
+						continue
 					}
 				}
+				cascade_warn(mut warnings, out, prop, 'unexpected "${part}" in `<width> [style] <color>`')
+				return out
 			}
 			if width == none && color == none {
 				cascade_warn(mut warnings, out, prop, 'expected `<width> [style] <color>`')
 				return out
 			}
-			w := width or { base.box.border_left }
-			c := color or { base.box.border_color }
-			if base.box.border_left != 0 || base.box.border_color != 0 {
-				return out // inline wins
+			w := width or {
+				cascade_warn(mut warnings, out, prop, 'no width: the border stays invisible; write `<width> <color>`')
+				return out
 			}
+			c := color or { base.box.border_color }
 			return Element{
 				...out
 				box: BoxStyle{
@@ -880,30 +1096,33 @@ fn apply_declaration(base &Element, out Element, prop string, value string, lctx
 			}
 		}
 		'opacity' {
-			if base.box.opacity != 1.0 {
-				return out
-			}
 			trimmed := if needs_trim(value) { value.trim_space() } else { value }
 			raw := if trimmed.ends_with('%') { trimmed[..trimmed.len - 1] } else { trimmed }
 			number := query_plain_number(raw) or {
 				cascade_warn(mut warnings, out, prop, 'expected a number or percentage')
 				return out
 			}
-			opacity := if trimmed.ends_with('%') { number / 100 } else { number }
-			return Element{
-				...out
-				box: BoxStyle{
-					...out.box
-					opacity: unit_clamp(opacity)
-				}
+			if base.box.opacity != 1.0 {
+				return out // inline wins
 			}
+			opacity := if trimmed.ends_with('%') { number / 100 } else { number }
+			fill.opacity = unit_clamp(opacity)
+			fill.opacity_set = true
+			return out
 		}
 		'box-shadow' {
-			if value.to_lower() == 'none' {
-				return out
-			}
 			if base.box.shadow.opacity != 0 {
-				return out
+				return out // inline wins
+			}
+			if value.trim_space().to_lower() == 'none' {
+				// Clears an earlier sheet shadow.
+				return Element{
+					...out
+					box: BoxStyle{
+						...out.box
+						shadow: BoxShadow{}
+					}
+				}
 			}
 			shadow := cascade_shadow(value, lctx, mut color_cache, mut len_cache, mut split_cache) or {
 				cascade_warn(mut warnings, out, prop, 'expected `<color> [blur] [x y] [spread]`')
@@ -926,6 +1145,28 @@ fn apply_declaration(base &Element, out Element, prop string, value string, lctx
 			return out
 		}
 	}
+}
+
+// style_border_styles are the CSS border-style keywords. Borders always
+// draw solid, so the shorthand accepts and skips them.
+const style_border_styles = ['solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset',
+	'outset']
+
+// style_font_weight_bold maps a font-weight to bold or regular: keywords,
+// or a number from 1 to 1000 (600 and up is bold). none for anything else.
+fn style_font_weight_bold(value string) ?bool {
+	lower := value.trim_space().to_lower()
+	if lower in ['bold', 'bolder'] {
+		return true
+	}
+	if lower in ['normal', 'lighter'] {
+		return false
+	}
+	number := query_plain_number(lower) or { return none }
+	if number < 1 || number > 1000 {
+		return none
+	}
+	return number >= 600
 }
 
 // cascade_split_value splits a shorthand value, memoizing per cascade run.

@@ -310,27 +310,24 @@ fn (mut p StyleParser) parse_container_condition() !MediaCondition {
 
 // ── Query blocks ────────────────────────────────────────────────────
 // parse_query_block parses `@media ... { }` / `@container ... { }` after
-// the keyword, attaching the accumulated queries to every inner rule.
-// Nesting accumulates (intersection); only rules and further query blocks
-// may appear inside.
+// the keyword. The block's query list becomes one more nesting level on
+// every inner rule: levels intersect (each must hold), while the commas
+// inside one level stay OR. Only rules and further query blocks may
+// appear inside.
 
-fn (mut p StyleParser) parse_query_block(m_acc []MediaQuery, c_acc []ContainerQuery) ![]StyleRule {
-	mut media := m_acc.clone()
-	mut containers := c_acc.clone()
+fn (mut p StyleParser) parse_query_block(q StyleQueryCtx) ![]StyleRule {
+	mut media := q.media.clone()
+	mut containers := q.containers.clone()
 	if p.src[p.pos..].starts_with('@media') {
 		for _ in 0 .. 6 {
 			p.advance()
 		}
-		for query in p.parse_media_queries()! {
-			media << query
-		}
+		media << p.parse_media_queries()!
 	} else if p.src[p.pos..].starts_with('@container') {
 		for _ in 0 .. 10 {
 			p.advance()
 		}
-		for query in p.parse_container_queries()! {
-			containers << query
-		}
+		containers << p.parse_container_queries()!
 	} else {
 		return error(style_err(p.line, p.col, 'expected `@media` or `@container`'))
 	}
@@ -339,5 +336,8 @@ fn (mut p StyleParser) parse_query_block(m_acc []MediaQuery, c_acc []ContainerQu
 		return error(style_err(p.line, p.col, 'expected `{` after the query'))
 	}
 	p.advance()
-	return p.parse_block(media, containers, false)
+	return p.parse_block(StyleQueryCtx{
+		media:      media
+		containers: containers
+	}, false)
 }

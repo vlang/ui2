@@ -270,7 +270,7 @@ pub fn refresh() {
 		return
 	}
 	st.rendering = true
-	root := stylesheet_apply_frame(st.build_screen(), stylesheet_appkit_env())
+	root := stylesheet_apply_frame(stylesheet_frame_build(st.build_screen), stylesheet_appkit_env())
 	render_root(root)
 	st.rendering = false
 	if st.refresh_pending {
