@@ -948,6 +948,47 @@ the event being handled has just added, call `refresh()` first so the element
 has its new range. The iOS backend scrolls the same modes but does not expose
 these functions.
 
+## Scaffold
+
+`scaffold` lays a screen out the way Compose's `Scaffold` does: a top bar, a
+bottom bar, content filling the box between them, and optional floating
+action and snackbar overlays docked inside the content box. Slot elements
+keep their declared sizes; bar children are positioned relative to their
+strip, content children relative to the content box, and the overlays are
+placed by the scaffold itself:
+
+```v
+ui2.scaffold(
+    id:                'app'
+    frame:             ui2.bounds()
+    top_bar_height:    56
+    bottom_bar_height: 64
+    top_bar:           [ui2.label('title', 'Scaffold', ui2.rect(16, 0, 200, 56), style)]
+    content:           [ui2.label('body', 'Hello', ui2.rect(16, 16, 200, 24), style)]
+    bottom_bar:        [ui2.label('nav', 'Nav', ui2.rect(16, 0, 200, 64), style)]
+    floating_action:   ui2.button('add', '+', ui2.rect(0, 0, 56, 56), fab_box, fab_text)
+    snackbar:          ui2.label('snack', 'Saved', ui2.rect(0, 0, 100, 40), snack_text)
+)!
+```
+
+```vml
+Scaffold {
+    id: app
+    top_bar_height: 56
+    bottom_bar_height: 64
+
+    Label { slot: top text: "Scaffold" }
+    Label { text: "Hello" }
+    Label { slot: bottom text: "Nav" }
+    Button { slot: fab text: "+" x: 0 y: 0 width: 56 height: 56 }
+}
+```
+
+Children without a `slot` land in the content box. At most one `fab` and one
+`snackbar` child are allowed; anything else in `slot` is rejected while the
+document loads. `scaffold_content_rect` exposes the content box for code that
+places its own overlays.
+
 ## Fonts and text sizes
 
 `TextStyle.size` is in points. Win32 and the Linux and BSD desktops resolve a
