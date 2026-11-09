@@ -15,6 +15,14 @@ module ui2
 // will override it. Layout-owned props (padding/margin/gap) are collected
 // into warnings instead of applied; the layout code does not read them yet.
 
+// stylesheet_known_props lists every property the cascade applies or
+// deliberately defers. Anything else warns as unknown. The lint helper reads
+// the same list, so the two can never disagree.
+pub const stylesheet_known_props = ['background', 'background-color', 'background-gradient', 'color',
+	'font-size', 'font-family', 'font-weight', 'font-style', 'text-align', 'text-decoration', 'border',
+	'border-radius', 'border-color', 'border-width', 'opacity', 'box-shadow', 'padding', 'margin',
+	'gap']
+
 pub struct StylesheetWarning {
 pub:
 	element string
@@ -168,7 +176,7 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 		return out
 	}
 	match decl.prop {
-		'background', 'background-color' {
+		'background', 'background-color', 'background-gradient' {
 			if base.box.bg != 0xffffff || base.box.gradient.stops.len > 0 {
 				return out // inline wins
 			}
@@ -314,6 +322,46 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 					...out.text_style
 					underline:     underline
 					strikethrough: strike
+				}
+			}
+		}
+		'border' {
+			if value.to_lower() == 'none' {
+				return out
+			}
+			mut width := ?f64(none)
+			mut color := ?u32(none)
+			for part in value.fields() {
+				if width == none {
+					if w := cascade_length(part) {
+						width = w
+						continue
+					}
+				}
+				if color == none {
+					if token := component_theme_token(part) {
+						color = token.over(0xffffff)
+					}
+				}
+			}
+			if width == none && color == none {
+				cascade_warn(mut warnings, out, decl.prop, 'expected `<width> [style] <color>`')
+				return out
+			}
+			w := width or { base.box.border_left }
+			c := color or { base.box.border_color }
+			if base.box.border_left != 0 || base.box.border_color != 0 {
+				return out // inline wins
+			}
+			return Element{
+				...out
+				box: BoxStyle{
+					...out.box
+					border_left:   w
+					border_top:    w
+					border_right:  w
+					border_bottom: w
+					border_color:  c
 				}
 			}
 		}

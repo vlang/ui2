@@ -107,10 +107,12 @@ which authored them.
   dark follow/force, `stylesheet_frame_env` / `stylesheet_apply_frame`), live
   env hooks in the custom (`ui_immediate.c.v`) and native Windows
   (`windows/ui_windows.v`) build paths, `examples/stylesheet_demo`.
-- **P3 (next):** AppKit/UIKit hooks (same 3-line pattern), lint helper,
-  `docs/stylesheet.md` user guide, gradient/shadow shorthands polish.
+- **P3 (done, this commit):** AppKit/UIKit hooks (same pattern),
+  `stylesheet_lint.v`, `docs/stylesheet.md` user guide, `background-gradient`
+  alias + `border` shorthand polish.
 - Non-goals v1: layout selectors, animations/transitions, `@media`,
-  nesting, `!important`.
+  nesting, `!important`. `refresh_element` (AppKit) intentionally bypasses
+  the sheet: it reconciles a caller-supplied subtree, not a fresh build.
 
 ## 6. Verification
 

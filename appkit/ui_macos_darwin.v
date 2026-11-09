@@ -270,7 +270,7 @@ pub fn refresh() {
 		return
 	}
 	st.rendering = true
-	root := st.build_screen()
+	root := stylesheet_apply_frame(st.build_screen(), stylesheet_appkit_env())
 	render_root(root)
 	st.rendering = false
 	if st.refresh_pending {
@@ -670,6 +670,15 @@ pub fn focus(id string) {
 	if !native_focus(native) {
 		return
 	}
+}
+
+// stylesheet_appkit_env reads this frame's interaction state for the
+// stylesheet cascade. AppKit tracks hover and focus; it has no press-target
+// tracking, so :pressed stays unmatched here.
+fn stylesheet_appkit_env() StyleMatchEnv {
+	st := state()
+	hovered := if st.hovered.len > 0 { st.hovered.last() } else { '' }
+	return stylesheet_frame_env(hovered, '', focused_id())
 }
 
 // focused_id returns the declarative id of the control that currently owns

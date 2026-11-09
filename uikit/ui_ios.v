@@ -133,7 +133,7 @@ pub fn refresh() {
 		return
 	}
 	g_ios_rendering = true
-	root := g_build_screen()
+	root := stylesheet_apply_frame(g_build_screen(), stylesheet_uikit_env())
 	render_root(root)
 	g_ios_rendering = false
 	if g_ios_refresh_pending {
@@ -301,6 +301,13 @@ pub fn focused_id() string {
 		}
 	}
 	return ''
+}
+
+// stylesheet_uikit_env reads this frame's interaction state for the
+// stylesheet cascade. UIKit tracks focus; hover and press targets are not
+// tracked, so :hover and :pressed stay unmatched here.
+fn stylesheet_uikit_env() StyleMatchEnv {
+	return stylesheet_frame_env('', '', focused_id())
 }
 
 pub fn focused_text_area_id() string {
