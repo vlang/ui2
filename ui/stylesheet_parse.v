@@ -162,6 +162,15 @@ fn is_style_name_char(ch u8) bool {
 	return is_style_name_start(ch) || (ch >= `0` && ch <= `9`) || ch == `-`
 }
 
+// style_keyword_end reports whether a theme-block keyword may end at pos:
+// the next character must not continue an identifier.
+fn style_keyword_end(src string, pos int) bool {
+	if pos >= src.len {
+		return true
+	}
+	return !is_style_name_char(src[pos])
+}
+
 fn (mut p StyleParser) skip_space_and_comments() ! {
 	for !p.eof() {
 		if is_style_space(p.peek()) {
@@ -207,8 +216,11 @@ fn (mut p StyleParser) parse() !Stylesheet {
 			result.variables[name] = value
 			continue
 		}
-		// Theme blocks: `light { ... }` / `dark { ... }`.
-		if p.src[p.pos..].starts_with('light') || p.src[p.pos..].starts_with('dark') {
+		// Theme blocks: `light { ... }` / `dark { ... }`. The keyword needs a
+		// word boundary so a type selector that merely starts with those
+		// letters (e.g. `lights`) parses as a rule instead.
+		if (p.src[p.pos..].starts_with('light') && style_keyword_end(p.src, p.pos + 5))
+			|| (p.src[p.pos..].starts_with('dark') && style_keyword_end(p.src, p.pos + 4)) {
 			mode, vars := p.parse_theme_block()!
 			if mode == 'light' {
 				for key, value in vars {

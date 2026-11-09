@@ -67,7 +67,8 @@ pub fn apply_stylesheet_ex(root Element, global Stylesheet, env StyleMatchEnv) (
 
 fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, mut warnings []StylesheetWarning) Element {
 	mut active := scopes.clone()
-	if el.stylesheet.rules.len > 0 || el.stylesheet.variables.len > 0 {
+	if el.stylesheet.rules.len > 0 || el.stylesheet.variables.len > 0
+		|| el.stylesheet.light_vars.len > 0 || el.stylesheet.dark_vars.len > 0 {
 		active << el.stylesheet
 	}
 	mut out := if el.ignore_stylesheet {
@@ -95,6 +96,7 @@ struct StyleCandidate {
 	specificity int
 	scope_level int
 	rule_order  int
+	decl_index  int
 	decl        StyleDeclaration
 }
 
@@ -104,11 +106,12 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 		for rule_index, rule in sheet.rules {
 			for sel in rule.selectors {
 				if stylesheet_selector_matches(sel, el, ancestors, index, count, env) {
-					for decl in rule.declarations {
+					for decl_index, decl in rule.declarations {
 						candidates << StyleCandidate{
 							specificity: sel.specificity
 							scope_level: scope_level
 							rule_order:  rule_index
+							decl_index:  decl_index
 							decl:        decl
 						}
 					}
@@ -127,7 +130,12 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 		if a.scope_level != b.scope_level {
 			return a.scope_level - b.scope_level
 		}
-		return a.rule_order - b.rule_order
+		if a.rule_order != b.rule_order {
+			return a.rule_order - b.rule_order
+		}
+		// Same rule, several declarations: source order wins, independent of
+		// the sort algorithm's stability.
+		return a.decl_index - b.decl_index
 	})
 	mut out := el
 	for candidate in candidates {
@@ -421,11 +429,13 @@ fn apply_declaration(base Element, out Element, decl StyleDeclaration, scopes []
 			if base.box.opacity != 1.0 {
 				return out
 			}
-			opacity := value.trim_space().trim_string_right('%').f64() / if value.trim_space().ends_with('%') {
-				100
-			} else {
-				1
+			trimmed := value.trim_space()
+			raw := if trimmed.ends_with('%') { trimmed[..trimmed.len - 1] } else { trimmed }
+			number := cascade_length(raw) or {
+				cascade_warn(mut warnings, out, decl.prop, 'expected a number or percentage')
+				return out
 			}
+			opacity := if trimmed.ends_with('%') { number / 100 } else { number }
 			return Element{
 				...out
 				box: BoxStyle{

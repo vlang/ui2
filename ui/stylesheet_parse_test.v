@@ -81,6 +81,16 @@ fn test_stylesheet_rejects_rule_in_theme_block() {
 	}
 }
 
+fn test_stylesheet_parses_type_prefixing_theme_keyword_as_rule() {
+	// `lights` is not a theme block (no word boundary): it parses as a type
+	// rule that simply never matches a real kind.
+	sheet := parse_stylesheet('lights { background: red; }')!
+	assert sheet.rules.len == 1
+	assert sheet.rules[0].selectors[0].parts[0].kind == 'lights'
+	assert sheet.light_vars.len == 0
+	assert sheet.dark_vars.len == 0
+}
+
 fn test_stylesheet_value_keeps_functions() {
 	sheet := parse_stylesheet('Card { background: linear-gradient(135deg, #4f46e5, #06b6d4); }')!
 	assert sheet.rules[0].declarations[0].value == 'linear-gradient(135deg, #4f46e5, #06b6d4)'

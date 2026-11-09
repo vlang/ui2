@@ -124,6 +124,32 @@ fn test_cascade_ignore_and_warnings() {
 	assert warnings.any(it.prop == 'bogus-prop')
 }
 
+fn test_cascade_theme_only_scoped_sheet_activates() {
+	global := parse_stylesheet('Button { background: @bg; }')!
+	scoped := parse_stylesheet('dark { @bg: #111111; }')!
+	inner := with_stylesheet(view('card', rect(0, 0, 100, 100), BoxStyle{}, [
+		cascade_test_button('x'),
+	]), scoped)
+	mut root := view('root', rect(0, 0, 200, 200), BoxStyle{}, [inner])
+	root = apply_stylesheet(root, global, StyleMatchEnv{ dark: true })
+	assert root.children[0].children[0].box.bg == 0x111111
+}
+
+fn test_cascade_opacity_garbage_warns() {
+	sheet := parse_stylesheet('Button { opacity: banana; }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	out, warnings := apply_stylesheet_ex(root, sheet, StyleMatchEnv{})
+	assert out.children[0].box.opacity == 1.0
+	assert warnings.any(it.prop == 'opacity')
+}
+
+fn test_cascade_duplicate_property_later_wins() {
+	sheet := parse_stylesheet('Button { background: #ff0000; background: #0000ff; }')!
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].box.bg == 0x0000ff
+}
+
 fn test_stylesheet_dsl_matches_parser() {
 	rule := style_rule('Button.primary:hover', {
 		'background': '#2563eb'
