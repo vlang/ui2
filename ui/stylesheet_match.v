@@ -29,8 +29,11 @@ pub:
 // stylesheet_selector_matches reports whether sel matches el.
 pub fn stylesheet_selector_matches(sel StyleSelector, el Element, ancestors []StyleAncestor, index int, count int, env StyleMatchEnv) bool {
 	// Rightmost part matches the element itself; walk left through ancestors.
+	// The kind name is computed once: part kinds are lowercased at parse
+	// time, so the kind check below allocates nothing.
+	kind_name := el.kind.str()
 	right := sel.parts.len - 1
-	if !style_part_matches(sel.parts[right], el, ancestors, index, count, env) {
+	if !style_part_matches(sel.parts[right], kind_name, el, ancestors, index, count, env) {
 		return false
 	}
 	mut ancestor_pos := ancestors.len - 1
@@ -41,8 +44,8 @@ pub fn stylesheet_selector_matches(sel StyleSelector, el Element, ancestors []St
 		}
 		if combinator == .child {
 			ancestor := ancestors[ancestor_pos]
-			if !style_part_matches(sel.parts[part_index], ancestor.el, ancestors, ancestor.index,
-				ancestor.count, env) {
+			if !style_part_matches(sel.parts[part_index], ancestor.el.kind.str(), ancestor.el,
+				ancestors, ancestor.index, ancestor.count, env) {
 				return false
 			}
 			ancestor_pos--
@@ -50,8 +53,8 @@ pub fn stylesheet_selector_matches(sel StyleSelector, el Element, ancestors []St
 			mut found := false
 			for ancestor_pos >= 0 {
 				ancestor := ancestors[ancestor_pos]
-				if style_part_matches(sel.parts[part_index], ancestor.el, ancestors, ancestor.index,
-					ancestor.count, env) {
+				if style_part_matches(sel.parts[part_index], ancestor.el.kind.str(), ancestor.el,
+					ancestors, ancestor.index, ancestor.count, env) {
 					found = true
 					ancestor_pos--
 					break
@@ -66,9 +69,9 @@ pub fn stylesheet_selector_matches(sel StyleSelector, el Element, ancestors []St
 	return true
 }
 
-fn style_part_matches(part StyleSelectorPart, el Element, ancestors []StyleAncestor, index int, count int, env StyleMatchEnv) bool {
+fn style_part_matches(part StyleSelectorPart, kind_name string, el Element, ancestors []StyleAncestor, index int, count int, env StyleMatchEnv) bool {
 	if !part.universal && part.kind.len > 0 {
-		if part.kind.to_lower() != el.kind.str() {
+		if part.kind != kind_name {
 			return false
 		}
 	}

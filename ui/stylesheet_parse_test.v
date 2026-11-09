@@ -7,7 +7,7 @@ fn test_stylesheet_parses_type_id_class() {
 	assert rule.selectors.len == 1
 	sel := rule.selectors[0]
 	assert sel.parts.len == 1
-	assert sel.parts[0].kind == 'Button'
+	assert sel.parts[0].kind == 'button'
 	assert sel.parts[0].id == 'login'
 	assert sel.parts[0].classes == ['primary']
 	assert sel.specificity == 1000000 + 1000 + 1
@@ -24,8 +24,8 @@ fn test_stylesheet_parses_group_descendant_child() {
 	first := rule.selectors[0]
 	assert first.parts.len == 2
 	assert first.combinators == [.child]
-	assert first.parts[0].kind == 'View'
-	assert first.parts[1].kind == 'Label'
+	assert first.parts[0].kind == 'view'
+	assert first.parts[1].kind == 'label'
 	second := rule.selectors[1]
 	assert second.parts.len == 1
 	assert second.parts[0].pseudos.len == 1
@@ -97,8 +97,8 @@ fn test_stylesheet_nesting_implicit_descendant() {
 	assert sheet.rules[0].selectors[0].parts.len == 1
 	inner := sheet.rules[1].selectors[0]
 	assert inner.parts.len == 2
-	assert inner.parts[0].kind == 'View'
-	assert inner.parts[1].kind == 'Label'
+	assert inner.parts[0].kind == 'view'
+	assert inner.parts[1].kind == 'label'
 	assert inner.combinators == [.descendant]
 	assert sheet.rules[1].declarations[0].prop == 'font-size'
 }
@@ -108,7 +108,7 @@ fn test_stylesheet_nesting_parent_ref() {
 	assert sheet.rules.len == 3
 	hover := sheet.rules[1].selectors[0]
 	assert hover.parts.len == 1
-	assert hover.parts[0].kind == 'Button'
+	assert hover.parts[0].kind == 'button'
 	assert hover.parts[0].classes == ['primary']
 	assert hover.parts[0].pseudos.map(it.name) == ['hover']
 	ghost := sheet.rules[2].selectors[0]

@@ -965,7 +965,8 @@ fn (mut p StyleParser) parse_compound() !StyleSelectorPart {
 		p.advance()
 		universal = true
 	} else if !p.eof() && is_style_name_start(p.peek()) {
-		kind = p.parse_ident()!
+		// Lowercased once here so matching never allocates per attempt.
+		kind = p.parse_ident()!.to_lower()
 	}
 	mut id := ''
 	mut classes := []string{}

@@ -62,46 +62,56 @@ pub fn apply_stylesheet_ex(root Element, global Stylesheet, env StyleMatchEnv) (
 		scopes << global
 	}
 	qenv := stylesheet_query_env(env.dark, env.dpi)
-	root_out := cascade_element(root, [], 0, 1, scopes, env, qenv, map[string]string{}, mut warnings)
+	// Colors parse independent of the element, so one run-wide cache serves
+	// every declaration: sheets repeat the same few values.
+	mut color_cache := map[string]ComponentThemeToken{}
+	mut len_cache := map[string]f64{}
+	root_out := cascade_element(root, [], 0, 1, scopes, env, qenv, map[string]string{},
+		mut warnings, mut color_cache, mut len_cache)
 	return root_out, warnings
 }
 
-fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, inherited map[string]string, mut warnings []StylesheetWarning) Element {
-	mut active := scopes.clone()
-	if el.stylesheet.rules.len > 0 || el.stylesheet.variables.len > 0
-		|| el.stylesheet.light_vars.len > 0 || el.stylesheet.dark_vars.len > 0 {
+fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, inherited map[string]string, mut warnings []StylesheetWarning, mut color_cache map[string]ComponentThemeToken, mut len_cache map[string]f64) Element {
+	// No clone when the element brings no scoped sheet: scopes is only read.
+	has_scoped := el.stylesheet.rules.len > 0 || el.stylesheet.variables.len > 0
+		|| el.stylesheet.light_vars.len > 0 || el.stylesheet.dark_vars.len > 0
+	mut active := scopes
+	if has_scoped {
+		active = scopes.clone()
 		active << el.stylesheet
 	}
-	mut out := el
-	mut child_inherited := inherited.clone()
-	if !el.ignore_stylesheet {
-		out, child_inherited = cascade_props(el, ancestors, index, count, active, env,
-			qenv, inherited, mut warnings)
-	}
+	// The inherited map is shared (never mutated in place: cascade_props
+	// clones before merging), threaded through a return because V forbids
+	// aliasing a map into a mutable local.
+	mut out, child_inherited := cascade_props_or_share(el, ancestors, index, count, active, env,
+		qenv, inherited, mut warnings, mut color_cache, mut len_cache)
 	// Plugin transforms run post-cascade, top-down: children see the
 	// transformed parent. Identity and kind are pinned so a transform
 	// cannot break reconciliation or dispatch; children are replaced
-	// below regardless.
-	transformed := style_plugin_transform(out, env)
-	if transformed.id != out.id || transformed.kind != out.kind {
-		// Keep the tree valid even for a misbehaving plugin.
-		out = Element{
-			...transformed
-			id:   out.id
-			kind: out.kind
+	// below regardless. Skipped entirely when no plugin is registered.
+	if g_style_plugins.len > 0 {
+		transformed := style_plugin_transform(out, env)
+		if transformed.id != out.id || transformed.kind != out.kind {
+			// Keep the tree valid even for a misbehaving plugin.
+			out = Element{
+				...transformed
+				id:   out.id
+				kind: out.kind
+			}
+		} else {
+			out = transformed
 		}
-	} else {
-		out = transformed
 	}
+	// One chain per element, not per child: every sibling shares it.
+	ancestors_next := [...ancestors, StyleAncestor{
+		el:    out
+		index: index
+		count: count
+	}]
 	mut children := []Element{cap: el.children.len}
 	for child_index, child in el.children {
-		ancestors_next := [...ancestors, StyleAncestor{
-			el:    out
-			index: index
-			count: count
-		}]
 		children << cascade_element(child, ancestors_next, child_index, el.children.len,
-			active, env, qenv, child_inherited, mut warnings)
+			active, env, qenv, child_inherited, mut warnings, mut color_cache, mut len_cache)
 	}
 	return Element{
 		...out
@@ -118,48 +128,45 @@ struct StyleCandidate {
 	length      StyleLengthCtx
 }
 
-fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, inherited map[string]string, mut warnings []StylesheetWarning) (Element, map[string]string) {
+// cascade_props_or_share runs the cascade unless the element opts out, in
+// which case the inherited map passes through shared.
+fn cascade_props_or_share(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, inherited map[string]string, mut warnings []StylesheetWarning, mut color_cache map[string]ComponentThemeToken, mut len_cache map[string]f64) (Element, map[string]string) {
+	if el.ignore_stylesheet {
+		return el, inherited
+	}
+	return cascade_props(el, ancestors, index, count, scopes, env, qenv, inherited,
+		mut warnings, mut color_cache, mut len_cache)
+}
+
+fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, inherited map[string]string, mut warnings []StylesheetWarning, mut color_cache map[string]ComponentThemeToken, mut len_cache map[string]f64) (Element, map[string]string) {
 	mut candidates := []StyleCandidate{}
 	for scope_level, sheet in scopes {
 		for rule_index, rule in sheet.rules {
-			if !media_list_matches(rule.media, qenv) {
-				continue
-			}
-			lctx := cascade_length_ctx(rule.containers, ancestors, qenv) or { continue }
-			for sel in rule.selectors {
-				if stylesheet_selector_matches(sel, el, ancestors, index, count, env) {
-					for decl_index, decl in rule.declarations {
-						candidates << StyleCandidate{
-							specificity: sel.specificity
-							scope_level: scope_level
-							rule_order:  rule_index
-							decl_index:  decl_index
-							decl:        decl
-							length:      lctx
-						}
-					}
-					break
-				}
-			}
+			cascade_rule_candidates(rule, rule_index, scope_level, el, ancestors, index, count,
+				env, qenv, mut candidates)
 		}
 	}
 	if candidates.len == 0 {
 		return el, inherited
 	}
-	candidates.sort_with_compare(fn (a &StyleCandidate, b &StyleCandidate) int {
-		if a.specificity != b.specificity {
-			return a.specificity - b.specificity
-		}
-		if a.scope_level != b.scope_level {
-			return a.scope_level - b.scope_level
-		}
-		if a.rule_order != b.rule_order {
-			return a.rule_order - b.rule_order
-		}
-		// Same rule, several declarations: source order wins, independent of
-		// the sort algorithm's stability.
-		return a.decl_index - b.decl_index
-	})
+	// Usually already ordered (rules author low→high specificity): one linear
+	// check, which is also the sort's fixed point, skips the closure sort.
+	if candidates.len > 1 && !candidates_in_order(candidates) {
+		candidates.sort_with_compare(fn (a &StyleCandidate, b &StyleCandidate) int {
+			if a.specificity != b.specificity {
+				return a.specificity - b.specificity
+			}
+			if a.scope_level != b.scope_level {
+				return a.scope_level - b.scope_level
+			}
+			if a.rule_order != b.rule_order {
+				return a.rule_order - b.rule_order
+			}
+			// Same rule, several declarations: source order wins, independent of
+			// the sort algorithm's stability.
+			return a.decl_index - b.decl_index
+		})
+	}
 	// Custom properties resolve in cascade order and pass down the tree;
 	// normal declarations resolve against them.
 	mut raw := map[string]string{}
@@ -183,8 +190,8 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 			cascade_warn(mut warnings, el, candidate.decl.prop, 'unknown variable in "${candidate.decl.value}"')
 			continue
 		}
-		out = apply_declaration(el, out, candidate.decl.prop, value, candidate.length,
-			mut warnings)
+		out = apply_declaration(&el, out, candidate.decl.prop, value, candidate.length,
+			mut warnings, mut color_cache, mut len_cache)
 	}
 	mut merged := inherited.clone()
 	for key, value in raw {
@@ -194,6 +201,59 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 		merged[key] = value
 	}
 	return out, merged
+}
+
+// cascade_rule_candidates appends one rule's declarations for the first
+// matching selector. Media gates are element-independent but cheap; the
+// length context (container lookup) is built only after a selector
+// matches, so non-matching rules cost just the match attempt.
+fn cascade_rule_candidates(rule StyleRule, rule_index int, scope_level int, el Element, ancestors []StyleAncestor, index int, count int, env StyleMatchEnv, qenv StyleQueryEnv, mut candidates []StyleCandidate) {
+	if !media_list_matches(rule.media, qenv) {
+		return
+	}
+	for sel in rule.selectors {
+		if stylesheet_selector_matches(sel, el, ancestors, index, count, env) {
+			lctx := cascade_length_ctx(rule.containers, ancestors, qenv) or { return }
+			for decl_index, decl in rule.declarations {
+				candidates << StyleCandidate{
+					specificity: sel.specificity
+					scope_level: scope_level
+					rule_order:  rule_index
+					decl_index:  decl_index
+					decl:        decl
+					length:      lctx
+				}
+			}
+			return
+		}
+	}
+}
+
+// candidates_in_order reports whether candidates already match the
+// comparator below: specificity, scope, rule, then declaration order. That
+// order is the sort's fixed point, so checking first skips the sort.
+fn candidates_in_order(candidates []StyleCandidate) bool {
+	for i in 1 .. candidates.len {
+		a := candidates[i - 1]
+		b := candidates[i]
+		if a.specificity > b.specificity {
+			return false
+		}
+		if a.specificity == b.specificity {
+			if a.scope_level > b.scope_level {
+				return false
+			}
+			if a.scope_level == b.scope_level {
+				if a.rule_order > b.rule_order {
+					return false
+				}
+				if a.rule_order == b.rule_order && a.decl_index > b.decl_index {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }
 
 // cascade_length_ctx builds the length basis for one rule: the window from
@@ -228,6 +288,67 @@ fn cascade_lookup_var(name string, scopes []Stylesheet, dark bool) ?string {
 		}
 	}
 	return none
+}
+
+// cascade_token parses a color value, memoizing successes per cascade run.
+// Color values do not depend on the element (no lengths, no variables left
+// — those resolve before apply_declaration runs), and sheets repeat the
+// same few values across every element.
+fn cascade_token(value string, mut color_cache map[string]ComponentThemeToken) !ComponentThemeToken {
+	if token := color_cache[value] {
+		return token
+	}
+	token := component_theme_token(value)!
+	color_cache[value] = token
+	return token
+}
+
+// cascade_length_px resolves a length, memoizing the plain-number case per
+// cascade run. Only `12px`/`4`-shaped values qualify: anything with units
+// needing the length context (percent, viewport, container), functions, or
+// operators always takes the slow path.
+fn cascade_length_px(raw string, lctx StyleLengthCtx, mut len_cache map[string]f64) ?f64 {
+	trimmed := raw.trim_space()
+	if cached := len_cache[trimmed] {
+		return cached
+	}
+	if !is_plain_length(trimmed) {
+		return style_length_px(trimmed, lctx)
+	}
+	value := style_length_px(trimmed, lctx) or { return none }
+	len_cache[trimmed] = value
+	return value
+}
+
+// is_plain_length reports whether text is an optional `-`, digits with at
+// most one `.`, and an optional `px` — the only spellings whose length
+// never consults the context.
+fn is_plain_length(text string) bool {
+	mut i := 0
+	if text.starts_with('-') {
+		i++
+	}
+	mut digits := 0
+	mut points := 0
+	for i < text.len {
+		ch := text[i]
+		if ch >= `0` && ch <= `9` {
+			digits++
+		} else if ch == `.` {
+			points++
+			if points > 1 {
+				return false
+			}
+		} else {
+			break
+		}
+		i++
+	}
+	if digits == 0 {
+		return false
+	}
+	rest := text[i..]
+	return rest == '' || rest == 'px'
 }
 
 // style_var_scope resolves `var()` references and `@`/`--` names against
@@ -281,21 +402,24 @@ fn cascade_resolve_value(raw string, scopes []Stylesheet, dark bool, inherited m
 }
 
 fn cascade_resolve_inner(raw string, mut scope StyleVarScope) !string {
-	trimmed := raw.trim_space()
-	if trimmed.to_lower().starts_with('light-dark(') && trimmed.ends_with(')') {
-		inner := trimmed['light-dark('.len..trimmed.len - 1]
-		parts := theme_split_commas(inner)
-		if parts.len != 2 {
-			return error('light-dark() needs exactly two branches')
-		}
-		branch := if scope.dark { parts[1] } else { parts[0] }
-		return cascade_resolve_inner(branch, mut scope)
-	}
-	value := raw.trim_space()
+	// Fast path first, usually allocation-free: most values carry no
+	// variables, need no trim, and are not light-dark(). The trim is skipped
+	// when neither end has whitespace; the lowercase check runs only for
+	// values starting with l/L.
+	value := if needs_trim(raw) { raw.trim_space() } else { raw }
 	if !value.contains('@') && !value.contains('--') && !value.contains('var(')
 		&& !value.contains('var (') {
+		if value.len > 11 && (value[0] == `l` || value[0] == `L`) {
+			if value.to_lower().starts_with('light-dark(') && value.ends_with(')') {
+				return cascade_resolve_value_light_dark(value, mut scope)
+			}
+		}
 		return value
 	}
+	if value.to_lower().starts_with('light-dark(') && value.ends_with(')') {
+		return cascade_resolve_value_light_dark(value, mut scope)
+	}
+	// Markers are present here: the fast path above returned otherwise.
 	mut out := []u8{}
 	mut index := 0
 	for index < value.len {
@@ -323,6 +447,28 @@ fn cascade_resolve_inner(raw string, mut scope StyleVarScope) !string {
 		index++
 	}
 	return out.bytestr()
+}
+
+// needs_trim reports whether trimming would change the string.
+fn needs_trim(s string) bool {
+	if s.len == 0 {
+		return false
+	}
+	first := s[0]
+	last := s[s.len - 1]
+	return first == ` ` || first == `\t` || first == `\n` || first == `\r` || last == ` `
+		|| last == `\t` || last == `\n` || last == `\r`
+}
+
+// cascade_resolve_value_light_dark resolves a top-level `light-dark(a, b)`.
+fn cascade_resolve_value_light_dark(trimmed string, mut scope StyleVarScope) !string {
+	inner := trimmed['light-dark('.len..trimmed.len - 1]
+	parts := theme_split_commas(inner)
+	if parts.len != 2 {
+		return error('light-dark() needs exactly two branches')
+	}
+	branch := if scope.dark { parts[1] } else { parts[0] }
+	return cascade_resolve_inner(branch, mut scope)
 }
 
 // style_var_word_at classifies the token at pos: `@`, `--`, `var` (only
@@ -393,13 +539,18 @@ fn cascade_warn(mut warnings []StylesheetWarning, el Element, prop string, messa
 // Inline wins is read off base (the pre-cascade element): checks below look
 // at base, writes accumulate onto out, so later (stronger) sheet rules still
 // override earlier ones while builder-set properties survive.
-fn apply_declaration(base Element, out Element, prop string, value string, lctx StyleLengthCtx, mut warnings []StylesheetWarning) Element {
+// Inline wins is read off base (the pre-cascade element): checks below look
+// at base, writes accumulate onto out, so later (stronger) sheet rules still
+// override earlier ones while builder-set properties survive. base travels
+// by reference: declarations apply per element per rule, and it is only
+// ever read.
+fn apply_declaration(base &Element, out Element, prop string, value string, lctx StyleLengthCtx, mut warnings []StylesheetWarning, mut color_cache map[string]ComponentThemeToken, mut len_cache map[string]f64) Element {
 	match prop {
 		'background', 'background-color', 'background-gradient' {
 			if base.box.bg != 0xffffff || base.box.gradient.stops.len > 0 {
 				return out // inline wins
 			}
-			token := component_theme_token(value) or {
+			token := cascade_token(value, mut color_cache) or {
 				cascade_warn(mut warnings, out, prop, 'unparseable color: ${err.msg()}')
 				return out
 			}
@@ -427,7 +578,7 @@ fn apply_declaration(base Element, out Element, prop string, value string, lctx 
 			if base.text_style.color != 0x111111 {
 				return out
 			}
-			token := component_theme_token(value) or {
+			token := cascade_token(value, mut color_cache) or {
 				cascade_warn(mut warnings, out, prop, 'unparseable color: ${err.msg()}')
 				return out
 			}
@@ -443,7 +594,7 @@ fn apply_declaration(base Element, out Element, prop string, value string, lctx 
 			if base.text_style.size != 15.0 {
 				return out
 			}
-			size := style_length_px(value, lctx) or {
+			size := cascade_length_px(value, lctx, mut len_cache) or {
 				cascade_warn(mut warnings, out, prop, 'expected a length')
 				return out
 			}
@@ -552,13 +703,13 @@ fn apply_declaration(base Element, out Element, prop string, value string, lctx 
 			mut color := ?u32(none)
 			for part in style_split_value(value) {
 				if width == none {
-					if w := style_length_px(part, lctx) {
+					if w := cascade_length_px(part, lctx, mut len_cache) {
 						width = w
 						continue
 					}
 				}
 				if color == none {
-					if token := component_theme_token(part) {
+					if token := cascade_token(part, mut color_cache) {
 						color = token.over(0xffffff)
 					}
 				}
@@ -588,7 +739,7 @@ fn apply_declaration(base Element, out Element, prop string, value string, lctx 
 			if base.box.radius != 0 {
 				return out
 			}
-			radius := style_length_px(value, lctx) or {
+			radius := cascade_length_px(value, lctx, mut len_cache) or {
 				cascade_warn(mut warnings, out, prop, 'expected a length')
 				return out
 			}
@@ -604,7 +755,7 @@ fn apply_declaration(base Element, out Element, prop string, value string, lctx 
 			if base.box.border_color != 0 {
 				return out
 			}
-			token := component_theme_token(value) or {
+			token := cascade_token(value, mut color_cache) or {
 				cascade_warn(mut warnings, out, prop, 'unparseable color: ${err.msg()}')
 				return out
 			}
@@ -621,7 +772,7 @@ fn apply_declaration(base Element, out Element, prop string, value string, lctx 
 				|| base.box.border_bottom != 0 {
 				return out
 			}
-			width := style_length_px(value, lctx) or {
+			width := cascade_length_px(value, lctx, mut len_cache) or {
 				cascade_warn(mut warnings, out, prop, 'expected a length')
 				return out
 			}
@@ -662,7 +813,7 @@ fn apply_declaration(base Element, out Element, prop string, value string, lctx 
 			if base.box.shadow.opacity != 0 {
 				return out
 			}
-			shadow := cascade_shadow(value, lctx) or {
+			shadow := cascade_shadow(value, lctx, mut color_cache, mut len_cache) or {
 				cascade_warn(mut warnings, out, prop, 'expected `<color> [blur] [x y] [spread]`')
 				return out
 			}
@@ -685,7 +836,7 @@ fn apply_declaration(base Element, out Element, prop string, value string, lctx 
 	}
 }
 
-fn cascade_shadow(raw string, lctx StyleLengthCtx) ?BoxShadow {
+fn cascade_shadow(raw string, lctx StyleLengthCtx, mut color_cache map[string]ComponentThemeToken, mut len_cache map[string]f64) ?BoxShadow {
 	parts := style_split_value(raw.trim_space())
 	if parts.len == 0 {
 		return none
@@ -695,14 +846,14 @@ fn cascade_shadow(raw string, lctx StyleLengthCtx) ?BoxShadow {
 	mut opacity := 1.0
 	mut numbers := []f64{}
 	for part in parts {
-		if token := component_theme_token(part) {
+		if token := cascade_token(part, mut color_cache) {
 			if color == none {
 				color = token.color & 0xffffff
 				opacity = token.opacity
 				continue
 			}
 		}
-		numbers << style_length_px(part, lctx) or { return none }
+		numbers << cascade_length_px(part, lctx, mut len_cache) or { return none }
 	}
 	solid := color or { return none }
 	mut blur := 0.0

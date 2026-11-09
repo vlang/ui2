@@ -21,6 +21,43 @@ fn test_cascade_type_and_class() {
 	assert root.children[1].text_style.color == 0xffffff
 }
 
+fn test_cascade_uppercase_kind_matches() {
+	// Kinds normalize to lowercase at parse; matching stays case-insensitive.
+	sheet := parse_stylesheet('BUTTON { background: #123456; }')!
+	assert sheet.rules[0].selectors[0].parts[0].kind == 'button'
+	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('a')])
+	root = apply_stylesheet(root, sheet, StyleMatchEnv{})
+	assert root.children[0].box.bg == 0x123456
+}
+
+fn test_cascade_plain_length_cache_stays_ctx_sensitive() {
+	mut cache := map[string]f64{}
+	narrow := StyleLengthCtx{
+		win_w:  400
+		win_h:  300
+		cont_w: 100
+		cont_h: 100
+	}
+	wide := StyleLengthCtx{
+		win_w:  800
+		win_h:  600
+		cont_w: 100
+		cont_h: 100
+	}
+	// Plain numbers cache and ignore the context.
+	plain_narrow := cascade_length_px('12px', narrow, mut cache) or { panic('plain length failed') }
+	plain_wide := cascade_length_px('12px', wide, mut cache) or { panic('plain length failed') }
+	assert plain_narrow == 12.0
+	assert plain_wide == 12.0
+	assert cache['12px'] == 12.0
+	// Viewport units always take the slow path and follow the window.
+	vw_narrow := cascade_length_px('50vw', narrow, mut cache) or { panic('vw length failed') }
+	vw_wide := cascade_length_px('50vw', wide, mut cache) or { panic('vw length failed') }
+	assert vw_narrow == 200.0
+	assert vw_wide == 400.0
+	assert '50vw' !in cache
+}
+
 fn test_cascade_specificity_and_order() {
 	sheet := parse_stylesheet('Button { background: #ff0000; } Button { background: #0000ff; } Button#go { background: #00ff00; }')!
 	mut root := view('root', rect(0, 0, 100, 100), BoxStyle{}, [cascade_test_button('go')])
