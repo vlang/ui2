@@ -354,6 +354,41 @@ while builder-set properties still win over everything. Dark variants ride
 on `(prefers-color-scheme: dark)` and follow `set_stylesheet_dark`.
 Translucency rides on box opacity — there is no backdrop blur in v1.
 
+## Stylesheets in VML
+
+VML documents style themselves without leaving the file. A `Style { ... }`
+block holds raw `.vss` source and becomes the scoped stylesheet of the node
+carrying it; `class: "a b"` puts a node in stylesheet classes; `style:`
+holds inline declarations for one node:
+
+```vml
+Screen {
+    Style {
+        Button.primary { background: #3478D4; color: white; border-radius: 7px; }
+    }
+    Button {
+        id: increment
+        class: primary
+        text: "Count"
+    }
+}
+```
+
+Several `Style` blocks on one node merge in order. In-document sheets run
+through the same cascade as builder trees when the document builds
+(`element_from_vml` / `element_from_vnode`), including dark-mode and media
+rules; the global sheet applies too when one is set. Individual VML props
+(`background:`, `font_size:`) beat `style:` on the same property, and both
+beat sheets, matching the inline-wins rule.
+
+Limits: `Style` blocks take plain sheets — `@import` needs a file, so it
+errors with a pointer to inline the sheet instead. Inline `style:` takes
+plain values only (no sheet variables; custom properties belong in a
+`Style` block) and resolves lengths against the node's own frame. The VML
+runtime does not feed pointer interaction into the match env, so `:hover`
+/ `:pressed` / `:focused` stay quiet there; state, structural, media, and
+container queries all work.
+
 ## Authoring from V
 
 ```v

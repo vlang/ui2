@@ -133,7 +133,12 @@ which authored them.
   variants on `(prefers-color-scheme: dark)`; concrete designs apply
   ungated on every platform. `with_platform_design` merges a base sheet
   with the preset, docs updated.
-- Non-goals v1: layout selectors, animations/transitions,
+- **P9 (done, this commit):** stylesheets inside VML (`ui/vml_stylesheet.v`):
+  `Style { ... }` raw-`.vss` blocks as scoped sheets on any node, `class:`
+  props, inline `style:` declarations, and cascade application at the
+  `element_from_vml` / `element_from_vnode` boundary (in-document sheets
+  always, global sheet when set). `examples/counter/counter.vml` migrated
+  as the showcase, docs updated.- Non-goals v1: layout selectors, animations/transitions,
   `!important`. `refresh_element` (AppKit) intentionally bypasses
   the sheet: it reconciles a caller-supplied subtree, not a fresh build.
 
