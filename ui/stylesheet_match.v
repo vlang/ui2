@@ -31,13 +31,18 @@ pub:
 // for subjects constraining none of those. Per element the cascade gathers
 // only the buckets the element can match instead of attempting every rule.
 // Built once per sheet at construction; sheets assembled by hand (tests,
-// ad-hoc literals) carry an empty index and fall back to a full scan.
+// ad-hoc literals) carry an empty index and fall back to a full scan. So
+// does a sheet whose rules changed after indexing (`Stylesheet{...sheet,
+// rules: more}`): the index remembers how many rules it filed, and a count
+// that no longer matches means it is stale. Rebuild it with
+// stylesheet_index_rules after editing rules to keep the fast path.
 pub struct StyleRuleIndex {
 pub:
-	by_kind   map[string][]int
-	by_id     map[string][]int
-	by_class  map[string][]int
-	universal []int
+	by_kind    map[string][]int
+	by_id      map[string][]int
+	by_class   map[string][]int
+	universal  []int
+	rule_count int // rules.len when built; a mismatch marks the index stale
 }
 
 // stylesheet_index_rules files rule indices by subject. Every rule lands in
@@ -79,20 +84,23 @@ pub fn stylesheet_index_rules(rules []StyleRule) StyleRuleIndex {
 		}
 	}
 	return StyleRuleIndex{
-		by_kind:   by_kind
-		by_id:     by_id
-		by_class:  by_class
-		universal: universal
+		by_kind:    by_kind
+		by_id:      by_id
+		by_class:   by_class
+		universal:  universal
+		rule_count: rules.len
 	}
 }
 
 // stylesheet_index_covers reports whether a sheet carries a usable index.
-// Hand-built sheets (empty index, non-empty rules) fall back to full scan.
+// Hand-built sheets (empty index, non-empty rules) and sheets whose rules
+// were added or removed after indexing fall back to full scan; trusting a
+// stale index would skip new rules or read past the end of the list.
 // Keep the bucket list here in sync with StyleRuleIndex: a new bucket left
 // out would make an index holding only that bucket look absent (a safe
 // full scan, but a silent slowdown).
 fn stylesheet_index_covers(sheet Stylesheet) bool {
-	if sheet.rules.len == 0 {
+	if sheet.rules.len == 0 || sheet.rule_index.rule_count != sheet.rules.len {
 		return false
 	}
 	return sheet.rule_index.universal.len > 0 || sheet.rule_index.by_kind.len > 0

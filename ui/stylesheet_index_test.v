@@ -74,3 +74,39 @@ fn stylesheet_index_trees_equal(a Element, b Element) bool {
 	}
 	return true
 }
+
+// Editing a parsed sheet's rules must not leave the cascade trusting the
+// old index: added rules would be skipped, removed ones read out of range.
+fn test_stylesheet_stale_index_falls_back_to_full_scan() {
+	parsed := parse_stylesheet('Label { color: #111111; } Button { color: #222222; }') or {
+		panic(err)
+	}
+	extra := style_rule('Label.dsl', {
+		'color': '#0d9488'
+	}) or { panic(err) }
+	mut rules := parsed.rules.clone()
+	rules << extra
+	grown := Stylesheet{
+		...parsed
+		rules: rules
+	}
+	assert !stylesheet_index_covers(grown)
+	root := view('root', rect(0, 0, 200, 100), BoxStyle{}, [
+		with_classes(label('l', 'x', rect(0, 0, 100, 18), TextStyle{}), 'dsl'),
+	])
+	assert apply_stylesheet(root, grown, StyleMatchEnv{}).children[0].text_style.color == 0x0d9488
+	shrunk := Stylesheet{
+		...parsed
+		rules: parsed.rules[..1].clone()
+	}
+	assert !stylesheet_index_covers(shrunk)
+	plain := view('root', rect(0, 0, 200, 100), BoxStyle{}, [
+		button('b', 'b', rect(0, 0, 100, 30), BoxStyle{}, TextStyle{}),
+	])
+	assert apply_stylesheet(plain, shrunk, StyleMatchEnv{}).children[0].text_style.color == 0x111111
+	reindexed := Stylesheet{
+		...grown
+		rule_index: stylesheet_index_rules(rules)
+	}
+	assert stylesheet_index_covers(reindexed)
+}
