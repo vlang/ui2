@@ -11,13 +11,12 @@ pub fn style_rule(selector string, props map[string]string) !StyleRule {
 	parsed := parse_stylesheet('${selector} { __dsl: 0; }') or {
 		return error('bad selector "${selector}": ${err.msg()}')
 	}
-	// Re-parse properly to keep positions honest is overkill; reuse the
-	// selector the parser accepted and attach the real declarations.
+	// The placeholder rule only validates the selector; the real
+	// declarations replace its body. Map literals keep insertion order, so
+	// declarations keep the order they were written in.
 	sel := parsed.rules[0].selectors
-	mut keys := props.keys()
-	keys.sort()
 	mut declarations := []StyleDeclaration{cap: props.len}
-	for key in keys {
+	for key in props.keys() {
 		prop := key.trim_space().to_lower()
 		if prop.len == 0 {
 			return error('empty property name in style_rule("${selector}")')

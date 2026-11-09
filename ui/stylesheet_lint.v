@@ -8,13 +8,19 @@ module ui2
 //   - unknown properties (not in stylesheet_known_props; `--*` custom
 //     properties always pass)
 //   - layout-owned properties (parsed, not applied in v1)
-//   - variables that resolve in neither mode (`var()` fallbacks and
-//     tree-provided custom properties only warn, since the tree is unknown)
-//   - empty stylesheet (no rules and no variables)
+//   - variable references, found exactly where the cascade finds them
+//     (anywhere in a value, inside `var()` fallbacks too):
+//       `@name` that the sheet never defines is an error, since `@`
+//       variables are sheet variables;
+//       `--name` the sheet never defines only warns, bare or in `var()`
+//       alike, since a custom property may come from an ancestor at
+//       runtime; `var()` must name a `--` custom property
+//   - empty stylesheet (no rules, variables or imports)
 //
 // StylesheetLintNotes keeps errors (sheet cannot work as written) separate
 // from warnings (works with caveats). Nothing here fails a build; the demo
-// prints them in debug output, and CI can gate on errors.
+// prints them in debug output, and CI can gate on errors. Positions are
+// each declaration's own line.
 
 pub struct StylesheetLintNotes {
 pub mut:
@@ -30,13 +36,12 @@ pub fn (notes StylesheetLintNotes) has_errors() bool {
 pub fn stylesheet_lint(sheet Stylesheet) StylesheetLintNotes {
 	mut errors := []string{}
 	mut warnings := []string{}
-	if sheet.rules.len == 0 && sheet.variables.len == 0 && sheet.light_vars.len == 0
-		&& sheet.dark_vars.len == 0 {
-		errors << 'empty stylesheet: no rules or variables'
+	if stylesheet_is_empty(sheet) && sheet.imports.len == 0 {
+		errors << 'empty stylesheet: no rules, variables or imports'
 	}
 	for rule in sheet.rules {
-		position := 'line ${rule.line}'
 		for decl in rule.declarations {
+			position := 'line ${if decl.line > 0 { decl.line } else { rule.line }}'
 			if decl.prop.starts_with('--') {
 				// Custom properties register per element; only their values
 				// lint like any other value.
@@ -61,26 +66,28 @@ pub fn stylesheet_lint(sheet Stylesheet) StylesheetLintNotes {
 	return notes
 }
 
-// stylesheet_lint_value checks one value's variable references against the
-// sheet's own variables. Bare `@`/`--` names must resolve or they are
-// errors; `var()` with a missing name only warns, since a custom property
-// may come from an ancestor at runtime, and a missing fallback warns too.
+// stylesheet_lint_value checks every variable reference in a value against
+// the sheet's own variables, scanning the way the cascade resolves: bare
+// `@name`/`--name` anywhere, and `var()` with its fallback.
 fn stylesheet_lint_value(sheet Stylesheet, value string, position string, mut warnings []string, mut errors []string) {
-	trimmed := value.trim_space()
-	if var_name := stylesheet_var_ref(trimmed) {
-		light := sheet.resolve_var(var_name, false)
-		dark := sheet.resolve_var(var_name, true)
-		if light == none && dark == none {
-			errors << '${position}: unknown variable "${var_name}"'
-		}
-		return
-	}
 	mut index := 0
 	for index < value.len {
-		// `var(` only counts at a word boundary, so `myvar(` is ignored.
-		preceded := index > 0 && (is_style_name_char(value[index - 1]) || value[index - 1] == `-`)
-		if value[index] != `v` || preceded || index + 4 >= value.len
-			|| value[index..index + 4] != 'var(' {
+		word := style_var_word_at(value, index)
+		if word == '@' || word == '--' {
+			mut end := index + word.len
+			for end < value.len && is_style_name_char(value[end]) {
+				end++
+			}
+			name := value[index..end]
+			if name.len == word.len {
+				errors << '${position}: "${word}" needs a variable name'
+			} else {
+				stylesheet_lint_name(sheet, name, position, mut warnings, mut errors)
+			}
+			index = end
+			continue
+		}
+		if word != 'var' {
 			index++
 			continue
 		}
@@ -95,36 +102,44 @@ fn stylesheet_lint_value(sheet Stylesheet, value string, position string, mut wa
 			end++
 		}
 		if depth != 0 {
-			warnings << '${position}: unclosed var()'
-			break
+			errors << '${position}: unclosed var()'
+			return
 		}
-		inner := value[index + 4..end - 1]
-		parts := theme_split_commas(inner)
-		name := if parts.len > 0 { parts[0].trim_space() } else { '' }
-		if name == '' || (!name.starts_with('--') && !name.starts_with('@')) {
-			warnings << '${position}: var() needs a variable name'
-		} else if sheet.resolve_var(name, false) == none
-			&& sheet.resolve_var(name, true) == none {
-			warnings << '${position}: "${name}" is not a sheet variable; it must come from the tree'
+		// Like the cascade, the fallback is everything after the first
+		// top-level comma.
+		raw_name, fallback := style_split_first_comma(value[index + 4..end - 1])
+		name := raw_name.trim_space()
+		if !name.starts_with('--') || name.len <= 2 {
+			errors << '${position}: var() takes a `--name` custom property, not "${name}"'
+		} else {
+			stylesheet_lint_name(sheet, name, position, mut warnings, mut errors)
 		}
-		if parts.len > 1 && parts[1..].join(',').trim_space() == '' {
-			warnings << '${position}: empty var() fallback never applies'
+		if fb := fallback {
+			if fb.trim_space() == '' {
+				warnings << '${position}: empty var() fallback never applies'
+			} else {
+				stylesheet_lint_value(sheet, fb, position, mut warnings, mut errors)
+			}
 		}
 		index = end
+	}
+}
+
+// stylesheet_lint_name reports one referenced name the sheet never defines:
+// an error for `@` sheet variables, a warning for `--` custom properties,
+// which an ancestor may provide at runtime.
+fn stylesheet_lint_name(sheet Stylesheet, name string, position string, mut warnings []string, mut errors []string) {
+	if sheet.resolve_var(name, false) != none || sheet.resolve_var(name, true) != none {
+		return
+	}
+	if name.starts_with('@') {
+		errors << '${position}: unknown variable "${name}"'
+	} else {
+		warnings << '${position}: "${name}" is not a sheet variable; it must come from the tree'
 	}
 }
 
 // stylesheet_lint_source parses and lints in one step.
 pub fn stylesheet_lint_source(source string) !StylesheetLintNotes {
 	return stylesheet_lint(parse_stylesheet(source)!)
-}
-
-// stylesheet_var_ref returns the variable name when a value references one
-// (`@name ...` or `--name ...`), else none.
-fn stylesheet_var_ref(value string) ?string {
-	trimmed := value.trim_space()
-	if trimmed.starts_with('@') || trimmed.starts_with('--') {
-		return trimmed.fields()[0]
-	}
-	return none
 }
