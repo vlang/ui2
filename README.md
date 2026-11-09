@@ -83,3 +83,926 @@ document loads. `scaffold_content_rect` exposes the content box for code that
 places its own overlays.
 
 ## Fonts and text sizes
+`border_width` is shorthand for all four edges; an explicitly declared edge
+overrides it. The equivalent V API fields live directly on `BoxStyle`.
+
+Images load from `image_path` on every backend. The custom renderer caches
+decoded images. Scroll viewports clip both drawing and hit testing.
+
+The Windows backend uses retained Win32 `BUTTON`, `EDIT`, `COMBOBOX`, `STATIC`,
+and custom container windows. Its image control currently loads BMP files and
+its text area is plain-text, so those two controls report `partial` support.
+
+Shared state includes `hidden`, `enabled`, `accessibility_role`,
+`accessibility_label`, and `accessibility_value`. Native backends expose these
+through AppKit/UIKit. Roles use ARIA names (`button`, `checkbox`, `tab`,
+`progressbar`, `navigation`, …); AppKit maps them onto its own roles, passes
+`AX…` roles through unchanged, and leaves a view's native role in place for a
+name it has no role for. Standard Windows controls expose their native name and
+value; `button_behavior` views also expose a native button role, generated
+label, keyboard focus, and accessibility activation. Other explicit Windows
+accessibility role/value overrides are not yet implemented.
+`autocorrect` and `padding_left` configure applicable mobile text inputs.
+
+## Visual IDE
+
+UI2 Studio in [`ide/`](ide/) is a Delphi/Lazarus-style WYSIWYG form designer
+written in V with UI2 itself. It includes a component palette, draggable and
+resizable controls, object tree and inspector, undo/redo, VML source editing,
+live preview, project save/open, `main.v` generation, and a build messages pane.
+
+```sh
+v run ide
+```
+
+See [`ide/README.md`](ide/README.md) for the supported visual document shape
+and workflow.
+
+## Message boxes
+
+`message_box(...)` shows the operating system's own modal alert and blocks until
+the user answers it:
+
+```v
+choice := ui2.message_box(
+	title:   'Save changes?'
+	text:    'The document has unsaved edits.'
+	style:   .question
+	buttons: .yes_no_cancel
+)
+```
+
+`title` is the short heading and `text` the body. macOS renders them as an
+`NSAlert` message and informative text, Windows as a `MessageBoxW` caption and
+body, and the Linux and BSD desktops as their own `zenity` or `kdialog` dialog
+— `kdialog` first under KDE and Plasma. iOS presents a `UIAlertController` and
+pumps the run loop so the call stays synchronous like the desktop backends.
+`alert(title, text)` and `confirm(title, text)` wrap the two common cases.
+
+Android has no alert this layer can drive without a JVM callback, so
+`message_box_supported()` returns `false` there and `message_box` answers as if
+the dialog had been dismissed. Dismissal always reports the non-destructive
+result: `cancel` where the button set has one, otherwise `no`, or `ok` for a
+single-button alert.
+
+`custom_message_box(...)` is the separate, hand-drawn alternative: a dimmed
+overlay with a rounded card that stays inside the window and never blocks. Flip
+its `hidden` field from the button events instead of reading a return value. It
+is also available from VML as `MessageBox`, whose `Button` children become the
+card's actions:
+
+```vml
+MessageBox {
+    id: overlay
+    hidden: !app.visible
+    title: "Hello World"
+    text: "This message came from the ui example."
+
+    Button { id: close_message text: "OK" on_tap: app.close_message() }
+}
+```
+
+## Window chrome
+
+`set_window_chrome(.hidden_titlebar)` lets the application draw its own title
+bar: content runs to the top edge of the window. macOS keeps its close,
+minimize and zoom buttons over the content's leading corner
+(`window_controls_leading_inset()` is how much room they take); Windows removes
+the caption but keeps the resizable border, and `window_draws_own_controls()`
+says the application draws the window buttons.
+
+```v
+fn on_event(event string) {
+	if ev := ui2.parse_pointer_event(event) {
+		if ev.phase == 'down' && ev.action == 'titlebar' {
+			ui2.start_window_drag() // the platform moves the window
+		}
+	}
+	match event {
+		'minimize' { ui2.minimize_window() }
+		'maximize' { ui2.toggle_maximize_window() }
+		'close' { ui2.quit() }
+		else {}
+	}
+}
+```
+
+`start_window_drag` only works while a press is being handled, so give the
+title bar `clickable: true` (or `draggable`) and call it on `pointer:down`.
+`window_is_maximized` tells a maximize button which icon to show. These work
+for native and custom-rendered windows on macOS and Windows; Linux, the BSDs,
+Android and iOS keep their own frame and the calls report false.
+
+The window does not exist until `run_window` starts, so hide the title bar
+from a zero-second timer set up before it; the timer runs during the first
+build, and the rebuild it asks for lays the window out at its new size:
+
+```v
+ui2.after(0, fn [mut app] () {
+	app.chrome_hidden = ui2.set_window_chrome(.hidden_titlebar)
+})
+ui2.run_window(...)
+```
+
+Pointer events carry no click count, and a press in a hidden title bar does
+not zoom the window on its own, so detect the double click yourself (the
+`title_bar` component's `title_bar_event` does) and call
+`toggle_maximize_window`.
+
+## Timers
+
+`after` runs a callback on the UI thread once a delay has passed and then
+rebuilds the window, so a notification can dismiss itself or a search can
+debounce without the application owning a thread:
+
+```v
+toast := ui2.after(4, fn [mut app] () {
+	app.toast_visible = false
+})
+ui2.cancel_timer(toast) // call it off, e.g. when the user dismisses it first
+```
+
+Callbacks run where widget animation callbacks do, between building the
+declared tree and rendering it, and a refresh is requested so whatever they
+change is drawn next. `timer_pending(id)` reports whether a callback has yet to
+run. A negative or non-finite delay runs at the next build.
+
+## Clipboard
+
+`set_clipboard_text` replaces the system clipboard with plain text and
+`clipboard_text` reads it back (`none` when it holds no text). Text fields
+keep their own copy and paste; these are for copying anything else, such as
+the contents of a code block.
+
+```v
+if !ui2.set_clipboard_text(token) {
+	// no clipboard this platform can reach
+}
+pasted := ui2.clipboard_text() or { '' }
+```
+
+macOS uses `NSPasteboard`, iOS `UIPasteboard` and Windows the Win32 clipboard,
+for native and custom-rendered windows alike. Linux and the BSDs drive
+`wl-copy`/`wl-paste` under Wayland, or `xclip` or `xsel` under X11, so one of
+them has to be installed; Android has no clipboard this layer can reach. Check
+`clipboard_supported()` before offering a copy action.
+
+## Platform integration
+
+`haptic` plays a haptic on phones and Force Touch trackpads, `set_app_badge`
+stamps a number on the application icon, `open_url` opens a link with its
+default handler, and `share_text` opens the platform share sheet. Every call
+reports whether the platform took it, and every family has a `*_supported`
+capability query, after the clipboard and dialog APIs:
+
+```v
+if ui2.haptic_supported() {
+    ui2.haptic(.success)
+}
+ui2.set_app_badge(3) // zero clears the stamp
+if ui2.open_url('https://vlang.io') {
+    // handed to the browser, mail client or owning app
+}
+if ui2.share_text('Look at this') {
+    // the share sheet is up
+}
+```
+
+Only `http`, `https` and `mailto` links with an address are accepted; blank
+share text and negative badge counts are rejected without touching the
+platform. Haptics run on iOS (impact, selection and notification generators),
+macOS (`NSHapticFeedbackManager`) and Android (the vibrator through JNI);
+badges on iOS and macOS dock tiles; links on iOS, macOS, Windows
+(`ShellExecute`), Android (an `ACTION_VIEW` intent) and the Linux and BSD
+desktops (`xdg-open`); the share sheet on iOS (`UIActivityViewController`)
+and Android (`ACTION_SEND` through the chooser). The rest answer unsupported,
+so gate the buttons on the capability queries. Run
+`v run examples/platform_integration/main.v` for a demo.
+
+## File and folder dialogs
+
+`open_file_dialog`, `save_file_dialog`, and `open_folder_dialog` show the
+operating system picker and return the selected absolute paths. They block while
+the picker is open; cancellation is an empty array. `open_file_dialog` can
+return several paths when `multiple: true`.
+
+```v
+paths := ui2.open_file_dialog(
+	title: 'Open a V source file'
+	directory: '/work/project'
+	filters: [ui2.FileDialogFilter{
+		name: 'V source'
+		extensions: ['v', 'vv']
+	}]
+)
+if paths.len > 0 {
+	println('Opening ${paths[0]}')
+}
+
+destination := ui2.save_file_dialog(
+	title: 'Save report'
+	filename: 'report.txt'
+	filters: [ui2.FileDialogFilter{
+		name: 'Text'
+		extensions: ['txt']
+	}]
+)
+```
+
+The API uses `NSOpenPanel`/`NSSavePanel` on macOS, standard Win32 open/save
+and folder dialogs on Windows, and the desktop's `zenity` or `kdialog` picker
+on Linux and the BSDs. Those desktops require a graphical session and one of
+those helpers; `file_dialog_supported()` reports that availability. The
+synchronous API is not
+available on iOS or Android, where a document picker needs an app-specific
+asynchronous presentation callback.
+
+For Linux, the BSDs, and custom-rendered applications, `FilePicker` provides
+an in-window picker with no `zenity` or `kdialog` dependency. It uses the same
+`FileDialogConfig` for open, save, and folder modes. Keep the picker in app
+state, add `picker.render(ui2.bounds())` as the last screen child, and forward
+events to `picker.handle`. The picker is asynchronous: `done` becomes true when
+the user accepts or cancels, and cancellation returns no paths. Call
+`ui2.refresh()` after opening it or handling an event on native backends.
+
+```v
+mut picker := ui2.new_file_picker(
+	id: 'picker'
+	dialog: ui2.FileDialogConfig{
+		kind: .open
+		directory: '/work/project'
+		multiple: true
+		filters: [ui2.FileDialogFilter{ name: 'V source', extensions: ['v'] }]
+	}
+)!
+picker.open()!
+// In the window's event callback:
+value := if event == 'picker__go' { ui2.text(picker.path_id()) }
+    else if event == picker.filename_id() { ui2.text(picker.filename_id()) }
+    else { '' }
+result := picker.handle(event, value)
+if result.done {
+	println(result.paths)
+}
+```
+
+Run `v run examples/custom_file_picker/main.v` for a complete example. The
+picker lists directories first, filters files by extension, supports multiple
+selection in open mode, and validates save filenames before returning an
+absolute path.
+
+## Menus and the tray
+
+`set_menu_bar(...)` installs the application's top level menu bar and
+`set_tray(...)` docks an icon in the status area. Both are plain declarations,
+and both emit through the event handler `run_window` was given — the same
+channel a button tap arrives on, so a menu row and a control can share an
+action id and run the same code:
+
+```v
+ui2.set_menu_bar([
+	ui2.Menu{
+		title: 'File'
+		items: [
+			ui2.menu_item_with_shortcut('file_new', 'New Note', 'cmd+n'),
+			ui2.menu_separator(),
+			ui2.disabled(ui2.menu_item('file_revert', 'Revert')),
+			ui2.submenu('Export', [
+				ui2.menu_item('export_pdf', 'PDF'),
+			]),
+		]
+	},
+])
+
+ui2.set_tray(
+	title:   'ui2'
+	icon:    'symbol:cup.and.saucer.fill'
+	tooltip: 'ui2 tray demo'
+	menu:    [ui2.menu_item('tray_quit', 'Quit')]
+)
+```
+
+A shortcut names the platform's primary modifier as `cmd`: Command on macOS,
+Control on Windows, Linux, and the BSDs. A row's `checked` state is declared
+rather than remembered — after handling the event, install the menu again with
+the new value. Either call may come before `run_window`; what was declared is
+installed as soon as there is a window to attach it to. `remove_tray()` undocks
+the icon.
+
+macOS builds an `NSMenu` main menu, keeping its own application menu with
+"Quit <app>" first, and an `NSStatusItem` for the tray, whose `icon` may name an
+SF Symbol as `symbol:<name>`. Windows builds an `HMENU` menu bar with an
+accelerator table, and a `Shell_NotifyIcon` notification area icon that opens
+its menu on either mouse button. The custom renderer has no platform menu bar,
+so it draws one across the top of the window — `bounds()` reserves that strip,
+so a screen laid out at y 0 starts below it — and it owns nothing outside its
+window, so `tray_supported()` is `false` there. iOS and Android have neither, so
+both calls are accepted and ignored; check `menu_bar_supported()` and
+`tray_supported()` before offering them in a shared UI.
+
+`validate_menus(...)` rejects an untitled menu, a row that emits nothing, a
+duplicated id, a submenu that also emits, and a decorated separator, so a
+declaration can be checked in a test without a window.
+
+In the custom renderer, every colour of the drawn menu bar can be recoloured to
+match the host application's theme:
+
+```v
+ui2.set_menu_bar_background_color(0x2c3e50)
+ui2.set_menu_bar_border_color(0x34495e)
+ui2.set_menu_bar_title_color(0xecf0f1)
+ui2.set_menu_bar_text_color(0xecf0f1)
+ui2.set_menu_bar_disabled_text_color(0x7f8c8d)
+ui2.set_menu_bar_highlight_color(0x3498db)
+ui2.set_menu_bar_panel_background_color(0x34495e)
+ui2.set_menu_bar_panel_shadow_color(0x2c3e50)
+ui2.set_menu_bar_shortcut_text_color(0xbdc3c7)
+ui2.set_menu_bar_separator_color(0x95a5a6)
+```
+
+## Layout and text offsets
+
+The VML layer provides fixed frames plus `Row` and `Column` layout. Child frames
+are parent-local. It does not implement intrinsic sizing, flex/grid, wrapping,
+or min/max constraints; applications can compute frames before constructing an
+element tree.
+
+A label, button, checkbox, or dropdown whose text is wider than its frame ends
+in an ellipsis rather than running over whatever is beside it: the native
+backends hand their cells `NSLineBreakByTruncatingTail`, and the custom
+renderer shortens the line itself. Text fields and text areas are the
+exception, since they place the caret by measuring the whole string.
+
+`TextEditor` positions are Unicode rune offsets. Native text-area selection APIs
+use UTF-16 code-unit offsets. This is intentional; grapheme-cluster editing is
+outside the portable editor's current contract.
+
+Read-only text that an application paints itself (a transcript on a canvas,
+say) can use `TextRangeSelection` for mouse selection. Register the lines you
+draw each frame as `SelectableTextLine` values, map pointer events to a
+`TextPosition` (block, line, rune column) with `text_position_at`, and feed it
+to `press`, `drag`, and `release`; `line_columns` then tells you which runes
+of each line to highlight and copy. A press only turns into a selection once
+the pointer moves past `text_selection_drag_threshold`, so clicks on links
+drawn in the same text still work. `ClickCounter` and `text_word_range` cover
+double-click word selection, and `text_column_at_x` maps an x offset to a
+column given a prefix-width function.
+
+## Scrolling
+
+A `Scroll` element scrolls over its children, vertically unless told otherwise.
+`scroll_mode`, named after vlang/gui's setting, chooses the axes:
+`vertical_only` (the default), `horizontal_only`, or `both`. The content is as
+wide as its rightmost child reaches and as tall as its lowest, and whatever
+overflows along an axis the mode leaves out is clipped.
+
+```v
+ui2.scroll_with_mode('columns', frame, 0xffffff, .horizontal_only, columns)
+```
+
+```vml
+Scroll {
+    id: columns
+    scroll_mode: horizontal_only
+}
+```
+
+The horizontal scroller runs along the bottom edge. A trackpad or a tilt wheel
+scrolls sideways directly, and Shift turns a plain wheel sideways. Scroll
+elements nest: a gesture along an axis the element under the pointer does not
+scroll moves the nearest enclosing one that does, so a strip of columns that
+each scroll vertically still scrolls sideways with the pointer over a column.
+
+`scroll_offset(id)` and `scroll_horizontal_offset(id)` read the position,
+`scroll_to_offset`, `scroll_to_horizontal_offset` and `scroll_to_rect` set it,
+and `on_scroll` reports a change along either axis. An offset asked for before
+the element exists is taken up when it is first laid out. To scroll to content
+the event being handled has just added, call `refresh()` first so the element
+has its new range. The iOS backend scrolls the same modes but does not expose
+these functions.
+
+## Fonts and text sizes
+
+`TextStyle.size` is in points. Win32 and the Linux and BSD desktops resolve a
+point at 96 dpi, AppKit and UIKit at 72, so the custom renderer follows
+whichever platform it draws on and a declared size matches the native controls
+beside it. The default size of 15 is therefore a 20 px em square on Linux, the
+BSDs, and Windows, and 15 px on macOS and iOS.
+
+The custom renderer draws through fontstash, which sizes a glyph by its
+ascender-to-descender height rather than by the em square. `ui2` reads
+`unitsPerEm` and the `hhea` metrics out of the font file and converts, so the
+declared size means the same thing no matter which face is loaded.
+
+The renderer picks the font itself instead of taking the first face `fc-match`
+reports, which varies by distribution. `ui2` ships Roboto and Roboto Mono in
+`assets/fonts/`, so every custom-rendered window draws the same faces on every
+platform. Nothing has to be installed for that to work while the module is on
+the build machine; to ship a binary elsewhere, copy `assets/fonts/` next to it
+or put the files in a `fonts/` directory beside it.
+
+Failing all of those, the renderer looks for Inter, Roboto, Noto Sans, Open
+Sans, DejaVu Sans, Liberation Sans, Ubuntu, Cantarell, FreeSans, and Arial among
+the installed fonts, in that order, and settles for any upright sans face.
+
+`UI2_FONT` and `UI2_FONT_BOLD` override everything and take file paths, which is
+the quickest way to compare faces:
+
+```sh
+UI2_FONT=/usr/share/fonts/truetype/roboto/Roboto-Regular.ttf ./users
+```
+
+Use static font files, not variable ones. `stb_truetype`, the rasterizer
+fontstash builds with, ignores the `fvar` and `gvar` tables, so a variable font
+draws every weight at its default instance and bold text stops being bold. The
+renderer skips variable files (`Roboto[wdth,wght].ttf`, `*-VariableFont*.ttf`)
+when choosing a default for that reason.
+
+`TextStyle.font_family` names a family. The native backends hand the name to the
+platform's font manager; the custom renderer resolves it against the same font
+directories and ignores it when the machine has no such face.
+
+A family that names a fixed-pitch face is the exception: dropping to the
+proportional default would lose the column alignment it was asked for. So
+`monospace`, `Consolas`, `Courier New`, `Menlo`, and anything ending in `Mono`
+fall back through Roboto Mono, JetBrains Mono, DejaVu Sans Mono, Liberation
+Mono, Noto Sans Mono, Ubuntu Mono, Cascadia Mono, Consolas, Menlo, and Courier
+New. The bundled Roboto Mono means that list always resolves.
+
+### Symbols
+
+A text face carries the letters of the scripts it was cut for and little else.
+Roboto has 927 code points, so the triangles, arrows and check marks an
+interface labels its rows with are not in it, and fontstash draws a code point
+it cannot find as glyph 0 — the empty box, or tofu.
+
+`ui2` therefore ships Noto Sans Symbols 2 and Noto Emoji in `assets/fonts/` as
+well, and hands them to fontstash as fallbacks for every face it loads.
+Fontstash searches the chain whenever a glyph lookup lands on that empty box, so
+a label mixing letters and symbols is still drawn in one pass and measured
+exactly the way it is drawn; `TextStyle.font_family` faces get the same chain.
+
+Noto Sans Symbols 2 comes first and covers the geometric shapes, dingbats, box
+elements and braille. Then one symbol face off the machine — Noto Sans Symbols,
+Segoe UI Symbol, Apple Symbols, Symbola, or the widest text face it finds —
+which is what covers the blocks Noto Sans Symbols 2 leaves out, the arrows at
+U+2190 and the box drawing at U+2500 among them. Only one is taken, since every
+face in the chain stays in memory for as long as the window does.
+
+Emoji are drawn from Noto Emoji, the monochrome family: they come out as
+outlines in the color the label was given, not as the color artwork a desktop
+draws. `stb_truetype` reads neither the bitmaps nor the layers a color emoji
+font keeps its artwork in, so an installed `NotoColorEmoji.ttf` or Segoe UI
+Emoji is never searched — it would draw an empty space rather than an empty box,
+which is no better.
+
+`UI2_FONT_SYMBOLS` takes a file path and is searched ahead of the bundled face:
+
+```sh
+UI2_FONT_SYMBOLS=/usr/share/fonts/truetype/ancient-scripts/Symbola.ttf ./treeview
+```
+
+### Measuring text
+
+`measure_text_width(text, style)` is how wide a label must be to show `text`
+on one line in `style`, measured by the backend that draws it: AppKit and
+UIKit with the label's own font, Win32 with GDI, the custom renderer with
+fontstash. It includes the inset a backend's labels put around their text, so
+a label that wide is not cut short, and widths are cached, so a build may
+measure the same words every frame. `wrap_text_to_width(text, style, width)`
+breaks text into the lines a label that wide shows.
+
+```v
+w := ui2.measure_text_width('Save changes', style)
+ui2.label('', 'Save changes', ui2.rect(x, y, w, 20), style)
+```
+
+Measuring needs a running window. Before one starts, and in tests, both
+estimate from the character count, and `text_measurement_exact()` is false.
+
+## Shapes
+
+`shape(id, frame, path, style)` draws a vector path inside a frame: lines,
+curves, areas, slices and outlines, antialiased on every backend (a
+CAShapeLayer on AppKit and UIKit, GDI+ on Windows, multisampled triangles in
+the custom renderer). Path coordinates are local to the frame, and the shape is
+a view, so it can hold children drawn above it.
+
+```v
+mut area := ui2.path_smooth(points) // a curve through the points, no overshoot
+area << ui2.path_line_to(width, height)
+area << ui2.path_line_to(0, height)
+area << ui2.path_close()
+ui2.shape('revenue', ui2.rect(0, 0, width, height), area, ui2.ShapeStyle{
+	fill:         u32(0x3b82f6)
+	fill_opacity: 0.25
+	stroke:       u32(0x2563eb)
+	stroke_width: 2
+})
+```
+
+Paths are lists of `path_move_to`, `path_line_to`, `path_quad_to`,
+`path_cubic_to` and `path_close`; `path_polyline`, `path_rect`,
+`path_rounded_rect`, `path_ellipse`, `path_circle`, `path_arc`,
+`path_sector` (a pie slice) and `path_annular_sector` (a doughnut slice) build
+common ones. `ShapeStyle` takes an optional fill and stroke with their
+opacities, the stroke width, `line_join`, `line_cap` and `fill_rule`
+(`.nonzero` or `.even_odd`, for holes). Angles are in radians from the
+positive x axis, growing clockwise on screen. See `examples/shapes`.
+
+## Charts
+
+`ui2.chart` creates line, grouped bar, scatter, pie, and doughnut charts. Its
+`type`, `data`, and `options` configuration follows the basic shape of
+[Chart.js](https://www.chartjs.org/docs/latest/). It returns an ordinary
+`Element`, so it can be placed in any V-built layout on native or custom
+backends, without JavaScript or a web view.
+
+```v okfmt
+sales := ui2.chart(
+	id:      'sales'
+	frame:   ui2.rect(16, 16, 480, 300)
+	type:    .bar
+	data:    ui2.ChartData{
+		labels:   ['Jan', 'Feb', 'Mar']
+		datasets: [
+			ui2.ChartDataset{ label: 'Revenue', data: [f64(12), 19, 25] },
+			ui2.ChartDataset{ label: 'Profit', data: [f64(-2), 5, 9] },
+		]
+	}
+	options: ui2.ChartOptions{ title: 'Monthly sales' }
+) or { panic(err) }
+```
+
+Line and bar charts use category labels; missing labels default to the
+one-based data index. Series can have different lengths. Scatter datasets use
+`points: [ui2.ChartPoint{x: 1, y: 3}, ...]` instead of `data`, with numeric
+x coordinates. Pie and doughnut accept one visible dataset, with labels and
+colors per slice. Non-positive slice values are skipped.
+
+Axes scale automatically with rounded tick intervals, including zero by default.
+Set `begin_at_zero: false`
+for a tighter line/scatter y range. Bars always include zero unless explicit
+`y_min` / `y_max` bounds override it. Values outside explicit bounds are clamped
+to the plot edges. NaN and infinite values are skipped, leaving gaps in lines.
+Empty data produces an empty chart; invalid options return an error.
+
+Options include `legend`, `grid`, `tooltips`, `ticks` (a target count from 1 through 20),
+`background`, `text_color`, `grid_color`, and a nonempty `palette` of RGB colors.
+Set a dataset's `color` to override its series color, or `colors` to override
+pie/doughnut slice colors. `hidden: true` excludes a dataset from the chart and
+its scales. `line_width` and `point_radius` accept values from 0 through 20;
+zero disables the corresponding line or markers. Doughnut `cutout` is the
+inner radius fraction, defaults to 0.5, and must be in `[0, 1)`.
+
+Charts expose their title and data through accessibility metadata. Data markers
+and slices use the existing backend tooltip support. Legends wrap, and category
+labels are thinned to fit. The frame must be at least 120 by 100 and have enough
+height for its title and legend. For resizing, derive the frame from
+`ui2.bounds()` in your build function. Update the model and call `ui2.refresh()`
+to rebuild with new data.
+
+This is a basic chart component rather than the complete Chart.js API: it has
+no chart animations, clickable legends, zoom, stacking, time axes, or plugins.
+It composes views and labels, including scan-converted strips for lines and
+slices, and is intended for modest datasets and chart sizes.
+
+Run `v run examples/charts/main.v` to see all five chart types in a layout that
+adapts to the window width. Add `-d ui2_custom_rendering` to try the custom
+renderer on macOS or Windows.
+
+## Window input
+
+`on_pointer_move` reports every pointer move over the window, wherever it lands, in
+logical units. The custom renderer delivers it; native backends do not yet.
+
+`on_mouse_button` reports raw mouse button transitions in window points: button 0
+is left, 1 right, 2 middle, and `down` says press or release. `on_wheel` reports
+raw wheel deltas before any scroll element or the menu bar sees them, so
+shift+wheel arrives as a vertical delta exactly as the hardware sent it. The
+custom renderer delivers both; native backends do not yet.
+
+`set_menu_bar_hidden(true)` hides the menu bar in the custom renderer: it takes no
+room, draws nothing and takes no clicks. Native menu bars are not hidden. Read the
+state with `menu_bar_hidden()`.
+
+`KeyEvent.repeat` is true for an autorepeat of a key that is still held, so an
+application can act on the first press only. The custom renderer delivers it;
+native backends do not yet.
+## OpenGL surfaces
+
+`opengl(id, frame)` reserves a rectangle for content an application renders with
+OpenGL, such as a video frame. The gg renderer draws it where the graphics backend
+is OpenGL — Linux, the BSDs, and Android. Custom-rendered desktop builds render
+through Metal (macOS) or D3D11 (Windows), which have no GL texture to wrap, so a
+texture handed over there draws as an empty quad; native backends show it as a
+transparent view.
+
+`set_gl_surface_renderer` installs a function that runs before every frame, on the
+UI thread with the GL context current, once for each `opengl` element drawn in the
+previous frame. Render into a framebuffer there, then hand ui2 the texture with
+`set_gl_surface_texture(id, texture, width, height)`, sizes in pixels. ui2 draws the
+texture as a quad over the element's frame, in the normal UI pass, so menus and other
+overlays draw above it. A texture whose element is no longer drawn is released before
+the next frame. The renderer runs inside the frame sokol is already driving: GL state
+it changes behind sokol's back — a framebuffer or texture it binds — has to be handed
+back with `gfx.reset_state_cache()` before returning, or sokol may skip reapplying
+bindings and draw the UI with stale ones.
+
+```v
+ui2.set_gl_surface_renderer(fn (id string, frame ui2.Rect, scale f64, height f64) {
+	if id == 'video' {
+		// ... render into the framebuffer that owns `texture`, sized w x h pixels ...
+		ui2.set_gl_surface_texture(id, texture, w, h)
+		gfx.reset_state_cache()
+	}
+})
+```
+
+A new element first gets its texture one frame after it appears.
+`examples/opengl_demo` renders a colour that cycles over time into the element.
+
+## Keyboard events
+
+Use `on_key_event` when a shortcut should follow a physical key across keyboard
+layouts. `KeyEvent.code` is a portable `KeyCode`; text entry still follows the
+active layout.
+
+```v
+fn handle_key(event ui2.KeyEvent) {
+	if event.cmd && !event.shift && !event.ctrl && !event.alt
+		&& event.code == ui2.KeyCode.n {
+		ui2.consume_key()
+		// New document
+	}
+}
+
+ui2.on_key_event(handle_key)
+```
+
+Pointer events do not carry modifier keys; `ui2.key_modifiers()` reports the
+ones held right now (`shift`, `ctrl`, `alt`, and `cmd` for Command or the
+Windows key), so a click handler can tell a Shift- or Cmd-click apart.
+
+The existing `on_key` callback remains available for normalized strings such as
+`cmd+n` and `up`. On AppKit those strings are now also derived from physical key
+codes for known keys, so command shortcuts are independent of the input source.
+
+## Examples
+
+Typed-VML ports from `v-ui` include:
+
+- `v run examples/counter/main.v` — the 7GUIs counter.
+- `v run examples/temperature_converter/main.v` — the two-way 7GUIs
+  temperature converter.
+- `v run examples/flight_booker/main.v` — the validated 7GUIs flight booker.
+- `v run examples/dropdown/main.v` — a dropdown with selection feedback.
+- `v run examples/switch/main.v` — a boolean switch represented by the
+  portable checkbox control.
+- `v run examples/crud/main.v` — create, filter, update, and delete people.
+- `v run examples/rgb_color/main.v` — validate RGB components and preview the
+  resulting color.
+- `v run examples/group/main.v` — grouped text fields, checkboxes, and form
+  validation.
+- `v run examples/rectangles/main.v` — the original four-color rectangle row.
+- `v run examples/textbox/main.v` — editable and read-only multiline text
+  areas with live character counts.
+- `v run examples/box_layout/main.v` — fixed, relative, nested, and
+  window-anchored rectangles.
+- `v run examples/dynamic_layout/main.v` — add, remove, reorder, hide, and
+  rename controls through a keyed repeater.
+- `v run examples/reorder_queue/main.v` — a print queue in a scrolling list:
+  drag a job to move it, or select it and press Alt with Up or Down.
+- `v run examples/grid/main.v` — the original compact three-column data grid.
+- `v run examples/label_justify/main.v` — left, center, and right label
+  alignment plus single-line clipping.
+- `v run examples/message/main.v` — compare the system alert from
+  `message_box` with the hand-drawn in-window dialog.
+- `v run examples/demo_label/main.v` — the original minimal centered-label
+  demonstration.
+- `v run examples/group2/main.v` — two responsive groups with text fields,
+  a checkbox, native buttons, and validation feedback.
+- `v run examples/logview/main.v` — append scan batches to a read-only log.
+- `v run examples/nested_scrollview/main.v` — scroll a list of independently
+  scrollable multiline text areas.
+- `v run examples/scrollview/main.v` — two independently scrollable read-only
+  text panes with generated content.
+- `v run examples/horizontal_scroll/main.v` — a column browser whose strip of
+  columns scrolls sideways while each column scrolls its own rows.
+- `v run examples/box_layout_with_textbox/main.v` — fixed and proportional box
+  layout with an editable multiline text area.
+- `v run examples/files_dropped/main.v` — collect dropped files and plain text
+  in a keyed, scrollable list.
+- `v run examples/nested_scrollview_box_layout/main.v` — a scrollable 5×5 box
+  layout of independently editable multiline areas.
+- `v run examples/demo_radio/main.v` — exclusive country choices that switch
+  between compact horizontal and vertical layouts.
+- `v run examples/demo_style_4colors/main.v` — select four-color palettes and
+  preview them across portable and native controls.
+- `v run examples/box_layout_inside_row/main.v` — proportional box layout
+  inside an inset row, with switchable text-area bounds.
+- `v run examples/rectangles_resizable/main.v` — four rounded color boxes that
+  share the available width as the window resizes.
+- `v run examples/accordion/main.v` — collapsible component pages with one
+  active section at a time.
+- `v run examples/tabs/main.v` — three keyed pages selected through a native
+  tab-style button bar.
+- `v run examples/double_listbox/main.v` — transfer keyed values between two
+  scrollable lists and inspect the result.
+- `v run examples/treeview/main.v` — expand nested folders and select files in
+  a keyed, scrollable tree.
+- `v run examples/dirbrowser/main.v` — browse and choose folders from the local
+  filesystem.
+- `v run examples/fontchooser/main.v` — apply font family, size, color, and
+  emphasis choices to an editable preview.
+- `v run examples/rasterview/main.v` — show a bundled bitmap in a responsive
+  image frame.
+- `v run examples/resizable_menu_window/main.v` — resize a native context-menu
+  control between compact and stretched layouts.
+- `v run examples/filebrowser/main.v` — browse folders, select files, and
+  confirm or cancel the current selection.
+- `v run examples/splitpanel/main.v` — adjust nested responsive panes around
+  editable text and a scrollable data grid.
+- `v run examples/row_layout/main.v` — experiment with row proportions,
+  margins, spacing, and control height.
+- `v run examples/demo_event/main.v` — inspect normalized pointer and keyboard
+  events in a live event log.
+- `v run examples/demo_chunkview/main.v` — compose nested styled text chunks
+  and toggle their visibility and alignment.
+- `v run examples/cells/main.v` — edit a compact spreadsheet and recalculate
+  dependent `sum` formulas.
+- `v run examples/pc_specs/main.v` — show basic machine specs in a striped
+  table with a Refresh button for live disk usage.
+- `v run examples/circle_drawer/main.v` — add and resize circles with
+  selection-aware undo and redo.
+- `v run examples/gg2048/main.v` — play a deterministic, responsive version
+  of the 2048 tile game.
+- `v run examples/editor/main.v` — browse, create, edit, and save text files
+  from a responsive editor.
+- `v run examples/calculate/main.v` — evaluate arithmetic expressions with
+  precedence, unary operators, and parentheses.
+- `v run examples/timer/main.v` — run, pause, resume, and restart a timer with
+  a draggable duration control.
+- `v run examples/slider_textbox/main.v` — keep horizontal and vertical slider
+  values synchronized with validated text fields.
+- `v run examples/transitions/main.v` — animate a movable tile between canvas
+  targets with cubic easing.
+- `v run examples/gradient_texture/main.v` — generate an interactive HSV
+  gradient from keyed color tiles.
+- `v run examples/change_title/main.v` — validate a title and update the native
+  desktop window caption.
+- `v run examples/nested_clipping/main.v` — toggle a scroll viewport per box, or
+  per quadrant, and watch the unclipped bars spill over their neighbours.
+- `v run examples/canvas_layout/main.v` — drag a themed tile across a sheet that
+  is taller than its viewport, and read live canvas coordinates.
+- `v run examples/grid2/main.v` — sort a scrollable data grid of text, factor,
+  and boolean columns, then edit the selected record.
+- `v run examples/colorbox/main.v` — pick a color from a hue strip and an HSV
+  square, store it in a slot, and drive a rectangle's text with it.
+- `v run examples/child_window/main.v` — open a movable child panel with its own
+  field, checkbox, and native greeting dialog.
+- `v run examples/accent_color/main.v` — drag three channels into an accent and
+  derive a shade, a tint, and a readable font color from it.
+- `v run examples/text_style/main.v` — apply a family found in this machine's
+  font trees, at a chosen size and emphasis, to an editable sample.
+- `v run examples/canvas_layout_inside_row/main.v` — drag a rotatable logo
+  across two panes and read its position in each pane's own coordinates.
+- `v run examples/calculator_resizable/main.v` — a calculator whose keys, type,
+  and spacing are all fractions of the window.
+- `v run examples/users_box_layout/main.v` — a fixed registration column, with a
+  progress bar and country choices, beside a table pane anchored to the window.
+- `v run examples/menubar/main.v` — a top level menu bar with shortcuts,
+  separators, disabled and checked rows, and nested submenus.
+- `v run examples/tray_icon/main.v` — a status area icon whose menu sets a
+  status, toggles a setting, and docks or hides the icon again.
+- `v run examples/custom_window/main.v` — a borderless desktop widget with
+  ui2-drawn chrome, draggable content, and genuinely transparent space between
+  its rounded surfaces on the native macOS and Windows backends.
+
+Run the calculator demo with:
+
+```sh
+v run examples/calculator/main.v
+```
+
+It ports the `v-ui` calculator to typed VML: the display reads from the model,
+a keyed `Repeater` builds the keypad, and button actions call the calculator's
+business logic directly. It includes decimal input, sign and percentage
+controls, exponentiation, repeated equals, and division-by-zero recovery.
+
+Run the responsive users demo with:
+
+```sh
+v run examples/users/main.v
+```
+
+It ports the native-widget users example from `v-ui`. The complete screen is
+declared in `examples/users/users.vml` and embedded once with `$embed_file`; V only
+contains the typed model and business actions. The example includes validated
+text entry, password masking, country selection, toggles, a progress indicator,
+and a keyed, scrollable user table.
+
+### Android
+
+Build Android examples on a Linux, macOS, or Windows development computer with
+[V Android Bootstrapper (`vab`)](https://github.com/vlang/vab). It requires V,
+a Java JDK, the Android SDK, and the Android NDK; Android Studio itself is not
+required. Install `vab` on macOS or Linux with:
+
+```sh
+v install vab
+v ~/.vmodules/vab
+export PATH="$HOME/.vmodules/vab:$PATH"
+vab doctor
+```
+
+See the `vab` installation guide linked above for Windows setup and environment
+variables if the SDK or NDK is not detected. Then, from the `ui2` repository
+root, build an APK for an example:
+
+```sh
+mkdir -p build/android
+vab --name "ui2 counter" --package-id io.vlang.ui2.counter \
+  -o build/android/counter.apk examples/counter -f '-d sokol_gles3'
+```
+
+Replace `counter` in the source path, output name, application name, and package
+ID to build another example. Use a different package ID for each example if you
+want several of them installed at the same time. The default build includes all
+supported Android CPU architectures.
+
+Install the resulting APK on a connected device or emulator with:
+
+```sh
+adb install -r build/android/counter.apk
+```
+
+After installation, open **ui2 counter** from the device's app launcher.
+
+Alternatively, let `vab` build, install, and launch the example in one step:
+
+```sh
+vab run --device auto --name "ui2 counter" \
+  --package-id io.vlang.ui2.counter examples/counter
+```
+
+## Verification
+
+Run `make test` for portable and host-native tests. `make examples` compiles
+every example under `examples/` for the host platform and reports all failures
+at once; `make examples-custom` repeats that with the custom `gg` renderer.
+GitHub Actions runs `make examples` on Linux, macOS, and Windows, plus
+`make examples-custom` on macOS and Windows, for every push and pull request.
+`make check-macos`,
+`make check-ios`, `make check-android`, `make check-linux`, and
+`make check-windows` type-check each renderer; cross-target checks require their
+normal platform SDK/toolchain. `make check-custom` additionally type-checks the
+opt-in custom macOS and Windows builds.
+
+`make screenshot EXAMPLE=<name>` renders one example and writes a single frame
+to a PNG, so a layout can be checked without a person watching the window:
+
+```sh
+make screenshot EXAMPLE=message
+v run examples/screenshot_example.vsh message --frame 30 --out shots
+```
+
+It drives gg's own recorder rather than a desktop screenshot utility, so it
+needs no screen recording permission and captures the window alone. The
+recorder reads the presented framebuffer back, which only the GL backend
+implements, so the script builds macOS examples against GL instead of Metal.
+Text is a third wider at 96 dpi than it is on macOS, so a layout that only just
+fits in a macOS screenshot still has to be checked on Linux, the BSDs, or
+Windows.
+
+The Windows backend also has an executable Wine smoke test. It creates every
+native widget kind, reads text back from the Win32 controls, verifies text-area
+selection, and closes itself with a non-zero exit status on failure:
+
+```sh
+smoke_dir="$(mktemp -d)"
+v -enable-globals -os windows \
+  -o "$smoke_dir/ui2-windows-smoke.exe" examples/windows_smoke/main.v
+mingw_sysroot="$(x86_64-w64-mingw32-gcc -print-sysroot)"
+mingw_runtime="$(find "$mingw_sysroot" -name libwinpthread-1.dll -type f -print -quit)"
+test -n "$mingw_runtime" && cp "$mingw_runtime" "$smoke_dir/"
+WINEARCH=win64 WINEPREFIX="$smoke_dir/prefix" \
+  wine "$smoke_dir/ui2-windows-smoke.exe"
+```
+
+A successful run prints `UI2_WINE_SMOKE_OK`. The runtime DLL copy is required
+by the default MinGW-w64 thread runtime; it should likewise be shipped beside
+applications unless the final executable is linked without that dependency.
+
+Native objects returned by `alloc` follow a +1 creation contract. Renderers
+release that ownership after a retaining parent/property accepts the object and
+remove observers, delegates, actions, menus, and pointer registries on unmount.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+### Embedding controls in an existing host
+
+UI2 exposes native and custom-renderer embedding APIs, vector decorations and
+explicit button icon sizing. See [Embedding UI2 controls](docs/embedding.md).
