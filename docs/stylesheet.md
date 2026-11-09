@@ -337,6 +337,23 @@ buttons on Windows, larger radii on iOS, denser type on Linux. For behavior
 above mean press-feedback styling is custom-renderer-only; prefer `:hover`
 plus `:focused` for cross-backend feedback.
 
+Two predefined looks ship in `ui/stylesheet_platform.v`, so common cases
+need no hand-written `@media` blocks: `glass` (frosted cards and buttons
+for macOS/iOS) and `material` (solid surfaces with elevation for Android).
+`auto` gates each look behind its home platforms and leaves the rest
+neutral; a concrete design applies everywhere — including on your dev
+machine, which is also how you preview another platform's look:
+
+```v
+sheet := ui2.with_platform_design(my_sheet, .auto)!
+ui2.set_global_stylesheet(sheet)
+```
+
+Presets append after the base rules, so they win equal-specificity ties
+while builder-set properties still win over everything. Dark variants ride
+on `(prefers-color-scheme: dark)` and follow `set_stylesheet_dark`.
+Translucency rides on box opacity — there is no backdrop blur in v1.
+
 ## Authoring from V
 
 ```v

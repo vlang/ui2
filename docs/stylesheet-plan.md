@@ -122,12 +122,17 @@ which authored them.
   `var(--x, fallback)`, top-level `light-dark()`, full modern color
   (lab/lch/oklab/oklch/hwb/gray/color() + relative `from` syntax),
   docs + gallery var() showcase.
-- **P7 (done, this commit):** Vite-style plugin system
-  (`ui/stylesheet_plugin.v`): custom value functions (number + color),
+- **P7 (done, this commit):** Vite-style plugin system  (`ui/stylesheet_plugin.v`): custom value functions (number + color),
   custom at-rules (parse-time expansion), custom pseudo-classes, custom
   `@media` features, post-cascade transforms, lint rules, `@import` with
   cycle-safe file loading, mtime-based live-reload helpers,
   `examples/stylesheet_plugins`, docs + README updates.
+- **P8 (done, this commit):** predefined per-platform designs
+  (`ui/stylesheet_platform.v`): `glass` for macOS/iOS, `material` for
+  Android, `auto` gating each behind `@media (platform: ...)` with dark
+  variants on `(prefers-color-scheme: dark)`; concrete designs apply
+  ungated on every platform. `with_platform_design` merges a base sheet
+  with the preset, docs updated.
 - Non-goals v1: layout selectors, animations/transitions,
   `!important`. `refresh_element` (AppKit) intentionally bypasses
   the sheet: it reconciles a caller-supplied subtree, not a fresh build.
