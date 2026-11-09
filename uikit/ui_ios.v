@@ -98,7 +98,21 @@ __global g_view_translation_x = map[voidptr]f64{}
 
 // ── Public API ─────────────────────────────────────────────────────
 
+// bounds is the app's own area: the root view's bounds, which follow iPad
+// Split View and Slide Over, falling back to the screen before the window
+// exists (launch sizes the window from it).
 pub fn bounds() Rect {
+	if g_root_view != unsafe { nil } {
+		view := macos.msg_rect(g_root_view, 'bounds')
+		if view.width > 0 && view.height > 0 {
+			return Rect{
+				x:      view.x
+				y:      view.y
+				width:  view.width
+				height: view.height
+			}
+		}
+	}
 	b := macos.msg_rect(macos.msg_id(macos.get_class('UIScreen'), 'mainScreen'), 'bounds')
 	return Rect{
 		x:      b.x
@@ -327,9 +341,14 @@ fn native_device_scale() f64 {
 // native_safe_insets reports the main screen's safe area. safeAreaInsets
 // arrives as (top, left, bottom, right), the same order safe_area_top
 // already reads its first field from.
+// native_safe_insets reads the root view's safe area, the same rectangle
+// bounds() reports (UIScreen has no safeAreaInsets). UIEdgeInsets comes
+// back in Rect's slots as top, left, bottom, right, as in safe_area_top.
 fn native_safe_insets() ?SafeInsets {
-	screen := macos.msg_id(macos.get_class('UIScreen'), 'mainScreen')
-	insets := macos.msg_rect(screen, 'safeAreaInsets')
+	if g_root_view == unsafe { nil } {
+		return none
+	}
+	insets := macos.msg_rect(g_root_view, 'safeAreaInsets')
 	return SafeInsets{
 		top:    insets.x
 		right:  insets.height
