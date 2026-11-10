@@ -833,7 +833,7 @@ pub fn image(id string, path string, frame Rect) Element {
 		image_path:          path
 		frame:               frame
 		accessibility_role:  'image'
-		accessibility_label: if id.len > 0 { id } else { path }
+		accessibility_label: if id.len > 0 { id } else { '' }
 	}
 }
 
@@ -860,7 +860,7 @@ pub fn transformed_image(id string, path string, frame Rect, rotation f64, click
 		rotation:            rotation
 		clickable:           clickable
 		accessibility_role:  if clickable { 'button' } else { 'image' }
-		accessibility_label: if id.len > 0 { id } else { path }
+		accessibility_label: if id.len > 0 { id } else { '' }
 	}
 }
 
@@ -874,7 +874,7 @@ pub fn transformed_image_with_cursor(id string, path string, frame Rect, rotatio
 		clickable:           clickable
 		cursor:              cursor
 		accessibility_role:  if clickable { 'button' } else { 'image' }
-		accessibility_label: if id.len > 0 { id } else { path }
+		accessibility_label: if id.len > 0 { id } else { '' }
 	}
 }
 
@@ -1005,7 +1005,7 @@ pub fn dropdown(id string, selected string, options []string, frame Rect, box_ B
 		text_style:          style
 		menu:                entries
 		accessibility_role:  'combobox'
-		accessibility_label: if id.len > 0 { id } else { 'Dropdown' }
+		accessibility_label: if id.len > 0 { id } else { '' }
 		accessibility_value: selected
 	}
 }
@@ -1037,7 +1037,7 @@ pub fn text_area(id string, text string, frame Rect, box_ BoxStyle, style TextSt
 		box:                 box_
 		text_style:          style
 		accessibility_role:  'textarea'
-		accessibility_label: if id.len > 0 { id } else { 'Text area' }
+		accessibility_label: if id.len > 0 { id } else { '' }
 		accessibility_value: text
 	}
 }
@@ -1052,7 +1052,7 @@ pub fn text_area_without_scroll(id string, text string, frame Rect, box_ BoxStyl
 		text_style:          style
 		disable_scroll:      true
 		accessibility_role:  'textarea'
-		accessibility_label: if id.len > 0 { id } else { 'Text area' }
+		accessibility_label: if id.len > 0 { id } else { '' }
 		accessibility_value: text
 	}
 }
@@ -1067,7 +1067,7 @@ pub fn rich_text_area(id string, text string, runs []TextRun, frame Rect, box_ B
 		text_style:          style
 		text_runs:           runs
 		accessibility_role:  'textarea'
-		accessibility_label: if id.len > 0 { id } else { 'Text area' }
+		accessibility_label: if id.len > 0 { id } else { '' }
 		accessibility_value: text
 	}
 }
@@ -1083,7 +1083,7 @@ pub fn rich_text_area_without_scroll(id string, text string, runs []TextRun, fra
 		text_runs:           runs
 		disable_scroll:      true
 		accessibility_role:  'textarea'
-		accessibility_label: if id.len > 0 { id } else { 'Text area' }
+		accessibility_label: if id.len > 0 { id } else { '' }
 		accessibility_value: text
 	}
 }
