@@ -640,7 +640,7 @@ fn table_dividers(xs []f64, widths []f64, limit f64, y f64, height f64, color u3
 
 fn table_simple_row(config TableConfig, geo TableGeometry, colors TableColors, metrics TableMetrics, row TableRow, index int, y f64, last bool) Element {
 	rh := metrics.row_height
-	hovered := config.hoverable && index == config.hovered_row
+	hovered := config.hoverable && row.enabled && index == config.hovered_row
 	fill := if hovered {
 		colors.hover
 	} else if config.striped && index % 2 == 1 {
@@ -659,7 +659,7 @@ fn table_simple_row(config TableConfig, geo TableGeometry, colors TableColors, m
 		geo.inner.width, TableTextStyle{
 			padding: metrics.padding
 			size:    metrics.font_size
-			color:   colors.text
+			color:   if row.enabled { colors.text } else { colors.dimmed_text }
 		})
 	part := if config.hoverable || config.clickable_rows {
 		table_row_part(config.id, index)
@@ -673,15 +673,16 @@ fn table_simple_row(config TableConfig, geo TableGeometry, colors TableColors, m
 		border_top:   if index > 0 { 1 } else { 0 }
 	}
 	mut el := view(part, rect(geo.inner.x, y, geo.inner.width, rh), box, children)
-	if config.clickable_rows {
+	if config.clickable_rows && row.enabled {
 		el = with_button_behavior(el)
 	}
-	if config.hoverable {
+	if config.hoverable && row.enabled {
 		el = with_hover(el)
 	}
 	return Element{
 		...el
 		key:                 'row:' + table_row_key(row, index)
+		enabled:             row.enabled
 		accessibility_role:  'row'
 		accessibility_label: table_row_label(row)
 	}
