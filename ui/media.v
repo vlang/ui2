@@ -72,7 +72,7 @@ pub enum MediaSource {
 pub struct MediaConfig {
 pub:
 	id       string
-	kind     MediaKind = .audio
+	kind     MediaKind   = .audio
 	source   MediaSource = .file
 	src      string
 	frame    Rect
@@ -109,17 +109,17 @@ pub fn media(config MediaConfig) !Element {
 		return error('media element `${config.id}` needs a positive playback rate')
 	}
 	return Element{
-		kind:            .media
-		id:              config.id
-		frame:           config.frame
-		media_src:       config.src
-		media_kind:      config.kind
-		autoplay:        config.autoplay
-		loop:            config.loop
-		media_muted:     config.muted
-		media_volume:    media_clamped_volume(config.volume)
-		media_rate:      config.rate
-		accessibility_role: if config.kind == .video { 'video' } else { 'audio' }
+		kind:                .media
+		id:                  config.id
+		frame:               config.frame
+		media_src:           config.src
+		media_kind:          config.kind
+		autoplay:            config.autoplay
+		loop:                config.loop
+		media_muted:         config.muted
+		media_volume:        media_clamped_volume(config.volume)
+		media_rate:          config.rate
+		accessibility_role:  if config.kind == .video { 'video' } else { 'audio' }
 		accessibility_label: media_accessible_name(config)
 	}
 }
@@ -747,13 +747,13 @@ pub fn media_controls(config MediaControlsConfig) !Element {
 	]
 	slider_width := config.frame.width - toggle_w - mute_w - time_w
 	children << slider(
-		id:          media_seek_slider_id(config.id)
-		action_id:   media_seek_action(config.id)
-		frame:       rect(toggle_w, 0, math.max(slider_width, 0), config.frame.height)
-		min:         0
-		max:         max
-		value:       value
-		enabled:     media_can_seek(config.id)
+		id:                  media_seek_slider_id(config.id)
+		action_id:           media_seek_action(config.id)
+		frame:               rect(toggle_w, 0, math.max(slider_width, 0), config.frame.height)
+		min:                 0
+		max:                 max
+		value:               value
+		enabled:             media_can_seek(config.id)
 		accessibility_label: 'Seek'
 	)
 	if config.show_time {
@@ -763,7 +763,11 @@ pub fn media_controls(config MediaControlsConfig) !Element {
 			})
 	}
 	if config.show_mute {
-		children << button(media_mute_action(config.id), if session_muted { 'Unmute' } else { 'Mute' },
+		children << button(media_mute_action(config.id), if session_muted {
+			'Unmute'
+		} else {
+			'Mute'
+		},
 			rect(config.frame.width - mute_w, 0, mute_w, config.frame.height), BoxStyle{
 				transparent: true
 			}, TextStyle{

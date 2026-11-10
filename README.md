@@ -787,6 +787,30 @@ for native and custom-rendered windows alike. Linux and the BSDs drive
 them has to be installed; Android has no clipboard this layer can reach. Check
 `clipboard_supported()` before offering a copy action.
 
+## Media playback and capture
+
+`audio(id, src)` and `video(id, src, frame)` play sound and moving pictures
+through each platform's built-in stack — MCI on Windows, AVFoundation on
+macOS/iOS, OpenSL ES audio on Android, helper tools on Linux — with no
+third-party media library. Transport is imperative and id-keyed
+(`media_play`, `media_pause`, `media_toggle`, `media_stop`, `media_seek`,
+`media_set_volume`, `media_set_muted`, `media_set_rate`, `media_set_loop`),
+position, duration and state are pulled, and `media_controls` draws the
+transport row whose actions `media_handle_control(id, action)` executes:
+
+```v
+video('intro', 'https://example.com/intro.mp4', ui2.rect(20, 100, 320, 180))
+media_controls(id: 'intro', frame: ui2.rect(20, 290, 320, 40))
+```
+
+`media_recorder` captures the microphone (`media_start_recording` /
+`media_stop_recording`, WAV out) and `media_capture_screen` snapshots the
+display, where the platform allows it. Check `media_playback_supported(kind)`
+and `media_capture_supported(source)` before offering actions; unsupported
+inputs report `false` instead of failing. See [docs/media.md](docs/media.md)
+for the per-platform matrix and the `examples/media_player` and
+`examples/voice_memo` walkthroughs.
+
 ## File and folder dialogs
 
 `open_file_dialog`, `save_file_dialog`, and `open_folder_dialog` show the

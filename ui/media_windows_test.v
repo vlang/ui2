@@ -16,14 +16,16 @@ $if windows {
 		mut data := []u8{cap: 44 + n * 2}
 		data << 'RIFF'.bytes()
 		size := u32(36 + n * 2)
-		data << [u8(size & 0xff), u8((size >> 8) & 0xff), u8((size >> 16) & 0xff), u8((size >> 24) & 0xff)]
+		data << [u8(size & 0xff), u8((size >> 8) & 0xff), u8((size >> 16) & 0xff),
+			u8((size >> 24) & 0xff)]
 		data << 'WAVE'.bytes()
 		data << 'fmt '.bytes()
 		data << [u8(16), 0, 0, 0, 1, 0, 1, 0]
 		data << [u8(0x40), u8(0x1f), 0, 0]
 		data << [u8(0x80), u8(0x3e), 0, 0, 2, 0, 16, 0]
 		data << 'data'.bytes()
-		data << [u8((n * 2) & 0xff), u8(((n * 2) >> 8) & 0xff), u8(((n * 2) >> 16) & 0xff), u8(((n * 2) >> 24) & 0xff)]
+		data << [u8((n * 2) & 0xff), u8(((n * 2) >> 8) & 0xff), u8(((n * 2) >> 16) & 0xff),
+			u8(((n * 2) >> 24) & 0xff)]
 		for i in 0 .. n {
 			t := f64(i) / f64(sample_rate)
 			s := i16(10000.0 * math.sin(t * 440.0 * 2.0 * math.pi))

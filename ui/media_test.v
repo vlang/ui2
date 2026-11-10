@@ -33,11 +33,11 @@ fn test_media_clamped_volume_stays_in_range() {
 
 fn test_media_builder_sets_kind_src_and_accessibility() {
 	el := media(
-		id:     'intro'
-		kind:   .video
-		source: .url
-		src:    'https://example.com/intro.mp4'
-		frame:  rect(20, 100, 320, 180)
+		id:       'intro'
+		kind:     .video
+		source:   .url
+		src:      'https://example.com/intro.mp4'
+		frame:    rect(20, 100, 320, 180)
 		autoplay: true
 		loop:     true
 		volume:   0.5
@@ -68,12 +68,25 @@ fn test_media_builder_rejects_capture_sources_and_bad_values() {
 	if _ := media(id: 'x', kind: .audio, source: .screen, src: '', frame: rect(0, 0, 10, 10)) {
 		assert false, 'screen cannot render'
 	}
-	if _ := media(id: 'x', kind: .audio, source: .file, src: 'a.mp3', frame: rect(0, 0, 10, 10), rate: 0) {
+	if _ := media(
+		id:     'x'
+		kind:   .audio
+		source: .file
+		src:    'a.mp3'
+		frame:  rect(0, 0, 10, 10)
+		rate:   0
+	) {
 		assert false, 'non-positive rate must fail'
 	}
 	// Volume is forgiving: clamped, not rejected.
-	hot := media(id: 'x', kind: .audio, source: .file, src: 'a.mp3', frame: rect(0, 0, 10, 10),
-		volume: 4)!
+	hot := media(
+		id:     'x'
+		kind:   .audio
+		source: .file
+		src:    'a.mp3'
+		frame:  rect(0, 0, 10, 10)
+		volume: 4
+	)!
 	assert hot.media_volume == 1.0
 }
 
@@ -139,7 +152,12 @@ fn test_media_recorder_validates_its_config() {
 	if _ := media_recorder(id: 'memo', output_path: '', frame: rect(0, 0, 100, 40)) {
 		assert false, 'empty output path must fail'
 	}
-	if _ := media_recorder(id: 'memo', source: .screen, output_path: 'a.png', frame: rect(0, 0, 100, 40)) {
+	if _ := media_recorder(
+		id:          'memo'
+		source:      .screen
+		output_path: 'a.png'
+		frame:       rect(0, 0, 100, 40)
+	) {
 		assert false, 'screen is one-shot, not a recorder'
 	}
 	el := media_recorder(id: 'memo', output_path: 'memo.wav', frame: rect(0, 0, 120, 40))!

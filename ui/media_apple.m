@@ -114,8 +114,14 @@ void *ui2_media_apple_attach(const char *cid, void *parent) {
 	@autoreleasepool {
 		Ui2MediaSession *session = ui2_media_session(cid);
 		if (session == nil || session->player == nil) return NULL;
+		if (![session->kind isEqualToString:@"video"]) return (void *)session->player;
 		id container = ui2_media_container(parent);
 		if (container == nil) return NULL;
+#if TARGET_OS_IPHONE
+		if (![container isKindOfClass:[UIView class]]) return NULL;
+#else
+		if (![container isKindOfClass:[NSView class]]) return NULL;
+#endif
 		if (session->layer == nil) {
 			session->layer = [[AVPlayerLayer playerLayerWithPlayer:session->player] retain];
 			session->layer.videoGravity = AVLayerVideoGravityResizeAspect;
@@ -143,12 +149,17 @@ void *ui2_media_apple_attach(const char *cid, void *parent) {
 
 static void ui2_media_apple_rebuild_player(Ui2MediaSession *session) {
 	if (session->item == nil) return;
+	[session->player pause];
+	[session->player release];
+	session->player = nil;
+	[session->queuePlayer release];
+	session->queuePlayer = nil;
+	[session->looper release];
+	session->looper = nil;
 	if (session->loopFlag) {
 		AVQueuePlayer *queue = [[AVQueuePlayer alloc] initWithItems:@[ session->item ]];
 		AVPlayerLooper *looper = [[AVPlayerLooper alloc] initWithPlayer:queue
 														   templateItem:session->item];
-		[session->player pause];
-		[session->player release];
 		session->player = [queue retain];
 		[queue release];
 		session->queuePlayer = [queue retain];
@@ -157,8 +168,6 @@ static void ui2_media_apple_rebuild_player(Ui2MediaSession *session) {
 		[looper release];
 	} else {
 		AVPlayer *player = [[AVPlayer alloc] initWithPlayerItem:session->item];
-		[session->player pause];
-		[session->player release];
 		session->player = [player retain];
 		[player release];
 		[session->queuePlayer release];
@@ -208,6 +217,7 @@ int ui2_media_apple_open(const char *cid, const char *kind, const char *src) {
 			return 1;
 		}
 		if (session != nil) {
+			[session retain];
 			[sessions removeObjectForKey:key];
 			[session detachLayer];
 			[session->player pause];
@@ -335,6 +345,7 @@ void ui2_media_apple_close(const char *cid) {
 		NSString *key = [NSString stringWithUTF8String:cid];
 		Ui2MediaSession *session = (Ui2MediaSession *)[ui2_media_sessions() objectForKey:key];
 		if (session == nil) return;
+		[session retain];
 		[ui2_media_sessions() removeObjectForKey:key];
 		[session detachLayer];
 		[session->player pause];
