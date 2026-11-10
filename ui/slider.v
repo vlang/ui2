@@ -35,7 +35,7 @@ pub:
 	style       SliderStyle
 	// enabled false dims the control and ignores input on every backend.
 	enabled             bool   = true
-	accessibility_label string = ''
+	accessibility_label string = 'Slider'
 }
 
 struct SliderSpec {
@@ -150,7 +150,7 @@ pub fn slider(config SliderConfig) Element {
 		accessibility_label: if config.accessibility_label.len > 0 {
 			config.accessibility_label
 		} else {
-			''
+			'Slider'
 		}
 		accessibility_value: slider_number(value)
 	}
