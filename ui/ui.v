@@ -931,7 +931,7 @@ pub fn button_with_image(id string, title string, image_name string, frame Rect,
 		box:                 box_
 		text_style:          style
 		accessibility_role:  'button'
-		accessibility_label: if title.len > 0 { title } else { image_name }
+		accessibility_label: if title.len > 0 { title } else { '' }
 	}
 }
 
