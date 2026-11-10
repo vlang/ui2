@@ -1903,8 +1903,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	// grows the hit rect; the visual control keeps its declared size. Mouse
 	// input keeps using hit_test so precision is unchanged.
 	fn touch_hit_test(x f64, y f64) HitTarget {
-		const min_target = 44.0
-		const max_slop = 12.0
+		min_target := 44.0
+		max_slop := 12.0
 		for i := g_hit_targets.len - 1; i >= 0; i-- {
 			t := g_hit_targets[i]
 			slop_x := math.min(max_slop, math.max(0.0, (min_target - t.w) / 2.0))
