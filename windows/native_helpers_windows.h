@@ -248,6 +248,15 @@ static inline void ui2_win_notify_invoked(void *hwnd_ptr) {
 	}
 }
 
+// Assistive technology caches a control's state, so a checked or enabled
+// transition has to be announced or a screen reader keeps reading the old one.
+static inline void ui2_win_notify_state_change(void *hwnd_ptr) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	if (hwnd != NULL && IsWindow(hwnd)) {
+		NotifyWinEvent(EVENT_OBJECT_STATECHANGE, hwnd, OBJID_CLIENT, CHILDID_SELF);
+	}
+}
+
 static inline LRESULT ui2_win_accessible_button_object(HWND hwnd, WPARAM wparam) {
 	IAccessible *accessible = NULL;
 	HRESULT result = CreateStdAccessibleProxyW(hwnd, L"BUTTON", OBJID_CLIENT,
@@ -1025,7 +1034,8 @@ enum {
 	UI2_WIN_ACCESSIBLE_NAME = 2,
 	UI2_WIN_ACCESSIBLE_DEFAULT_ACTION = 4,
 	UI2_WIN_ACCESSIBLE_FOCUSABLE = 8,
-	UI2_WIN_ACCESSIBLE_UNAVAILABLE = 16
+	UI2_WIN_ACCESSIBLE_UNAVAILABLE = 16,
+	UI2_WIN_ACCESSIBLE_CHECKED = 32
 };
 
 static inline unsigned int ui2_win_accessible_button_info(void *hwnd_ptr,
@@ -1067,6 +1077,9 @@ static inline unsigned int ui2_win_accessible_button_info(void *hwnd_ptr,
 		}
 		if ((state.lVal & STATE_SYSTEM_UNAVAILABLE) != 0) {
 			info |= UI2_WIN_ACCESSIBLE_UNAVAILABLE;
+		}
+		if ((state.lVal & STATE_SYSTEM_CHECKED) != 0) {
+			info |= UI2_WIN_ACCESSIBLE_CHECKED;
 		}
 	}
 	if (name != NULL) SysFreeString(name);

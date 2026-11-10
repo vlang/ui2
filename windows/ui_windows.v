@@ -122,6 +122,8 @@ fn C.ui2_win_click(hwnd voidptr)
 
 fn C.ui2_win_notify_invoked(hwnd voidptr)
 
+fn C.ui2_win_notify_state_change(hwnd voidptr)
+
 fn C.ui2_win_accessible_button_info(hwnd voidptr, expected_name &u16) u32
 
 fn C.ui2_win_accessible_button_invoke(hwnd voidptr) int
@@ -453,6 +455,7 @@ mut:
 	node_label_boxed   map[string]bool
 	pending_scroll     map[string]int // Scroll element id -> offset to apply when it renders
 	pending_scroll_x   map[string]int
+	node_accessible_states map[string]int // node key -> checked/enabled bits last announced
 	run_config         WindowsRunConfig
 	rendering          bool
 	key_consumed       bool
@@ -505,6 +508,7 @@ const windows_state_singleton = &WindowsState{
 	node_label_boxed: map[string]bool{}
 	pending_scroll: map[string]int{}
 	pending_scroll_x: map[string]int{}
+	node_accessible_states: map[string]int{}
 	suppress_click: map[u64]bool{}
 }
 
@@ -1579,11 +1583,33 @@ fn windows_update_element(key string, hwnd voidptr, el Element, x_offset int, y_
 	// The tooltip goes on the outer window, which is the declared frame, and on the
 	// control inside it, which is what the pointer actually lands on.
 	windows_update_tooltip(key, hwnd, text_hwnd, el.tooltip)
+	windows_notify_accessible_state(key, hwnd, el)
 	if el.kind == .label {
 		C.ui2_win_invalidate_parent(hwnd)
 		C.ui2_win_invalidate(text_hwnd)
 	}
 	C.ui2_win_invalidate(hwnd)
+}
+
+// windows_notify_accessible_state announces checked/enabled transitions on
+// controls assistive technology reads state from: native checkables and views
+// exposed as accessible buttons. Screen readers cache state, so without
+// EVENT_OBJECT_STATECHANGE they keep reporting the previous one.
+fn windows_notify_accessible_state(key string, hwnd voidptr, el Element) {
+	active := match el.kind {
+		.checkbox, .switch_control, .toggle_button { true }
+		.view { el.button_behavior }
+		else { false }
+	}
+	if !active {
+		return
+	}
+	mut st := windows_state()
+	bits := (if el.checked { 1 } else { 0 }) | (if el.enabled { 0 } else { 2 })
+	if st.node_accessible_states[key] or { -1 } != bits {
+		st.node_accessible_states[key] = bits
+		C.ui2_win_notify_state_change(hwnd)
+	}
 }
 
 fn windows_update_tooltip(key string, hwnd voidptr, text_hwnd voidptr, tooltip string) {
@@ -1821,6 +1847,7 @@ fn windows_cleanup_node_resources(key string, hwnd voidptr, kind Kind) {
 	}
 	st.tooltips.delete(key)
 	st.tooltip_sigs.delete(key)
+	st.node_accessible_states.delete(key)
 }
 
 fn windows_remove_stale(active map[string]bool) {

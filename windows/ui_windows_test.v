@@ -207,6 +207,24 @@ $if !ui2_custom_rendering ? {
 		assert disabled_info & u32(16) != 0 // STATE_SYSTEM_UNAVAILABLE
 		C.ui2_win_click(button)
 		assert windows_accessibility_events == ['save', 'replacement']
+		C.ui2_win_enable(button, 1)
+
+		check_label := ''.to_wide()
+		check := C.ui2_win_create_widget(windows_widget_kind(.checkbox), root, 0, 96, 200,
+			32, check_label, 0, 0, 0, 0, 0)
+		unsafe { free(check_label) }
+		assert check != unsafe { nil }
+		C.ui2_win_set_checked(check, 1)
+		checked_name := ''.to_wide()
+		checked_info := C.ui2_win_accessible_button_info(check, checked_name)
+		unsafe { free(checked_name) }
+		assert checked_info & u32(32) != 0 // STATE_SYSTEM_CHECKED
+		C.ui2_win_set_checked(check, 0)
+		unchecked_name := ''.to_wide()
+		unchecked_info := C.ui2_win_accessible_button_info(check, unchecked_name)
+		unsafe { free(unchecked_name) }
+		assert unchecked_info & u32(32) == 0
+		C.ui2_win_destroy(check)
 
 		empty_caption := ''.to_wide()
 		C.ui2_win_configure_accessible_button(button, empty_caption, 0)
