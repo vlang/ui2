@@ -1,5 +1,7 @@
 module ui2
 
+import math
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
 fn nav2_items() []TabBarItem {
@@ -545,13 +547,14 @@ fn test_tab_bar_reveal_offset_shows_tab_and_neighbors() {
 		frame: rect(0, 0, 200, 32)
 	}
 	layout := tab_bar_layout(config) or { panic(err) }
-	assert layout.tabs[3].width < 200
+	assert layout.scrolls
+	assert layout.tabs[3].width < layout.length
 	assert tab_bar_reveal_offset(nav2_bar('a'), 'a') == none
 	assert tab_bar_reveal_offset(config, 'nope') == none
 	first := tab_bar_reveal_offset(config, 'a') or { panic('no offset') }
 	assert first == 0
 	last := tab_bar_reveal_offset(config, 'd') or { panic('no offset') }
-	assert last == layout.length - 200
+	assert last == math.min(layout.length - 200, layout.tabs[3].x)
 	middle := tab_bar_reveal_offset(config, 'c') or { panic('no offset') }
 	c := layout.tabs[2]
 	assert middle <= c.x && middle + 200 >= c.x + c.width
