@@ -891,6 +891,24 @@ fn form_message_elements(field FormField, frame Rect, config FormConfig, m FormM
 	]
 }
 
+// form_control_label names a field's control for assistive technology: an
+// explicitly labelled control keeps its name, while one whose label only
+// restates its placeholder or id — what the primitive builders derive when
+// the caller gives none — takes the field's label, which is the visible name
+// next to it. A cue-banner placeholder is a hint, never a name.
+fn form_control_label(control Element, name string) string {
+	if control.accessibility_label.len == 0 {
+		return name
+	}
+	if control.placeholder.len > 0 && control.accessibility_label == control.placeholder {
+		return name
+	}
+	if control.id.len > 0 && control.accessibility_label == control.id {
+		return name
+	}
+	return control.accessibility_label
+}
+
 fn form_field_elements(field FormField, item FormFieldLayout, config FormConfig, m FormMetrics, vertical bool) ![]Element {
 	mut out := []Element{}
 	if field.label.len > 0 && item.label.width > 0 {
@@ -906,11 +924,7 @@ fn form_field_elements(field FormField, item FormFieldLayout, config FormConfig,
 		out << Element{
 			...control
 			key:                 'control:' + field.id
-			accessibility_label: if control.accessibility_label.len > 0 {
-				control.accessibility_label
-			} else {
-				name
-			}
+			accessibility_label: form_control_label(control, name)
 		}
 	} else if field.text.len > 0 {
 		out << Element{

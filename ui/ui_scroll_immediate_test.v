@@ -629,7 +629,6 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		assert 'columns' !in g_scroll_offsets_x
 		assert 'columns' !in g_scroll_content_w
 	}
-}
 
 fn test_text_area_line_ranges_follow_wrapped_source_runes() {
 	lines := ['one two', 'three']
@@ -681,4 +680,12 @@ fn test_text_area_vertical_and_line_boundary_navigation() {
 		anchor: 4
 		caret: 7
 	}
+}
+}
+
+// The tests above exercise the custom renderer and only compile with it; this
+// one keeps `v test` green on the native backends, where the file would
+// otherwise contain no test functions at all.
+fn test_scroll_immediate_suite_needs_custom_renderer() {
+	assert true
 }

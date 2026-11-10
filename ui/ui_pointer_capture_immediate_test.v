@@ -351,3 +351,10 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		assert pointer_capture_events.len == 0
 	}
 }
+
+// The tests above exercise the custom renderer and only compile with it; this
+// one keeps `v test` green on the native backends, where the file would
+// otherwise contain no test functions at all.
+fn test_pointer_capture_immediate_suite_needs_custom_renderer() {
+	assert true
+}

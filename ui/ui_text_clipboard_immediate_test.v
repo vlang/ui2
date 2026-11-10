@@ -220,3 +220,10 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		finish_clipboard_test()
 	}
 }
+
+// The tests above exercise the custom renderer and only compile with it; this
+// one keeps `v test` green on the native backends, where the file would
+// otherwise contain no test functions at all.
+fn test_text_clipboard_immediate_suite_needs_custom_renderer() {
+	assert true
+}

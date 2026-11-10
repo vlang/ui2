@@ -311,3 +311,10 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		assert !tooltip_hides_beneath(Element{kind: .label})
 	}
 }
+
+// The tests above exercise the custom renderer and only compile with it; this
+// one keeps `v test` green on the native backends, where the file would
+// otherwise contain no test functions at all.
+fn test_tooltip_immediate_suite_needs_custom_renderer() {
+	assert true
+}
