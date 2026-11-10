@@ -928,6 +928,12 @@ fn apply_widget_animation_node(declared Element, now i64, visible_only bool, mut
 		}
 		if completed {
 			animation_run.status = .completed
+			if animation_run.definition.fill_mode == 'none' {
+				// revert: release retained values
+				runtime.runs.delete(declared.id)
+			} else {
+				runtime.runs[declared.id] = animation_run
+			}
 			if voidptr(animation_run.definition.on_event) != unsafe { nil } {
 				pending << PendingAnimationEvent{
 					callback: animation_run.definition.on_event
@@ -939,8 +945,10 @@ fn apply_widget_animation_node(declared Element, now i64, visible_only bool, mut
 				}
 			}
 		}
-		animation_run.last = result
-		runtime.runs[declared.id] = animation_run
+		if animation_run.definition.fill_mode != 'none' {
+			animation_run.last = result
+			runtime.runs[declared.id] = animation_run
+		}
 		return result, true
 	}
 	if animation_run.initialized {

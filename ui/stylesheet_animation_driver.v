@@ -247,9 +247,6 @@ fn start_keyframes(id string, kf StyleKeyframes, spec StyleAnimation) {
 		children << child
 		prev_stop = cur.stop
 	}
-	if children.len == 0 {
-		return
-	}
 	mut anim := Animation{}
 	if children.len == 1 {
 		anim = children[0]

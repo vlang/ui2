@@ -1401,6 +1401,8 @@ Typed-VML ports from `v-ui` include:
   a custom `theme()` function, `@supports` at-rules, a `:--has-tooltip`
   pseudo-class, a debug transform, a lint rule, `@import` across files,
   and mtime-gated live reload.
+- `v run examples/stylesheet_animation/main.v` — VSS-driven animations:
+  hover transitions and an infinite pulse via `@keyframes`/`animation`.
 
 Run the calculator demo with:
 

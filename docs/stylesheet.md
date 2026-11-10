@@ -670,7 +670,8 @@ When a property's resolved value changes between builds and a transition
 covers it, ui2 tweens from the previous value to the new one. `all` covers
 every animatable property. Atomic forms `transition-property`,
 `transition-duration`, `transition-timing-function`, `transition-delay` align
-by comma index, matching CSS.
+by comma index, matching CSS. Timing functions: `linear`, `ease`,
+`ease-in`, `ease-out`, `ease-in-out`, or `cubic-bezier(x1, y1, x2, y2)`.
 
 ### Keyframes
 
@@ -684,9 +685,9 @@ Button.loading { animation: pulse 1s ease-in-out infinite; }
 ```
 
 An animation starts when its rule newly matches an element (state entry) and
-runs through the runtime, so frames schedule themselves. `infinite` repeats;
-named timings map to ui2's easing curves (`ease`, `ease-in`, `ease-out`,
-`ease-in-out`, `linear`).
+runs through the runtime, so frames schedule themselves. `infinite` repeats.
+`animation-fill-mode`: `none` (revert), `forwards` (keep final, default),
+`backwards` (hold first stop during delay), `both`. `animation-delay` honored.
 
 ### Non-goals (v1)
 

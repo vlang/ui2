@@ -32,7 +32,7 @@ fn apply_style_animation_decl(el Element, prop string, value string) Element {
 fn parse_transition_shorthand(value string) []StyleTransition {
 	mut out := []StyleTransition{}
 	for entry in split_top_level_commas(value) {
-		tokens := entry.fields()
+		tokens := split_shorthand_tokens(entry)
 		if tokens.len == 0 {
 			continue
 		}
@@ -46,8 +46,6 @@ fn parse_transition_shorthand(value string) []StyleTransition {
 			l := tok.to_lower()
 			if l == 'all' {
 				props << 'all'
-			} else if is_transition_property_name(tok) {
-				props << tok
 			} else if d := parse_time_seconds(tok) {
 				if !seen_duration {
 					duration = d
@@ -61,6 +59,8 @@ fn parse_transition_shorthand(value string) []StyleTransition {
 			} else if f := parse_cubic_bezier(tok) {
 				timing = .linear
 				timing_fn = f
+			} else if is_transition_property_name(tok) {
+				props << tok
 			}
 		}
 		if props.len == 0 {
@@ -149,7 +149,7 @@ fn is_transition_property_name(tok string) bool {
 fn parse_animation_shorthand(value string, _ string) []StyleAnimation {
 	mut out := []StyleAnimation{}
 	for entry in split_top_level_commas(value) {
-		tokens := entry.fields()
+		tokens := split_shorthand_tokens(entry)
 		if tokens.len == 0 {
 			continue
 		}
@@ -167,7 +167,8 @@ fn parse_animation_shorthand(value string, _ string) []StyleAnimation {
 		for tok in tokens {
 			l := tok.to_lower()
 			if name == '' && !is_time_token(tok) && !is_timing_token(tok) && !is_iteration_token(tok)
-				&& !is_direction_token(tok) && !is_fill_token(tok) && !is_play_state_token(tok) {
+				&& !is_direction_token(tok) && !is_fill_token(tok) && !is_play_state_token(tok)
+				&& parse_cubic_bezier(tok) == none {
 				name = tok
 				continue
 			}
@@ -325,7 +326,7 @@ fn parse_time_seconds(tok string) ?f64 {
 	}
 	// bare number treated as seconds
 	n := t.f64()
-	if t == n.str() || t.contains('.') {
+	if t == n.str() {
 		return n
 	}
 	return none
@@ -431,4 +432,55 @@ fn bezier_component(u f64, a f64, b f64) f64 {
 fn bezier_derivative(u f64, a f64, b f64) f64 {
 	mut v := 1.0 - u
 	return 3.0 * v * v * a + 6.0 * v * u * (b - a) + 3.0 * u * u * (1.0 - b)
+}
+// split_shorthand_tokens splits a shorthand value into tokens, keeping
+// parenthesized groups (such as cubic-bezier(...)) together.
+fn split_shorthand_tokens(s string) []string {
+	mut out := []string{}
+	mut depth := 0
+	mut quote := u8(0)
+	mut start := -1
+	for i in 0 .. s.len {
+		ch := s[i]
+		if quote != 0 {
+			if ch == quote {
+				quote = 0
+			}
+			continue
+		}
+		if ch == `"` || ch == `'` {
+			quote = ch
+			if start < 0 {
+				start = i
+			}
+			continue
+		}
+		if ch == `(` {
+			if start < 0 {
+				start = i
+			}
+			depth++
+			continue
+		}
+		if ch == `)` {
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+		if (ch == ` ` || ch == `\t` || ch == `\n` || ch == `\r`) && depth == 0 {
+			if start >= 0 {
+				out << s[start..i]
+				start = -1
+			}
+			continue
+		}
+		if start < 0 {
+			start = i
+		}
+	}
+	if start >= 0 && start < s.len {
+		out << s[start..]
+	}
+	return out
 }
