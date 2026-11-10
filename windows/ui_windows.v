@@ -1600,7 +1600,7 @@ fn windows_update_element(key string, hwnd voidptr, el Element, x_offset int, y_
 			C.ui2_win_slider_set_normalized(hwnd, slider_value_normalized(el.value,
 				el.min_value, el.max_value), windows_bool(el.orientation == .vertical))
 		}
-		.view, .scroll, .screen, .opengl {}
+		.view, .scroll, .screen, .opengl, .media {}
 	}
 	st.node_declared_text[key] = el.text
 	windows_update_style(key, text_hwnd, el)

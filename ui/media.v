@@ -281,6 +281,7 @@ pub fn media_open(id string, kind MediaKind, src string) bool {
 		return false
 	}
 	mut session := media_ensure_session(id, kind, src)
+	session.open_failed = false
 	if !native_media_open(id, kind, src) {
 		session.state = .error
 		session.error_msg = 'unsupported source'
@@ -597,6 +598,25 @@ pub fn media_sync_native(parent voidptr, el Element, frame Rect) {
 			return
 		}
 	}
+	if el.media_kind == .video {
+		if session.open_failed {
+			return
+		}
+		if native_media_attach(el.id, parent, frame.x, frame.y, frame.width, frame.height) {
+			session.surface = parent
+			if session.duration < 0 {
+				session.duration = native_media_duration(el.id)
+			}
+		} else {
+			session.state = .error
+			session.error_msg = 'unsupported source'
+			session.open_failed = true
+			return
+		}
+	} else if session.surface != unsafe { nil } {
+		native_media_detach(el.id)
+		session.surface = unsafe { nil }
+	}
 	if el.media_muted != session.applied_muted {
 		if native_media_set_muted(el.id, el.media_muted) {
 			session.muted = el.media_muted
@@ -623,21 +643,6 @@ pub fn media_sync_native(parent voidptr, el Element, frame Rect) {
 	}
 	if el.autoplay && session.state in [.idle, .stopped, .ended] {
 		media_play(el.id)
-	}
-	if el.media_kind == .video {
-		if native_media_attach(el.id, parent, frame.x, frame.y, frame.width, frame.height) {
-			session.surface = parent
-			if session.duration < 0 {
-				session.duration = native_media_duration(el.id)
-			}
-		} else if !session.open_failed {
-			session.state = .error
-			session.error_msg = 'unsupported source'
-			session.open_failed = true
-		}
-	} else if session.surface != unsafe { nil } {
-		native_media_detach(el.id)
-		session.surface = unsafe { nil }
 	}
 }
 
