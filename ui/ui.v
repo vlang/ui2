@@ -849,7 +849,7 @@ pub fn opengl(id string, frame Rect) Element {
 			transparent: true
 		}
 		accessibility_role:  'image'
-		accessibility_label: if id.len > 0 { id } else { 'OpenGL surface' }
+		accessibility_label: if id.len > 0 { id } else { '' }
 	}
 }
 
