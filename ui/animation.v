@@ -113,6 +113,8 @@ pub:
 	step            f64
 	repeat          bool
 	on_event        AnimationEventFn = unsafe { nil }
+	delay           f64
+	fill_mode       string
 	x               ?f64
 	y               ?f64
 	width           ?f64
@@ -164,6 +166,8 @@ mut:
 	targets       AnimationTargets
 	children      []Animation
 	properties    []string
+	delay         f64
+	fill_mode     string
 	transition_fn AnimationTransitionFn = unsafe { nil }
 	on_event      AnimationEventFn      = unsafe { nil }
 }
@@ -228,6 +232,8 @@ pub fn animation(config AnimationConfig) Animation {
 		transition:    config.transition
 		transition_fn: config.transition_fn
 		step:          step
+		delay:         config.delay
+		fill_mode:     config.fill_mode
 		repeat:        config.repeat
 		on_event:      config.on_event
 		properties:    properties
@@ -868,10 +874,12 @@ fn apply_widget_animation_node(declared Element, now i64, visible_only bool, mut
 		}
 	}
 	if animation_run.status == .running {
-		elapsed := math.max(0.0, f64(now - animation_run.started_at) / 1000.0)
+		raw_elapsed := math.max(0.0, f64(now - animation_run.started_at) / 1000.0)
+		delay := animation_run.definition.delay
 		duration := animation_run.definition.duration
+		elapsed := if raw_elapsed > delay { raw_elapsed - delay } else { 0.0 }
 		mut evaluation_elapsed := elapsed
-		mut completed := duration == 0.0
+		mut completed := false
 		if animation_run.definition.repeat && duration > 0.0 {
 			cycle := i64(math.floor(elapsed / duration))
 			evaluation_elapsed = math.fmod(elapsed, duration)
@@ -882,8 +890,16 @@ fn apply_widget_animation_node(declared Element, now i64, visible_only bool, mut
 			}
 			evaluated := evaluate_animation(animation_run.definition, cycle_start, evaluation_elapsed)
 			result = merge_animation_properties(result, evaluated, animation_run.retained)
-			animation_run.progress = evaluation_elapsed / duration
+			animation_run.progress = if duration == 0.0 { 1.0 } else { evaluation_elapsed / duration }
 		} else {
+			if raw_elapsed < delay {
+				// still in delay: hold start values
+				result = merge_animation_properties(result, animation_run.start, animation_run.retained)
+				animation_run.progress = 0.0
+				animation_run.last = result
+				runtime.runs[declared.id] = animation_run
+				return result, true
+			}
 			if elapsed >= duration {
 				evaluation_elapsed = duration
 				completed = true
@@ -949,9 +965,16 @@ fn dispatch_animation_events(pending []PendingAnimationEvent) {
 fn evaluate_animation(definition Animation, start Element, elapsed f64) Element {
 	return match definition.kind {
 		.tween {
-			mut sample := elapsed
-			if definition.step > 0.0 && elapsed < definition.duration {
-				sample = math.floor(elapsed / definition.step) * definition.step
+			mut eff := elapsed
+			if definition.delay > 0.0 {
+				if elapsed < definition.delay {
+					return start
+				}
+				eff = elapsed - definition.delay
+			}
+			mut sample := eff
+			if definition.step > 0.0 && eff < definition.duration {
+				sample = math.floor(eff / definition.step) * definition.step
 			}
 			raw := if definition.duration == 0.0 {
 				1.0

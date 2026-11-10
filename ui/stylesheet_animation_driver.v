@@ -136,9 +136,11 @@ fn start_transition(id string, old_el Element, targets []AnimationProperty, tr S
 	}
 	runtime.mutex.unlock()
 	mut anim := animation(AnimationConfig{
-		duration:   tr.duration
-		transition: tr.timing
-		properties: targets
+		duration:      tr.duration
+		delay:         tr.delay
+		transition:    tr.timing
+		transition_fn: tr.timing_fn
+		properties:    targets
 	})
 	// apply delay by adjusting? runtime doesn't support delay directly; skip for v1
 	anim.start(id)
@@ -148,7 +150,7 @@ fn start_transition(id string, old_el Element, targets []AnimationProperty, tr S
 fn drive_keyframes(old Element, current Element, had_prev bool) {
 	old_matches := g_style_prev_anim_matches.clone()
 	mut new_matches := map[string]bool{}
-	walk_for_keyframes(current, old_matches, mut new_matches)
+	walk_for_keyframes(current, []Stylesheet{}, old_matches, mut new_matches)
 	g_style_prev_anim_matches = new_matches.clone()
 	_ = old
 	_ = had_prev
@@ -167,7 +169,11 @@ fn collect_matches(current Element, mut out map[string]bool) {
 	}
 }
 
-fn walk_for_keyframes(current Element, old_matches map[string]bool, mut new_matches map[string]bool) {
+fn walk_for_keyframes(current Element, ancestor_sheets []Stylesheet, old_matches map[string]bool, mut new_matches map[string]bool) {
+	mut sheets := ancestor_sheets.clone()
+	if !stylesheet_is_empty(current.stylesheet) {
+		sheets << current.stylesheet
+	}
 	if current.id.len > 0 && current.style_animations.len > 0 {
 		for anim in current.style_animations {
 			if anim.name.len == 0 {
@@ -177,26 +183,28 @@ fn walk_for_keyframes(current Element, old_matches map[string]bool, mut new_matc
 			new_matches[key] = true
 			if !(old_matches[key] or { false }) {
 				// newly matching: start
-				if kf := find_keyframes(current, anim.name) {
+				if kf := find_keyframes(sheets, anim.name) {
 					start_keyframes(current.id, kf, anim)
 				}
 			}
 		}
 	}
 	for child in current.children {
-		walk_for_keyframes(child, old_matches, mut new_matches)
+		walk_for_keyframes(child, sheets, old_matches, mut new_matches)
 	}
 }
 
-fn find_keyframes(el Element, name string) ?StyleKeyframes {
-	// Look up in global sheet first, then any scoped sheet on ancestors.
-	// For v1, check global stylesheet only.
+fn find_keyframes(sheets []Stylesheet, name string) ?StyleKeyframes {
+	for i := sheets.len - 1; i >= 0; i-- {
+		if kf := sheets[i].keyframes[name] {
+			return kf
+		}
+	}
 	if g_stylesheet_has_global {
 		if kf := g_stylesheet_global.keyframes[name] {
 			return kf
 		}
 	}
-	// scoped: search up? skip for v1
 	return none
 }
 
@@ -231,9 +239,10 @@ fn start_keyframes(id string, kf StyleKeyframes, spec StyleAnimation) {
 			continue
 		}
 		child := animation(AnimationConfig{
-			duration:   dur
-			transition: spec.timing
-			properties: targets
+			duration:      dur
+			transition:    spec.timing
+			transition_fn: spec.timing_fn
+			properties:    targets
 		})
 		children << child
 		prev_stop = cur.stop
@@ -241,24 +250,23 @@ fn start_keyframes(id string, kf StyleKeyframes, spec StyleAnimation) {
 	if children.len == 0 {
 		return
 	}
-	mut anim := if children.len == 1 {
-		children[0]
+	mut anim := Animation{}
+	if children.len == 1 {
+		anim = children[0]
+		anim.delay = spec.delay
+		anim.fill_mode = spec.fill_mode
+		anim.transition_fn = spec.timing_fn
 	} else {
-		// sequence
-		mut seq := animation(AnimationConfig{ duration: spec.duration })
-		// Animation struct composition: use .sequence? Animation has kind mut. 
-		// Use helper: build via animation() then set kind/children manually impossible (mut).
-		seq
-	}
-	// For multi-stop, rebuild as sequence manually using struct literal
-	if children.len > 1 {
 		anim = Animation{
-			duration:   spec.duration
-			transition: spec.timing
-			repeat:     spec.iteration_count == 0
-			kind:       .sequence
-			children:   children
-			properties: collect_animation_properties(children)
+			duration:      spec.duration
+			delay:         spec.delay
+			transition:    spec.timing
+			transition_fn: spec.timing_fn
+			fill_mode:     spec.fill_mode
+			repeat:        spec.iteration_count == 0
+			kind:          .sequence
+			children:      children
+			properties:    collect_animation_properties(children)
 		}
 	}
 	if spec.iteration_count == 0 {

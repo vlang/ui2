@@ -39,6 +39,7 @@ fn parse_transition_shorthand(value string) []StyleTransition {
 		mut props := []string{}
 		mut duration := 0.2
 		mut timing := AnimationTransition.out_cubic
+		mut timing_fn := AnimationTransitionFn(unsafe { nil })
 		mut delay := 0.0
 		mut seen_duration := false
 		for tok in tokens {
@@ -56,6 +57,10 @@ fn parse_transition_shorthand(value string) []StyleTransition {
 				}
 			} else if t := parse_timing_token(tok) {
 				timing = t
+				timing_fn = unsafe { nil }
+			} else if f := parse_cubic_bezier(tok) {
+				timing = .linear
+				timing_fn = f
 			}
 		}
 		if props.len == 0 {
@@ -65,6 +70,7 @@ fn parse_transition_shorthand(value string) []StyleTransition {
 			properties: props
 			duration:   duration
 			timing:     timing
+			timing_fn:  timing_fn
 			delay:      delay
 		}
 	}
@@ -107,6 +113,10 @@ fn apply_transition_atomic(list []StyleTransition, prop string, value string) []
 			'transition-timing-function' {
 				if t := parse_timing_token(trimmed) {
 					out[i].timing = t
+					out[i].timing_fn = unsafe { nil }
+				} else if f := parse_cubic_bezier(trimmed) {
+					out[i].timing = .linear
+					out[i].timing_fn = f
 				}
 			}
 			'transition-delay' {
@@ -146,6 +156,7 @@ fn parse_animation_shorthand(value string, _ string) []StyleAnimation {
 		mut name := ''
 		mut duration := 0.0
 		mut timing := AnimationTransition.out_cubic
+		mut timing_fn := AnimationTransitionFn(unsafe { nil })
 		mut delay := 0.0
 		mut iters := 1.0
 		mut infinite := false
@@ -172,6 +183,11 @@ fn parse_animation_shorthand(value string, _ string) []StyleAnimation {
 			if t := parse_timing_token(tok) {
 				// only assign if token is a timing keyword (parse_timing_token returns none otherwise)
 				timing = t
+				timing_fn = unsafe { nil }
+				continue
+			} else if f := parse_cubic_bezier(tok) {
+				timing = .linear
+				timing_fn = f
 				continue
 			}
 			if is_iteration_token(tok) {
@@ -203,6 +219,7 @@ fn parse_animation_shorthand(value string, _ string) []StyleAnimation {
 			name:            name
 			duration:        if duration <= 0 { 0.0 } else { duration }
 			timing:          timing
+			timing_fn:       timing_fn
 			delay:           delay
 			iteration_count: if infinite { 0 } else { iters }
 			direction:       direction
@@ -233,7 +250,13 @@ fn apply_animation_atomic(list []StyleAnimation, prop string, value string) []St
 				if d := parse_time_seconds(trimmed) { out[i].duration = d }
 			}
 			'animation-timing-function' {
-				if t := parse_timing_token(trimmed) { out[i].timing = t }
+				if t := parse_timing_token(trimmed) {
+					out[i].timing = t
+					out[i].timing_fn = unsafe { nil }
+				} else if f := parse_cubic_bezier(trimmed) {
+					out[i].timing = .linear
+					out[i].timing_fn = f
+				}
 			}
 			'animation-delay' {
 				if d := parse_time_seconds(trimmed) { out[i].delay = d }
@@ -350,12 +373,62 @@ fn is_direction_token(tok string) bool {
 	return l in ['normal', 'reverse', 'alternate', 'alternate-reverse']
 }
 
+fn is_play_state_token(tok string) bool {
+	l := tok.to_lower()
+	return l in ['running', 'paused']
+}
+
 fn is_fill_token(tok string) bool {
 	l := tok.to_lower()
 	return l in ['none', 'forwards', 'backwards', 'both']
 }
 
-fn is_play_state_token(tok string) bool {
-	l := tok.to_lower()
-	return l in ['running', 'paused']
+fn parse_cubic_bezier(tok string) ?AnimationTransitionFn {
+	t := tok.trim_space().to_lower()
+	if !t.starts_with('cubic-bezier(') || !t.ends_with(')') {
+		return none
+	}
+	inner := t['cubic-bezier('.len..t.len - 1]
+	parts := inner.split(',')
+	if parts.len != 4 {
+		return none
+	}
+	x1 := parts[0].trim_space().f64()
+	y1 := parts[1].trim_space().f64()
+	x2 := parts[2].trim_space().f64()
+	y2 := parts[3].trim_space().f64()
+	return cubic_bezier_easing(x1, y1, x2, y2)
+}
+
+fn cubic_bezier_easing(x1 f64, y1 f64, x2 f64, y2 f64) AnimationTransitionFn {
+	return fn [x1, y1, x2, y2](t f64) f64 {
+		// Newton-Raphson to find u with bezier_x(u) = t
+		mut u := t
+		for _ in 0 .. 8 {
+			x := bezier_component(u, x1, x2) - t
+			dx := bezier_derivative(u, x1, x2)
+			if dx == 0 {
+				break
+			}
+			u -= x / dx
+			if u < 0 {
+				u = 0
+			}
+			if u > 1 {
+				u = 1
+			}
+		}
+		return bezier_component(u, y1, y2)
+	}
+}
+
+fn bezier_component(u f64, a f64, b f64) f64 {
+	// 3*(1-u)^2*u*a + 3*(1-u)*u^2*b + u^3
+	mut v := 1.0 - u
+	return 3.0 * v * v * u * a + 3.0 * v * u * u * b + u * u * u
+}
+
+fn bezier_derivative(u f64, a f64, b f64) f64 {
+	mut v := 1.0 - u
+	return 3.0 * v * v * a + 6.0 * v * u * (b - a) + 3.0 * u * u * (1.0 - b)
 }
