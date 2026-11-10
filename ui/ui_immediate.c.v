@@ -1287,6 +1287,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		g_active_images.clear()
 		ctx.begin()
 		if app.has_root {
+			media_begin_frame()
 			g_dropdown_popup.mounted = false
 			top := menu_bar_height()
 			render_element(ctx, root, 0, top, rect(0, top, f64(ctx.width), f64(ctx.height) - top), '')
@@ -1303,6 +1304,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			prune_unmounted_state()
 			// Content can move under a pointer that stays put.
 			update_hover()
+			media_end_frame()
 		}
 		check_long_press()
 		// The atlas needs no flush here: gg's fontstash callbacks copy every
@@ -3093,6 +3095,26 @@ fn page_focused_text_area(direction int) {
 
 	// ── Rendering ──────────────────────────────────────────────────────
 
+	// custom_media_parent is the native window media surfaces attach to: the
+	// sokol window on desktops with a player (Windows, macOS), nil everywhere
+	// else (Linux, Android, iOS), where video honestly reports unsupported.
+	fn custom_media_parent() voidptr {
+		$if windows {
+			return voidptr(sapp.win32_get_hwnd())
+		} $else $if macos {
+			return voidptr(sapp.macos_get_window())
+		} $else {
+			return unsafe { nil }
+		}
+	}
+
+	// custom_media_frame maps a layout frame to physical pixels for the native
+	// surface, which lives outside gg's scaled drawing.
+	fn custom_media_frame(x f64, y f64, w f64, h f64) Rect {
+		s := scale()
+		return rect(x * s, y * s, w * s, h * s)
+	}
+
 	fn render_element(ctx &gg.Context, source Element, off_x f64, off_y f64, clip Rect, scroll_parent_id string) {
 		el := embedded_button_image_element(source)
 		if el.hidden {
@@ -3266,6 +3288,29 @@ fn page_focused_text_area(direction int) {
 						draggable: el.draggable
 					}, clip)
 				}
+			}
+			.media {
+				x := el.frame.x + off_x
+				y := el.frame.y + off_y
+				draw_box_fill(ctx, x, y, el.frame.width, el.frame.height, el.box)
+				draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
+				if el.media_kind == .video {
+					// The native player covers this where the platform has one;
+					// elsewhere the placeholder keeps the layout honest.
+					draw_rect(ctx, x, y, el.frame.width, el.frame.height, 0x141414, 0)
+					draw_label_text(ctx, if el.accessibility_label.len > 0 {
+						el.accessibility_label
+					} else {
+						'Video'
+					}, x, y, el.frame.width, el.frame.height, TextStyle{
+						color:  0x9aa0a6
+						size:   14
+						align:  .center
+						valign: .middle
+					}, clip)
+				}
+				media_sync_native(custom_media_parent(), el, custom_media_frame(x, y,
+					el.frame.width, el.frame.height))
 			}
 			.image {
 				x := el.frame.x + off_x

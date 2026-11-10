@@ -270,8 +270,10 @@ pub fn refresh() {
 		return
 	}
 	st.rendering = true
+	media_begin_frame()
 	root := stylesheet_apply_frame(stylesheet_frame_build(st.build_screen), stylesheet_appkit_env())
 	render_root(root)
+	media_end_frame()
 	st.rendering = false
 	if st.refresh_pending {
 		st.refresh_pending = false
@@ -1328,6 +1330,9 @@ fn render_element(parent NativeView, source Element, key string, mut active map[
 			register_pointer(native, el)
 			render_children(native, el.children, key, mut active)
 		}
+		.media {
+			media_sync_native(native, el, el.frame)
+		}
 		.scroll {
 			// Observe scroll position changes for virtualized lists
 			clip := macos.msg_id(native, 'contentView')
@@ -1521,7 +1526,7 @@ fn native_create_element(el Element) NativeView {
 		.screen {
 			native_nil_view()
 		}
-		.view, .opengl {
+		.view, .opengl, .media {
 			native_new_view(element_rect(el.frame), el.box, element_interactive(el))
 		}
 		.scroll {
@@ -1564,7 +1569,7 @@ fn native_create_element(el Element) NativeView {
 fn native_update_element(native NativeView, el Element, declared_text_changed bool, content_changed bool) {
 	match el.kind {
 		.screen {}
-		.view, .opengl {
+		.view, .opengl, .media {
 			native_set_frame(native, element_rect(el.frame))
 			native_set_box_background(native, el.box)
 			native_set_box_corners(native, el.box)
