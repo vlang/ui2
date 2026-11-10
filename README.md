@@ -579,9 +579,9 @@ accent/mode studio, and `examples/stylesheet_plugins` wires every plugin
 hook to a live-reloaded sheet. `with_platform_design` presets cover the
 common per-OS looks (glass on macOS/iOS, Material on Android, one design
 everywhere when forced), VML documents style themselves with in-document
-`Style` blocks (`examples/counter`), and composite components expose
-styleable part classes (`.switch-track`, `.picker-option.selected`,
-`.tab.selected`). The full guide — selectors, specificity, every property,
+`Style` blocks (`examples/counter`), composite components expose
+styleable part classes, and VSS now drives ui2's animation runtime via
+`transition:` and `@keyframes`/`animation:`. The full guide — selectors, specificity, every property,
 media/container reference, scoping, the DSL, plugins, lint, dark mode,
 platform adaptation, VML styling, component classes, migration and
 troubleshooting — is [docs/stylesheet.md](docs/stylesheet.md).

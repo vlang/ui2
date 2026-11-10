@@ -30,6 +30,30 @@ pub:
 	message string
 }
 
+// StyleTransition describes a `transition:` declaration: which properties
+// animate, how long, which easing, and how long to delay.
+pub struct StyleTransition {
+pub mut:
+	properties []string
+	duration   f64
+	timing     AnimationTransition
+	delay      f64
+}
+
+// StyleAnimation describes an `animation:` declaration referencing a
+// `@keyframes` name.
+pub struct StyleAnimation {
+pub mut:
+	name            string
+	duration        f64
+	timing          AnimationTransition
+	delay           f64
+	iteration_count f64 // 0 means infinite
+	direction       string
+	fill_mode       string
+	play_state      string
+}
+
 // with_classes returns el with stylesheet classes added to the ones it
 // already carries, so wrapping a pre-classed element keeps its classes.
 pub fn with_classes(el Element, classes ...string) Element {
@@ -245,7 +269,12 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 		if !apply[i] {
 			continue
 		}
-		out = apply_declaration(&el, out, candidate.decl.prop, resolved[i], candidate.length, mut
+		prop := candidate.decl.prop
+		if prop.starts_with('transition') || prop.starts_with('animation') {
+			out = apply_style_animation_decl(out, prop, resolved[i])
+			continue
+		}
+		out = apply_declaration(&el, out, prop, resolved[i], candidate.length, mut
 			fill, mut warnings, mut color_cache, mut len_cache, mut split_cache)
 	}
 	out = style_fill_finish(&el, out, fill)

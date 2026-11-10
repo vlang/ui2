@@ -49,6 +49,7 @@ fn v_style_sheet(node &VNode) !Stylesheet {
 	mut variables := map[string]string{}
 	mut light_vars := map[string]string{}
 	mut dark_vars := map[string]string{}
+	mut keyframes := map[string]StyleKeyframes{}
 	for child in node.children {
 		if child.tag != 'Style' {
 			continue
@@ -69,12 +70,16 @@ fn v_style_sheet(node &VNode) !Stylesheet {
 		for key, value in sheet.dark_vars {
 			dark_vars[key] = value
 		}
+		for key, value in sheet.keyframes {
+			keyframes[key] = value
+		}
 	}
 	return Stylesheet{
 		rules:      rules
 		variables:  variables
 		light_vars: light_vars
 		dark_vars:  dark_vars
+		keyframes:  keyframes
 		rule_index: stylesheet_index_rules(rules)
 	}
 }

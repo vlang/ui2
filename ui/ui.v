@@ -473,6 +473,9 @@ pub mut:
 	classes           []string
 	ignore_stylesheet bool
 	stylesheet        Stylesheet
+	// vss animation specs (declarations collected by the cascade):
+	style_transitions []StyleTransition
+	style_animations  []StyleAnimation
 }
 
 pub enum BackendSupport {
