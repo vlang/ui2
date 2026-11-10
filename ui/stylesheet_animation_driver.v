@@ -2,29 +2,27 @@
 module ui2
 
 // runtime but keyed to declared (pre-animation) trees.
-__global g_style_prev_tree = Element{}
+__global g_style_prev_elements = map[string]Element{}
 __global g_style_prev_valid = false
 // Tracks which (id, animation-name) pairs were matching on the previous
 // frame, so keyframes animations start only on entry.
 __global g_style_prev_anim_matches = map[string]bool{}
 
 fn style_animation_drive(current Element) {
-	old := g_style_prev_tree
 	had_prev := g_style_prev_valid
+	new_elements := index_elements_by_id(current)
 	if had_prev {
-		drive_transitions(old, current)
+		drive_transitions(g_style_prev_elements, current, new_elements)
 	}
-	drive_keyframes(old, current, had_prev)
-	g_style_prev_tree = current
+	drive_keyframes(current, had_prev)
+	g_style_prev_elements = new_elements.clone()
 	g_style_prev_valid = true
 }
 
 // drive_transitions walks old and current in parallel by id and starts a
 // tween for every transitioned property whose resolved value changed.
-fn drive_transitions(old Element, current Element) {
-	// Build lookup old by id for children.
-	old_by_id := index_elements_by_id(old)
-	walk_for_transitions(current, old_by_id)
+fn drive_transitions(old map[string]Element, current Element, new_elements map[string]Element) {
+	walk_for_transitions(current, old)
 }
 
 fn index_elements_by_id(root Element) map[string]Element {
@@ -147,13 +145,17 @@ fn start_transition(id string, old_el Element, targets []AnimationProperty, tr S
 }
 
 // drive_keyframes starts @keyframes animations on entry.
-fn drive_keyframes(old Element, current Element, had_prev bool) {
+fn drive_keyframes(current Element, had_prev bool) {
+	if !had_prev {
+		mut baseline := map[string]bool{}
+		collect_matches(current, mut baseline)
+		g_style_prev_anim_matches = baseline.clone()
+		return
+	}
 	old_matches := g_style_prev_anim_matches.clone()
 	mut new_matches := map[string]bool{}
 	walk_for_keyframes(current, []Stylesheet{}, old_matches, mut new_matches)
 	g_style_prev_anim_matches = new_matches.clone()
-	_ = old
-	_ = had_prev
 }
 
 fn collect_matches(current Element, mut out map[string]bool) {
