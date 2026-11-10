@@ -842,12 +842,14 @@ pub fn image(id string, path string, frame Rect) Element {
 // view.
 pub fn opengl(id string, frame Rect) Element {
 	return Element{
-		kind:  .opengl
-		id:    id
-		frame: frame
-		box:   BoxStyle{
+		kind:                .opengl
+		id:                  id
+		frame:               frame
+		box:                 BoxStyle{
 			transparent: true
 		}
+		accessibility_role:  'image'
+		accessibility_label: if id.len > 0 { id } else { 'OpenGL surface' }
 	}
 }
 
