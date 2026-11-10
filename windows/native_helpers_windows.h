@@ -71,6 +71,8 @@ extern int ui2_windows_is_transparent_button(void *hwnd);
 extern int ui2_windows_paint_transparent_button(void *hwnd);
 extern int ui2_windows_accessibility_activate(void *hwnd);
 
+static inline int ui2_win_register_touch(void *hwnd_ptr);
+
 static inline void ui2_win_refresh_text_font(HWND hwnd);
 
 static const wchar_t *ui2_win_placeholder_property(void) {
@@ -588,6 +590,9 @@ static inline void *ui2_win_create_main_window(const wchar_t *title, int width, 
 		GetModuleHandleW(NULL), NULL);
 	if (hwnd != NULL) {
 		DragAcceptFiles(hwnd, TRUE);
+		// Touch on the client area arrives as WM_TOUCH from here on; panes
+		// register their own containers the same way when they are created.
+		ui2_win_register_touch(hwnd);
 	}
 	return hwnd;
 }
@@ -747,6 +752,11 @@ static inline void *ui2_win_create_widget(int kind, void *parent_ptr, int x, int
 	if (hwnd != NULL && kind != UI2_WIN_VIEW && kind != UI2_WIN_SCROLL) {
 		SendMessageW(hwnd, WM_SETFONT, (WPARAM)ui2_win_system_font(), TRUE);
 		SetWindowSubclass(hwnd, ui2_win_control_subclass, 1, 0);
+	}
+	if (hwnd != NULL && (kind == UI2_WIN_VIEW || kind == UI2_WIN_SCROLL)) {
+		// Pan and tap gestures over a pane arrive as WM_TOUCH/WM_GESTURE;
+		// native controls keep the system's own touch handling.
+		ui2_win_register_touch(hwnd);
 	}
 	return hwnd;
 }
@@ -2163,6 +2173,187 @@ static inline void ui2_win_capture_mouse(void *hwnd) {
 
 static inline void ui2_win_release_mouse(void) {
 	ReleaseCapture();
+}
+
+// ---- Touch and gesture input (Windows 7+) ----
+// TOUCHINPUT/GESTUREINFO spellings differ across SDK vintages, so the shapes
+// used here carry a ui2_ prefix. Their layouts match the system ones field
+// for field, which is what lets GetTouchInputInfo fill them in.
+#ifndef TOUCHEVENTF_MOVE
+#define TOUCHEVENTF_MOVE 0x0001
+#define TOUCHEVENTF_DOWN 0x0002
+#define TOUCHEVENTF_UP 0x0004
+#define TOUCHEVENTF_PRIMARY 0x0010
+#endif
+#ifndef GID_PAN
+#define GID_BEGIN 1
+#define GID_END 4
+#define GID_PAN 4
+#define GF_BEGIN 0x00000001
+#define GF_END 0x00000004
+#endif
+
+typedef struct ui2_win_touch_point {
+	LONG x;
+	LONG y;
+	HANDLE source;
+	DWORD id;
+	DWORD flags;
+	LONG mask;
+	DWORD time;
+	ULONG_PTR extra;
+	DWORD cx_contact;
+	DWORD cy_contact;
+} ui2_win_touch_point;
+
+typedef struct ui2_win_gesture_point {
+	SHORT x;
+	SHORT y;
+} ui2_win_gesture_point;
+
+typedef struct ui2_win_gesture_info {
+	UINT size;
+	DWORD flags;
+	DWORD id;
+	HWND target;
+	ui2_win_gesture_point location;
+	DWORD instance;
+	DWORD sequence;
+	ULONGLONG arguments;
+	UINT extra;
+} ui2_win_gesture_info;
+
+typedef BOOL (WINAPI *ui2_win_register_touch_fn)(HWND, ULONG);
+typedef BOOL (WINAPI *ui2_win_get_touch_input_fn)(void *, UINT, void *, int);
+typedef BOOL (WINAPI *ui2_win_close_touch_input_fn)(void *);
+typedef BOOL (WINAPI *ui2_win_get_gesture_info_fn)(void *, void *);
+typedef BOOL (WINAPI *ui2_win_close_gesture_info_fn)(void *);
+
+extern int ui2_windows_touch_down(unsigned int contact, int x, int y);
+extern int ui2_windows_touch_move(unsigned int contact, int x, int y);
+extern int ui2_windows_touch_up(unsigned int contact, int x, int y);
+extern int ui2_windows_touch_pan(int dx, int dy, int x, int y);
+
+// Registers a window for touch input so the system reports WM_TOUCH instead
+// of only synthesizing mouse messages. Native controls are left alone: they
+// already answer touch through the system. Returns nonzero when registered.
+static inline int ui2_win_register_touch(void *hwnd_ptr) {
+	HWND hwnd = (HWND)hwnd_ptr;
+	if (hwnd == NULL) return 0;
+	HMODULE user32 = GetModuleHandleW(L"user32.dll");
+	if (user32 == NULL) return 0;
+	ui2_win_register_touch_fn register_touch = (ui2_win_register_touch_fn)(void *)GetProcAddress(user32,
+		"RegisterTouchWindow");
+	if (register_touch == NULL) return 0;
+	return register_touch(hwnd, 0) ? 1 : 0;
+}
+
+// Finds the deepest visible window of the root at a screen point, with that
+// window's client coordinates. Touch reports screen points, while the pointer
+// pipeline below wants the window and the point in its own client area.
+static inline void *ui2_win_touch_target(void *root_ptr, int screen_x, int screen_y,
+		int *client_x, int *client_y) {
+	HWND root = (HWND)root_ptr;
+	if (root == NULL) return NULL;
+	POINT screen;
+	screen.x = screen_x;
+	screen.y = screen_y;
+	HWND top = WindowFromPoint(screen);
+	if (top == NULL || GetAncestor(top, GA_ROOT) != GetAncestor(root, GA_ROOT)) return NULL;
+	HWND current = root;
+	for (int depth = 0; depth < 256; depth++) {
+		POINT point = screen;
+		ScreenToClient(current, &point);
+		HWND child = ChildWindowFromPointEx(current, point, CWP_SKIPINVISIBLE);
+		if (child == NULL || child == current) break;
+		current = child;
+	}
+	POINT local = screen;
+	ScreenToClient(current, &local);
+	if (client_x != NULL) *client_x = local.x;
+	if (client_y != NULL) *client_y = local.y;
+	return current;
+}
+
+// Decodes a WM_TOUCH message into per-contact down/move/up calls. Touch
+// coordinates arrive in hundredths of a pixel. Returns nonzero when at least
+// one contact was dispatched, in which case the caller must not let the
+// default handler synthesize a duplicate mouse message.
+static inline int ui2_win_handle_touch(void *hwnd_ptr, uintptr_t wparam, intptr_t lparam) {
+	(void)hwnd_ptr;
+	HMODULE user32 = GetModuleHandleW(L"user32.dll");
+	if (user32 == NULL) return 0;
+	ui2_win_get_touch_input_fn get_input = (ui2_win_get_touch_input_fn)(void *)GetProcAddress(user32,
+		"GetTouchInputInfo");
+	ui2_win_close_touch_input_fn close_input = (ui2_win_close_touch_input_fn)(void *)GetProcAddress(user32,
+		"CloseTouchInputHandle");
+	if (get_input == NULL || close_input == NULL) return 0;
+	unsigned int count = (unsigned int)(wparam & 0xffff);
+	if (count == 0) return 0;
+	ui2_win_touch_point *inputs = (ui2_win_touch_point *)HeapAlloc(GetProcessHeap(), 0,
+		(size_t)count * sizeof(ui2_win_touch_point));
+	if (inputs == NULL) return 0;
+	int handled = 0;
+	if (get_input((void *)lparam, count, inputs, (int)sizeof(ui2_win_touch_point))) {
+		for (unsigned int i = 0; i < count; i++) {
+			int x = (int)(inputs[i].x / 100);
+			int y = (int)(inputs[i].y / 100);
+			if ((inputs[i].flags & TOUCHEVENTF_DOWN) != 0) {
+				handled |= ui2_windows_touch_down(inputs[i].id, x, y);
+			} else if ((inputs[i].flags & TOUCHEVENTF_UP) != 0) {
+				handled |= ui2_windows_touch_up(inputs[i].id, x, y);
+			} else if ((inputs[i].flags & TOUCHEVENTF_MOVE) != 0) {
+				handled |= ui2_windows_touch_move(inputs[i].id, x, y);
+			}
+		}
+	}
+	close_input((void *)lparam);
+	HeapFree(GetProcessHeap(), 0, inputs);
+	return handled;
+}
+
+// Decodes a WM_GESTURE message. Only pan scrolls today; a pan started over a
+// scrollable pane moves it the way a drag would. Returns nonzero when a pan
+// was dispatched.
+static inline int ui2_win_handle_gesture(void *hwnd_ptr, uintptr_t wparam, intptr_t lparam) {
+	(void)hwnd_ptr;
+	(void)wparam;
+	HMODULE user32 = GetModuleHandleW(L"user32.dll");
+	if (user32 == NULL) return 0;
+	ui2_win_get_gesture_info_fn get_info = (ui2_win_get_gesture_info_fn)(void *)GetProcAddress(user32,
+		"GetGestureInfo");
+	ui2_win_close_gesture_info_fn close_info = (ui2_win_close_gesture_info_fn)(void *)GetProcAddress(user32,
+		"CloseGestureInfoHandle");
+	if (get_info == NULL || close_info == NULL) return 0;
+	ui2_win_gesture_info info;
+	ZeroMemory(&info, sizeof(info));
+	info.size = sizeof(info);
+	if (!get_info((void *)lparam, &info)) return 0;
+	int handled = 0;
+	if (info.id == GID_PAN) {
+		static LONG previous_x = 0;
+		static LONG previous_y = 0;
+		static int tracking = 0;
+		if ((info.flags & GF_BEGIN) != 0) {
+			previous_x = info.location.x;
+			previous_y = info.location.y;
+			tracking = 1;
+		} else if (tracking) {
+			int dx = (int)info.location.x - (int)previous_x;
+			int dy = (int)info.location.y - (int)previous_y;
+			previous_x = info.location.x;
+			previous_y = info.location.y;
+			if (dx != 0 || dy != 0) {
+				handled = ui2_windows_touch_pan(dx, dy, (int)info.location.x,
+					(int)info.location.y);
+			}
+		}
+		if ((info.flags & GF_END) != 0) {
+			tracking = 0;
+		}
+	}
+	close_info((void *)lparam);
+	return handled;
 }
 
 static inline unsigned long long ui2_win_ticks(void) {
