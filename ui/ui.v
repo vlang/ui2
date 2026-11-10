@@ -880,7 +880,8 @@ pub fn transformed_image_with_cursor(id string, path string, frame Rect, rotatio
 	}
 }
 
-pub fn button(id string, title string, frame Rect, box_ BoxStyle, style TextStyle) Element {
+pub fn button(id string, title string, frame Rect, box_ BoxStyle, style TextStyle, enabled ...bool) Element {
+	is_enabled := if enabled.len > 0 { enabled[0] } else { true }
 	return Element{
 		kind:                .button
 		id:                  id
@@ -888,6 +889,7 @@ pub fn button(id string, title string, frame Rect, box_ BoxStyle, style TextStyl
 		frame:               frame
 		box:                 box_
 		text_style:          style
+		enabled:             is_enabled
 		accessibility_role:  'button'
 		accessibility_label: title
 	}
@@ -904,7 +906,8 @@ pub fn with_native_style(el Element) Element {
 
 // checkbox creates the platform checkbox control. Its id is emitted when the
 // user toggles it; rebuild with the updated checked value to retain that state.
-pub fn checkbox(id string, title string, checked bool, frame Rect, style TextStyle) Element {
+pub fn checkbox(id string, title string, checked bool, frame Rect, style TextStyle, enabled ...bool) Element {
+	is_enabled := if enabled.len > 0 { enabled[0] } else { true }
 	return Element{
 		kind:                .checkbox
 		id:                  id
@@ -915,13 +918,15 @@ pub fn checkbox(id string, title string, checked bool, frame Rect, style TextSty
 			transparent: true
 		}
 		text_style:          style
+		enabled:             is_enabled
 		accessibility_role:  'checkbox'
 		accessibility_label: title
 		accessibility_value: if checked { 'checked' } else { 'unchecked' }
 	}
 }
 
-pub fn button_with_image(id string, title string, image_name string, frame Rect, box_ BoxStyle, style TextStyle) Element {
+pub fn button_with_image(id string, title string, image_name string, frame Rect, box_ BoxStyle, style TextStyle, enabled ...bool) Element {
+	is_enabled := if enabled.len > 0 { enabled[0] } else { true }
 	return Element{
 		kind:                .button
 		id:                  id
@@ -930,6 +935,7 @@ pub fn button_with_image(id string, title string, image_name string, frame Rect,
 		frame:               frame
 		box:                 box_
 		text_style:          style
+		enabled:             is_enabled
 		accessibility_role:  'button'
 		accessibility_label: if title.len > 0 { title } else { '' }
 	}
@@ -976,7 +982,8 @@ pub fn with_secure_entry(el Element) Element {
 	}
 }
 
-pub fn button_with_long_press(id string, title string, frame Rect, box_ BoxStyle, style TextStyle) Element {
+pub fn button_with_long_press(id string, title string, frame Rect, box_ BoxStyle, style TextStyle, enabled ...bool) Element {
+	is_enabled := if enabled.len > 0 { enabled[0] } else { true }
 	return Element{
 		kind:                .button
 		id:                  id
@@ -985,12 +992,14 @@ pub fn button_with_long_press(id string, title string, frame Rect, box_ BoxStyle
 		box:                 box_
 		text_style:          style
 		long_press:          true
+		enabled:             is_enabled
 		accessibility_role:  'button'
 		accessibility_label: title
 	}
 }
 
-pub fn dropdown(id string, selected string, options []string, frame Rect, box_ BoxStyle, style TextStyle) Element {
+pub fn dropdown(id string, selected string, options []string, frame Rect, box_ BoxStyle, style TextStyle, enabled ...bool) Element {
+	is_enabled := if enabled.len > 0 { enabled[0] } else { true }
 	mut entries := []MenuEntry{}
 	for option in options {
 		entries << MenuEntry{
@@ -1006,13 +1015,15 @@ pub fn dropdown(id string, selected string, options []string, frame Rect, box_ B
 		box:                 box_
 		text_style:          style
 		menu:                entries
+		enabled:             is_enabled
 		accessibility_role:  'combobox'
 		accessibility_label: if id.len > 0 { id } else { '' }
 		accessibility_value: selected
 	}
 }
 
-pub fn text_field(id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int) Element {
+pub fn text_field(id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int, enabled ...bool) Element {
+	is_enabled := if enabled.len > 0 { enabled[0] } else { true }
 	return Element{
 		kind:                .text_field
 		id:                  id
@@ -1022,6 +1033,7 @@ pub fn text_field(id string, placeholder string, text string, frame Rect, box_ B
 		box:                 box_
 		text_style:          style
 		keyboard:            keyboard
+		enabled:             is_enabled
 		accessibility_role:  'textfield'
 		accessibility_label: if placeholder.len > 0 { placeholder } else { id }
 		accessibility_value: text
@@ -1030,7 +1042,8 @@ pub fn text_field(id string, placeholder string, text string, frame Rect, box_ B
 
 // text_area is a multi-line editor (NSTextView on macOS) with native
 // wrapping, scrolling, selection, clipboard and undo.
-pub fn text_area(id string, text string, frame Rect, box_ BoxStyle, style TextStyle) Element {
+pub fn text_area(id string, text string, frame Rect, box_ BoxStyle, style TextStyle, enabled ...bool) Element {
+	is_enabled := if enabled.len > 0 { enabled[0] } else { true }
 	return Element{
 		kind:                .text_area
 		id:                  id
@@ -1038,13 +1051,15 @@ pub fn text_area(id string, text string, frame Rect, box_ BoxStyle, style TextSt
 		frame:               frame
 		box:                 box_
 		text_style:          style
+		enabled:             is_enabled
 		accessibility_role:  'textarea'
 		accessibility_label: if id.len > 0 { id } else { '' }
 		accessibility_value: text
 	}
 }
 
-pub fn text_area_without_scroll(id string, text string, frame Rect, box_ BoxStyle, style TextStyle) Element {
+pub fn text_area_without_scroll(id string, text string, frame Rect, box_ BoxStyle, style TextStyle, enabled ...bool) Element {
+	is_enabled := if enabled.len > 0 { enabled[0] } else { true }
 	return Element{
 		kind:                .text_area
 		id:                  id
@@ -1053,13 +1068,15 @@ pub fn text_area_without_scroll(id string, text string, frame Rect, box_ BoxStyl
 		box:                 box_
 		text_style:          style
 		disable_scroll:      true
+		enabled:             is_enabled
 		accessibility_role:  'textarea'
 		accessibility_label: if id.len > 0 { id } else { '' }
 		accessibility_value: text
 	}
 }
 
-pub fn rich_text_area(id string, text string, runs []TextRun, frame Rect, box_ BoxStyle, style TextStyle) Element {
+pub fn rich_text_area(id string, text string, runs []TextRun, frame Rect, box_ BoxStyle, style TextStyle, enabled ...bool) Element {
+	is_enabled := if enabled.len > 0 { enabled[0] } else { true }
 	return Element{
 		kind:                .text_area
 		id:                  id
@@ -1068,13 +1085,15 @@ pub fn rich_text_area(id string, text string, runs []TextRun, frame Rect, box_ B
 		box:                 box_
 		text_style:          style
 		text_runs:           runs
+		enabled:             is_enabled
 		accessibility_role:  'textarea'
 		accessibility_label: if id.len > 0 { id } else { '' }
 		accessibility_value: text
 	}
 }
 
-pub fn rich_text_area_without_scroll(id string, text string, runs []TextRun, frame Rect, box_ BoxStyle, style TextStyle) Element {
+pub fn rich_text_area_without_scroll(id string, text string, runs []TextRun, frame Rect, box_ BoxStyle, style TextStyle, enabled ...bool) Element {
+	is_enabled := if enabled.len > 0 { enabled[0] } else { true }
 	return Element{
 		kind:                .text_area
 		id:                  id
@@ -1084,44 +1103,57 @@ pub fn rich_text_area_without_scroll(id string, text string, runs []TextRun, fra
 		text_style:          style
 		text_runs:           runs
 		disable_scroll:      true
+		enabled:             is_enabled
 		accessibility_role:  'textarea'
 		accessibility_label: if id.len > 0 { id } else { '' }
 		accessibility_value: text
 	}
 }
 
-pub fn text_field_with_change(id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int) Element {
-	return text_field_with_change_and_submit(id, '', placeholder, text, frame, box_, style, keyboard)
+pub fn text_field_with_change(id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int, enabled ...bool) Element {
+	is_enabled := if enabled.len > 0 { enabled[0] } else { true }
+	return text_field_with_change_and_submit(id, '', placeholder, text, frame, box_,
+		style, keyboard, is_enabled)
 }
 
 // text_field_with_submit emits submit_id when Return/Enter is pressed without
 // also emitting a live change event for every edit.
-pub fn text_field_with_submit(id string, submit_id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int) Element {
+pub fn text_field_with_submit(id string, submit_id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int, enabled ...bool) Element {
+	is_enabled := if enabled.len > 0 { enabled[0] } else { true }
 	return Element{
-		kind:        .text_field
-		id:          id
-		submit_id:   submit_id
-		text:        text
-		placeholder: placeholder
-		frame:       frame
-		box:         box_
-		text_style:  style
-		keyboard:    keyboard
+		kind:                .text_field
+		id:                  id
+		submit_id:           submit_id
+		text:                text
+		placeholder:         placeholder
+		frame:               frame
+		box:                 box_
+		text_style:          style
+		keyboard:            keyboard
+		enabled:             is_enabled
+		accessibility_role:  'textfield'
+		accessibility_label: if placeholder.len > 0 { placeholder } else { id }
+		accessibility_value: text
 	}
 }
 
-pub fn text_field_with_change_and_submit(id string, submit_id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int) Element {
+pub fn text_field_with_change_and_submit(id string, submit_id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int, enabled ...bool) Element {
+	is_enabled := if enabled.len > 0 { enabled[0] } else { true }
 	return Element{
-		kind:        .text_field
-		id:          id
-		submit_id:   submit_id
-		text:        text
-		placeholder: placeholder
-		frame:       frame
-		box:         box_
-		text_style:  style
-		keyboard:    keyboard
-		emit_change: true
+		kind:                .text_field
+		id:                  id
+		submit_id:           submit_id
+		text:                text
+		placeholder:         placeholder
+		frame:               frame
+		box:                 box_
+		text_style:          style
+		keyboard:            keyboard
+		emit_change:         true
+		enabled:             is_enabled
+		accessibility_role:  'textfield'
+		accessibility_label: if placeholder.len > 0 { placeholder } else { id }
+		accessibility_value: text
 	}
 }
 

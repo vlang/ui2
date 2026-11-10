@@ -51,9 +51,32 @@ fn test_checkbox_constructor_preserves_native_state_and_accessibility() {
 	assert el.id == 'terms'
 	assert el.text == 'Accept terms'
 	assert el.checked
+	assert el.enabled
 	assert el.box.transparent
 	assert el.accessibility_role == 'checkbox'
 	assert el.accessibility_value == 'checked'
+}
+
+fn test_primitive_constructors_default_to_enabled_and_accept_an_override() {
+	frame := rect(0, 0, 120, 32)
+	box_ := BoxStyle{}
+	style := TextStyle{}
+	assert button('ok', 'OK', frame, box_, style).enabled
+	assert button_with_image('img', 'Save', 'disk', frame, box_, style).enabled
+	assert button_with_long_press('lp', 'Hold', frame, box_, style).enabled
+	assert dropdown('dd', 'One', ['One', 'Two'], frame, box_, style).enabled
+	assert text_field('tf', 'Name', '', frame, box_, style, keyboard_default).enabled
+	assert text_area('ta', '', frame, box_, style).enabled
+	assert text_area_without_scroll('tb', '', frame, box_, style).enabled
+	assert rich_text_area('tc', '', [], frame, box_, style).enabled
+	assert text_field_with_submit('ts', 'go', 'Name', '', frame, box_, style, keyboard_default).enabled
+	assert !button('off', 'Off', frame, box_, style, false).enabled
+	assert !checkbox('off', 'Off', false, frame, style, false).enabled
+	assert !dropdown('off', 'One', ['One'], frame, box_, style, false).enabled
+	assert !text_field('off', '', '', frame, box_, style, keyboard_default, false).enabled
+	assert !text_area('off', '', frame, box_, style, false).enabled
+	assert !text_field_with_change_and_submit('off', 'go', '', '', frame, box_, style,
+		keyboard_default, false).enabled
 }
 
 fn test_button_view_preserves_its_composite_content() {
