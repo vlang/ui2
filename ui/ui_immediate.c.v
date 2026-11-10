@@ -1136,7 +1136,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			deadline = g_tooltip.rest_since + tooltip_delay_ms
 		}
 		if g_touch.down && !g_touch.moved && !g_touch.long_press_fired && !g_touch.scrollbar_drag {
-			target := hit_test(g_touch.start_x, g_touch.start_y)
+			target := touch_hit_test(g_touch.start_x, g_touch.start_y)
 			if target.long_press && target.action_id.len > 0 {
 				press_deadline := g_touch.start_time + 450
 				if deadline < 0 || press_deadline < deadline {
@@ -1605,7 +1605,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			update_dropdown_hover(x, y)
 			return
 		}
-		target := hit_test(x, y)
+		target := touch_hit_test(x, y)
 		if g_refresh_mode == .on_demand && target.long_press {
 			// check_long_press fires from inside drawn frames, and after the
 			// last input event only a few trailing frames follow; the ask keeps
@@ -1655,7 +1655,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		target := if g_touch.pointer_target.action_id.len > 0 {
 			g_touch.pointer_target
 		} else {
-			hit_test(g_touch.start_x, g_touch.start_y)
+			touch_hit_test(g_touch.start_x, g_touch.start_y)
 		}
 		if target.slider {
 			commit_slider(target, x, y)
@@ -1760,7 +1760,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		slider_target := if captured.action_id.len > 0 {
 			captured
 		} else {
-			hit_test(g_touch.start_x, g_touch.start_y)
+			touch_hit_test(g_touch.start_x, g_touch.start_y)
 		}
 		if slider_target.slider {
 			commit_slider(slider_target, x, y)
@@ -1789,7 +1789,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		mut target := if captured.action_id.len > 0 {
 			captured
 		} else {
-			hit_test(g_touch.start_x, g_touch.start_y)
+			touch_hit_test(g_touch.start_x, g_touch.start_y)
 		}
 		dx := x - g_touch.start_x
 		if g_touch.moved && dx < -72 {
@@ -1821,7 +1821,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if g_touch.moved {
 			return
 		}
-		target = hit_test(x, y)
+		target = touch_hit_test(x, y)
 		if target.checkbox {
 			commit_checkbox(target)
 			return
@@ -1881,7 +1881,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if elapsed < 450 {
 			return
 		}
-		target := hit_test(g_touch.start_x, g_touch.start_y)
+		target := touch_hit_test(g_touch.start_x, g_touch.start_y)
 		if target.action_id.len > 0 && target.long_press {
 			g_touch.long_press_fired = true
 			fire_event('long:' + target.action_id)
@@ -1892,6 +1892,25 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		for i := g_hit_targets.len - 1; i >= 0; i-- {
 			t := g_hit_targets[i]
 			if x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h {
+				return t
+			}
+		}
+		return HitTarget{}
+	}
+
+	// touch_hit_test is hit_test with a touch slop so controls smaller than the
+	// 44px minimum touch target stay reachable on touch screens. The slop only
+	// grows the hit rect; the visual control keeps its declared size. Mouse
+	// input keeps using hit_test so precision is unchanged.
+	fn touch_hit_test(x f64, y f64) HitTarget {
+		const min_target = 44.0
+		const max_slop = 12.0
+		for i := g_hit_targets.len - 1; i >= 0; i-- {
+			t := g_hit_targets[i]
+			slop_x := math.min(max_slop, math.max(0.0, (min_target - t.w) / 2.0))
+			slop_y := math.min(max_slop, math.max(0.0, (min_target - t.h) / 2.0))
+			if x >= t.x - slop_x && x <= t.x + t.w + slop_x
+				&& y >= t.y - slop_y && y <= t.y + t.h + slop_y {
 				return t
 			}
 		}
