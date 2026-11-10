@@ -63,6 +63,16 @@ fn test_stylesheet_animation_cubic_bezier() {
 	assert voidptr(el.style_transitions[0].timing_fn) != unsafe { nil }
 }
 
+// Driver: a property change between builds starts a transition run.
+fn test_stylesheet_animation_driver_transition() {
+	set_global_stylesheet(parse_stylesheet('Button { transition: opacity 0.2s; }')!)
+	b1 := stylesheet_apply_frame(button('b', 'hi', rect(0, 0, 10, 10), BoxStyle{opacity: 1.0}, TextStyle{}), StyleMatchEnv{})
+	_ = b1
+	b2 := stylesheet_apply_frame(button('b', 'hi', rect(0, 0, 10, 10), BoxStyle{opacity: 0.5}, TextStyle{}), StyleMatchEnv{})
+	_ = b2
+	assert 'b' in g_animation_runtime.runs
+	clear_global_stylesheet()
+}
 // Inline wins: builder-set animation specs? Sheets only; inline ignore via ignore_stylesheet.
 fn test_stylesheet_animation_inline_wins() {
 	sheet := parse_stylesheet('Button { transition: opacity 0.2s; }')!

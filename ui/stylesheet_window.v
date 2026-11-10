@@ -24,6 +24,9 @@ __global g_stylesheet_frame_building = 0
 pub fn set_global_stylesheet(sheet Stylesheet) {
 	g_stylesheet_global = sheet
 	g_stylesheet_has_global = true
+	g_style_prev_elements = map[string]Element{}
+	g_style_prev_valid = false
+	g_style_prev_anim_matches = map[string]bool{}
 }
 
 // clear_global_stylesheet removes the process-wide sheet. Call refresh()
@@ -31,6 +34,9 @@ pub fn set_global_stylesheet(sheet Stylesheet) {
 pub fn clear_global_stylesheet() {
 	g_stylesheet_global = Stylesheet{}
 	g_stylesheet_has_global = false
+	g_style_prev_elements = map[string]Element{}
+	g_style_prev_valid = false
+	g_style_prev_anim_matches = map[string]bool{}
 }
 
 // set_stylesheet_follow_system resumes (or stops) tracking the operating

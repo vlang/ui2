@@ -1449,10 +1449,10 @@ fn keyframe_stop_progress(token string) ?f64 {
 	if lower == 'to' {
 		return 1.0
 	}
-	mut raw := token
-	if raw.ends_with('%') {
-		raw = raw[..raw.len - 1]
+	if !token.ends_with('%') {
+		return none
 	}
+	raw := token[..token.len - 1]
 	number := raw.f64()
 	if number < 0 || number > 100 {
 		return none
