@@ -447,7 +447,6 @@ pub:
 	menu                      []MenuEntry
 	children                  []Element
 	hidden                    bool
-	enabled                   bool = true
 	accessibility_role        string
 	accessibility_label       string
 	accessibility_value       string
@@ -473,6 +472,7 @@ pub mut:
 	classes           []string
 	ignore_stylesheet bool
 	stylesheet        Stylesheet
+	enabled           bool = true
 }
 
 pub enum BackendSupport {
@@ -816,20 +816,24 @@ fn scroll_content_width(children []Element) f64 {
 
 pub fn label(id string, text string, frame Rect, style TextStyle) Element {
 	return Element{
-		kind:       .label
-		id:         id
-		text:       text
-		frame:      frame
-		text_style: style
+		kind:                .label
+		id:                  id
+		text:                text
+		frame:               frame
+		text_style:          style
+		accessibility_role:  'text'
+		accessibility_label: text
 	}
 }
 
 pub fn image(id string, path string, frame Rect) Element {
 	return Element{
-		kind:       .image
-		id:         id
-		image_path: path
-		frame:      frame
+		kind:                .image
+		id:                  id
+		image_path:          path
+		frame:               frame
+		accessibility_role:  'image'
+		accessibility_label: if id.len > 0 { id } else { path }
 	}
 }
 
@@ -849,35 +853,41 @@ pub fn opengl(id string, frame Rect) Element {
 
 pub fn transformed_image(id string, path string, frame Rect, rotation f64, clickable bool) Element {
 	return Element{
-		kind:       .image
-		id:         id
-		image_path: path
-		frame:      frame
-		rotation:   rotation
-		clickable:  clickable
+		kind:                .image
+		id:                  id
+		image_path:          path
+		frame:               frame
+		rotation:            rotation
+		clickable:           clickable
+		accessibility_role:  if clickable { 'button' } else { 'image' }
+		accessibility_label: if id.len > 0 { id } else { path }
 	}
 }
 
 pub fn transformed_image_with_cursor(id string, path string, frame Rect, rotation f64, clickable bool, cursor string) Element {
 	return Element{
-		kind:       .image
-		id:         id
-		image_path: path
-		frame:      frame
-		rotation:   rotation
-		clickable:  clickable
-		cursor:     cursor
+		kind:                .image
+		id:                  id
+		image_path:          path
+		frame:               frame
+		rotation:            rotation
+		clickable:           clickable
+		cursor:              cursor
+		accessibility_role:  if clickable { 'button' } else { 'image' }
+		accessibility_label: if id.len > 0 { id } else { path }
 	}
 }
 
 pub fn button(id string, title string, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:       .button
-		id:         id
-		text:       title
-		frame:      frame
-		box:        box_
-		text_style: style
+		kind:                .button
+		id:                  id
+		text:                title
+		frame:               frame
+		box:                 box_
+		text_style:          style
+		accessibility_role:  'button'
+		accessibility_label: title
 	}
 }
 
@@ -911,14 +921,32 @@ pub fn checkbox(id string, title string, checked bool, frame Rect, style TextSty
 
 pub fn button_with_image(id string, title string, image_name string, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:       .button
-		id:         id
-		text:       title
-		image_path: image_name
-		frame:      frame
-		box:        box_
-		text_style: style
+		kind:                .button
+		id:                  id
+		text:                title
+		image_path:          image_name
+		frame:               frame
+		box:                 box_
+		text_style:          style
+		accessibility_role:  'button'
+		accessibility_label: if title.len > 0 { title } else { image_name }
 	}
+}
+
+// with_enabled toggles an element's availability without rebuilding it. Disabled
+// elements do not emit actions, paint in their disabled style and are skipped
+// by focus traversal. Availability is also declared through the `enabled` field.
+pub fn with_enabled(el Element, enabled bool) Element {
+	return Element{
+		...el
+		enabled: enabled
+	}
+}
+
+// with_disabled is the inverse of with_enabled and reads more naturally at call
+// sites that start from an enabled control.
+pub fn with_disabled(el Element, disabled bool) Element {
+	return with_enabled(el, !disabled)
 }
 
 // with_tooltip adds hover help without changing an element's visible text.
@@ -948,13 +976,15 @@ pub fn with_secure_entry(el Element) Element {
 
 pub fn button_with_long_press(id string, title string, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:       .button
-		id:         id
-		text:       title
-		frame:      frame
-		box:        box_
-		text_style: style
-		long_press: true
+		kind:                .button
+		id:                  id
+		text:                title
+		frame:               frame
+		box:                 box_
+		text_style:          style
+		long_press:          true
+		accessibility_role:  'button'
+		accessibility_label: title
 	}
 }
 
@@ -967,26 +997,32 @@ pub fn dropdown(id string, selected string, options []string, frame Rect, box_ B
 		}
 	}
 	return Element{
-		kind:       .dropdown
-		id:         id
-		text:       selected
-		frame:      frame
-		box:        box_
-		text_style: style
-		menu:       entries
+		kind:                .dropdown
+		id:                  id
+		text:                selected
+		frame:               frame
+		box:                 box_
+		text_style:          style
+		menu:                entries
+		accessibility_role:  'combobox'
+		accessibility_label: if id.len > 0 { id } else { 'Dropdown' }
+		accessibility_value: selected
 	}
 }
 
 pub fn text_field(id string, placeholder string, text string, frame Rect, box_ BoxStyle, style TextStyle, keyboard int) Element {
 	return Element{
-		kind:        .text_field
-		id:          id
-		text:        text
-		placeholder: placeholder
-		frame:       frame
-		box:         box_
-		text_style:  style
-		keyboard:    keyboard
+		kind:                .text_field
+		id:                  id
+		text:                text
+		placeholder:         placeholder
+		frame:               frame
+		box:                 box_
+		text_style:          style
+		keyboard:            keyboard
+		accessibility_role:  'textfield'
+		accessibility_label: if placeholder.len > 0 { placeholder } else { id }
+		accessibility_value: text
 	}
 }
 
@@ -994,49 +1030,61 @@ pub fn text_field(id string, placeholder string, text string, frame Rect, box_ B
 // wrapping, scrolling, selection, clipboard and undo.
 pub fn text_area(id string, text string, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:       .text_area
-		id:         id
-		text:       text
-		frame:      frame
-		box:        box_
-		text_style: style
+		kind:                .text_area
+		id:                  id
+		text:                text
+		frame:               frame
+		box:                 box_
+		text_style:          style
+		accessibility_role:  'textarea'
+		accessibility_label: if id.len > 0 { id } else { 'Text area' }
+		accessibility_value: text
 	}
 }
 
 pub fn text_area_without_scroll(id string, text string, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:           .text_area
-		id:             id
-		text:           text
-		frame:          frame
-		box:            box_
-		text_style:     style
-		disable_scroll: true
+		kind:                .text_area
+		id:                  id
+		text:                text
+		frame:               frame
+		box:                 box_
+		text_style:          style
+		disable_scroll:      true
+		accessibility_role:  'textarea'
+		accessibility_label: if id.len > 0 { id } else { 'Text area' }
+		accessibility_value: text
 	}
 }
 
 pub fn rich_text_area(id string, text string, runs []TextRun, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:       .text_area
-		id:         id
-		text:       text
-		frame:      frame
-		box:        box_
-		text_style: style
-		text_runs:  runs
+		kind:                .text_area
+		id:                  id
+		text:                text
+		frame:               frame
+		box:                 box_
+		text_style:          style
+		text_runs:           runs
+		accessibility_role:  'textarea'
+		accessibility_label: if id.len > 0 { id } else { 'Text area' }
+		accessibility_value: text
 	}
 }
 
 pub fn rich_text_area_without_scroll(id string, text string, runs []TextRun, frame Rect, box_ BoxStyle, style TextStyle) Element {
 	return Element{
-		kind:           .text_area
-		id:             id
-		text:           text
-		frame:          frame
-		box:            box_
-		text_style:     style
-		text_runs:      runs
-		disable_scroll: true
+		kind:                .text_area
+		id:                  id
+		text:                text
+		frame:               frame
+		box:                 box_
+		text_style:          style
+		text_runs:           runs
+		disable_scroll:      true
+		accessibility_role:  'textarea'
+		accessibility_label: if id.len > 0 { id } else { 'Text area' }
+		accessibility_value: text
 	}
 }
 
