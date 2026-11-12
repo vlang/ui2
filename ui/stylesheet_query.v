@@ -107,7 +107,7 @@ pub fn stylesheet_query_env(dark bool, dpi f64) StyleQueryEnv {
 		platform: stylesheet_platform_name()
 		coarse:   stylesheet_is_coarse_pointer()
 		dark:     dark
-		insets:   native_safe_insets()
+		insets:   $if ui2_headless ? { none } $else { native_safe_insets() }
 	}
 }
 
