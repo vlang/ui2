@@ -422,6 +422,55 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		return ranges
 	}
 
+	// Resolve a pointer through the same wrapped lines and source ranges used
+	// by painting, including the current scroll offset and CRLF source offsets.
+	fn text_area_pointer_offset(layout TextAreaLayout, offset f64, x f64, y f64, measure fn (string) f64) int {
+		if layout.lines.len == 0 { return 0 }
+		height := math.max(1.0, font_line_height(layout.style.size))
+		row := clamp_int(int(math.floor((y - layout.content.y + offset) / height)), 0, layout.lines.len - 1)
+		line := layout.lines[row]
+		origin := text_field_aligned_text_origin(layout.content.x, layout.content.width, measure(line), layout.style.align)
+		column := text_column_at_x(line, x - origin, measure)
+		ranges := text_area_line_rune_ranges(layout.text, layout.lines)
+		return clamp_int(ranges[row].start + column, ranges[row].start, ranges[row].end)
+	}
+
+	fn text_area_pointer_caret(id string, x f64, y f64) int {
+		layout := g_text_area_layouts[id] or { return 0 }
+		ctx := g_gg_app.ctx
+		if ctx == unsafe { nil } {
+			return text_area_pointer_offset(layout, scroll_offset(id), x, y, fn [layout] (prefix string) f64 { return measure_text_width(prefix, layout.style) })
+		}
+		family := text_font_file(layout.style.font_family, layout.style.bold, layout.style.italic)
+		ctx.set_text_cfg(gg.TextCfg{ size: layout.rendered_size, bold: layout.style.bold, italic: layout.style.italic, family: family })
+		return text_area_pointer_offset(layout, scroll_offset(id), x, y, fn [ctx] (prefix string) f64 { return text_area_advance(ctx, prefix, 0) })
+	}
+
+	fn begin_text_area_selection(x f64, y f64) {
+		if !g_touch.down || g_touch.scrollbar_drag || g_open_dropdown.len > 0 { return }
+		target := hit_test(x, y)
+		if !target.text_area || target.id == '' || target.id !in g_text_area_layouts { return }
+		id := target.id
+		mut editor := g_text_editors[id] or { text_editor((g_text_values[id] or { '' }).clone()) }
+		caret := text_area_pointer_caret(id, x, y)
+		extend := g_key_modifiers.shift && g_focused_field == id
+		editor.move_caret_to(caret, extend)
+		g_focused_field = id
+		g_touch.text_selection_id = id
+		g_touch.text_selection_anchor = editor.selection.anchor
+		replace_text_editor(id, editor)
+		invalidate_custom_paint()
+	}
+
+	fn extend_text_area_selection(x f64, y f64) {
+		id := g_touch.text_selection_id
+		if id == '' || id !in g_text_area_layouts { return }
+		mut editor := g_text_editors[id] or { text_editor((g_text_values[id] or { '' }).clone()) }
+		editor.set_selection(g_touch.text_selection_anchor, text_area_pointer_caret(id, x, y))
+		replace_text_editor(id, editor)
+		invalidate_custom_paint()
+	}
+
 	fn focused_text_area_line_index(ranges []TextAreaLineRange, caret int) int {
 		for index, line in ranges {
 			if caret <= line.end {
@@ -646,6 +695,9 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		lines := text_area_lines(el.id, value, content.width, style, cfg.size, fn [ctx] (line string) f64 {
 			return f64(ctx.text_width_f(line))
 		})
+		if el.id != '' {
+			if layout := g_text_area_layouts[el.id] { g_text_area_layouts[el.id] = TextAreaLayout{ ...layout, content: content } }
+		}
 		line_ranges := text_area_line_rune_ranges(value, lines)
 		spans := text_area_run_spans(el.text_runs, value)
 		editor := g_text_editors[el.id] or { text_editor(value.clone()) }

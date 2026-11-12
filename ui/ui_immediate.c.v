@@ -53,6 +53,9 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		// A rebuild can move a dragged view away from the initial press.
 		// Keep its event identity until release instead of hit-testing it again.
 		pointer_target     HitTarget
+		// Mouse text selection captures its source field and anchor until release.
+		text_selection_id string
+		text_selection_anchor int
 		// A slider owns its gesture through commit_slider, which returns before
 		// any pointer_target capture is taken. Recording its id here gives the
 		// same protection from the other side: an external write racing the drag
@@ -1424,7 +1427,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			inside: true
 		}
 		update_hover()
-		if g_touch.down && g_touch.pointer_target.action_id.len > 0 {
+		if g_touch.down && (g_touch.pointer_target.action_id.len > 0 || g_touch.text_selection_id != '') {
 			handle_touch_move(x, y)
 			return
 		}
@@ -1443,6 +1446,13 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	fn pointer_release_at(x f64, y f64, button int) {
 		if voidptr(g_mouse_button_handler) != unsafe { nil } {
 			g_mouse_button_handler(button, false, x, y)
+		}
+		if button == 0 && g_touch.text_selection_id != '' {
+			extend_text_area_selection(x, y)
+			g_touch.text_selection_id = ''
+			g_touch.down = false
+			publish_text_selection(x, y)
+			return
 		}
 		if button == 0 {
 			publish_text_selection(x, y)
@@ -1477,6 +1487,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		match e.typ {
 			.mouse_down {
 				pointer_press_at(f64(e.mouse_x), f64(e.mouse_y), int(e.mouse_button))
+				if int(e.mouse_button) == 0 { begin_text_area_selection(f64(e.mouse_x), f64(e.mouse_y)) }
 			}
 			.mouse_move {
 				pointer_move_to(f64(e.mouse_x), f64(e.mouse_y))
@@ -1668,6 +1679,10 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		}
 		g_touch.current_x = x
 		g_touch.current_y = y
+		if g_touch.text_selection_id != '' {
+			extend_text_area_selection(x, y)
+			return
+		}
 		target := if g_touch.pointer_target.action_id.len > 0 {
 			g_touch.pointer_target
 		} else {
@@ -3600,9 +3615,10 @@ fn page_focused_text_area(direction int) {
 				current_text := g_text_values[el.id] or { el.text }
 				if el.box.transparent {
 					// A transparent text area sits on what is behind it, as on AppKit:
-					// only its declared borders, and the focus outline while focused.
+					// only its declared borders. Editable areas also show a focus ring;
+					// read-only viewers use their selection highlight for focus.
 					draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
-					if g_focused_field == el.id {
+					if g_focused_field == el.id && !el.readonly {
 						draw_outline(ctx, x, y, el.frame.width, el.frame.height, 0x3478d4, el.box.radius)
 					}
 				} else {
@@ -3766,7 +3782,17 @@ fn page_focused_text_area(direction int) {
 		// Round the physical clip edges outward as a pair. Casting the logical
 		// origin and extent separately, then scaling both in gg, can drop up to
 		// two pixels at fractional scales because the two truncations compound.
-		ctx.scissor_rect(clip.x, clip.y, clip.width, clip.height)
+		left, top, width, height := physical_clip_edges(clip, f64(ctx.scale))
+		ctx.r.scissor_rect(left, top, width, height, true)
+	}
+
+	fn physical_clip_edges(clip Rect, scale f64) (int, int, int, int) {
+		left := int(math.floor(clip.x * scale))
+		top := int(math.floor(clip.y * scale))
+		if clip.width <= 0 || clip.height <= 0 { return left, top, 0, 0 }
+		right := int(math.ceil((clip.x + math.max(0, clip.width)) * scale))
+		bottom := int(math.ceil((clip.y + math.max(0, clip.height)) * scale))
+		return left, top, math.max(0, right - left), math.max(0, bottom - top)
 	}
 
 	fn add_hit_target(target HitTarget, clip Rect) {
