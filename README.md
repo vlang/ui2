@@ -32,7 +32,10 @@ v -d ui2_custom_rendering run examples/users/main.v
 
 ## Requirements
 
-`ui2` needs V 0.5.2 or newer. The module is split across `ui/`, `appkit/`,
+`ui2` master needs a V built from master: CI builds it with the commit named in
+`.github/workflows/ci.yml` (`V_COMMIT`). The 0.5.2 release cannot build it: it rejects
+`array2 = array1`, `uint` in a C declaration, `math.max` with an `int` and an `f64`, and a
+`void` index, all of which V master accepts. The module is split across `ui/`, `appkit/`,
 `uikit/`, `windows/`, and `linux/` through the `subdirs` field of `v.mod`, and
 older compilers ignore that field. Run `v up` if `import ui2` fails.
 

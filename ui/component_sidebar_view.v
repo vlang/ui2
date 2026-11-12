@@ -58,10 +58,6 @@ fn sidebar_symbol(name string, frame Rect, color u32) Element {
 	}
 }
 
-fn sidebar_none() Rect {
-	return rect(0, 0, 0, 0)
-}
-
 fn sidebar_has(frame Rect) bool {
 	return frame.width > 0 && frame.height > 0
 }
