@@ -3201,6 +3201,7 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 		macos.msg_void1(tv, 'setString:', macos.nsstring(el.text))
 		return
 	}
+	selection := native_text_view_selected_range(tv)
 	macos.msg_void_bool(tv, 'setRichText:', true)
 	native_text_view_set_attributed_string(tv, el.text, el.text_style.color, el.text_style.background_color, el.text_style.size, el.text_style.font_family, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.text_style.strikethrough, el.text_style.vertical_align)
 	base_length := native_utf16_length(el.text)
@@ -3219,6 +3220,8 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 		}
 		location += length
 	}
+	// Applying effects changes the selected range; rendering must preserve it.
+	native_text_view_restore_selected_range(tv, selection.location, selection.length, false)
 }
 
 fn text_style_effect_value(style TextStyle) int {
