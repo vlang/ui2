@@ -683,6 +683,15 @@ fn test_text_area_vertical_and_line_boundary_navigation() {
 	}
 }
 
+fn test_physical_clip_keeps_fractional_edges_outward() {
+	x, y, width, height := physical_clip_edges(rect(0.2, 1.2, 1.2, 2.2), 1.25)
+	assert x == 0 && y == 1 && width == 2 && height == 4
+	left, top, w, h := physical_clip_edges(rect(4, 6, 20, 30), 2)
+	assert left == 8 && top == 12 && w == 40 && h == 60
+	_, _, empty_w, empty_h := physical_clip_edges(rect(0.2, 0.2, 0, 2), 1.25)
+	assert empty_w == 0 && empty_h == 0
+}
+
 fn test_pointer_selection_offsets_match_wrapped_unicode_and_scrolling() {
 	layout := TextAreaLayout{ text: 'αβ\r\nsecond line', lines: ['αβ', 'second', 'line'], width: 100, style: TextStyle{ size: 10 }, content: rect(10, 20, 100, 100) }
 	height := font_line_height(10)

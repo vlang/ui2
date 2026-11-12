@@ -3781,7 +3781,17 @@ fn page_focused_text_area(direction int) {
 		// Round the physical clip edges outward as a pair. Casting the logical
 		// origin and extent separately, then scaling both in gg, can drop up to
 		// two pixels at fractional scales because the two truncations compound.
-		ctx.scissor_rect(clip.x, clip.y, clip.width, clip.height)
+		left, top, width, height := physical_clip_edges(clip, f64(ctx.scale))
+		ctx.r.scissor_rect(left, top, width, height, true)
+	}
+
+	fn physical_clip_edges(clip Rect, scale f64) (int, int, int, int) {
+		left := int(math.floor(clip.x * scale))
+		top := int(math.floor(clip.y * scale))
+		if clip.width <= 0 || clip.height <= 0 { return left, top, 0, 0 }
+		right := int(math.ceil((clip.x + math.max(0, clip.width)) * scale))
+		bottom := int(math.ceil((clip.y + math.max(0, clip.height)) * scale))
+		return left, top, math.max(0, right - left), math.max(0, bottom - top)
 	}
 
 	fn add_hit_target(target HitTarget, clip Rect) {
