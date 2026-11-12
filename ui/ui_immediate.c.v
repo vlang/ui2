@@ -3615,9 +3615,10 @@ fn page_focused_text_area(direction int) {
 				current_text := g_text_values[el.id] or { el.text }
 				if el.box.transparent {
 					// A transparent text area sits on what is behind it, as on AppKit:
-					// only its declared borders, and the focus outline while focused.
+					// only its declared borders. Editable areas also show a focus ring;
+					// read-only viewers use their selection highlight for focus.
 					draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
-					if g_focused_field == el.id {
+					if g_focused_field == el.id && !el.readonly {
 						draw_outline(ctx, x, y, el.frame.width, el.frame.height, 0x3478d4, el.box.radius)
 					}
 				} else {
