@@ -435,46 +435,9 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 // a video surface fed by a player, for example — calls request_refresh from
 // the player thread whenever new content is ready.
 //
-// manual suppresses the frame callback between explicit asks, like on_demand
-// did before the frame scheduler took over: refresh and request_refresh wake
-// the loop for exactly one coalesced frame, deadlines and running animations
-// wake their own continuation, and nothing else draws — no per-vsync present,
-// no keep-alive redraw.
-	pub enum RefreshMode {
-	continuous
-	on_demand
-	manual
-	}
-
-// WindowOptions carries the window creation knobs run_window_with_options
-// accepts on top of what run_window takes positionally. gl_load scopes which
-// EGL vendor libraries glvnd may load before the window's GL context
-// initializes (Linux only; see GlLoad), and UI2_GL_VENDOR overrides it
-// without a recompile.
-	pub struct WindowOptions {
-	pub:
-		title      string
-		width      int
-		height     int
-		min_width  int
-		min_height int
-	// sample_count is Sokol's antialiasing level for the window's framebuffer.
-	// Flat immediate-mode geometry gains nothing visible from 4x, and weak GPUs
-	// pay the fill rate for it; 1 turns antialiasing off.
-		sample_count int = 4
-		refresh    RefreshMode = .on_demand
-		gl_load    GlLoad = .auto
-	// background keeps the window's frames running while the window is
-	// hidden — iconified, minimized, or parked on another workspace — instead
-	// of suspending the frame coordinator. Nothing is presented while hidden;
-	// the frames exist so the application keeps its own machinery fed: a
-	// custom renderer whose surface is drained inside the frame (a video
-	// player's mpv render call, say) must keep consuming frames, or the
-	// source stalls and playback stops the moment the window is hidden.
-	// Windows that only show UI pay nothing for this — leave it off and a
-	// hidden window suspends, as before.
-		background bool
-	}
+// RefreshMode and WindowOptions live in window_options.v so every backend,
+// including the native ones that do not consume them yet, agrees on the
+// window creation knobs and their defaults.
 
 // run_window_with_options opens the window with per-application control over
 // the antialiasing level, the refresh mode and the GL vendor scope.
@@ -1136,7 +1099,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			deadline = g_tooltip.rest_since + tooltip_delay_ms
 		}
 		if g_touch.down && !g_touch.moved && !g_touch.long_press_fired && !g_touch.scrollbar_drag {
-			target := hit_test(g_touch.start_x, g_touch.start_y)
+			target := touch_hit_test(g_touch.start_x, g_touch.start_y)
 			if target.long_press && target.action_id.len > 0 {
 				press_deadline := g_touch.start_time + 450
 				if deadline < 0 || press_deadline < deadline {
@@ -1605,7 +1568,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			update_dropdown_hover(x, y)
 			return
 		}
-		target := hit_test(x, y)
+		target := touch_hit_test(x, y)
 		if g_refresh_mode == .on_demand && target.long_press {
 			// check_long_press fires from inside drawn frames, and after the
 			// last input event only a few trailing frames follow; the ask keeps
@@ -1655,7 +1618,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		target := if g_touch.pointer_target.action_id.len > 0 {
 			g_touch.pointer_target
 		} else {
-			hit_test(g_touch.start_x, g_touch.start_y)
+			touch_hit_test(g_touch.start_x, g_touch.start_y)
 		}
 		if target.slider {
 			commit_slider(target, x, y)
@@ -1760,7 +1723,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		slider_target := if captured.action_id.len > 0 {
 			captured
 		} else {
-			hit_test(g_touch.start_x, g_touch.start_y)
+			touch_hit_test(g_touch.start_x, g_touch.start_y)
 		}
 		if slider_target.slider {
 			commit_slider(slider_target, x, y)
@@ -1789,7 +1752,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		mut target := if captured.action_id.len > 0 {
 			captured
 		} else {
-			hit_test(g_touch.start_x, g_touch.start_y)
+			touch_hit_test(g_touch.start_x, g_touch.start_y)
 		}
 		dx := x - g_touch.start_x
 		if g_touch.moved && dx < -72 {
@@ -1821,7 +1784,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if g_touch.moved {
 			return
 		}
-		target = hit_test(x, y)
+		target = touch_hit_test(x, y)
 		if target.checkbox {
 			commit_checkbox(target)
 			return
@@ -1881,7 +1844,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if elapsed < 450 {
 			return
 		}
-		target := hit_test(g_touch.start_x, g_touch.start_y)
+		target := touch_hit_test(g_touch.start_x, g_touch.start_y)
 		if target.action_id.len > 0 && target.long_press {
 			g_touch.long_press_fired = true
 			fire_event('long:' + target.action_id)
@@ -1892,6 +1855,25 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		for i := g_hit_targets.len - 1; i >= 0; i-- {
 			t := g_hit_targets[i]
 			if x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h {
+				return t
+			}
+		}
+		return HitTarget{}
+	}
+
+	// touch_hit_test is hit_test with a touch slop so controls smaller than the
+	// 44px minimum touch target stay reachable on touch screens. The slop only
+	// grows the hit rect; the visual control keeps its declared size. Mouse
+	// input keeps using hit_test so precision is unchanged.
+	fn touch_hit_test(x f64, y f64) HitTarget {
+		min_target := 44.0
+		max_slop := 12.0
+		for i := g_hit_targets.len - 1; i >= 0; i-- {
+			t := g_hit_targets[i]
+			slop_x := math.min(max_slop, math.max(0.0, (min_target - t.w) / 2.0))
+			slop_y := math.min(max_slop, math.max(0.0, (min_target - t.h) / 2.0))
+			if x >= t.x - slop_x && x <= t.x + t.w + slop_x
+				&& y >= t.y - slop_y && y <= t.y + t.h + slop_y {
 				return t
 			}
 		}

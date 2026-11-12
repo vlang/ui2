@@ -122,6 +122,8 @@ fn C.ui2_win_click(hwnd voidptr)
 
 fn C.ui2_win_notify_invoked(hwnd voidptr)
 
+fn C.ui2_win_notify_state_change(hwnd voidptr)
+
 fn C.ui2_win_accessible_button_info(hwnd voidptr, expected_name &u16) u32
 
 fn C.ui2_win_accessible_button_invoke(hwnd voidptr) int
@@ -325,6 +327,14 @@ fn C.ui2_win_capture_mouse(hwnd voidptr)
 
 fn C.ui2_win_release_mouse()
 
+fn C.ui2_win_register_touch(hwnd voidptr) int
+
+fn C.ui2_win_touch_target(root voidptr, screen_x int, screen_y int, client_x &int, client_y &int) voidptr
+
+fn C.ui2_win_handle_touch(hwnd voidptr, wparam u64, lparam i64) int
+
+fn C.ui2_win_handle_gesture(hwnd voidptr, wparam u64, lparam i64) int
+
 fn C.ui2_win_ticks() u64
 
 fn C.ui2_win_point_to_root(hwnd voidptr, root voidptr, x &int, y &int)
@@ -369,6 +379,8 @@ const win_wm_ctlcolor_static = u32(0x0138)
 const win_wm_mouse_move = u32(0x0200)
 const win_wm_lbutton_down = u32(0x0201)
 const win_wm_lbutton_up = u32(0x0202)
+const win_wm_touch = u32(0x0240)
+const win_wm_gesture = u32(0x0119)
 const win_wm_mouse_wheel = u32(0x020a)
 const win_wm_mouse_hwheel = u32(0x020e)
 const win_wm_dropfiles = u32(0x0233)
@@ -453,6 +465,7 @@ mut:
 	node_label_boxed   map[string]bool
 	pending_scroll     map[string]int // Scroll element id -> offset to apply when it renders
 	pending_scroll_x   map[string]int
+	node_accessible_states map[string]int // node key -> checked/enabled bits last announced
 	run_config         WindowsRunConfig
 	rendering          bool
 	key_consumed       bool
@@ -463,6 +476,8 @@ mut:
 	pointer_started    u64
 	pointer_moved      bool
 	suppress_click     map[u64]bool
+	touch_primary      u32
+	touch_active       bool
 }
 
 const windows_state_singleton = &WindowsState{
@@ -505,6 +520,7 @@ const windows_state_singleton = &WindowsState{
 	node_label_boxed: map[string]bool{}
 	pending_scroll: map[string]int{}
 	pending_scroll_x: map[string]int{}
+	node_accessible_states: map[string]int{}
 	suppress_click: map[u64]bool{}
 }
 
@@ -1579,11 +1595,33 @@ fn windows_update_element(key string, hwnd voidptr, el Element, x_offset int, y_
 	// The tooltip goes on the outer window, which is the declared frame, and on the
 	// control inside it, which is what the pointer actually lands on.
 	windows_update_tooltip(key, hwnd, text_hwnd, el.tooltip)
+	windows_notify_accessible_state(key, hwnd, el)
 	if el.kind == .label {
 		C.ui2_win_invalidate_parent(hwnd)
 		C.ui2_win_invalidate(text_hwnd)
 	}
 	C.ui2_win_invalidate(hwnd)
+}
+
+// windows_notify_accessible_state announces checked/enabled transitions on
+// controls assistive technology reads state from: native checkables and views
+// exposed as accessible buttons. Screen readers cache state, so without
+// EVENT_OBJECT_STATECHANGE they keep reporting the previous one.
+fn windows_notify_accessible_state(key string, hwnd voidptr, el Element) {
+	active := match el.kind {
+		.checkbox, .switch_control, .toggle_button { true }
+		.view { el.button_behavior }
+		else { false }
+	}
+	if !active {
+		return
+	}
+	mut st := windows_state()
+	bits := (if el.checked { 1 } else { 0 }) | (if el.enabled { 0 } else { 2 })
+	if st.node_accessible_states[key] or { -1 } != bits {
+		st.node_accessible_states[key] = bits
+		C.ui2_win_notify_state_change(hwnd)
+	}
 }
 
 fn windows_update_tooltip(key string, hwnd voidptr, text_hwnd voidptr, tooltip string) {
@@ -1821,6 +1859,7 @@ fn windows_cleanup_node_resources(key string, hwnd voidptr, kind Kind) {
 	}
 	st.tooltips.delete(key)
 	st.tooltip_sigs.delete(key)
+	st.node_accessible_states.delete(key)
 }
 
 fn windows_remove_stale(active map[string]bool) {
@@ -2347,6 +2386,16 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam u64, lparam i64) i6
 			windows_handle_wheel(hwnd, message, wparam)
 			return 0
 		}
+		win_wm_touch {
+			if C.ui2_win_handle_touch(hwnd, wparam, lparam) != 0 {
+				return 0
+			}
+		}
+		win_wm_gesture {
+			if C.ui2_win_handle_gesture(hwnd, wparam, lparam) != 0 {
+				return 0
+			}
+		}
 		win_wm_key_down {
 			if windows_dispatch_key(u32(wparam)) {
 				return 0
@@ -2617,6 +2666,105 @@ fn ui2_windows_control_pointer(hwnd voidptr, message u32, local_x int, local_y i
 	if gesture {
 		st.suppress_click[windows_handle_id(target)] = true
 	}
+}
+
+// Touch input arrives as screen points, so the window under the touch is
+// resolved first and the contact then takes the same pointer path a click
+// does. Only the first contact drives controls; the rest are left for pan
+// gestures. Returning nonzero claims the contact, which stops the system
+// from synthesizing a duplicate mouse message for it.
+@[export: 'ui2_windows_touch_down']
+fn ui2_windows_touch_down(contact_id u32, screen_x int, screen_y int) int {
+	mut st := windows_state()
+	if st.touch_active || st.root == unsafe { nil } {
+		return 0
+	}
+	mut local_x := 0
+	mut local_y := 0
+	target := C.ui2_win_touch_target(st.root, screen_x, screen_y, &local_x, &local_y)
+	if target == unsafe { nil } {
+		return 0
+	}
+	ui2_windows_control_pointer(target, win_wm_lbutton_down, local_x, local_y)
+	if st.pointer_handle == unsafe { nil } {
+		// No binding claimed the touch: a nested native control owns it and
+		// the default handler must still deliver the emulated mouse message.
+		return 0
+	}
+	st.touch_primary = contact_id
+	st.touch_active = true
+	return 1
+}
+
+@[export: 'ui2_windows_touch_move']
+fn ui2_windows_touch_move(contact_id u32, screen_x int, screen_y int) int {
+	mut st := windows_state()
+	if !st.touch_active || contact_id != st.touch_primary || st.root == unsafe { nil } {
+		return 0
+	}
+	mut local_x := 0
+	mut local_y := 0
+	mut target := C.ui2_win_touch_target(st.root, screen_x, screen_y, &local_x, &local_y)
+	if target == unsafe { nil } {
+		target = st.root
+	}
+	ui2_windows_control_pointer(target, win_wm_mouse_move, local_x, local_y)
+	return 1
+}
+
+@[export: 'ui2_windows_touch_up']
+fn ui2_windows_touch_up(contact_id u32, screen_x int, screen_y int) int {
+	mut st := windows_state()
+	if !st.touch_active || contact_id != st.touch_primary || st.root == unsafe { nil } {
+		return 0
+	}
+	st.touch_active = false
+	mut local_x := 0
+	mut local_y := 0
+	mut target := C.ui2_win_touch_target(st.root, screen_x, screen_y, &local_x, &local_y)
+	if target == unsafe { nil } {
+		target = st.root
+	}
+	ui2_windows_control_pointer(target, win_wm_lbutton_up, local_x, local_y)
+	return 1
+}
+
+// A pan gesture drags the scrollable pane under it the way a finger would:
+// the content follows the gesture, so the bar moves against the pan delta.
+// Whatever the pane cannot take bubbles to the panes around it, the way a
+// wheel message's leftover distance does.
+@[export: 'ui2_windows_touch_pan']
+fn ui2_windows_touch_pan(delta_x int, delta_y int, screen_x int, screen_y int) int {
+	st := windows_state()
+	if st.root == unsafe { nil } {
+		return 0
+	}
+	mut local_x := 0
+	mut local_y := 0
+	target := C.ui2_win_touch_target(st.root, screen_x, screen_y, &local_x, &local_y)
+	if target == unsafe { nil } {
+		return 0
+	}
+	mut scrolled := 0
+	if delta_y != 0 {
+		mut remaining := -delta_y - windows_scroll_by(target, -delta_y, false)
+		mut pane := C.ui2_win_scroll_parent(target, windows_bool(false))
+		for remaining != 0 && pane != unsafe { nil } {
+			remaining -= windows_scroll_by(pane, remaining, false)
+			pane = C.ui2_win_scroll_parent(pane, windows_bool(false))
+		}
+		scrolled += -delta_y - remaining
+	}
+	if delta_x != 0 {
+		mut remaining := -delta_x - windows_scroll_by(target, -delta_x, true)
+		mut pane := C.ui2_win_scroll_parent(target, windows_bool(true))
+		for remaining != 0 && pane != unsafe { nil } {
+			remaining -= windows_scroll_by(pane, remaining, true)
+			pane = C.ui2_win_scroll_parent(pane, windows_bool(true))
+		}
+		scrolled += -delta_x - remaining
+	}
+	return if scrolled != 0 { 1 } else { 0 }
 }
 
 fn windows_button_behavior_action(captured WindowsPointerBinding, current WindowsPointerBinding, gesture bool, moved bool, target_available bool) string {
