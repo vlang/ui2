@@ -53,6 +53,9 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		// A rebuild can move a dragged view away from the initial press.
 		// Keep its event identity until release instead of hit-testing it again.
 		pointer_target     HitTarget
+		// Mouse text selection captures its source field and anchor until release.
+		text_selection_id string
+		text_selection_anchor int
 		// A slider owns its gesture through commit_slider, which returns before
 		// any pointer_target capture is taken. Recording its id here gives the
 		// same protection from the other side: an external write racing the drag
@@ -1424,7 +1427,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			inside: true
 		}
 		update_hover()
-		if g_touch.down && g_touch.pointer_target.action_id.len > 0 {
+		if g_touch.down && (g_touch.pointer_target.action_id.len > 0 || g_touch.text_selection_id != '') {
 			handle_touch_move(x, y)
 			return
 		}
@@ -1443,6 +1446,13 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	fn pointer_release_at(x f64, y f64, button int) {
 		if voidptr(g_mouse_button_handler) != unsafe { nil } {
 			g_mouse_button_handler(button, false, x, y)
+		}
+		if button == 0 && g_touch.text_selection_id != '' {
+			extend_text_area_selection(x, y)
+			g_touch.text_selection_id = ''
+			g_touch.down = false
+			publish_text_selection(x, y)
+			return
 		}
 		if button == 0 {
 			publish_text_selection(x, y)
@@ -1477,6 +1487,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		match e.typ {
 			.mouse_down {
 				pointer_press_at(f64(e.mouse_x), f64(e.mouse_y), int(e.mouse_button))
+				if int(e.mouse_button) == 0 { begin_text_area_selection(f64(e.mouse_x), f64(e.mouse_y)) }
 			}
 			.mouse_move {
 				pointer_move_to(f64(e.mouse_x), f64(e.mouse_y))
@@ -1668,6 +1679,10 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		}
 		g_touch.current_x = x
 		g_touch.current_y = y
+		if g_touch.text_selection_id != '' {
+			extend_text_area_selection(x, y)
+			return
+		}
 		target := if g_touch.pointer_target.action_id.len > 0 {
 			g_touch.pointer_target
 		} else {
