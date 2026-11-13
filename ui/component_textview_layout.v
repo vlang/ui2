@@ -274,11 +274,11 @@ pub fn text_view_heading_scale(style TextViewStyle, level int) f64 {
 fn tv_label_inset(style TextStyle) f64 {
 	one := measure_text_width('n', style)
 	two := measure_text_width('nn', style)
-	return math.max(0, math.min(2 * one - two, style.size))
+	return math.max(0.0, math.min(2 * one - two, style.size))
 }
 
 fn tv_space_width(style TextStyle) f64 {
-	return math.max(0, measure_text_width('n n', style) - measure_text_width('nn', style))
+	return math.max(0.0, measure_text_width('n n', style) - measure_text_width('nn', style))
 }
 
 // tv_advance is how far text moves the pen: the glyph width without the label
@@ -295,7 +295,7 @@ fn tv_advance(s string, style TextStyle) f64 {
 	}
 	lead := s.len - s.trim_left(' ').len
 	trail := s.len - s.trim_right(' ').len
-	return math.max(0, measure_text_width(tv_display(core), style) - tv_label_inset(style)) +
+	return math.max(0.0, measure_text_width(tv_display(core), style) - tv_label_inset(style)) +
 		space * f64(lead + trail)
 }
 
@@ -869,7 +869,7 @@ fn (mut e TvEngine) emit_text(s string, rstart int, st TvRunStyle, gx f64, cente
 	}
 	if st.strike {
 		baseline := center + tv_baseline_ratio(st.mono) * em
-		e.fill(rect(core_x, math.round(baseline - em * 0.3), core_adv, math.max(1, math.round(em / 14))),
+		e.fill(rect(core_x, math.round(baseline - em * 0.3), core_adv, math.max(1.0, math.round(em / 14))),
 			st.role, 0, container)
 	}
 	return adv
@@ -887,8 +887,8 @@ fn (mut e TvEngine) emit_line(line []TvPlaced, y f64, ctx TvCtx, align TextViewA
 		line_w = last.x + (if last.kind == 3 { last.w } else { last.adv + last.pad_r })
 	}
 	shift := match align {
-		.right { math.max(0, ctx.width - line_w) }
-		.center { math.max(0, (ctx.width - line_w) / 2) }
+		.right { math.max(0.0, ctx.width - line_w) }
+		.center { math.max(0.0, (ctx.width - line_w) / 2) }
 		else { 0.0 }
 	}
 	mut rstart := -1
@@ -1008,7 +1008,7 @@ fn (mut e TvEngine) heading(n TextViewNode, y f64, ctx TvCtx) f64 {
 }
 
 fn (mut e TvEngine) quote(n TextViewNode, y f64, ctx TvCtx) f64 {
-	bar := math.max(2, math.round(e.em * 0.25))
+	bar := math.max(2.0, math.round(e.em * 0.25))
 	indent := bar + math.round(e.em * 0.9)
 	inner := TvCtx{
 		...ctx
@@ -1086,7 +1086,7 @@ fn (mut e TvEngine) marker(list_node TextViewNode, item TextViewNode, k int, ctx
 			.left)
 		return
 	}
-	d := math.max(4, math.round(e.em * 0.38))
+	d := math.max(4.0, math.round(e.em * 0.38))
 	bx := ctx.x + math.round((marker_w - d) / 2 - e.em * 0.2)
 	by := math.round(center - d / 2)
 	match ctx.depth % 3 {
@@ -1094,7 +1094,7 @@ fn (mut e TvEngine) marker(list_node TextViewNode, item TextViewNode, k int, ctx
 			e.fill(rect(bx, by, d, d), ctx.role, d / 2, ctx.container)
 		}
 		1 {
-			ring := math.max(1, math.round(d / 4))
+			ring := math.max(1.0, math.round(d / 4))
 			e.fill(rect(bx, by, d, d), ctx.role, d / 2, ctx.container)
 			e.fill(rect(bx + ring, by + ring, d - 2 * ring, d - 2 * ring), .background, d / 2 - ring,
 				ctx.container)
@@ -1600,7 +1600,7 @@ fn tv_clamp(lay TextViewLayout, max_lines int) TextViewLayout {
 			&& bottom > cutoff {
 			kept = TextViewItem{
 				...item
-				frame: rect(item.frame.x, top, item.frame.width, math.max(0, cutoff - top))
+				frame: rect(item.frame.x, top, item.frame.width, math.max(0.0, cutoff - top))
 			}
 		}
 		if item.kind == .text {
@@ -1723,7 +1723,7 @@ pub fn text_view_reveal_offset(lay TextViewLayout, start int, end int, top f64, 
 	}
 	margin := math.min(r.height * 2, viewport / 4)
 	if line_top < offset || r.height > viewport {
-		return math.max(0, line_top - margin)
+		return math.max(0.0, line_top - margin)
 	}
-	return math.max(0, line_bottom - viewport + margin)
+	return math.max(0.0, line_bottom - viewport + margin)
 }
