@@ -339,7 +339,7 @@ fn data_table_header_cells(config DataTableConfig, layout DataTableLayout, metri
 			.none { 'arrow.up.arrow.down' }
 		}
 		icon_color := if direction == .none {
-			choice_mix(colors.head_text, colors.head, 0.45)
+			color_mix(colors.head_text, colors.head, 0.45)
 		} else {
 			colors.text
 		}

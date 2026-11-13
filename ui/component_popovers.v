@@ -555,15 +555,3 @@ pub fn hover_card(config HoverCardConfig) !Element {
 		hoverable: true
 	})
 }
-
-// popover_blend mixes two 0xRRGGBB colors; amount 0 is a, 1 is b.
-fn popover_blend(a u32, b u32, amount f64) u32 {
-	t := math.min(math.max(amount, 0), 1)
-	mut out := u32(0)
-	for shift in [u32(16), 8, 0] {
-		ca := f64((a >> shift) & 0xff)
-		cb := f64((b >> shift) & 0xff)
-		out |= u32(math.round(ca + (cb - ca) * t)) << shift
-	}
-	return out
-}

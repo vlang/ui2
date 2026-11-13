@@ -13,18 +13,6 @@ import math
 
 // ── Colors ──────────────────────────────────────────────────────────
 
-// choice_mix blends two 0xRRGGBB colors; t = 0 is a, t = 1 is b.
-fn choice_mix(a u32, b u32, t f64) u32 {
-	amount := math.max(0.0, math.min(1.0, t))
-	mut out := u32(0)
-	for shift in [u32(16), 8, 0] {
-		from := f64((a >> shift) & 0xff)
-		to := f64((b >> shift) & 0xff)
-		out |= u32(math.round(from + (to - from) * amount)) << shift
-	}
-	return out
-}
-
 fn choice_luminance(color u32) f64 {
 	weights := [0.2126, 0.7152, 0.0722]
 	mut sum := 0.0
@@ -52,7 +40,7 @@ fn choice_contrast(a u32, b u32) f64 {
 // fills, and need darkening before they can be text on a light background.
 fn choice_legible(color u32, bg u32, toward u32) u32 {
 	for i in 0 .. 11 {
-		candidate := choice_mix(color, toward, f64(i) / 10)
+		candidate := color_mix(color, toward, f64(i) / 10)
 		if choice_contrast(candidate, bg) >= 4.5 {
 			return candidate
 		}
@@ -62,13 +50,13 @@ fn choice_legible(color u32, bg u32, toward u32) u32 {
 
 // choice_disabled_text is the dimmed text shared by every disabled choice.
 fn choice_disabled_text(theme ComponentTheme) u32 {
-	return choice_mix(theme.muted_foreground, theme.background, 0.35)
+	return color_mix(theme.muted_foreground, theme.background, 0.35)
 }
 
 // choice_pressed is the neutral fill of a pressed toggle or a selected ghost
 // button: darker than `muted`, which barely differs from the background.
 fn choice_pressed(theme ComponentTheme) u32 {
-	return choice_mix(theme.muted, theme.border, 0.7)
+	return color_mix(theme.muted, theme.border, 0.7)
 }
 
 // ── Geometry ────────────────────────────────────────────────────────
@@ -233,7 +221,7 @@ pub:
 pub fn button_variant_colors(theme ComponentTheme, variant ButtonVariant, outline bool, selected bool, enabled bool) ButtonVariantColors {
 	if variant == .ghost {
 		pressed := choice_pressed(theme)
-		fill := if enabled { pressed } else { choice_mix(pressed, theme.background, 0.5) }
+		fill := if enabled { pressed } else { color_mix(pressed, theme.background, 0.5) }
 		return ButtonVariantColors{
 			fill:       fill
 			foreground: if enabled { theme.foreground } else { choice_disabled_text(theme) }
@@ -254,14 +242,14 @@ pub fn button_variant_colors(theme ComponentTheme, variant ButtonVariant, outlin
 	mut fill := tone
 	mut foreground := tone_foreground
 	mut border := if neutral { theme.border } else { tone }
-	mut divider := if neutral { theme.border } else { choice_mix(tone, tone_foreground, 0.35) }
+	mut divider := if neutral { theme.border } else { color_mix(tone, tone_foreground, 0.35) }
 	if outline {
 		fill = if !selected {
 			theme.background
 		} else if neutral {
 			choice_pressed(theme)
 		} else {
-			choice_mix(theme.background, tone, 0.16)
+			color_mix(theme.background, tone, 0.16)
 		}
 		foreground = if neutral {
 			theme.foreground
@@ -273,16 +261,16 @@ pub fn button_variant_colors(theme ComponentTheme, variant ButtonVariant, outlin
 		fill = if neutral {
 			choice_pressed(theme)
 		} else {
-			choice_mix(tone, theme.foreground, 0.25)
+			color_mix(tone, theme.foreground, 0.25)
 		}
 		if !neutral {
 			border = fill
 		}
 	}
 	if !enabled {
-		fill = choice_mix(fill, theme.background, 0.6)
-		border = choice_mix(border, theme.background, 0.5)
-		divider = choice_mix(divider, theme.background, 0.5)
+		fill = color_mix(fill, theme.background, 0.6)
+		border = color_mix(border, theme.background, 0.5)
+		divider = color_mix(divider, theme.background, 0.5)
 		foreground = choice_disabled_text(theme)
 	}
 	return ButtonVariantColors{

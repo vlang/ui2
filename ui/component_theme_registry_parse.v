@@ -654,21 +654,21 @@ fn component_theme_from_tokens(tokens map[string]ComponentThemeToken, dark bool)
 	{
 		token.over(background)
 	} else if custom {
-		choice_mix(background, foreground, 0.08)
+		color_mix(background, foreground, 0.08)
 	} else {
 		base.muted
 	}
 	muted_foreground := if token := tokens['muted.foreground'] {
 		token.over(muted)
 	} else if custom || muted != base.muted {
-		choice_mix(muted, foreground, 0.7)
+		color_mix(muted, foreground, 0.7)
 	} else {
 		base.muted_foreground
 	}
 	border := if token := theme_first(tokens, ['border', 'input.border']) {
 		token.over(background)
 	} else if custom {
-		choice_mix(background, foreground, 0.18)
+		color_mix(background, foreground, 0.18)
 	} else {
 		base.border
 	}

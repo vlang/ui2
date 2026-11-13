@@ -1,165 +1,17 @@
-# ui2
+## Safe areas
 
-<img width="1508" height="1043" alt="image" src="https://github.com/user-attachments/assets/fb335b0a-ea55-4c66-8e69-b700f0a402d9" />
-
-
-<img height="280" alt="image" src="https://github.com/user-attachments/assets/0fb17bf1-ba64-4d70-bba9-76e08069e009" />
-
-
-`ui2` is a compact declarative UI module for V. It uses retained native controls
-on macOS, iOS, and Windows and a custom immediate-mode `gg` renderer on Linux,
-the BSDs, and Android.
-
-The Linux and BSD backends draw and handle widgets directly through
-`gg`/Sokol; they have no GTK dependency.
-
-The V API includes responsive Flex and Grid placement with intrinsic text
-measurement. See the [layout guide](docs/modern-layout.md) and
-[responsive example](examples/responsive_layout/main.v).
-
-You can also build desktop ui2 apps in C or any language with a C FFI. Build
-the shared library and the C counter with `make c-example`; the standalone
-header is [`c/ui2.h`](c/ui2.h). See the [C API guide](c/README.md) for the build
-callback, widget constructors, state access, ownership rules, and a Python
-`ctypes` example. Application code needs no V compiler once the library is built.
-
-macOS and Windows use native widgets by default. Pass the compile-time define
-`-d ui2_custom_rendering` to use the same custom `gg` renderer there instead:
-
-```sh
-v -d ui2_custom_rendering run examples/users/main.v
-```
-
-## Requirements
-
-`ui2` needs V 0.5.2 or newer. The module is split across `ui/`, `appkit/`,
-`uikit/`, `windows/`, and `linux/` through the `subdirs` field of `v.mod`, and
-older compilers ignore that field. Run `v up` if `import ui2` fails.
-
-FreeBSD, OpenBSD, NetBSD, and DragonFlyBSD share the custom `gg` renderer with
-Linux, drawing through X11: the X11 client libraries (`libX11`, `libXcursor`,
-`libXi`, `libXrandr`) and OpenGL have to be installed, and stock V's sokol
-module already supplies each BSD's include and library paths.
-
-To use `ui2` from a project outside this repository, link the clone into
-`~/.vmodules`:
-
-```sh
-ln -s "$(pwd)" ~/.vmodules/ui2
-```
-
-## State and identity
-
-- `Element.id` identifies a mounted control for `text`, `set_text`, `focus`, and
-  other lookup APIs.
-- `Element.key` identifies a child during reconciliation. Keys must be unique
-  among siblings; IDs must be unique in the tree. Renderers validate both before
-  changing native state.
-- `Element.action_id` identifies the emitted action and falls back to `id`.
-  VML `on_tap` and `on_change` populate `action_id` without replacing `id`.
-
-Text inputs use controlled-on-change semantics: changing the declared `text`
-applies that value, while a refresh with the same declaration preserves the
-current native/local edit, selection, focus, and (on native controls) input
-method composition. Use `set_text` for an explicit imperative replacement.
-
-The custom renderer is demand driven: it builds on demand and reuses its tree
-while idle, `ui2.WindowOptions{refresh: .continuous}` restores the historical
-per-vsync rebuild loop, and `refresh: .manual` suppresses all drawing between
-explicit asks. See
-[render scheduling](docs/render-scheduling.md) for invalidation, worker
-delivery, window lifecycle and the acceptance fixture.
-
-On Linux, glvnd probes the ICD of every installed GL vendor before the first
-frame, mapping each vendor's whole userspace stack into the process — tens of
-megabytes per vendor, even when only one of them renders.
-`ui2.WindowOptions{gl_load: .mesa_only}` probes the Mesa vendor only (VMs, CI,
-Xvfb), `gl_load: .gpu_only` probes the proprietary vendor only (NVIDIA
-desktops; it needs a real hardware GL context). The `UI2_GL_VENDOR`
-environment variable overrides the field without a recompile, and an explicit
-`__EGL_VENDOR_LIBRARY_FILENAMES` or `__EGL_VENDOR_LIBRARY_DIRS` in the
-process wins over both.
-
-## Widget animations
-
-Animations target a mounted element by `id` and are applied after each
-declarative build, so they work with both V-built and VML-built trees. The
-native and custom backends schedule frames while the animation is active. The
-custom renderer returns to idle when the animation completes.
+A `SafeArea` insets its children by the operating-system intrusions — the
+status bar, display notch, camera housing, and home indicator on phones —
+after Flutter's `SafeArea`. Each side can be switched off individually, and
+`minimum` keeps at least that much room where the platform reports nothing.
+Children are positioned relative to the safe content box:
 
 ```v
-move := ui2.animation(
-	duration: 0.75
-	transition: .in_out_cubic
-	x: 320
-	y: 180
-	rotation: 90
-)
-move.start('tile')
-```
-
-The original shorthand targets are `x`, `y`, `width`, `height`, `rotation`,
-`background`, `corner_radius`, `text_color`, `text_background`, `font_size`,
-and `padding_left`. For any other numeric or color property on `Element` or
-its visual styles, use typed property targets. They accept concise names where
-unambiguous and dotted paths for nested styles:
-
-```v
-ui2.animation(
-	duration: 0.3
-	properties: [
-		ui2.animation_number_property('value', 75),
-		ui2.animation_number_property('slider_style.thumb_size', 28),
-		ui2.animation_color_property('slider_style.thumb_color', 0xf97316),
-		ui2.animation_color_property('box.border_color', 0x0ea5e9),
-	]
-).start('volume')
-```
-
-This covers numeric geometry, text metrics, slider state and chrome, switch
-colors, borders, and toggle-button selected styles. Use
-`is_animatable_property(name, kind)` to validate a property name before
-constructing an animation. Strings, booleans, enums, child lists, and callback
-fields are deliberately not interpolated. `duration` and `step` use seconds.
-All of Kivy's named linear, sine, quadratic, cubic, quartic, quintic,
-exponential, circular, back, elastic, and bounce transitions are available;
-`transition_fn` accepts a custom `fn (f64) f64` curve.
-
-Use `+` or `sequence(...)` to run definitions in order and `parallel(...)` to
-run them together:
-
-```v
-there_and_back := ui2.animation(duration: 0.4, x: 320) +
-	ui2.animation(duration: 0.4, x: 20)
-pulse := ui2.parallel(
-	ui2.animation(duration: 0.25, width: 140, height: 140),
-	ui2.animation(duration: 0.25, background: u32(0x60a5fa)),
-)
-
-there_and_back.repeating().start('tile')
-pulse.start('badge')
-```
-
-`stop_animation` emits a `.complete` callback while `cancel_animation` does
-not; their property-specific and all-widget variants follow the same rule.
-Both retain the values currently on screen, as does natural completion.
-`clear_animation(id)` releases those retained values and returns the element to
-its declaration. Query `animation_info(id)` for status and progress, or attach
-one callback for `.start`, `.progress`, and `.complete` with `on_event` or
-`with_event_handler`.
-
-## Typed VML models
-
-`run_vml[T]` parses the document once, owns a model for the window, and exposes
-its public fields as `app`:
-
-```v
-ui2.run_vml[App](
-    source: $embed_file('app.vml').to_string()
-    model: App{}
-    title: 'My app'
-    width: 780
-    height: 420
+content := ui2.safe_area(
+    id:    'safe'
+    frame: ui2.bounds()
+    minimum: ui2.LayoutPadding{ top: 8, bottom: 8 }
+    children: [ui2.label('title', 'Hello', ui2.rect(0, 0, 200, 24), style)]
 )!
 ```
 
@@ -357,90 +209,51 @@ can live in `PrimaryButton.vml` or the conventional snake-case
 `primary_button.vml`:
 
 ```vml
-module PrimaryButton
-
-Button {
-    height: 40
-    background: #2563EB
-    border_color: #1D4ED8
-    border_width: 1
-    corner_radius: 8
-    color: #FFFFFF
-    bold: true
+SafeArea {
+    id: safe
+    minimum_top: 8
+    minimum_bottom: 8
 }
 ```
 
-Import the module from `app.vml` and set the instance-specific properties.
-Properties on an instance override the module defaults:
+`SafeViewport` is the scrolling equivalent, after Flutter's `SliverSafeArea`:
+the scroll pane spans the whole frame while its content clears the intrusions,
+so the first and last rows are never hidden behind a notch or home indicator.
+`scroll_mode` chooses the axes, as in `scroll_with_mode`:
 
 ```vml
-import PrimaryButton
-
-Screen {
-    PrimaryButton {
-        id: save
-        text: "Save"
-        on_tap: app.save()
-        x: 20
-        y: 20
-        width: 120
-    }
+SafeViewport {
+    id: list
+    scroll_mode: vertical_only
 }
 ```
 
-A reusable composite can put only the interactive surface in its module and
-accept its visible content as instance children. For example,
-`action_surface.vml` can contain:
+`safe_area_insets()` reports the current intrusions per side (zero where the
+platform keeps them outside the content rect, as on desktop); `safe_area_top()`
+is the top edge of the same value. iOS reads the view's `safeAreaInsets`, so
+rotating the phone or revealing the keyboard-adjacent edges is picked up on
+the next build.
 
-```vml
-module ActionSurface
+## Scaffold
 
-Rectangle {
-    button_behavior: true
-    height: 56
-    background: #2563EB
-    corner_radius: 8
-}
-```
-
-The importing document supplies the action and any combination of labels,
-images, or decorative rectangles:
-
-```vml
-import ActionSurface
-
-Screen {
-    ActionSurface {
-        id: save_card
-        on_tap: app.save()
-        x: 20
-        y: 20
-        width: 180
-
-        Label {
-            text: "Save changes"
-            x: 16
-            y: 16
-            width: save_card.width - 32
-            height: 24
-            align: center
-            color: #FFFFFF
-            bold: true
-        }
-    }
-}
-```
-
-VML imports require a file path so they can resolve sibling modules. Use the
-file-backed runtime API instead of passing an embedded source string:
+`scaffold` lays a screen out the way Compose's `Scaffold` does: a top bar, a
+bottom bar, content filling the box between them, and optional floating
+action and snackbar overlays docked inside the content box. Slot elements
+keep their declared sizes; bar children are positioned relative to their
+strip, content children relative to the content box, and the overlays are
+placed by the scaffold itself:
 
 ```v
-ui2.run_vml_file[App](
-    source_path: os.join_path(os.dir(@FILE), 'app.vml')
-    model: App{}
-    title: 'My app'
-    width: 400
-    height: 300
+ui2.scaffold(
+    id:                'app'
+    frame:             ui2.bounds()
+    top_bar_height:    56
+    bottom_bar_height: 64
+    top_bar:           [ui2.label('title', 'Scaffold', ui2.rect(16, 0, 200, 56), style)]
+    content:           [ui2.label('body', 'Hello', ui2.rect(16, 16, 200, 24), style)]
+    bottom_bar:        [ui2.label('nav', 'Nav', ui2.rect(16, 0, 200, 64), style)]
+    floating_action:   ui2.button('add', '+', ui2.rect(0, 0, 56, 56), fab_box, fab_text)
+    snackbar:          ui2.label('snack', 'Saved', ui2.rect(0, 0, 100, 40), snack_text)
 )!
 ```
 
@@ -609,20 +422,24 @@ the same logical units as frames and corner radii, so native and custom
 renderers scale them with the rest of the element:
 
 ```vml
-Rectangle {
-    background: #10131F
-    border_color: #28314A
-    border_left: 1
-    border_top: 1
-    border_right: 1
-    border_bottom: 0
+Scaffold {
+    id: app
+    top_bar_height: 56
+    bottom_bar_height: 64
+
+    Label { slot: top text: "Scaffold" }
+    Label { text: "Hello" }
+    Label { slot: bottom text: "Nav" }
+    Button { slot: fab text: "+" x: 0 y: 0 width: 56 height: 56 }
 }
 ```
 
-Set `transparent: true` to omit a box's fill. It also works on the root
-`Screen`; a transparent screen reveals the desktop when its native host window
-is configured for transparency, as demonstrated by `examples/custom_window`.
+Children without a `slot` land in the content box. At most one `fab` and one
+`snackbar` child are allowed; anything else in `slot` is rejected while the
+document loads. `scaffold_content_rect` exposes the content box for code that
+places its own overlays.
 
+## Fonts and text sizes
 `border_width` is shorthand for all four edges; an explicitly declared edge
 overrides it. The equivalent V API fields live directly on `BoxStyle`.
 
@@ -786,6 +603,38 @@ for native and custom-rendered windows alike. Linux and the BSDs drive
 `wl-copy`/`wl-paste` under Wayland, or `xclip` or `xsel` under X11, so one of
 them has to be installed; Android has no clipboard this layer can reach. Check
 `clipboard_supported()` before offering a copy action.
+
+## Platform integration
+
+`haptic` plays a haptic on phones and Force Touch trackpads, `set_app_badge`
+stamps a number on the application icon, `open_url` opens a link with its
+default handler, and `share_text` opens the platform share sheet. Every call
+reports whether the platform took it, and every family has a `*_supported`
+capability query, after the clipboard and dialog APIs:
+
+```v
+if ui2.haptic_supported() {
+    ui2.haptic(.success)
+}
+ui2.set_app_badge(3) // zero clears the stamp
+if ui2.open_url('https://vlang.io') {
+    // handed to the browser, mail client or owning app
+}
+if ui2.share_text('Look at this') {
+    // the share sheet is up
+}
+```
+
+Only `http`, `https` and `mailto` links with an address are accepted; blank
+share text and negative badge counts are rejected without touching the
+platform. Haptics run on iOS (impact, selection and notification generators),
+macOS (`NSHapticFeedbackManager`) and Android (the vibrator through JNI);
+badges on iOS and macOS dock tiles; links on iOS, macOS, Windows
+(`ShellExecute`), Android (an `ACTION_VIEW` intent) and the Linux and BSD
+desktops (`xdg-open`); the share sheet on iOS (`UIActivityViewController`)
+and Android (`ACTION_SEND` through the chooser). The rest answer unsupported,
+so gate the buttons on the capability queries. Run
+`v run examples/platform_integration/main.v` for a demo.
 
 ## File and folder dialogs
 

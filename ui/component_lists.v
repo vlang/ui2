@@ -872,7 +872,7 @@ struct ListRowLook {
 // list_selected_fill tints the background toward the primary color, more in
 // a dark theme, where the muted hover fill is closer to it.
 fn list_selected_fill(theme ComponentTheme) u32 {
-	return interpolate_color(theme.background, theme.primary, if feedback_is_dark(theme) {
+	return color_mix(theme.background, theme.primary, if feedback_is_dark(theme) {
 		0.32
 	} else {
 		0.2

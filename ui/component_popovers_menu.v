@@ -1002,7 +1002,7 @@ pub fn dropdown_button(config DropdownButtonConfig) !Element {
 	component_validate_id(config.menu_id)!
 	metrics := component_metrics(config.size)
 	bg, fg, border := dropdown_button_colors(config)
-	pressed := popover_blend(bg, fg, 0.12)
+	pressed := color_mix(bg, fg, 0.12)
 	local := component_local(config.frame)
 	menu_toggle := dropdown_menu_toggle_action(config.menu_id)
 	expanded := if config.open { 'expanded' } else { 'collapsed' }
@@ -1027,7 +1027,7 @@ pub fn dropdown_button(config DropdownButtonConfig) !Element {
 	divider := if config.outline || config.tone == .neutral {
 		border
 	} else {
-		popover_blend(bg, fg, 0.35)
+		color_mix(bg, fg, 0.35)
 	}
 	mut trigger_children := []Element{}
 	if config.open {

@@ -978,7 +978,7 @@ fn attachment_media(config AttachmentConfig, r AttachmentResolved, m AttachmentM
 	has_image := config.image_path.len > 0
 	failed_icon := r.status == .failed && !has_image
 	fill := if failed_icon {
-		interpolate_color(theme.danger, theme.background, 0.88)
+		color_mix(theme.danger, theme.background, 0.88)
 	} else {
 		theme.muted
 	}
@@ -1218,7 +1218,7 @@ fn attachment_build(config AttachmentConfig, inherited AttachmentStatus) !Elemen
 	tile := vertical && !r.content
 	hovered := r.hover && config.hovered
 	surface := if hovered && config.clickable {
-		interpolate_color(theme.muted, theme.background, 0.5)
+		color_mix(theme.muted, theme.background, 0.5)
 	} else {
 		theme.background
 	}
@@ -1232,7 +1232,7 @@ fn attachment_build(config AttachmentConfig, inherited AttachmentStatus) !Elemen
 		children << view('', rect(0, 0, card_width, card_height), BoxStyle{
 			transparent:   true
 			radius:        m.radius
-			border_color:  interpolate_color(theme.border, theme.muted_foreground, 0.35)
+			border_color:  color_mix(theme.border, theme.muted_foreground, 0.35)
 			border_left:   1
 			border_top:    1
 			border_right:  1
@@ -1322,7 +1322,7 @@ fn attachment_build(config AttachmentConfig, inherited AttachmentStatus) !Elemen
 				thickness:           attachment_bar_thickness
 				reduce_motion:       config.reduce_motion
 				color:               theme.primary
-				track_color:         interpolate_color(theme.primary, surface, 0.85)
+				track_color:         color_mix(theme.primary, surface, 0.85)
 				accessibility_label: 'Upload progress'
 				theme:               theme
 			)!

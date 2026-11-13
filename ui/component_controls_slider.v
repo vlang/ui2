@@ -467,15 +467,15 @@ fn styled_slider_colors(config StyledSliderConfig) SliderColors {
 	mut accent := config.color or { theme.primary }
 	mut thumb := config.thumb_color or { theme.background }
 	if !config.enabled {
-		accent = choice_mix(accent, theme.background, 0.55)
-		thumb = choice_mix(thumb, theme.background, 0.3)
+		accent = color_mix(accent, theme.background, 0.55)
+		thumb = color_mix(thumb, theme.background, 0.3)
 	}
 	return SliderColors{
 		accent:      accent
-		track:       choice_mix(accent, theme.background, 0.8)
+		track:       color_mix(accent, theme.background, 0.8)
 		thumb:       thumb
-		dot_on:      choice_mix(accent, thumb, 0.7)
-		dot_off:     choice_mix(accent, theme.background, 0.45)
+		dot_on:      color_mix(accent, thumb, 0.7)
+		dot_off:     color_mix(accent, theme.background, 0.45)
 		mark_text:   if config.enabled {
 			theme.muted_foreground
 		} else {
@@ -567,7 +567,7 @@ fn styled_slider_thumb(config StyledSliderConfig, l SliderLayout, colors SliderC
 	if config.focused && config.enabled && thumb == styled_slider_key_thumb(config) {
 		r := slider_thumb_ring
 		parts << view('', rect(frame.x - r, frame.y - r, d + 2 * r, d + 2 * r), BoxStyle{
-			bg:     choice_mix(colors.accent, config.theme.background, 0.6)
+			bg:     color_mix(colors.accent, config.theme.background, 0.6)
 			radius: d / 2 + r
 		}, []Element{})
 	}
