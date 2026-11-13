@@ -105,7 +105,7 @@ fn element_has_scoped_stylesheet(el Element) bool {
 fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, inherited map[string]string, mut warnings []StylesheetWarning, mut color_cache map[string]ComponentThemeToken, mut len_cache map[string]f64, mut split_cache map[string][]string) Element {
 	// No clone when the element brings no scoped sheet: scopes is only read.
 	has_scoped := !stylesheet_is_empty(el.stylesheet)
-	mut active := scopes
+	mut active := scopes.clone()
 	if has_scoped {
 		active = scopes.clone()
 		active << el.stylesheet
