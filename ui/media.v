@@ -839,7 +839,7 @@ pub fn media_recorder(config MediaRecorderConfig) !Element {
 		}, [
 			label('', status, rect(0, 0, config.frame.width, config.frame.height), TextStyle{
 				size:  16
-				color: if recording { 0xd92d20 } else { 0x444444 }
+				color: if recording { u32(0xd92d20) } else { u32(0x444444) }
 			}),
 		])
 		key:                 'recorder:' + config.id
