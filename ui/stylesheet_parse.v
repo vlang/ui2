@@ -306,11 +306,14 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 	sheet := parse_stylesheet(source) or {
 		// Point at the file: `theme.vss:3:1: ...` instead of `stylesheet:3:1:`.
 		msg := err.msg()
-		return error(if msg.starts_with('stylesheet:') {
+		// NOTE(V 0.5.2 CI): `if` as a function argument returns void in 0.5.2;
+		// bind it first (same on newer toolchains).
+		pointed := if msg.starts_with('stylesheet:') {
 			'${path}:${msg['stylesheet:'.len..]}'
 		} else {
 			'${path}: ${msg}'
-		})
+		}
+		return error(pointed)
 	}
 	if sheet.imports.len == 0 {
 		return sheet
