@@ -655,9 +655,43 @@ warn until layout reads them.
 - **`@mediax`:** the `@` prefix always starts a variable or query — check
   the keyword spelling; the error points at it.
 
-## Non-goals (v1)
+## Animations
 
-Layout selectors, animations/transitions, `!important`, and container units
+VSS drives ui2's animation runtime declaratively. Two mechanisms.
+
+### Transitions
+
+```css
+Button { transition: background 0.2s ease, opacity 0.15s; }
+Button:hover { background: #1d4ed8; opacity: 0.9; }
+```
+
+When a property's resolved value changes between builds and a transition
+covers it, ui2 tweens from the previous value to the new one. `all` covers
+every animatable property. Atomic forms `transition-property`,
+`transition-duration`, `transition-timing-function`, `transition-delay` align
+by comma index, matching CSS. Timing functions: `linear`, `ease`,
+`ease-in`, `ease-out`, `ease-in-out`, or `cubic-bezier(x1, y1, x2, y2)`.
+
+### Keyframes
+
+```css
+@keyframes pulse {
+	from { opacity: 1; }
+	50%  { opacity: 0.5; }
+	to   { opacity: 1; }
+}
+Button.loading { animation: pulse 1s ease-in-out infinite; }
+```
+
+An animation starts when its rule newly matches an element (state entry) and
+runs through the runtime, so frames schedule themselves. `infinite` repeats.
+`animation-fill-mode`: `none` (revert), `forwards` (keep final, default),
+`backwards` (hold first stop during delay), `both`. `animation-delay` honored.
+
+### Non-goals (v1)
+
+Layout selectors, `!important`, and container units
 beyond lengths (`cqw` etc. work as values; container *queries* are the
 `@container` rules above). `refresh_element` (AppKit) bypasses the sheet:
 it reconciles a caller-supplied subtree, not a fresh build.

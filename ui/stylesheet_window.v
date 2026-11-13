@@ -24,6 +24,9 @@ __global g_stylesheet_frame_building = 0
 pub fn set_global_stylesheet(sheet Stylesheet) {
 	g_stylesheet_global = sheet
 	g_stylesheet_has_global = true
+	g_style_prev_elements = map[string]Element{}
+	g_style_prev_valid = false
+	g_style_prev_anim_matches = map[string]bool{}
 }
 
 // clear_global_stylesheet removes the process-wide sheet. Call refresh()
@@ -31,6 +34,9 @@ pub fn set_global_stylesheet(sheet Stylesheet) {
 pub fn clear_global_stylesheet() {
 	g_stylesheet_global = Stylesheet{}
 	g_stylesheet_has_global = false
+	g_style_prev_elements = map[string]Element{}
+	g_style_prev_valid = false
+	g_style_prev_anim_matches = map[string]bool{}
 }
 
 // set_stylesheet_follow_system resumes (or stops) tracking the operating
@@ -87,13 +93,21 @@ pub fn stylesheet_apply_frame(declared Element, env StyleMatchEnv) Element {
 	if env.dpi > 0 {
 		g_stylesheet_last_dpi = env.dpi
 	}
+	mut styled := declared
 	if !g_stylesheet_has_global {
 		if !element_has_scoped_stylesheet(declared) {
-			return declared
+			styled = declared
+		} else {
+			styled = apply_stylesheet(declared, Stylesheet{}, env)
 		}
-		return apply_stylesheet(declared, Stylesheet{}, env)
+	} else {
+		styled = apply_stylesheet(declared, g_stylesheet_global, env)
 	}
-	return apply_stylesheet(declared, g_stylesheet_global, env)
+	// vss animation driver: detect property/state changes since the last
+	// styled frame and start transitions / keyframes animations on the
+	// animation runtime. The runtime overlays animated values at render time.
+	style_animation_drive(styled)
+	return styled
 }
 
 // stylesheet_live_dpi reports the device pixel ratio from the most recent
