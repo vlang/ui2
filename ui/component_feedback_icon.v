@@ -213,11 +213,12 @@ pub fn named_icon(config IconConfig) !Element {
 	if !symbol_known(symbol) {
 		return error('icon symbol `${symbol}` is not drawn on every backend; see symbol_names()')
 	}
-	side := math.min(if config.pixel_size > 0 {
+	pixel := if config.pixel_size > 0 {
 		config.pixel_size
 	} else {
 		icon_pixel_size(config.size)
-	}, math.min(config.frame.width, config.frame.height))
+	}
+	side := math.min(pixel, math.min(config.frame.width, config.frame.height))
 	color := config.color or { config.theme.foreground }
 	return component_finish(Element{
 		...image(config.id, 'symbol:' + symbol, rect(config.frame.x + (config.frame.width - side) / 2,

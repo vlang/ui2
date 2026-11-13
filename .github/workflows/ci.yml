@@ -77,10 +77,10 @@ jobs:
             libx11-dev libxcursor-dev libxi-dev libgl1-mesa-dev libasound2-dev xvfb
 
       - name: Test component catalog and primitives
-        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/component_catalog_test.v
+        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/component_catalog_test.v
 
       - name: Test VML menu declarations
-        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/vml_menu_test.v
+        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/vml_menu_test.v
 
       - name: Test embedder window API
         run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/embed_test.v
@@ -91,11 +91,11 @@ jobs:
       - name: Test immediate scrolling
         if: runner.os == 'Linux' || matrix.custom
         run: |
-          v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/ui_scroll_immediate_test.v
+          v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui_scroll_immediate_test.v
           v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/examples/scrollview
 
       - name: Test custom renderer pipeline
-        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/ui_custom_rendering_test.v
+        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui_custom_rendering_test.v
 
       - name: Test C ABI and build C example
         if: runner.os != 'Windows'
@@ -106,7 +106,7 @@ jobs:
 
       - name: Test immediate text clipboard shortcuts
         if: runner.os == 'Linux' || matrix.custom
-        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/ui_text_clipboard_immediate_test.v
+        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui_text_clipboard_immediate_test.v
 
       - name: Build all examples
         run: v run ui2/examples/build_examples.vsh ${{ matrix.custom && '-d ui2_custom_rendering' || '' }}

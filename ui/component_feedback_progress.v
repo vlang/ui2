@@ -111,11 +111,12 @@ pub fn linear_progress(config LinearProgressConfig) !Element {
 	feedback_validate_length('progress transition', config.transition)!
 	feedback_validate_length('progress duration', config.duration)!
 	width := config.frame.width
-	thickness := math.min(if config.thickness > 0 {
+	thick := if config.thickness > 0 {
 		config.thickness
 	} else {
 		linear_progress_thickness(config.size)
-	}, config.frame.height)
+	}
+	thickness := math.min(thick, config.frame.height)
 	requested_radius := config.radius or { thickness / 2 }
 	feedback_validate_length('progress radius', requested_radius)!
 	radius := math.min(requested_radius, thickness / 2)
@@ -266,16 +267,18 @@ pub fn progress_circle(config ProgressCircleConfig) !Element {
 	feedback_validate_length('progress circle thickness', config.thickness)!
 	feedback_validate_length('progress circle duration', config.duration)!
 	fit := math.min(config.frame.width, config.frame.height)
-	diameter := math.min(if config.diameter > 0 {
+	want := if config.diameter > 0 {
 		config.diameter
 	} else {
 		progress_circle_diameter(config.size)
-	}, fit)
-	stroke := math.min(if config.thickness > 0 {
+	}
+	diameter := math.min(want, fit)
+	stroke_want := if config.thickness > 0 {
 		config.thickness
 	} else {
 		progress_circle_thickness(diameter)
-	}, diameter / 2)
+	}
+	stroke := math.min(stroke_want, diameter / 2)
 	ring := (diameter - stroke) / 2
 	color := config.color or { feedback_tone_color(config.theme, config.tone) }
 	background := config.background or { config.theme.background }
@@ -307,7 +310,7 @@ pub fn progress_circle(config ProgressCircleConfig) !Element {
 	}
 	metrics := component_metrics(config.size)
 	if config.label.len > 0 || config.caption.len > 0 {
-		inner := math.max(diameter - 2 * stroke, 0)
+		inner := math.max(diameter - 2 * stroke, 0.0)
 		label_height := if config.label.len > 0 {
 			math.min(metrics.font_size * 1.4, inner)
 		} else {

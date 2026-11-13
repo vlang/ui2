@@ -1,3 +1,5 @@
+// vfmt off
+@[has_globals]
 module ui2
 
 $if macos && !ui2_custom_rendering ? {
@@ -8,9 +10,9 @@ $if macos && !ui2_custom_rendering ? {
 // Missing IDs and other widget kinds return false.
 pub fn control_checked(id string) bool {
 	$if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
-		if id in g_active_checkboxes { return checkbox_checked(id) }
-		if id in g_active_switches { return switch_active(id) }
-		if id in g_active_toggles { return toggle_button_pressed(id) }
+		if is_checkbox_active(id) { return checkbox_checked(id) }
+		if is_switch_active(id) { return switch_active(id) }
+		if is_toggle_active(id) { return toggle_button_pressed(id) }
 	} $else $if macos {
 		st := state()
 		if (st.view_kinds[id] or { Kind.view }) !in [.checkbox, .switch_control, .toggle_button] {
@@ -33,9 +35,12 @@ pub fn control_checked(id string) bool {
 // value on the next build to keep application state and the control in sync.
 pub fn set_control_checked(id string, value bool) {
 	$if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
-		if id in g_active_checkboxes { set_checkbox_checked(id, value) }
-		if id in g_active_switches { set_switch_active(id, value) }
-		if id in g_active_toggles { set_toggle_button_pressed(id, value) }
+		// set_* helpers already no-op when the id is not mounted, so no
+		// `id in g_active_*` guard is needed here (and V 0.5.2 cannot see
+		// `__global` maps across files, only function calls).
+		set_checkbox_checked(id, value)
+		set_switch_active(id, value)
+		set_toggle_button_pressed(id, value)
 	} $else $if macos {
 		st := state()
 		kind := st.view_kinds[id] or { return }
