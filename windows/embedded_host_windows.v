@@ -8,11 +8,14 @@ $if ui2_custom_rendering ? {
 	fn C.IsZoomed(voidptr) i32
 	fn C.SetForegroundWindow(voidptr) i32
 	fn C.ReleaseCapture() i32
-	fn C.SendMessageW(voidptr, u32, uint, int) int
+	fn C.SendMessageW(voidptr, u32, usize, isize) int
 
 	// Window hosting operations; UI2's shared V elements own chrome behavior.
 	pub fn embedded_host_action(action string) {
-		if action == 'close' { sapp.request_quit(); return }
+		if action == 'close' {
+			sapp.request_quit()
+			return
+		}
 		window := sapp.win32_get_hwnd()
 		if window == unsafe { nil } { return }
 		match action {

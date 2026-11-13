@@ -1050,7 +1050,8 @@ fn (b &DiffBuild) code_columns(cells map[string][]Element) []Element {
 			// In one column every line is on the .modified key; the widest
 			// line may be on either side.
 			columns := if cols.split {
-				s.columns[fi][if side == .original { 0 } else { 1 }]
+				col := if side == .original { 0 } else { 1 }
+				s.columns[fi][col]
 			} else {
 				math.max(s.columns[fi][0], s.columns[fi][1])
 			}

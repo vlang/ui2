@@ -248,7 +248,7 @@ pub fn chat_message_layout(config ChatMessageConfig) ChatMessageLayout {
 	if config.show_avatar && chat_group_closes(config.group_position) {
 		size := math.min(avatar_size, row)
 		ax := if config.alignment == .start { 0.0 } else { row - size }
-		avatar_frame = rect(ax, math.max(0, content_bottom - size), size, size)
+		avatar_frame = rect(ax, math.max(0.0, content_bottom - size), size, size)
 		y = math.max(y, avatar_frame.y + size)
 	}
 	mut footer := rect(0, 0, 0, 0)

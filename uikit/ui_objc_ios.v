@@ -59,7 +59,7 @@ fn objc_number_u64(value u64) macos.Id {
 @[inline]
 fn objc_is_kind_of(object macos.Id, class_name string) bool {
 	return !objc_is_nil(object)
-		&& macos.msg_bool_id(object, 'isKindOfClass:', macos.get_class(class_name))
+		&& darwin_msg_bool_id(object, 'isKindOfClass:', macos.get_class(class_name))
 }
 
 fn objc_string(object macos.Id) string {
@@ -265,7 +265,7 @@ fn native_apply_common_view_state(view View, hidden bool, enabled bool, role str
 // where the application delegate answers it, and carries the button it was
 // built for in its property list.
 fn native_configure_dropdown(button View, entries []MenuEntry) {
-	if objc_is_nil(button) || !macos.responds_to(button, 'setShowsMenuAsPrimaryAction:') {
+	if objc_is_nil(button) || !darwin_responds_to(button, 'setShowsMenuAsPrimaryAction:') {
 		return
 	}
 	commands := macos.msg_id(macos.alloc('NSMutableArray'), 'init')
@@ -334,19 +334,19 @@ fn native_text_view_set_selected_range(view View, location u64, length u64) {
 	} else {
 		length
 	}
-	selection := macos.range(safe_location, safe_length)
+	selection := darwin_range(safe_location, safe_length)
 	macos.msg_bool(view, 'becomeFirstResponder')
-	macos.msg_void_range(view, 'setSelectedRange:', selection)
-	macos.msg_void_range(view, 'scrollRangeToVisible:', selection)
+	darwin_msg_void_range(view, 'setSelectedRange:', selection)
+	darwin_msg_void_range(view, 'scrollRangeToVisible:', selection)
 }
 
-fn native_text_view_selected_range(view View) macos.Range {
+fn native_text_view_selected_range(view View) DarwinRange {
 	if !objc_is_kind_of(view, 'UITextView') {
-		return macos.range(0, 0)
+		return darwin_range(0, 0)
 	}
-	selection := macos.msg_range(view, 'selectedRange')
+	selection := darwin_msg_range(view, 'selectedRange')
 	if selection.location == ns_not_found {
-		return macos.range(0, 0)
+		return darwin_range(0, 0)
 	}
 	return selection
 }

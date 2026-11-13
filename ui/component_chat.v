@@ -227,7 +227,7 @@ fn chat_joined_corners(alignment MessageAlignment, position ChatGroupPosition) C
 // border-colored shape with the fill inset over it, patched the same way, so
 // it follows the corners on every renderer.
 fn chat_surface(frame Rect, fill u32, border u32, border_width f64, radius f64, joined f64, corners ChatCorners) []Element {
-	r := math.max(0, math.min(radius, math.min(frame.width, frame.height) / 2))
+	r := math.max(0.0, math.min(radius, math.min(frame.width, frame.height) / 2))
 	if border_width <= 0 {
 		return chat_surface_layer(frame, fill, r, joined, corners)
 	}
@@ -244,7 +244,7 @@ fn chat_surface_layer(frame Rect, color u32, radius f64, joined f64, corners Cha
 		bg:     color
 		radius: radius
 	}, []Element{})]
-	tight := math.max(0, math.min(joined, radius))
+	tight := math.max(0.0, math.min(joined, radius))
 	if tight >= radius {
 		return out
 	}

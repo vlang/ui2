@@ -305,7 +305,7 @@ fn point_chart_fade_path(contours []PathContour, y0 f64, y1 f64) []PathCommand {
 // every 6 points of the plot's height, so neighbors differ by too little
 // opacity to show a step.
 fn plot_fade_slices(height f64) int {
-	return int(math.max(8, math.min(32, math.ceil(height / 6))))
+	return int(math.max(8.0, math.min(32.0, math.ceil(height / 6))))
 }
 
 fn point_chart(spec PointChartSpec) !Element {

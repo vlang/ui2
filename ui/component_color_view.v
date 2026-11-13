@@ -96,9 +96,9 @@ fn color_picker_composited(config ColorPickerConfig) bool {
 // cells, so bands are 4 points tall there and 2 points elsewhere.
 fn color_picker_area_bands(height f64) int {
 	$if ui2_custom_rendering ? {
-		return int(math.max(8, math.min(128, math.ceil(height / 4))))
+		return int(math.max(8.0, math.min(128.0, math.ceil(height / 4))))
 	} $else {
-		return int(math.max(8, math.min(128, math.ceil(height / 2))))
+		return int(math.max(8.0, math.min(128.0, math.ceil(height / 2))))
 	}
 }
 

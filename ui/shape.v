@@ -701,7 +701,7 @@ fn path_stroke_join(mut tris []PathPoint, prev PathPoint, at PathPoint, next Pat
 			for sweep < -math.pi {
 				sweep += 2 * math.pi
 			}
-			count := int(math.max(1, math.ceil(math.abs(sweep) / (math.pi / 2) * f64(steps) / 4)))
+			count := int(math.max(1.0, math.ceil(math.abs(sweep) / (math.pi / 2) * f64(steps) / 4)))
 			for i in 0 .. count {
 				t0 := a0 + sweep * f64(i) / f64(count)
 				t1 := a0 + sweep * f64(i + 1) / f64(count)
