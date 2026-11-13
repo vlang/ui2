@@ -1097,7 +1097,30 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 			return view(node.id, frame, v_box(node), [label('${node.id}_title', node.prop_or('title', node.prop('text')), rect(12, 8, frame.width - 24, 20), v_text_style(node))])
 		}
 		'Scaffold' {
-			return view(node.id, frame, v_box(node), v_children(node, local)!)
+			top := node.prop_or('top_bar_height', '0').f64()
+			bottom := node.prop_or('bottom_bar_height', '0').f64()
+			content_box := scaffold_content_rect(local, top, bottom)
+			top_bar, content, bottom_bar, fab, snackbar := v_scaffold_slots(node, rect(0,
+				0, local.width, top), rect(0, 0, content_box.width, content_box.height),
+				rect(0, content_box.y + content_box.height, local.width, bottom))!
+			return scaffold(ScaffoldConfig{
+				id:                node.id
+				frame:             frame
+				top_bar_height:    top
+				bottom_bar_height: bottom
+				fab_margin:        node.prop_or('fab_margin', '16').f64()
+				snackbar_margin:   node.prop_or('snackbar_margin', '16').f64()
+				background:        if node.prop_bool('transparent') {
+					none
+				} else {
+					v_color(node, 'background', 0xffffff)
+				}
+				top_bar:           top_bar
+				content:           content
+				bottom_bar:        bottom_bar
+				floating_action:   fab
+				snackbar:          snackbar
+			})!
 		}
 		'ProgressBar' {
 			return progress_bar(
@@ -1359,6 +1382,52 @@ fn v_keyboard(raw string) int {
 		'decimal', 'numeric', 'number' { keyboard_decimal }
 		else { keyboard_default }
 	}
+}
+
+// v_scaffold_slots routes a Scaffold's children into their slots: `slot: top`
+// for the top bar, `slot: bottom` for the bottom bar, `slot: fab` for the
+// floating action, `slot: snackbar` for the snackbar, and anything else for
+// the content box. Frames are resolved against each slot's own box, so slot
+// coordinates start at the slot's top-left corner. At most one fab and one
+// snackbar child are allowed.
+fn v_scaffold_slots(node &VNode, top_box Rect, content_box Rect, bottom_box Rect) !([]Element, []Element, []Element, ?Element, ?Element) {
+	mut top_bar := []Element{}
+	mut content := []Element{}
+	mut bottom_bar := []Element{}
+	mut fab := ?Element(none)
+	mut snackbar := ?Element(none)
+	for child in node.children {
+		if v_is_layout_metadata(child) {
+			continue
+		}
+		match child.prop_or('slot', 'content') {
+			'top' {
+				top_bar << node_to_element(child, top_box)!
+			}
+			'bottom' {
+				bottom_bar << node_to_element(child, bottom_box)!
+			}
+			'fab' {
+				if fab != none {
+					return error('Scaffold accepts at most one fab child')
+				}
+				fab = node_to_element(child, content_box)!
+			}
+			'snackbar' {
+				if snackbar != none {
+					return error('Scaffold accepts at most one snackbar child')
+				}
+				snackbar = node_to_element(child, content_box)!
+			}
+			'content' {
+				content << node_to_element(child, content_box)!
+			}
+			else {
+				return error('unknown scaffold slot `${child.prop('slot')}`')
+			}
+		}
+	}
+	return top_bar, content, bottom_bar, fab, snackbar
 }
 
 fn v_column(node &VNode, frame Rect) !Element {
