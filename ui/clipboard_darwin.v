@@ -27,7 +27,9 @@ fn native_set_clipboard_text(text string) bool {
 	}
 	macos.msg_i64(pasteboard, 'clearContents')
 	objects := macos.msg_id1(macos.get_class('NSArray'), 'arrayWithObject:', macos.nsstring(text))
-	return macos.msg_bool_id(pasteboard, 'writeObjects:', objects)
+	// NOTE(V 0.5.2 CI): `macos.msg_bool_id` does not exist in 0.5.2; call the
+	// underlying `bool1` objc bridge directly (exists in 0.5.2).
+	return C.macos_objc_msg_bool1(pasteboard, macos.sel('writeObjects:'), objects)
 }
 
 fn native_clipboard_text() ?string {

@@ -1,3 +1,5 @@
+// vfmt off
+@[has_globals]
 module ui2
 
 // measure_layout_text uses the active backend's metrics when available, with
@@ -9,7 +11,7 @@ pub fn measure_layout_text(text string, style TextStyle, max_width f64) !LayoutS
 	$if macos && !ui2_custom_rendering ?&& !ui2_headless ? {
 		return layout_measure_appkit_text(text, style, max_width)
 	} $else $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
-		ctx := g_gg_app.ctx
+		ctx := immediate_gg_ctx()
 		if ctx != unsafe { nil } && ctx.font_inited {
 			ensure_symbol_fallbacks(ctx)
 			return layout_measure_text_lines(text, style, max_width, font_line_height(style.size), fn [ctx, style] (line string) f64 {
@@ -23,7 +25,7 @@ pub fn measure_layout_text(text string, style TextStyle, max_width f64) !LayoutS
 $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
 	fn layout_measure_custom_text_area(text string, style TextStyle, max_width f64) !LayoutSize {
 		layout_validate_text_measurement(style, max_width)!
-		ctx := g_gg_app.ctx
+		ctx := immediate_gg_ctx()
 		if ctx != unsafe { nil } && ctx.font_inited {
 			ensure_symbol_fallbacks(ctx)
 			return layout_measure_text_area_lines(text, style, max_width, font_line_height(style.size), fn [ctx, style] (line string) f64 {

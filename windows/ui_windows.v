@@ -254,16 +254,26 @@ fn windows_pack_shape(el Element) WindowsShape {
 // into its own paint cycle (dc nil) or into a DC a descendant asked for.
 fn windows_paint_box(hwnd voidptr, dc voidptr, key string, box BoxStyle, transparent int) {
 	mesh := windows_gradient_mesh(box, C.ui2_win_client_width(hwnd), C.ui2_win_client_height(hwnd))
-	vertices := if mesh.vertices.len > 0 { &mesh.vertices[0] } else { unsafe { nil } }
-	triangles := if mesh.triangles.len > 0 { &mesh.triangles[0] } else { unsafe { nil } }
+	mut vertices := &C.ui2_win_mesh_vertex(unsafe { nil })
+	if mesh.vertices.len > 0 {
+		vertices = &mesh.vertices[0]
+	}
+	mut triangles := &u32(unsafe { nil })
+	if mesh.triangles.len > 0 {
+		triangles = &mesh.triangles[0]
+	}
 	opacity := if box.transparent { 1.0 } else { box_fill_opacity(box) }
 	st := windows_state()
 	mut shape_ptr := &C.ui2_win_shape(unsafe { nil })
 	mut packed := C.ui2_win_shape{}
 	if shape := st.node_shapes[key] {
 		style := shape.style
+		mut shape_commands := &f64(unsafe { nil })
+		if shape.commands.len > 0 {
+			shape_commands = &shape.commands[0]
+		}
 		packed = C.ui2_win_shape{
-			commands:       if shape.commands.len > 0 { &shape.commands[0] } else { unsafe { nil } }
+			commands:       shape_commands
 			count:          shape.commands.len / 7
 			has_fill:       windows_bool(style.fill != none && style.fill_opacity > 0)
 			fill:           style.fill or { 0 }
@@ -1474,6 +1484,7 @@ fn windows_widget_kind(kind Kind) int {
 		.switch_control { 11 }
 		.toggle_button { 12 }
 		.screen { 0 }
+		.opengl { 0 }
 	}
 }
 
@@ -2356,7 +2367,7 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam u64, lparam i64) i6
 				return 0
 			}
 			if wparam in [u64(0x0d), u64(0x20)]
-				&& (uint(lparam) & (uint(1) << 30)) == 0 {
+				&& (u32(lparam) & (u32(1) << 30)) == 0 {
 				binding := st.pointer_bindings[windows_handle_id(hwnd)] or {
 					WindowsPointerBinding{}
 				}
@@ -2529,7 +2540,7 @@ fn ui2_windows_control_pointer(hwnd voidptr, message u32, local_x int, local_y i
 	mut y := local_y
 	C.ui2_win_point_to_root(hwnd, st.root, &x, &y)
 	if message == win_wm_lbutton_down {
-		mut target := voidptr(uint(hwnd))
+		mut target := hwnd
 		mut binding := WindowsPointerBinding{}
 		for target != unsafe { nil } {
 			handle := windows_handle_id(target)

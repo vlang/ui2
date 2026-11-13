@@ -7,25 +7,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	__global scroll_test_measurements = 0
 
 	fn reset_scroll_test_state() {
-		reset_scroll_frame()
-		g_scroll_offsets = map[string]f64{}
-		g_pending_scroll = map[string]f64{}
-		g_scroll_content_h = map[string]f64{}
-		g_scroll_offsets_x = map[string]f64{}
-		g_pending_scroll_x = map[string]f64{}
-		g_scroll_content_w = map[string]f64{}
-		g_active_scrolls = map[string]bool{}
-		g_active_fields = map[string]bool{}
-		g_text_values = map[string]string{}
-		g_text_props = map[string]string{}
-		g_text_kinds = map[string]Kind{}
-		g_text_editors = map[string]TextEditor{}
-		g_text_area_layouts = map[string]TextAreaLayout{}
-		g_hit_targets = []HitTarget{}
-		g_touch = TouchState{}
-		g_focused_field = ''
-		g_scroll_handler = ScrollFn(unsafe { nil })
-		g_event_handler = EventFn(unsafe { nil })
+		reset_scroll_test_globals()
 		scroll_test_events = []string{}
 		scroll_test_measurements = 0
 		close_dropdown()
@@ -52,7 +34,7 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		reset_scroll_test_state()
 		frame := rect(0, 0, 100, 80)
 		register_scroll_view('notes', frame, frame, 400, true, true, false)
-		g_focused_field = 'notes'
+		set_test_focused_field('notes')
 		page_focused_text_area(1)
 		assert scroll_offset('notes') == 80
 		page_focused_text_area(10)
@@ -139,7 +121,7 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		handle_touch_up(150, 30)
 		assert scroll_offset('text') == 146
 		assert scroll_offset('info') == 48
-		assert g_focused_field == ''
+		assert embedded_focused_field() == ''
 		assert scroll_test_events == ['text', 'info', 'text']
 	}
 
@@ -179,7 +161,7 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		register_scroll_view('inner', rect(20, 20, 100, 200), rect(0, 0, 300, 100), 1000,
 			true, true, false)
 		assert scroll_maximum('inner') == 800
-		assert g_scroll_areas['inner'] == rect(20, 20, 100, 80)
+		assert get_scroll_areas()['inner'] == rect(20, 20, 100, 80)
 		handle_mouse_scroll(50, 50, -1)
 		assert scroll_offset('inner') == 48
 		assert scroll_offset('outer') == 0
@@ -256,7 +238,7 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		set_scroll_offset('inner', 80, scroll_maximum('inner'))
 
 		handle_touch_down(50, 80)
-		assert g_touch.scroll_chain == ['inner', 'outer']
+		assert get_touch_state().scroll_chain == ['inner', 'outer']
 		handle_touch_move(50, 30)
 		assert scroll_offset('inner') == 100
 		assert scroll_offset('outer') == 30
@@ -264,7 +246,7 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		// Simulate the next frame after the parent has moved the child outside
 		// its viewport. Only the parent is registered, but the renderer retains
 		// scroll state from the child's still-mounted element subtree.
-		g_active_scrolls = map[string]bool{}
+		clear_active_scrolls_for_test()
 		reset_scroll_frame()
 		clip := rect(0, 0, 300, 300)
 		register_scroll_view('outer', clip, clip, 1200, true, true, false)
@@ -276,10 +258,10 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 			}]
 		})
 		prune_unmounted_state()
-		assert 'inner' !in g_scroll_viewports
+		assert 'inner' !in get_scroll_viewports()
 		assert scroll_offset('inner') == 100
-		assert g_scroll_content_h['inner'] == 200
-		assert g_scroll_parents.len == 0
+		assert get_scroll_content_h()['inner'] == 200
+		assert get_scroll_parents().len == 0
 
 		handle_touch_move(50, 0)
 		assert scroll_offset('outer') == 60
@@ -335,7 +317,7 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		assert scroll_hit_test(50, 50) == ''
 		reset_scroll_frame()
 		register_scroll_view('hidden-bar', frame, frame, 1000, true, false, false)
-		assert 'hidden-bar' !in g_scrollbar_geometries
+		assert 'hidden-bar' !in get_scrollbar_geometries()
 		handle_mouse_scroll(50, 50, -0.5)
 		assert scroll_offset('hidden-bar') == 24
 	}
@@ -358,11 +340,11 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		frame := rect(0, 0, 100, 100)
 		register_scroll_view('text', frame, frame, 1000, true, true, false)
 		handle_touch_down(94, 10)
-		assert g_touch.scrollbar_drag
+		assert get_touch_state().scrollbar_drag
 		handle_touch_move(94, 74)
 		handle_touch_up(94, 74)
 		assert scroll_offset('text') == 900
-		assert g_focused_field == ''
+		assert embedded_focused_field() == ''
 		set_scroll_offset('text', 0, 900)
 		reset_scroll_frame()
 		register_scroll_view('text', frame, frame, 1000, true, true, false)
@@ -385,14 +367,14 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		reset_scroll_test_state()
 		scroll_test_panes()
 		text_area_lines('text', 'abcdef', 30, TextStyle{}, 15, scroll_test_width)
-		g_text_values['text'] = 'abcdef'
-		g_text_kinds['text'] = .text_area
-		g_active_scrolls = map[string]bool{}
+		set_test_text_value('text', 'abcdef')
+		set_test_text_kind('text', .text_area)
+		clear_active_scrolls_for_test()
 		reset_scroll_frame()
 		prune_unmounted_state()
-		assert 'text' !in g_scroll_offsets
-		assert 'text' !in g_scroll_content_h
-		assert 'text' !in g_text_area_layouts
+		assert 'text' !in get_scroll_offsets()
+		assert 'text' !in get_scroll_content_h()
+		assert 'text' !in get_text_area_layouts()
 		assert scroll_hit_test(150, 50) == ''
 	}
 
@@ -523,8 +505,8 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		reset_scroll_test_state()
 		horizontal_scroll_test_pane()
 		handle_touch_down(10, 94)
-		assert g_touch.scrollbar_drag
-		assert g_touch.scrollbar_horizontal
+		assert get_touch_state().scrollbar_drag
+		assert get_touch_state().scrollbar_horizontal
 		handle_touch_move(74, 94)
 		handle_touch_up(74, 94)
 		assert scroll_horizontal_offset('columns') == 300
@@ -546,19 +528,19 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 			400, true, true, false)
 		// The press lands on the column, whose strip draws its scroller over it.
 		handle_touch_down(20, 94)
-		assert g_touch.scroll_chain == ['column', 'columns']
-		assert g_touch.scrollbar_drag
-		assert g_touch.scrollbar_horizontal
-		assert g_touch.scroll_id == 'columns'
+		assert get_touch_state().scroll_chain == ['column', 'columns']
+		assert get_touch_state().scrollbar_drag
+		assert get_touch_state().scrollbar_horizontal
+		assert get_touch_state().scroll_id == 'columns'
 		handle_touch_move(120, 94)
 		handle_touch_up(120, 94)
 		assert scroll_horizontal_offset('columns') > 300
 		assert scroll_offset('column') == 0
 		// The column's own scroller still answers further up.
 		handle_touch_down(144, 20)
-		assert g_touch.scrollbar_drag
-		assert !g_touch.scrollbar_horizontal
-		assert g_touch.scroll_id == 'column'
+		assert get_touch_state().scrollbar_drag
+		assert !get_touch_state().scrollbar_horizontal
+		assert get_touch_state().scroll_id == 'column'
 		handle_touch_up(144, 20)
 	}
 
@@ -606,7 +588,7 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		scroll_to_horizontal_offset('columns', 10_000)
 		scroll_to_horizontal_offset('columns', 120)
 		assert scroll_horizontal_offset('columns') == 120
-		assert 'columns' !in g_pending_scroll_x
+		assert 'columns' !in get_pending_scroll_x()
 	}
 
 	fn test_sideways_state_goes_with_the_axis_and_with_the_pane() {
@@ -618,16 +600,16 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		frame := rect(0, 0, 100, 100)
 		register_scroll_view('columns', frame, frame, 0, true, false, false)
 		assert register_scroll_view_width('columns', 0, false, false, false) == 0
-		assert 'columns' !in g_scrollbar_geometries_x
+		assert 'columns' !in get_scrollbar_geometries_x()
 		assert scroll_hit_test(50, 50) == ''
 		reset_scroll_frame()
 		horizontal_scroll_test_pane()
 		scroll_to_horizontal_offset('columns', 120)
-		g_active_scrolls = map[string]bool{}
+		clear_active_scrolls_for_test()
 		reset_scroll_frame()
 		prune_unmounted_state()
-		assert 'columns' !in g_scroll_offsets_x
-		assert 'columns' !in g_scroll_content_w
+		assert 'columns' !in get_scroll_offsets_x()
+		assert 'columns' !in get_scroll_content_w()
 	}
 }
 
@@ -660,11 +642,11 @@ fn test_text_area_line_ranges_keep_original_crlf_offsets() {
 
 fn test_text_area_vertical_and_line_boundary_navigation() {
 	reset_scroll_test_state()
-	g_focused_field = 'notes'
-	g_text_area_layouts['notes'] = TextAreaLayout{
+	set_test_focused_field('notes')
+	set_test_text_area_layout('notes', TextAreaLayout{
 		text: 'one\ntwo\nthree'
 		lines: ['one', 'two', 'three']
-	}
+	})
 	mut editor := text_editor('one\ntwo\nthree')
 	editor.set_caret(6)
 	assert move_focused_text_area_caret(mut editor, 1, false)

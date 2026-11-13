@@ -847,7 +847,7 @@ fn apply_widget_animation_node(declared Element, now i64, visible_only bool, mut
 	if children.len == 0 {
 		// Nothing below this node changed, so the declared children are the
 		// processed children.
-		children = declared.children
+		children = declared.children.clone()
 	}
 	mut result := Element{
 		...declared
