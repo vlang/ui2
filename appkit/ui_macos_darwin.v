@@ -810,8 +810,14 @@ pub fn quit() {
 	native_terminate_app()
 }
 
+pub fn safe_area_insets() SafeInsets {
+	// macOS keeps its menu bar and camera housing outside the content rect
+	// ui2 lays out, so there is no inset left to avoid.
+	return SafeInsets{}
+}
+
 pub fn safe_area_top() f64 {
-	return 0
+	return safe_area_insets().top
 }
 
 pub fn start_barcode_scan() {

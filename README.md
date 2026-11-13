@@ -989,6 +989,49 @@ the event being handled has just added, call `refresh()` first so the element
 has its new range. The iOS backend scrolls the same modes but does not expose
 these functions.
 
+## Safe areas
+
+A `SafeArea` insets its children by the operating-system intrusions — the
+status bar, display notch, camera housing, and home indicator on phones —
+after Flutter's `SafeArea`. Each side can be switched off individually, and
+`minimum` keeps at least that much room where the platform reports nothing.
+Children are positioned relative to the safe content box:
+
+```v
+content := ui2.safe_area(
+    id:    'safe'
+    frame: ui2.bounds()
+    minimum: ui2.LayoutPadding{ top: 8, bottom: 8 }
+    children: [ui2.label('title', 'Hello', ui2.rect(0, 0, 200, 24), style)]
+)!
+```
+
+```vml
+SafeArea {
+    id: safe
+    minimum_top: 8
+    minimum_bottom: 8
+}
+```
+
+`SafeViewport` is the scrolling equivalent, after Flutter's `SliverSafeArea`:
+the scroll pane spans the whole frame while its content clears the intrusions,
+so the first and last rows are never hidden behind a notch or home indicator.
+`scroll_mode` chooses the axes, as in `scroll_with_mode`:
+
+```vml
+SafeViewport {
+    id: list
+    scroll_mode: vertical_only
+}
+```
+
+`safe_area_insets()` reports the current intrusions per side (zero where the
+platform keeps them outside the content rect, as on desktop); `safe_area_top()`
+is the top edge of the same value. iOS reads the view's `safeAreaInsets`, so
+rotating the phone or revealing the keyboard-adjacent edges is picked up on
+the next build.
+
 ## Fonts and text sizes
 
 `TextStyle.size` is in points. Win32 and the Linux and BSD desktops resolve a

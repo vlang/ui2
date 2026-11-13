@@ -916,8 +916,12 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		consume_key()
 	}
 
+	pub fn safe_area_insets() SafeInsets {
+		return SafeInsets{}
+	}
+
 	pub fn safe_area_top() f64 {
-		return 0
+		return safe_area_insets().top
 	}
 
 	pub fn start_barcode_scan() {

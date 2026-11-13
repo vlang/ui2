@@ -1014,6 +1014,41 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 				scroll_mode: mode
 			}
 		}
+		'SafeArea' {
+			left, top, right, bottom := v_safe_sides(node)
+			minimum := v_safe_minimum(node)!
+			pad := safe_area_padding(left, top, right, bottom, minimum)
+			inner := safe_content_rect(local, pad)
+			kids := v_children(node, rect(0, 0, inner.width, inner.height))!
+			return view(node.id, frame, v_box(node), [
+				view('', inner, BoxStyle{ transparent: true }, kids),
+			])
+		}
+		'SafeViewport' {
+			left, top, right, bottom := v_safe_sides(node)
+			minimum := v_safe_minimum(node)!
+			mode := scroll_mode(node.prop_or('scroll_mode', ''))!
+			pad := safe_area_padding(left, top, right, bottom, minimum)
+			inner := safe_content_rect(local, pad)
+			kids := v_children(node, rect(0, 0, inner.width, inner.height))!
+			return safe_viewport(SafeViewportConfig{
+				id:                    node.id
+				frame:                 frame
+				left:                  left
+				top:                   top
+				right:                 right
+				bottom:                bottom
+				minimum:               minimum
+				axis:                  mode
+				background:            if node.prop_bool('transparent') {
+					none
+				} else {
+					v_color(node, 'background', 0xffffff)
+				}
+				persistent_scrollbars: node.prop_bool('persistent')
+				children:              kids
+			})!
+		}
 		'View', 'Rectangle' {
 			return view(node.id, frame, v_box(node), v_children(node, local)!)
 		}
@@ -1359,6 +1394,25 @@ fn v_keyboard(raw string) int {
 		'decimal', 'numeric', 'number' { keyboard_decimal }
 		else { keyboard_default }
 	}
+}
+
+// v_safe_sides reads which system intrusions a SafeArea or SafeViewport
+// avoids. Every side defaults to true, after Flutter's SafeArea flags.
+fn v_safe_sides(node &VNode) (bool, bool, bool, bool) {
+	return node.prop_or('left', 'true') == 'true', node.prop_or('top', 'true') == 'true', node.prop_or('right', 'true') == 'true', node.prop_or('bottom', 'true') == 'true'
+}
+
+// v_safe_minimum reads the minimum padding a SafeArea or SafeViewport keeps on
+// every side, even where the platform reports no intrusion.
+fn v_safe_minimum(node &VNode) !LayoutPadding {
+	minimum := LayoutPadding{
+		left:   node.prop_or('minimum_left', '0').f64()
+		top:    node.prop_or('minimum_top', '0').f64()
+		right:  node.prop_or('minimum_right', '0').f64()
+		bottom: node.prop_or('minimum_bottom', '0').f64()
+	}
+	safe_validate_minimum(minimum)!
+	return minimum
 }
 
 fn v_column(node &VNode, frame Rect) !Element {
