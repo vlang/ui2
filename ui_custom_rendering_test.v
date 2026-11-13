@@ -2,14 +2,16 @@ module ui2
 
 $if ui2_custom_rendering ? {
 	import gg
+	import sokol.sgl
 
 	// Regression coverage for `-d ui2_custom_rendering`:
-	// `ctx.pipeline` holds `render.Pipeline`, so alpha blending must go
-	// through `ctx.r` (the pure-V `gg/render` context), not `sokol.sgl`.
-	// Defining this helper fails to compile if the `sgl`/`render` pipeline
-	// types diverge again (see shape_immediate.c.v / ui_immediate.c.v).
+	// Alpha blending goes through `sokol.sgl` directly so the test compiles
+	// on V 0.5.2 (CI, whose gg predates `render.Context`) as well as on
+	// newer V (whose sgl API is unchanged). Defining this helper fails to
+	// compile if the `sgl` pipeline types diverge again
+	// (see shape_immediate.c.v / ui_immediate.c.v).
 	fn custom_render_pipeline_smoke(ctx &gg.Context) {
-		ctx.r.load_pipeline(ctx.pipeline.alpha)
+		sgl.load_pipeline(im_alpha_pipeline())
 	}
 }
 

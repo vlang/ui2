@@ -64,17 +64,17 @@ pub fn (constraints LayoutConstraints) deflate(padding LayoutPadding) !LayoutCon
 	horizontal := padding.left + padding.right
 	vertical := padding.top + padding.bottom
 	return LayoutConstraints{
-		min_width:  math.max(0, constraints.min_width - horizontal)
-		min_height: math.max(0, constraints.min_height - vertical)
+		min_width:  math.max(0.0, constraints.min_width - horizontal)
+		min_height: math.max(0.0, constraints.min_height - vertical)
 		max_width:  if constraints.max_width < 0 {
 			-1
 		} else {
-			math.max(0, constraints.max_width - horizontal)
+			math.max(0.0, constraints.max_width - horizontal)
 		}
 		max_height: if constraints.max_height < 0 {
 			-1
 		} else {
-			math.max(0, constraints.max_height - vertical)
+			math.max(0.0, constraints.max_height - vertical)
 		}
 	}
 }
@@ -115,30 +115,31 @@ pub fn measure_layout_element(element Element, constraints LayoutConstraints, me
 		text_width := if outer_width < 0 {
 			-1.0
 		} else {
-			math.max(0, outer_width - insets.left - insets.right)
+			math.max(0.0, outer_width - insets.left - insets.right)
 		}
 		content := if element.text.len == 0 && element.kind in [.text_field, .text_area] {
 			element.placeholder
 		} else {
 			element.text
 		}
-		measured := $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
+		mut measured := LayoutSize{}
+		$if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
 			// Editors wrap every row, unlike labels with a declared line limit.
 			// Keep external callbacks' original TextStyle contract unchanged.
 			if element.kind == .text_area && voidptr(measure) == voidptr(measure_layout_text) {
-				layout_measure_custom_text_area(content, element.text_style, text_width)!
+				measured = layout_measure_custom_text_area(content, element.text_style, text_width)!
 			} else {
-				measure(content, element.text_style, text_width)!
+				measured = measure(content, element.text_style, text_width)!
 			}
 		} $else {
-			measure(content, element.text_style, text_width)!
+			measured = measure(content, element.text_style, text_width)!
 		}
 		preferred = LayoutSize{
 			width:  measured.width + insets.left + insets.right
 			height: measured.height + insets.top + insets.bottom
 		}
 		if element.kind == .checkbox {
-			preferred = LayoutSize{ ...preferred, height: math.max(18, preferred.height) }
+			preferred = LayoutSize{ ...preferred, height: math.max(18.0, preferred.height) }
 		}
 	} else {
 		mut width := 0.0
@@ -173,7 +174,7 @@ fn layout_measure_control_insets(element Element) LayoutPadding {
 			// Include the gutter reserved by text_area_content_rect even when no
 			// scrollbar is visible, so measurement and drawing wrap identically.
 			return LayoutPadding{
-				left:   math.max(2, element.padding_left)
+				left:   math.max(2.0, element.padding_left)
 				right:  if element.disable_scroll { 8 } else { 12 }
 				top:    8
 				bottom: 8
@@ -186,10 +187,10 @@ fn layout_measure_control_insets(element Element) LayoutPadding {
 		}
 		.checkbox { LayoutPadding{ left: 26 } }
 		.dropdown {
-			LayoutPadding{ left: math.max(0, element.padding_left), right: 32, top: 6, bottom: 6 }
+			LayoutPadding{ left: math.max(0.0, element.padding_left), right: 32, top: 6, bottom: 6 }
 		}
 		.text_field {
-			LayoutPadding{ left: math.max(0, element.padding_left), right: 8, top: 6, bottom: 6 }
+			LayoutPadding{ left: math.max(0.0, element.padding_left), right: 8, top: 6, bottom: 6 }
 		}
 		.text_area { LayoutPadding{ left: 8, right: 8, top: 8, bottom: 8 } }
 		else { LayoutPadding{} }
