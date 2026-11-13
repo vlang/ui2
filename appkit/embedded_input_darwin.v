@@ -15,7 +15,13 @@ $if !ui2_custom_rendering ? {
 	const embedded_key_current_ = &EmbeddedKeyCurrent{}
 	fn embedded_current_key_event() voidptr {
 		current := embedded_key_current_
-		return if current.event != unsafe { nil } { current.event } else { voidptr(macos.msg_id(native_current_app(), 'currentEvent')) }
+		// NOTE(V 0.5.2 CI): `return if ...` as a value is not supported in 0.5.2;
+		// use explicit branches instead (same on newer toolchains).
+		if current.event != unsafe { nil } {
+			return current.event
+		} else {
+			return voidptr(macos.msg_id(native_current_app(), 'currentEvent'))
+		}
 	}
 	pub fn embedded_key_panel() string { return embedded_event_panel(embedded_current_key_event()) }
 	pub fn install_embedded_keys(handler KeyEventFn) {
@@ -51,20 +57,20 @@ $if !ui2_custom_rendering ? {
 		match action {
 			'show' {
 				if macos.msg_bool(window, 'isMiniaturized') {
-					macos.msg_void1(window, 'deminiaturize:', native_nil_view())
+					macos.msg_void1(window, 'deminiaturize:', macos.Id(native_nil_view()))
 				}
-				macos.msg_void1(window, 'makeKeyAndOrderFront:', native_nil_view())
+				macos.msg_void1(window, 'makeKeyAndOrderFront:', macos.Id(native_nil_view()))
 				macos.msg_void_bool(native_current_app(), 'activateIgnoringOtherApps:', true)
 			}
-			'close' { macos.msg_void1(window, 'performClose:', native_nil_view()) }
-			'minimize' { macos.msg_void1(window, 'performMiniaturize:', native_nil_view()) }
-			'zoom' { macos.msg_void1(window, 'zoom:', native_nil_view()) }
+			'close' { macos.msg_void1(window, 'performClose:', macos.Id(native_nil_view())) }
+			'minimize' { macos.msg_void1(window, 'performMiniaturize:', macos.Id(native_nil_view())) }
+			'zoom' { macos.msg_void1(window, 'zoom:', macos.Id(native_nil_view())) }
 			'drag' { macos.msg_void1(window, 'performWindowDragWithEvent:', macos.msg_id(native_current_app(), 'currentEvent')) }
 			else {}
 		}
 	}
 	pub fn install_embedded_menus(app_name string, menus []Menu) {
-		publish_menu_context(state().event_handler, app_name, state().window)
+		publish_menu_context(state().event_handler, app_name, voidptr(state().window))
 		set_menu_bar(menus)
 	}
 	fn C.ui2_install_embedded_wheel_monitor(callback fn (voidptr) i32)

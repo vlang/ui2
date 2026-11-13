@@ -29,7 +29,7 @@ fn basics_text_width(text string, style TextStyle) f64 {
 	if text.len == 0 {
 		return 0
 	}
-	return math.max(0, measure_text_width(text, style) - 2 * basics_label_inset())
+	return math.max(0.0, measure_text_width(text, style) - 2 * basics_label_inset())
 }
 
 // BasicsSpan is a stretch of runes, end exclusive.

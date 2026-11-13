@@ -18,19 +18,19 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 
 	pub fn select_embedded_textbox(id string) {
 		focus(id)
-		mut editor := g_text_editors[id] or { text_editor(text(id).clone()) }
+		mut editor := get_embedded_text_editor(id, text(id).clone())
 		editor.select_all()
 		replace_text_editor(id, editor)
 	}
 	// Select a rune range of a focused embedded field, as address completion does.
 	pub fn select_embedded_text_range(id string, start int, end int) {
-		mut editor := g_text_editors[id] or { text_editor(text(id).clone()) }
+		mut editor := get_embedded_text_editor(id, text(id).clone())
 		editor.set_selection(start, end)
 		replace_text_editor(id, editor)
 	}
 	// The custom renderer inserts committed characters only.
 	pub fn embedded_text_composing(_ string) bool { return false }
-	pub fn blur_embedded_textbox() { g_focused_field = '' }
+	pub fn blur_embedded_textbox() { clear_embedded_focus() }
 	fn collect_embedded_readonly(elements []Element) {
 		for element in elements {
 			if element.kind in [.text_field, .text_area] { embedded_readonly[element.id] = element.readonly }
@@ -40,33 +40,23 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	// Draw into the host application's existing pass. Images are already decoded,
 	// so no texture is allocated while the host render pass is active.
 	pub fn draw_embedded_elements(ctx &gg.Context, elements []Element, images map[string]int, handler EventFn) {
-		g_gg_app.ctx = ctx
-		g_event_handler = handler
+		set_immediate_gg_ctx(ctx)
+		set_embedded_event_handler(handler)
 		embedded_elements = elements.clone()
 		embedded_readonly.clear()
 		collect_embedded_readonly(elements)
 		if elements.len == 0 { embedded_context.clear() }
-		g_hit_targets.clear()
-		g_tooltip_targets.clear()
-		g_tooltip_owners = 0
-		reset_scroll_frame()
-		g_active_scrolls.clear()
-		g_active_fields.clear()
-		g_active_checkboxes.clear()
-		g_active_sliders.clear()
-		g_active_switches.clear()
-		g_active_toggles.clear()
-		g_active_images.clear()
+		reset_embedded_immediate_state()
 		// Texture ownership stays with the embedding browser. Forget stale routes
 		// without destroying its cache entries, and protect current borrowed images
 		// from UI2's ordinary unmount cleanup.
-		for path, _ in embedded_image_paths { if path !in images { g_image_ids.delete(path) } }
+		for path, _ in embedded_image_paths { if path !in images { delete_embedded_image_id(path) } }
 		embedded_image_paths.clear()
-		for path, id in images { g_image_ids[path] = id; embedded_image_paths[path] = true }
+		for path, id in images { set_embedded_image_id(path, id); embedded_image_paths[path] = true }
 		clip := rect(0, 0, f64(ctx.width), f64(ctx.height))
 		for element in elements { render_element(ctx, element, 0, 0, clip, '') }
 		for element in embedded_context { render_element(ctx, element, 0, 0, clip, '') }
-		for path, _ in images { g_active_images[path] = true }
+		for path, _ in images { mark_embedded_image_active(path) }
 		prune_unmounted_state()
 		update_tooltip(time.ticks())
 		draw_tooltip(ctx)
@@ -79,8 +69,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			left := off_x + el.frame.x
 			top := off_y + el.frame.y
 			if el.hidden || x < left || y < top || x >= left + el.frame.width || y >= top + el.frame.height { continue }
-			child_left := if el.kind == .scroll { left - (g_scroll_offsets_x[el.id] or { 0.0 }) } else { left }
-			child_top := if el.kind == .scroll { top - (g_scroll_offsets[el.id] or { 0.0 }) } else { top }
+			child_left := if el.kind == .scroll { left - embedded_scroll_offset_x(el.id) } else { left }
+			child_top := if el.kind == .scroll { top - embedded_scroll_offset(el.id) } else { top }
 			children := embedded_context_target(el.children, x, y, child_left, child_top)
 			if children.len > 0 { return children }
 			if el.enabled && el.menu.len > 0 { return el.menu }
@@ -91,14 +81,14 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	// Consume only UI2 targets or an active pointer capture. The document keeps
 	// its keyboard and pointer dispatch when the pointer is outside this tree.
 	pub fn embedded_elements_event(event &gg.Event) bool {
-		if g_gg_app.ctx == unsafe { nil } { return false }
+		if immediate_gg_ctx() == unsafe { nil } { return false }
 		if event.typ in [.key_down, .char] {
 			if event.typ == .key_down && dispatch_key_event(event) { return true }
-			if g_focused_field == '' { return false }
-			if embedded_readonly[g_focused_field] or { false } {
+			if embedded_focused_field() == '' { return false }
+			if embedded_readonly[embedded_focused_field()] or { false } {
 				if event.typ == .char || event.key_code in [.backspace, .delete, .enter] || ((event.modifiers & 10) != 0 && event.key_code in [.x, .v, .z]) { return true }
 			}
-			on_event(event, g_gg_app)
+			on_event(event, immediate_gg_app())
 			return true
 		}
 		x := f64(event.mouse_x)
@@ -110,7 +100,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if event.typ == .mouse_down && event.mouse_button == .right {
 			menu := embedded_context_target(embedded_elements, x, y, 0, 0)
 			if menu.len == 0 { return false }
-			ctx := g_gg_app.ctx
+			ctx := immediate_gg_ctx()
 			width := f64(180)
 			left := if x + width > ctx.width { f64(ctx.width) - width } else { x }
 			height := f64(menu.len) * 28
@@ -126,24 +116,24 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			return true
 		}
 		if event.typ == .mouse_scroll && embedded_wheel_handler(x, y, f64(event.scroll_x), f64(event.scroll_y)) { return true }
-		captured := g_touch.down
+		captured := embedded_touch_down()
 		target := hit_test(x, y)
 		if event.typ in [.mouse_down, .mouse_up, .mouse_move, .mouse_scroll] {
 			if target.action_id == '' && !captured && embedded_context.len == 0 {
-				if event.typ == .mouse_move { on_event(event, g_gg_app) }
+				if event.typ == .mouse_move { on_event(event, immediate_gg_app()) }
 				return false
 			}
 			if event.typ == .mouse_down && event.mouse_button == .middle {
-				g_event_handler(pointer_event_id('middle', target.action_id, x, y))
+				embedded_event_handler()(pointer_event_id('middle', target.action_id, x, y))
 				return true
 			}
 			if event.typ in [.mouse_down, .mouse_up] && event.mouse_button != .left { return true }
-			on_event(event, g_gg_app)
+			on_event(event, immediate_gg_app())
 			if event.typ == .mouse_up { embedded_context.clear() }
 			return true
 		}
 		if event.typ in [.mouse_leave, .unfocused, .suspended] {
-			on_event(event, g_gg_app)
+			on_event(event, immediate_gg_app())
 			if event.typ != .mouse_leave { embedded_context.clear() }
 		}
 		return false

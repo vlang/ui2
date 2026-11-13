@@ -71,7 +71,7 @@ fn native_message_box(cfg MessageBoxConfig) MessageBoxResult {
 	}
 	g_alert_titles = titles.clone()
 	g_alert_choice = -1
-	macos.msg_void_id_i64_id(top_view_controller(g_root_vc), 'presentViewController:animated:completion:', alert, 1, objc_nil())
+	darwin_msg_void_id_i64_id(top_view_controller(g_root_vc), 'presentViewController:animated:completion:', alert, 1, objc_nil())
 	chosen := wait_for_alert(alert)
 	g_alert_titles = []string{}
 	return message_box_result_at(cfg.buttons, chosen)

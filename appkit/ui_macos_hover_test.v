@@ -85,11 +85,11 @@ fn test_macos_composite_button_uses_pointer_view_and_passive_child_classes() {
 		macos.release(decorative_native)
 	}
 
-	assert macos.msg_bool_id(native, 'isKindOfClass:', macos.get_class('UI2PointerView'))
-	assert macos.msg_bool_id(label_native, 'isKindOfClass:', macos.get_class('UI2PointerLabel'))
-	assert macos.msg_bool_id(decorative_native, 'isKindOfClass:',
+	assert darwin_msg_bool_id(native, 'isKindOfClass:', macos.get_class('UI2PointerView'))
+	assert darwin_msg_bool_id(label_native, 'isKindOfClass:', macos.get_class('UI2PointerLabel'))
+	assert darwin_msg_bool_id(decorative_native, 'isKindOfClass:',
 		macos.get_class('UI2PointerChildView'))
-	assert macos.responds_to(native, 'accessibilityPerformPress')
+	assert darwin_responds_to(native, 'accessibilityPerformPress')
 	register_pointer(native, el)
 	pointer := u64(voidptr(native))
 	mut st := state()
