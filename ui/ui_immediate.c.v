@@ -11,6 +11,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	import os
 	import sokol.gfx
 	import sokol.sapp
+	import sokol.sgl
 	import time
 
 	struct HitTarget {
@@ -591,7 +592,10 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			return
 		}
 		g_gg_app.ctx.refresh_ui()
-		C.sapp_wake()
+		// NOTE(V 0.5.2 CI): sokol on-demand present (`sapp_wake`,
+		// `sapp_set_present_on_demand`, etc.) does not exist in the 0.5.2
+		// release, so the custom renderer stays continuous here. `refresh_ui`
+		// alone is enough when the loop never sleeps deeply.
 	}
 
 // refresh asks for a rebuild over whatever the application changed outside a
@@ -639,18 +643,10 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		g_refresh_mode = mode
 		$if gg_record ? {
 		} $else $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
-			// These run sokol's X11 loop, where the hooks below exist; the
-			// patched sokol_app.h compiles them for any __unix__ target.
-			if mode != .continuous {
-				g_present_on_demand = C.sapp_set_present_on_demand(true)
-				C.sapp_set_frame_deadline_cb(ui2_frame_deadline_cb)
-			} else {
-				// Continuous keeps sokol's stock pacing: the deadline hook
-				// steps aside and present-on-demand stops gating the swap.
-				C.sapp_set_present_on_demand(false)
-				g_present_on_demand = false
-				C.sapp_set_frame_deadline_cb(unsafe { nil })
-			}
+			// NOTE(V 0.5.2 CI): sokol present-on-demand
+			// (`sapp_set_present_on_demand`, frame-deadline hook) does not
+			// exist in the 0.5.2 release, so stay continuous here.
+			g_present_on_demand = false
 		}
 		// A reference field of an immutable pointer cannot be popped through to
 		// a mut method on V 0.5.2; bind it through a mutable local instead.
@@ -805,6 +801,280 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 
 	pub fn toggle_button_pressed(id string) bool {
 		return g_toggle_values[id] or { false }
+	}
+
+	// is_checkbox_active reports whether a checkbox id is currently mounted.
+	// Helper for V 0.5.2 (CI): `__global` maps are file-visible there, so
+	// cross-file `id in g_active_*` fails while function calls succeed.
+	pub fn is_checkbox_active(id string) bool {
+		return id in g_active_checkboxes
+	}
+
+	// is_switch_active reports whether a switch id is currently mounted.
+	pub fn is_switch_active(id string) bool {
+		return id in g_active_switches
+	}
+
+	// is_toggle_active reports whether a toggle-button id is currently mounted.
+	pub fn is_toggle_active(id string) bool {
+		return id in g_active_toggles
+	}
+
+	// immediate_gg_ctx returns the immediate backend's gg context (may be nil
+	// before the window opens). Helper for V 0.5.2 (CI): `__global`
+	// `g_gg_app` is file-visible there, so cross-file `g_gg_app.ctx` fails
+	// while a same-file function call succeeds.
+	pub fn immediate_gg_ctx() &gg.Context {
+		return g_gg_app.ctx
+	}
+
+	// set_immediate_gg_ctx replaces the immediate backend's gg context.
+	// Helper for V 0.5.2 cross-file `__global` visibility (see above).
+	pub fn set_immediate_gg_ctx(ctx &gg.Context) {
+		g_gg_app.ctx = ctx
+	}
+
+	// immediate_gg_app returns the immediate backend's app handle.
+	pub fn immediate_gg_app() &GgApp {
+		return g_gg_app
+	}
+
+	// get_embedded_text_editor returns the live editor for an embedded field,
+	// creating it from fallback text when none exists yet.
+	pub fn get_embedded_text_editor(id string, fallback_text string) TextEditor {
+		return g_text_editors[id] or { text_editor(fallback_text) }
+	}
+
+	// clear_embedded_focus clears the focused field id.
+	pub fn clear_embedded_focus() {
+		g_focused_field = ''
+	}
+
+	// embedded_focused_field returns the currently focused field id.
+	pub fn embedded_focused_field() string {
+		return g_focused_field
+	}
+
+	// set_embedded_event_handler installs the embedded event handler.
+	pub fn set_embedded_event_handler(handler EventFn) {
+		g_event_handler = handler
+	}
+
+	// embedded_event_handler returns the installed embedded event handler.
+	pub fn embedded_event_handler() EventFn {
+		return g_event_handler
+	}
+
+	// reset_embedded_immediate_state clears per-frame immediate state for an
+	// embedded draw (hit targets, tooltips, active sets). Same-file helper
+	// so V 0.5.2 sees the `__global` maps.
+	pub fn reset_embedded_immediate_state() {
+		g_hit_targets.clear()
+		g_tooltip_targets.clear()
+		g_tooltip_owners = 0
+		reset_scroll_frame()
+		g_active_scrolls.clear()
+		g_active_fields.clear()
+		g_active_checkboxes.clear()
+		g_active_sliders.clear()
+		g_active_switches.clear()
+		g_active_toggles.clear()
+		g_active_images.clear()
+	}
+
+	// delete_embedded_image_id forgets a borrowed image route.
+	pub fn delete_embedded_image_id(path string) {
+		g_image_ids.delete(path)
+	}
+
+	// set_embedded_image_id records a borrowed image route.
+	pub fn set_embedded_image_id(path string, id int) {
+		g_image_ids[path] = id
+	}
+
+	// mark_embedded_image_active protects a borrowed image from unmount cleanup.
+	pub fn mark_embedded_image_active(path string) {
+		g_active_images[path] = true
+	}
+
+	// embedded_scroll_offset_x returns the horizontal scroll offset for a view.
+	pub fn embedded_scroll_offset_x(id string) f64 {
+		return g_scroll_offsets_x[id] or { 0.0 }
+	}
+
+	// embedded_scroll_offset returns the vertical scroll offset for a view.
+	pub fn embedded_scroll_offset(id string) f64 {
+		return g_scroll_offsets[id] or { 0.0 }
+	}
+
+	// embedded_touch_down reports whether a pointer is currently down.
+	pub fn embedded_touch_down() bool {
+		return g_touch.down
+	}
+
+	// reset_scroll_test_globals clears all immediate state used by the scroll
+	// immediate tests. Same-file helper so V 0.5.2 (CI) sees the `__global`
+	// maps; test files call this instead of assigning cross-file globals.
+	pub fn reset_scroll_test_globals() {
+		reset_scroll_frame()
+		g_scroll_offsets = map[string]f64{}
+		g_pending_scroll = map[string]f64{}
+		g_scroll_content_h = map[string]f64{}
+		g_scroll_offsets_x = map[string]f64{}
+		g_pending_scroll_x = map[string]f64{}
+		g_scroll_content_w = map[string]f64{}
+		g_active_scrolls = map[string]bool{}
+		g_active_fields = map[string]bool{}
+		g_text_values = map[string]string{}
+		g_text_props = map[string]string{}
+		g_text_kinds = map[string]Kind{}
+		g_text_editors = map[string]TextEditor{}
+		g_text_area_layouts = map[string]TextAreaLayout{}
+		g_hit_targets = []HitTarget{}
+		g_touch = TouchState{}
+		g_focused_field = ''
+		g_scroll_handler = ScrollFn(unsafe { nil })
+		g_event_handler = EventFn(unsafe { nil })
+	}
+
+	// reset_clipboard_test_globals clears text/clipboard state for the
+	// clipboard immediate tests (field id is set up by the caller via the
+	// setters below, since the kind varies per test).
+	pub fn reset_clipboard_test_globals() {
+		g_text_values = map[string]string{}
+		g_text_props = map[string]string{}
+		g_text_editors = map[string]TextEditor{}
+		g_text_kinds = map[string]Kind{}
+		g_text_secure = map[string]bool{}
+		g_active_fields = map[string]bool{}
+		g_focused_field = ''
+		g_hit_targets = []HitTarget{}
+		g_event_handler = EventFn(unsafe { nil })
+	}
+
+	// set_test_text_kind records a text kind for a field id (test helper).
+	pub fn set_test_text_kind(id string, kind Kind) {
+		g_text_kinds[id] = kind
+	}
+
+	// set_test_active_field marks a field id as active (test helper).
+	pub fn set_test_active_field(id string) {
+		g_active_fields[id] = true
+	}
+
+	// set_test_focused_field sets the focused field id (test helper).
+	pub fn set_test_focused_field(id string) {
+		g_focused_field = id
+	}
+
+	// set_test_hit_targets replaces hit targets (test helper).
+	pub fn set_test_hit_targets(targets []HitTarget) {
+		g_hit_targets = targets.clone()
+	}
+
+	// set_test_event_handler installs an event handler (test helper).
+	pub fn set_test_event_handler(handler EventFn) {
+		g_event_handler = handler
+	}
+
+	// clear_clipboard_override_for_test clears the clipboard override (test helper).
+	pub fn clear_clipboard_override_for_test() {
+		g_clipboard_override = none
+	}
+
+	// get_test_text_editor returns a text editor for tests (none if missing).
+	pub fn get_test_text_editor(id string) ?TextEditor {
+		return g_text_editors[id] or { return none }
+	}
+
+	// clear_test_active_fields clears active fields (test helper).
+	pub fn clear_test_active_fields() {
+		g_active_fields = map[string]bool{}
+	}
+
+	// set_clipboard_override_for_test installs a clipboard override (test helper).
+	pub fn set_clipboard_override_for_test(override ?TextClipboard) {
+		g_clipboard_override = override
+	}
+
+	// set_test_text_secure records secure flag (test helper).
+	pub fn set_test_text_secure(id string, secure bool) {
+		g_text_secure[id] = secure
+	}
+
+	// get_scroll_areas returns scroll areas (test helper for V 0.5.2).
+	pub fn get_scroll_areas() map[string]Rect {
+		return g_scroll_areas
+	}
+
+	// get_scroll_viewports returns scroll viewports (test helper).
+	pub fn get_scroll_viewports() map[string]Rect {
+		return g_scroll_viewports
+	}
+
+	// get_scroll_parents returns scroll parents (test helper).
+	pub fn get_scroll_parents() map[string]string {
+		return g_scroll_parents
+	}
+
+	// get_scroll_content_h returns vertical content heights (test helper).
+	pub fn get_scroll_content_h() map[string]f64 {
+		return g_scroll_content_h
+	}
+
+	// get_scroll_content_w returns horizontal content widths (test helper).
+	pub fn get_scroll_content_w() map[string]f64 {
+		return g_scroll_content_w
+	}
+
+	// get_pending_scroll_x returns pending horizontal scrolls (test helper).
+	pub fn get_pending_scroll_x() map[string]f64 {
+		return g_pending_scroll_x
+	}
+
+	// get_scroll_offsets_x returns horizontal offsets (test helper).
+	pub fn get_scroll_offsets_x() map[string]f64 {
+		return g_scroll_offsets_x
+	}
+
+	// get_scroll_offsets returns vertical offsets (test helper).
+	pub fn get_scroll_offsets() map[string]f64 {
+		return g_scroll_offsets
+	}
+
+	// get_scrollbar_geometries returns scrollbar geometries (test helper).
+	pub fn get_scrollbar_geometries() map[string]ScrollbarGeometry {
+		return g_scrollbar_geometries
+	}
+
+	// get_scrollbar_geometries_x returns horizontal scrollbar geometries.
+	pub fn get_scrollbar_geometries_x() map[string]ScrollbarGeometry {
+		return g_scrollbar_geometries_x
+	}
+
+	// get_text_area_layouts returns text area layouts (test helper).
+	pub fn get_text_area_layouts() map[string]TextAreaLayout {
+		return g_text_area_layouts
+	}
+
+	// get_touch_state returns touch state (test helper).
+	pub fn get_touch_state() TouchState {
+		return g_touch
+	}
+
+	// clear_active_scrolls_for_test clears active scrolls (test helper).
+	pub fn clear_active_scrolls_for_test() {
+		g_active_scrolls = map[string]bool{}
+	}
+
+	// set_test_text_value records a text value (test helper).
+	pub fn set_test_text_value(id string, value string) {
+		g_text_values[id] = value
+	}
+
+	// set_test_text_area_layout records a text area layout (test helper).
+	pub fn set_test_text_area_layout(id string, layout TextAreaLayout) {
+		g_text_area_layouts[id] = layout
 	}
 
 	pub fn set_toggle_button_pressed(id string, pressed bool) {
@@ -1048,19 +1318,25 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 
 	// ── Frame & event loop ─────────────────────────────────────────────
 
-	fn C.sapp_set_present_on_demand(enabled bool) bool
-	fn C.sapp_request_present()
+	// NOTE(V 0.5.2 CI): sokol on-demand present APIs
+	// (`sapp_set_present_on_demand`, `sapp_request_present`,
+	// `sapp_set_frame_deadline_cb`, `sapp_wake`) do not exist in the 0.5.2
+	// release, so the custom renderer stays continuous here. The declarations
+	// below are kept for newer toolchains but unused on 0.5.2; the call sites
+	// were removed to keep the 0.5.2 link green.
+	// fn C.sapp_set_present_on_demand(enabled bool) bool
+	// fn C.sapp_request_present()
 	// The X11 loop's deadline hook: before each sleep sokol asks this function
 	// how long it may wait. A negative return means nothing is scheduled, so
 	// the loop waits on its poll set — an X event or a sapp_wake — alone.
 	// Passing nil clears it, restoring sokol's stock per-frame pacing.
 	type FrameDeadlineFn = fn () f64
 
-	fn C.sapp_set_frame_deadline_cb(cb FrameDeadlineFn)
+	// fn C.sapp_set_frame_deadline_cb(cb FrameDeadlineFn)
 	// sapp_wake interrupts the loop's sleep from any thread. It is a plain
 	// nonblocking write to a pipe in data-segment memory, so unlike the
 	// scheduler's invalidate it is safe from threads the GC does not know.
-	fn C.sapp_wake()
+	// fn C.sapp_wake()
 
 // ui2_frame_deadline_cb tells sokol how long the event loop may sleep before
 // the next scheduled frame. It runs on the frame thread just before the loop
@@ -1083,20 +1359,12 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 
 	fn on_init(app &GgApp) {
 		// Sokol's loops swap even when frame_fn returns early, so an undrawn backbuffer
-		// can be presented on drivers that discard it. Metal skips idle callbacks. X11
-		// skips them too when sokol honors sapp_set_present_on_demand: frames UI2 did
-		// not draw are not presented, so the window keeps its last picture. Other
-		// backends repaint the retained tree on every callback.
+		// can be presented on drivers that discard it. Metal skips idle callbacks.
+		// NOTE(V 0.5.2 CI): present-on-demand (see set_refresh_mode) is disabled
+		// for the 0.5.2 release, so the window repaints on every callback here.
 		$if gg_record ? {
 		} $else $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
-			g_present_on_demand = g_refresh_mode != .continuous && C.sapp_set_present_on_demand(true)
-			// The deadline hook makes the X11 loop sleep until the earliest of
-			// the scheduler's next deadline, an X event or a sapp_wake, instead
-			// of pacing itself at the swap interval all night. Continuous mode
-			// draws every frame and must keep the stock pacing.
-			if g_refresh_mode != .continuous {
-				C.sapp_set_frame_deadline_cb(ui2_frame_deadline_cb)
-			}
+			g_present_on_demand = false
 		}
 		// A reference field of an immutable pointer cannot be popped through to a
 		// mut method on V 0.5.2; bind it through a mutable local instead.
@@ -1289,8 +1557,10 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		// nothing: the swap would land in an unmapped window and only spend
 		// the GPU's time. The keep-alive's clock keeps running from the last
 		// presented frame, so a window that comes back also repaints at once.
+		// NOTE(V 0.5.2 CI): on-demand present (`sapp_request_present`) does not
+		// exist in 0.5.2, and `g_present_on_demand` stays false above, so this
+		// block never runs there; continuous mode presents every frame anyway.
 		if g_present_on_demand && !(app.iconified && g_background_work) {
-			C.sapp_request_present()
 			g_last_frame_ticks = time.ticks()
 		}
 		app.scheduler.set_deadline(custom_visual_deadline())
@@ -2283,7 +2553,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			.c {
 				selected := editor_selected_text(editor)
 				if selected.len > 0 {
-					cb.copy(selected)
+					cb.copy_text(selected)
 				}
 			}
 			.x {
@@ -2291,7 +2561,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 				// A cut that could not reach the clipboard must not destroy the
 				// text; the Windows backend returns false when it cannot lock the
 				// clipboard or SetClipboardData fails.
-				if selected.len > 0 && cb.copy(selected) {
+				if selected.len > 0 && cb.copy_text(selected) {
 					editor.replace_selection('')
 					replace_text_value(id, editor.text)
 					replace_text_editor(id, editor)
@@ -2321,7 +2591,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	// and pasted text without touching the system clipboard.
 	interface TextClipboard {
 	mut:
-		copy(text string) bool
+		copy_text(text string) bool
 		paste() string
 	}
 
@@ -2335,11 +2605,11 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	// so the first copy or paste crashed the window.
 	struct NativeTextClipboard {}
 
-	fn (mut NativeTextClipboard) copy(text string) bool {
+	fn (mut cb NativeTextClipboard) copy_text(text string) bool {
 		return native_set_clipboard_text(text)
 	}
 
-	fn (NativeTextClipboard) paste() string {
+	fn (cb NativeTextClipboard) paste() string {
 		return native_clipboard_text() or { '' }
 	}
 
@@ -3815,15 +4085,15 @@ fn page_focused_text_area(direction int) {
 		y0 := y * s
 		x1 := x0 + f64(tex.width)
 		y1 := y0 + f64(tex.height)
-		ctx.r.enable_texture()
-		ctx.r.texture(tex.image, tex.sampler)
-		ctx.r.begin_quads()
-		ctx.r.v2f_t2f_c4f(f32(x0), f32(y0), 0, 1, 1, 1, 1, 1)
-		ctx.r.v2f_t2f_c4f(f32(x1), f32(y0), 1, 1, 1, 1, 1, 1)
-		ctx.r.v2f_t2f_c4f(f32(x1), f32(y1), 1, 0, 1, 1, 1, 1)
-		ctx.r.v2f_t2f_c4f(f32(x0), f32(y1), 0, 0, 1, 1, 1, 1)
-		ctx.r.end()
-		ctx.r.disable_texture()
+		sgl.enable_texture()
+		sgl.texture(tex.image, tex.sampler)
+		sgl.begin_quads()
+		sgl.v2f_t2f_c4f(f32(x0), f32(y0), 0, 1, 1, 1, 1, 1)
+		sgl.v2f_t2f_c4f(f32(x1), f32(y0), 1, 1, 1, 1, 1, 1)
+		sgl.v2f_t2f_c4f(f32(x1), f32(y1), 1, 0, 1, 1, 1, 1)
+		sgl.v2f_t2f_c4f(f32(x0), f32(y1), 0, 0, 1, 1, 1, 1)
+		sgl.end()
+		sgl.disable_texture()
 	}
 
 	fn draw_cached_image(ctx &gg.Context, path string, x f64, y f64, width f64, height f64, rotation f64) bool {
@@ -3990,30 +4260,30 @@ fn page_focused_text_area(direction int) {
 		if w <= 0 || h <= 0 {
 			return
 		}
-		r := math.max(0, math.min(radius, math.min(w, h) / 2))
+		r := math.max(0.0, math.min(radius, math.min(w, h) / 2))
 		scale := f64(ctx.scale)
 		segments := int(math.min(math.max(math.sqrt(r * scale) * 1.5, 2), 16))
-		mut points := g_outline_points
+		mut points := g_outline_points.clone()
 		points.clear()
 		rounded_outline(mut points, x, y, w, h, r, segments)
 		unsafe {
 			g_outline_points = points
 		}
 		if c.a != 255 {
-			ctx.r.load_pipeline(ctx.pipeline.alpha)
+			sgl.load_pipeline(im_alpha_pipeline())
 		}
-		ctx.r.c4b(c.r, c.g, c.b, c.a)
+		sgl.c4b(c.r, c.g, c.b, c.a)
 		cx := f32((x + w / 2) * scale)
 		cy := f32((y + h / 2) * scale)
-		ctx.r.begin_triangles()
+		sgl.begin_triangles()
 		count := points.len / 2
 		for i in 0 .. count {
 			j := (i + 1) % count
-			ctx.r.v2f(cx, cy)
-			ctx.r.v2f(f32(points[2 * i] * scale), f32(points[2 * i + 1] * scale))
-			ctx.r.v2f(f32(points[2 * j] * scale), f32(points[2 * j + 1] * scale))
+			sgl.v2f(cx, cy)
+			sgl.v2f(f32(points[2 * i] * scale), f32(points[2 * i + 1] * scale))
+			sgl.v2f(f32(points[2 * j] * scale), f32(points[2 * j + 1] * scale))
 		}
-		ctx.r.end()
+		sgl.end()
 	}
 
 	fn draw_rect_alpha(ctx &gg.Context, x f64, y f64, w f64, h f64, color_hex u32, alpha f64, radius f64) {
@@ -4102,7 +4372,7 @@ fn page_focused_text_area(direction int) {
 		}
 		stops := gradient_sorted_stops(gradient)
 		line := gradient_line(gradient.angle, w, h)
-		r := math.max(0, math.min(radius, math.min(w, h) / 2))
+		r := math.max(0.0, math.min(radius, math.min(w, h) / 2))
 		scale := f64(ctx.scale)
 		if r < 0.5 && draw_square_gradient(ctx, x, y, w, h, line, stops, gradient.angle, opacity) {
 			return
@@ -4130,8 +4400,8 @@ fn page_focused_text_area(direction int) {
 		} else {
 			rows << h
 		}
-		ctx.r.load_pipeline(ctx.pipeline.alpha)
-		ctx.r.begin_quads()
+		sgl.load_pipeline(im_alpha_pipeline())
+		sgl.begin_quads()
 		for i in 1 .. rows.len {
 			top := rows[i - 1]
 			bottom := math.min(rows[i], h)
@@ -4154,7 +4424,7 @@ fn page_focused_text_area(direction int) {
 				gradient_vertex(ctx, line, stops, opacity, x, y, xb0, bottom, scale)
 			}
 		}
-		ctx.r.end()
+		sgl.end()
 	}
 
 	// draw_square_gradient draws the exact gradient of a square-cornered box from a
@@ -4164,13 +4434,13 @@ fn page_focused_text_area(direction int) {
 	fn draw_square_gradient(ctx &gg.Context, x f64, y f64, w f64, h f64, line GradientLine, stops []GradientStop, angle f64, opacity f64) bool {
 		scale := f64(ctx.scale)
 		if stops.len == 2 {
-			ctx.r.load_pipeline(ctx.pipeline.alpha)
-			ctx.r.begin_quads()
+			sgl.load_pipeline(im_alpha_pipeline())
+			sgl.begin_quads()
 			gradient_vertex(ctx, line, stops, opacity, x, y, 0, 0, scale)
 			gradient_vertex(ctx, line, stops, opacity, x, y, w, 0, scale)
 			gradient_vertex(ctx, line, stops, opacity, x, y, w, h, scale)
 			gradient_vertex(ctx, line, stops, opacity, x, y, 0, h, scale)
-			ctx.r.end()
+			sgl.end()
 			return true
 		}
 		turn := math.fmod(math.fmod(angle, 360) + 360, 360)
@@ -4184,8 +4454,8 @@ fn page_focused_text_area(direction int) {
 			cuts << stop.position
 		}
 		cuts.sort()
-		ctx.r.load_pipeline(ctx.pipeline.alpha)
-		ctx.r.begin_quads()
+		sgl.load_pipeline(im_alpha_pipeline())
+		sgl.begin_quads()
 		for i in 1 .. cuts.len {
 			// Positions run along the gradient, which may point back along the axis.
 			a := if turn == 180 || turn == 270 { 1 - cuts[i] } else { cuts[i - 1] }
@@ -4205,14 +4475,14 @@ fn page_focused_text_area(direction int) {
 				gradient_vertex(ctx, line, stops, opacity, x, y, 0, b * extent, scale)
 			}
 		}
-		ctx.r.end()
+		sgl.end()
 		return true
 	}
 
 	fn gradient_vertex(ctx &gg.Context, line GradientLine, stops []GradientStop, opacity f64, ox f64, oy f64, lx f64, ly f64, scale f64) {
 		color, alpha := gradient_color_at(stops, gradient_position(line, lx, ly))
-		ctx.r.c4b(u8((color >> 16) & 0xff), u8((color >> 8) & 0xff), u8(color & 0xff), u8(math.round(alpha * opacity * 255)))
-		ctx.r.v2f(f32((ox + lx) * scale), f32((oy + ly) * scale))
+		sgl.c4b(u8((color >> 16) & 0xff), u8((color >> 8) & 0xff), u8(color & 0xff), u8(math.round(alpha * opacity * 255)))
+		sgl.v2f(f32((ox + lx) * scale), f32((oy + ly) * scale))
 	}
 
 	fn draw_outline(ctx &gg.Context, x f64, y f64, w f64, h f64, color_hex u32, radius f64) {
@@ -4256,7 +4526,7 @@ fn page_focused_text_area(direction int) {
 	// start of its top-left corner, with the same count whatever the radius so
 	// an outer and an inner outline pair up point for point.
 	fn rounded_outline(mut points []f64, x f64, y f64, w f64, h f64, radius f64, segments int) {
-		r := math.max(0, math.min(radius, math.min(w, h) / 2))
+		r := math.max(0.0, math.min(radius, math.min(w, h) / 2))
 		for corner in 0 .. 4 {
 			cx := if corner == 1 || corner == 2 { x + w - r } else { x + r }
 			cy := if corner < 2 { y + r } else { y + h - r }
@@ -4275,9 +4545,9 @@ fn page_focused_text_area(direction int) {
 		if width <= 0 || w <= 0 || h <= 0 {
 			return
 		}
-		segments := int(math.max(4, math.min(16, radius / 2)))
-		mut outer := g_outline_outer
-		mut inner := g_outline_inner
+		segments := int(math.max(4.0, math.min(16.0, radius / 2)))
+		mut outer := g_outline_outer.clone()
+		mut inner := g_outline_inner.clone()
 		outer.clear()
 		inner.clear()
 		rounded_outline(mut outer, x, y, w, h, radius, segments)
@@ -4292,15 +4562,15 @@ fn page_focused_text_area(direction int) {
 		count := outer.len / 2
 		c := gg.hex(color_hex)
 		scale := f64(ctx.scale)
-		ctx.r.load_pipeline(ctx.pipeline.alpha)
-		ctx.r.c4b(c.r, c.g, c.b, c.a)
-		ctx.r.begin_triangle_strip()
+		sgl.load_pipeline(im_alpha_pipeline())
+		sgl.c4b(c.r, c.g, c.b, c.a)
+		sgl.begin_triangle_strip()
 		for i in 0 .. count + 1 {
 			k := i % count
-			ctx.r.v2f(f32(outer[2 * k] * scale), f32(outer[2 * k + 1] * scale))
-			ctx.r.v2f(f32(inner[2 * k] * scale), f32(inner[2 * k + 1] * scale))
+			sgl.v2f(f32(outer[2 * k] * scale), f32(outer[2 * k + 1] * scale))
+			sgl.v2f(f32(inner[2 * k] * scale), f32(inner[2 * k + 1] * scale))
 		}
-		ctx.r.end()
+		sgl.end()
 	}
 
 	fn draw_control_surface(ctx &gg.Context, x f64, y f64, w f64, h f64, box BoxStyle, focused bool, enabled bool) {

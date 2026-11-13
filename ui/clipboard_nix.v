@@ -71,26 +71,30 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 		$if clipboard_stage_probe ? {
 			eprintln('KW stage: file ${time.sys_mono_now()}')
 		}
-		mut p := os.new_process(copy_args[0])
-		p.set_args(copy_args[1..])
-		p.set_stdin_path(path)
-		p.run()
+		// V 0.5.2 (CI) has no `os.Process.set_stdin_path`; feed the temp file
+		// via shell redirection so stdin is a file, not a pipe. Pipes made the
+		// caller wait for xclip's daemon lifetime; a file gives immediate EOF.
+		// wl-copy never exits (serves until superseded), so it stays
+		// fire-and-forget in the background.
+		cmd := copy_args.join(' ') + " < '" + path + "'"
+		if copy_args[0].contains('wl-copy') {
+			os.execute(cmd + ' &')
+			$if clipboard_stage_probe ? {
+				eprintln('KW stage: post-run ${time.sys_mono_now()}')
+			}
+			return true
+		}
 		$if clipboard_stage_probe ? {
 			eprintln('KW stage: post-run ${time.sys_mono_now()}')
 		}
-		if copy_args[0].contains('wl-copy') {
-			return true
-		}
-		p.wait()
+		result := os.execute(cmd)
 		$if clipboard_stage_probe ? {
 			eprintln('KW stage: post-wait ${time.sys_mono_now()}')
 		}
-		code := p.code
-		p.close()
 		$if clipboard_stage_probe ? {
 			eprintln('KW stage: post-close ${time.sys_mono_now()}')
 		}
-		return code == 0
+		return result.exit_code == 0
 	}
 
 	fn native_set_clipboard_text(text string) bool {

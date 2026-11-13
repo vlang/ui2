@@ -99,11 +99,12 @@ pub fn loading_spinner(config LoadingSpinnerConfig) !Element {
 	component_validate_id(config.id)!
 	feedback_validate_length('spinner diameter', config.diameter)!
 	feedback_validate_length('spinner duration', config.duration)!
-	diameter := math.min(if config.diameter > 0 {
+	want := if config.diameter > 0 {
 		config.diameter
 	} else {
 		loading_spinner_diameter(config.size)
-	}, math.min(config.frame.width, config.frame.height))
+	}
+	diameter := math.min(want, math.min(config.frame.width, config.frame.height))
 	color := config.color or { feedback_tone_color(config.theme, config.tone) }
 	background := config.background or { config.theme.background }
 	track := config.track_color or { feedback_track_color(color, background) }

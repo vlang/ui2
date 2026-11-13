@@ -33,7 +33,8 @@ fn tabbed_panel_bar_frames(config TabbedPanelConfig) (Rect, Rect) {
 			rect(0, height - bar, width, bar), rect(0, 0, width, height - bar)
 		}
 	}
-	side := math.min(if config.bar_size > 0 { config.bar_size } else { 180.0 }, width)
+	bar_want := if config.bar_size > 0 { config.bar_size } else { 180.0 }
+	side := math.min(bar_want, width)
 	return if position == .left {
 		rect(0, 0, side, height), rect(side, 0, width - side, height)
 	} else {

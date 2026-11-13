@@ -107,7 +107,7 @@ fn shimmer_pulse_level(center f64, middle f64, half f64) f64 {
 	if half <= 0 {
 		return 0
 	}
-	return math.max(0, 1 - math.abs(center - middle) / half)
+	return math.max(0.0, 1 - math.abs(center - middle) / half)
 }
 
 // shimmer_band_spans keyframes the band over [start, start + extent] of the
