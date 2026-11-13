@@ -411,7 +411,8 @@ fn settings_page_layout(config SettingsConfig, state SettingsState, page_ix int,
 		}
 		surface_top := y
 		inner_x := if boxed { x + m.inset } else { x }
-		inner_w := math.max(if boxed { w - 2 * m.inset } else { w }, 0)
+		w_want := if boxed { w - 2 * m.inset } else { w }
+		inner_w := math.max(w_want, 0.0)
 		mut items := []SettingsItemBox{}
 		mut separators := []Rect{}
 		for item_ix, item in group.items {

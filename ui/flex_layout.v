@@ -245,11 +245,12 @@ fn flex_line_sizes(config FlexConfig, line FlexLine, available f64) []f64 {
 
 fn flex_justify_space(justify FlexJustify, free_space f64, count int, gap f64) (f64, f64) {
 	remaining := layout_max(0, free_space)
+	between_gap := if count > 1 { gap + remaining / f64(count - 1) } else { gap }
 	return match justify {
 		.start { 0.0, gap }
 		.center { remaining / 2, gap }
 		.end { remaining, gap }
-		.space_between { 0.0, if count > 1 { gap + remaining / f64(count - 1) } else { gap } }
+		.space_between { 0.0, between_gap }
 		.space_around { remaining / f64(count * 2), gap + remaining / f64(count) }
 		.space_evenly { remaining / f64(count + 1), gap + remaining / f64(count + 1) }
 	}

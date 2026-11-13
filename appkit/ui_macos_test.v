@@ -327,7 +327,7 @@ fn test_macos_scroll_gesture_passes_to_an_enclosing_view_only_when_it_cannot_be_
 	assert !scroll_view_passes_gesture(inner, true, -1)
 	// ...until it has run out, where further the same way is the outer strip's again,
 	// while the way back is still its own.
-	macos.msg_void_point(macos.msg_id(inner, 'contentView'), 'setBoundsOrigin:', macos.point(600,
+	darwin_msg_void_point(macos.msg_id(inner, 'contentView'), 'setBoundsOrigin:', darwin_point(600,
 		0))
 	assert !scroll_view_can_move(inner, true, -1)
 	assert scroll_view_passes_gesture(inner, true, -1)
@@ -338,7 +338,7 @@ fn test_macos_scroll_gesture_passes_to_an_enclosing_view_only_when_it_cannot_be_
 
 	// Ten short of its end, the inner strip has room for ten of a 48 point step and
 	// the strip around it for the other 38; the way back is all its own.
-	macos.msg_void_point(macos.msg_id(inner, 'contentView'), 'setBoundsOrigin:', macos.point(590,
+	darwin_msg_void_point(macos.msg_id(inner, 'contentView'), 'setBoundsOrigin:', darwin_point(590,
 		0))
 	assert scroll_view_room(inner, true, 48) == 10
 	assert scroll_view_room(outer, true, 48 - 10) == 38
@@ -417,9 +417,9 @@ fn test_macos_checkbox_title_takes_its_text_color() {
 	}
 	title := macos.msg_id(box, 'attributedTitle')
 	assert macos.utf8_string(macos.msg_id(title, 'string')) == 'Remember me'
-	attrs := macos.msg_id_u64_id(title, 'attributesAtIndex:effectiveRange:', 0, macos.Id(unsafe { nil }))
+	attrs := darwin_msg_id_u64_id(title, 'attributesAtIndex:effectiveRange:', 0, macos.Id(unsafe { nil }))
 	color := macos.msg_id1(attrs, 'objectForKey:', macos.nsstring('NSColor'))
-	assert macos.msg_bool_id(color, 'isEqual:', native_color(0xef4444))
+	assert darwin_msg_bool_id(color, 'isEqual:', native_color(0xef4444))
 }
 
 fn test_macos_unlimited_line_budget_wraps() {
@@ -469,7 +469,7 @@ fn test_macos_bordered_text_field_draws_its_box_instead_of_a_bezel() {
 	assert !macos.msg_bool(styled, 'isBezeled')
 	assert macos.msg_bool(plain, 'isBezeled')
 	cell := macos.msg_id(styled, 'cell')
-	assert macos.msg_bool_id(cell, 'isKindOfClass:', macos.get_class('UI2TextFieldCell'))
+	assert darwin_msg_bool_id(cell, 'isKindOfClass:', macos.get_class('UI2TextFieldCell'))
 	// One line of 14 pt text, centered in the 40 pt field and moved in by the padding.
 	text_rect := C.ui2_macos_msg_rect_rect(cell, macos.sel('drawingRectForBounds:'), C.ui2_macos_rect{
 		width:  240

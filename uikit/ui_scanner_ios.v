@@ -102,7 +102,7 @@ fn ensure_scanner_class() {
 fn native_present_barcode_scanner(root View) {
 	if !macos.msg_bool(macos.get_class('NSThread'), 'isMainThread') {
 		if !objc_is_nil(g_button_handler) {
-			macos.msg_void_sel_id_bool(g_button_handler, 'performSelectorOnMainThread:withObject:waitUntilDone:', macos.sel('vuiPresentScanner:'), root, false)
+			darwin_msg_void_sel_id_bool(g_button_handler, 'performSelectorOnMainThread:withObject:waitUntilDone:', macos.sel('vuiPresentScanner:'), root, false)
 		}
 		return
 	}
@@ -110,7 +110,7 @@ fn native_present_barcode_scanner(root View) {
 		report_scan_error('scanner unavailable')
 		return
 	}
-	status := i64(macos.msg_u64_id(macos.get_class('AVCaptureDevice'), 'authorizationStatusForMediaType:', av_media_type_video()))
+	status := i64(darwin_msg_u64_id(macos.get_class('AVCaptureDevice'), 'authorizationStatusForMediaType:', av_media_type_video()))
 	if status == av_authorization_denied || status == av_authorization_restricted {
 		report_scan_error('camera permission denied')
 		return
@@ -153,7 +153,7 @@ fn present_scanner(root View) {
 	}
 	build_scanner_chrome(scanner, view)
 	layout_scanner(view)
-	macos.msg_void_id_i64_id(top_view_controller(root), 'presentViewController:animated:completion:', scanner, 1, objc_nil())
+	darwin_msg_void_id_i64_id(top_view_controller(root), 'presentViewController:animated:completion:', scanner, 1, objc_nil())
 	macos.msg_void(g_scanner_session, 'startRunning')
 }
 
@@ -162,7 +162,7 @@ fn scanner_metadata_object_types(output View) macos.Id {
 	types := macos.msg_id(macos.alloc('NSMutableArray'), 'init')
 	for metadata_type in scanner_metadata_types {
 		value := extern_id(metadata_type.symbol, metadata_type.fallback)
-		if macos.msg_bool_id(available, 'containsObject:', value) {
+		if darwin_msg_bool_id(available, 'containsObject:', value) {
 			macos.msg_void1(types, 'addObject:', value)
 		}
 	}
@@ -185,11 +185,11 @@ fn start_scanner_session(scanner View, view View) bool {
 		return false
 	}
 	session := macos.msg_id(macos.alloc('AVCaptureSession'), 'init')
-	if macos.msg_bool_id(session, 'canAddInput:', input) {
+	if darwin_msg_bool_id(session, 'canAddInput:', input) {
 		macos.msg_void1(session, 'addInput:', input)
 	}
 	output := macos.msg_id(macos.alloc('AVCaptureMetadataOutput'), 'init')
-	if !macos.msg_bool_id(session, 'canAddOutput:', output) {
+	if !darwin_msg_bool_id(session, 'canAddOutput:', output) {
 		macos.release(output)
 		macos.release(session)
 		report_scan_error('barcode scanner unavailable')
@@ -217,7 +217,7 @@ fn start_scanner_session(scanner View, view View) bool {
 	macos.msg_void1(macos.msg_id(view, 'layer'), 'addSublayer:', preview)
 	g_scanner_preview = macos.retain(preview)
 	center := macos.msg_id(macos.get_class('NSNotificationCenter'), 'defaultCenter')
-	macos.msg_void_id_sel_id_id(center, 'addObserver:selector:name:object:', scanner, macos.sel('vuiSessionError:'), extern_id('AVCaptureSessionRuntimeErrorNotification', 'AVCaptureSessionRuntimeErrorNotification'), session)
+	darwin_msg_void_id_sel_id_id(center, 'addObserver:selector:name:object:', scanner, macos.sel('vuiSessionError:'), extern_id('AVCaptureSessionRuntimeErrorNotification', 'AVCaptureSessionRuntimeErrorNotification'), session)
 	return true
 }
 
