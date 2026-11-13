@@ -782,6 +782,7 @@ pub fn refresh() {
 	st.toggle_allow_no_selection = map[u64]bool{}
 	st.toggle_ids = map[u64]string{}
 	st.toggle_views = map[u64]voidptr{}
+	media_begin_frame()
 	mut active := map[string]bool{}
 	if root.kind == .screen {
 		st.node_boxes[''] = root.box
@@ -791,6 +792,7 @@ pub fn refresh() {
 		windows_render_element(st.root, root, reconciliation_child_key('', 0, root), '', 0, 0, mut active)
 	}
 	windows_remove_stale(active)
+	media_end_frame()
 	st.rendering = false
 	C.ui2_win_invalidate(st.root)
 	// Content can move under a cursor that stays put.
@@ -1318,6 +1320,9 @@ fn windows_render_element(parent voidptr, el Element, key string, parent_key str
 		}, x_offset, y_offset)
 	}
 	windows_register_bindings(hwnd, el)
+	if el.kind == .media {
+		windows_sync_media(hwnd, el)
+	}
 	if el.kind == .view {
 		caption := windows_button_accessibility_caption(el.accessibility_label)
 		wide_caption := caption.to_wide()
@@ -1459,6 +1464,28 @@ fn windows_native_height(el Element) int {
 	return if el.kind == .dropdown { height + 240 } else { height }
 }
 
+// windows_sync_media parents the session's video surface to the element's own
+// container window, inset past the border the same way held labels are, and
+// applies the declared state through the shared cascade. Coordinates are
+// physical pixels, matching the element frame on this backend.
+fn windows_sync_media(hwnd voidptr, el Element) {
+	frame_width := int(el.frame.width)
+	frame_height := int(el.frame.height)
+	left := C.ui2_win_border_width(el.box.border_left, frame_width)
+	top := C.ui2_win_border_width(el.box.border_top, frame_height)
+	right := C.ui2_win_border_width(el.box.border_right, frame_width)
+	bottom := C.ui2_win_border_width(el.box.border_bottom, frame_height)
+	mut width := frame_width - left - right
+	if width < 0 {
+		width = 0
+	}
+	mut height := frame_height - top - bottom
+	if height < 0 {
+		height = 0
+	}
+	media_sync_native(hwnd, el, rect(f64(left), f64(top), f64(width), f64(height)))
+}
+
 fn windows_widget_kind(kind Kind) int {
 	return match kind {
 		.view { 1 }
@@ -1473,6 +1500,7 @@ fn windows_widget_kind(kind Kind) int {
 		.slider { 10 }
 		.switch_control { 11 }
 		.toggle_button { 12 }
+		.media { 1 }
 		.screen { 0 }
 	}
 }
@@ -1572,7 +1600,7 @@ fn windows_update_element(key string, hwnd voidptr, el Element, x_offset int, y_
 			C.ui2_win_slider_set_normalized(hwnd, slider_value_normalized(el.value,
 				el.min_value, el.max_value), windows_bool(el.orientation == .vertical))
 		}
-		.view, .scroll, .screen, .opengl {}
+		.view, .scroll, .screen, .opengl, .media {}
 	}
 	st.node_declared_text[key] = el.text
 	windows_update_style(key, text_hwnd, el)

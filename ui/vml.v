@@ -1023,6 +1023,21 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 		'Image' {
 			return image(node.id, node.prop_or('source', node.prop('path')), frame)
 		}
+		'Video', 'Audio' {
+			kind := if node.tag == 'Video' { MediaKind.video } else { MediaKind.audio }
+			return media(
+				id:       node.id
+				kind:     kind
+				source:   media_source_for_src(node.prop_or('source', node.prop('path')))
+				src:      node.prop_or('source', node.prop('path'))
+				frame:    frame
+				autoplay: node.prop_bool('autoplay')
+				loop:     node.prop_bool('loop')
+				muted:    node.prop_bool('muted')
+				volume:   node.prop_or('volume', '1').f64()
+				rate:     node.prop_or('rate', '1').f64()
+			)!
+		}
 		'Card' {
 			return view(node.id, frame, v_box(node), v_children(node, local)!)
 		}

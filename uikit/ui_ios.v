@@ -147,8 +147,10 @@ pub fn refresh() {
 		return
 	}
 	g_ios_rendering = true
+	media_begin_frame()
 	root := stylesheet_apply_frame(stylesheet_frame_build(g_build_screen), stylesheet_uikit_env())
 	render_root(root)
+	media_end_frame()
 	g_ios_rendering = false
 	if g_ios_refresh_pending {
 		g_ios_refresh_pending = false
@@ -1368,7 +1370,7 @@ fn render_children(parent View, children []Element, parent_key string, mut activ
 fn native_create_element(el Element) View {
 	return match el.kind {
 		.screen { View(unsafe { nil }) }
-		.view, .opengl { new_native_view(el.frame, el.box, el.button_behavior) }
+		.view, .opengl, .media { new_native_view(el.frame, el.box, el.button_behavior) }
 		.scroll { new_scroll_view(el.frame, el.box) }
 		.label {
 			new_label_view(el.frame, el.text, el.text_style.color, el.text_style.size, el.text_style.bold, align_value(el.text_style.align), el.text_style.lines, el.text_style.valign, label_needs_container(el))
@@ -1394,7 +1396,7 @@ fn native_create_element(el Element) View {
 fn native_update_element(native View, el Element, declared_text_changed bool) {
 	match el.kind {
 		.screen {}
-		.view, .opengl {
+		.view, .opengl, .media {
 			macos.msg_void_rect(native, 'setFrame:', native_rect(el.frame))
 			set_box_background(native, el.box)
 			set_box_corners(native, el.box)
@@ -1655,6 +1657,9 @@ fn render_element(parent View, el Element, key string, mut active map[string]boo
 	}
 
 	register_native_handlers(native, el)
+	if el.kind == .media {
+		media_sync_native(native, el, el.frame)
+	}
 	native_apply_common_view_state(native, el.hidden, el.enabled, el.accessibility_role, el.accessibility_label, el.accessibility_value)
 	if el.id.len > 0 {
 		remember(el.id, native)

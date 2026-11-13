@@ -291,6 +291,7 @@ pub enum Kind {
 	switch_control
 	toggle_button
 	opengl
+	media
 }
 
 // MenuEntry is one right-click context menu item attached to an element.
@@ -466,6 +467,13 @@ pub:
 	toggle_down_text_style    TextStyle
 	toggle_group              string
 	toggle_allow_no_selection bool = true
+	media_src                 string    // media: file path or URL of the audio/video
+	media_kind                MediaKind // media: audio-only or video playback
+	autoplay                  bool      // media: start playing once the source opens
+	loop                      bool      // media: replay from the start instead of ending
+	media_muted               bool      // media: declared mute flag (see media_set_muted)
+	media_volume              f64 = 1.0 // media: declared 0..1 volume (see media_set_volume)
+	media_rate                f64 = 1.0 // media: declared playback rate (see media_set_rate)
 pub mut:
 	// stylesheet hooks (vss): classes participate in `.class` selectors,
 	// ignore_stylesheet opts out of the cascade for this element, and
@@ -499,6 +507,7 @@ pub fn control_support(kind Kind) BackendSupport {
 	} $else $if android || linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 		return match kind {
 			.text_area, .dropdown { .partial }
+			.media { .partial }
 			else { .supported }
 		}
 	} $else $if windows {
