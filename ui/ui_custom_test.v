@@ -159,13 +159,13 @@ $if ui2_custom_rendering ? {
 			switch_control: true
 		}
 		g_hit_targets = [target]
-		handle_touch_down(20, 30)
-		handle_touch_up(20, 30)
+		handle_touch_down(20, 30, false)
+		handle_touch_up(20, 30, false)
 		assert switch_active('network')
 		set_switch_active('network', false)
-		handle_touch_down(20, 30)
-		handle_touch_move(80, 30)
-		handle_touch_up(80, 30)
+		handle_touch_down(20, 30, false)
+		handle_touch_move(80, 30, false)
+		handle_touch_up(80, 30, false)
 		assert switch_active('network')
 		set_switch_active('network', false)
 		assert !switch_active('network')
@@ -196,8 +196,8 @@ $if ui2_custom_rendering ? {
 			h:         28
 			checkbox:  true
 		}]
-		handle_touch_down(20, 30)
-		handle_touch_up(20, 30)
+		handle_touch_down(20, 30, false)
+		handle_touch_up(20, 30, false)
 		assert checkbox_checked('newsletter')
 		set_checkbox_checked('newsletter', false)
 		set_checkbox_checked('missing', true)
@@ -236,9 +236,9 @@ $if ui2_custom_rendering ? {
 			'form': 320
 		}
 		g_scroll_offsets = map[string]f64{}
-		handle_touch_down(20, 70)
-		handle_touch_move(20, 20)
-		handle_touch_up(20, 20)
+		handle_touch_down(20, 70, false)
+		handle_touch_move(20, 20, false)
+		handle_touch_up(20, 20, false)
 		assert scroll_offset('form') == 50
 		assert !checkbox_checked('newsletter')
 		g_checkbox_values = map[string]bool{}
@@ -273,8 +273,8 @@ $if ui2_custom_rendering ? {
 			h:             32
 			toggle_button: true
 		}]
-		handle_touch_down(20, 30)
-		handle_touch_up(20, 30)
+		handle_touch_down(20, 30, false)
+		handle_touch_up(20, 30, false)
 		assert toggle_button_pressed('bold')
 		set_toggle_button_pressed('bold', false)
 		set_toggle_button_pressed('missing', true)
@@ -473,14 +473,14 @@ $if ui2_custom_rendering ? {
 		close_dropdown()
 		targets := custom_test_dropdown_targets('menu-pick')
 		g_hit_targets = [targets[0]]
-		handle_touch_down(100, 90)
-		handle_touch_up(100, 90)
+		handle_touch_down(100, 90, false)
+		handle_touch_up(100, 90, false)
 		assert g_open_dropdown == 'menu-pick'
 		assert text('menu-pick') == ''
 		g_hit_targets = targets.clone()
-		handle_touch_down(100, 160)
+		handle_touch_down(100, 160, false)
 		assert g_dropdown_hover == 1
-		handle_touch_up(100, 160)
+		handle_touch_up(100, 160, false)
 		assert g_open_dropdown == ''
 		assert text('menu-pick') == 'Two'
 		g_hit_targets = []HitTarget{}
@@ -490,21 +490,21 @@ $if ui2_custom_rendering ? {
 		close_dropdown()
 		targets := custom_test_dropdown_targets('menu-dismiss')
 		g_hit_targets = [targets[0]]
-		handle_touch_down(100, 90)
-		handle_touch_up(100, 90)
+		handle_touch_down(100, 90, false)
+		handle_touch_up(100, 90, false)
 		assert g_open_dropdown == 'menu-dismiss'
 		g_hit_targets = targets.clone()
-		handle_touch_down(100, 300)
+		handle_touch_down(100, 300, false)
 		assert g_dropdown_hover == -1
-		handle_touch_up(100, 300)
+		handle_touch_up(100, 300, false)
 		assert g_open_dropdown == ''
 		assert text('menu-dismiss') == ''
 		g_hit_targets = [targets[0]]
-		handle_touch_down(100, 90)
-		handle_touch_up(100, 90)
+		handle_touch_down(100, 90, false)
+		handle_touch_up(100, 90, false)
 		assert g_open_dropdown == 'menu-dismiss'
-		handle_touch_down(100, 90)
-		handle_touch_up(100, 90)
+		handle_touch_down(100, 90, false)
+		handle_touch_up(100, 90, false)
 		assert g_open_dropdown == ''
 		assert text('menu-dismiss') == ''
 		g_hit_targets = []HitTarget{}

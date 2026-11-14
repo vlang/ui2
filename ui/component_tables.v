@@ -712,7 +712,7 @@ pub:
 
 // table_event decodes what a table emitted: hover reports (with hoverable) and
 // row clicks (with clickable_rows). It ignores events for other elements, rows
-// the table does not show, and hover reports that change nothing.
+// the table does not show, disabled rows, and hover reports that change nothing.
 pub fn table_event(config TableConfig, event string) ?TableEvent {
 	shown := table_geometry(config).rows
 	if pointer := parse_pointer_event(event) {
@@ -720,6 +720,9 @@ pub fn table_event(config TableConfig, event string) ?TableEvent {
 			return none
 		}
 		index := table_part_index(config.id, pointer.action, 'row:', shown)?
+		if !config.rows[index].enabled {
+			return none
+		}
 		if pointer.phase == 'enter' {
 			return if index == config.hovered_row {
 				none
@@ -743,6 +746,9 @@ pub fn table_event(config TableConfig, event string) ?TableEvent {
 		return none
 	}
 	index := table_part_index(config.id, event, 'row:', shown)?
+	if !config.rows[index].enabled {
+		return none
+	}
 	return TableEvent{
 		kind: .click_row
 		row:  index

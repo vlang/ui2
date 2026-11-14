@@ -1035,7 +1035,7 @@ pub fn text_field(id string, placeholder string, text string, frame Rect, box_ B
 		keyboard:            keyboard
 		enabled:             is_enabled
 		accessibility_role:  'textfield'
-		accessibility_label: if placeholder.len > 0 { placeholder } else { id }
+		accessibility_label: if placeholder.len > 0 { placeholder } else { '' }
 		accessibility_value: text
 	}
 }
@@ -1132,7 +1132,7 @@ pub fn text_field_with_submit(id string, submit_id string, placeholder string, t
 		keyboard:            keyboard
 		enabled:             is_enabled
 		accessibility_role:  'textfield'
-		accessibility_label: if placeholder.len > 0 { placeholder } else { id }
+		accessibility_label: if placeholder.len > 0 { placeholder } else { '' }
 		accessibility_value: text
 	}
 }
@@ -1152,7 +1152,7 @@ pub fn text_field_with_change_and_submit(id string, submit_id string, placeholde
 		emit_change:         true
 		enabled:             is_enabled
 		accessibility_role:  'textfield'
-		accessibility_label: if placeholder.len > 0 { placeholder } else { id }
+		accessibility_label: if placeholder.len > 0 { placeholder } else { '' }
 		accessibility_value: text
 	}
 }

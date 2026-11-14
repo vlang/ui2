@@ -60,6 +60,9 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		// must not overwrite the value the pointer is holding.
 		slider_drag_id     string
 		down               bool
+		// Whether this gesture may use the touch slop: true for a finger,
+		// false for a mouse, which keeps exact hit-testing for precision.
+		slop               bool
 		start_x            f64
 		start_y            f64
 		current_x          f64
@@ -1367,7 +1370,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			deadline = g_tooltip.rest_since + tooltip_delay_ms
 		}
 		if g_touch.down && !g_touch.moved && !g_touch.long_press_fired && !g_touch.scrollbar_drag {
-			target := touch_hit_test(g_touch.start_x, g_touch.start_y)
+			target := touch_hit_test(g_touch.start_x, g_touch.start_y, g_touch.slop)
 			if target.long_press && target.action_id.len > 0 {
 				press_deadline := g_touch.start_time + 450
 				if deadline < 0 || press_deadline < deadline {
@@ -1565,7 +1568,9 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	// pointer_press_at handles a press of the pointer: a mouse button, or the
 	// first finger on a touch screen. Both take this one path, so the menu bar,
 	// the tooltip and the press handlers see a tap the way they see a click.
-	fn pointer_press_at(x f64, y f64, button int) {
+	// is_touch carries which one pressed: fingers get the touch slop, the
+	// mouse keeps exact hit-testing.
+	fn pointer_press_at(x f64, y f64, button int, is_touch bool) {
 		if voidptr(g_mouse_button_handler) != unsafe { nil } {
 			g_mouse_button_handler(button, true, x, y)
 		}
@@ -1579,7 +1584,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if button == 1 && handle_middle_click(x, y) {
 			return
 		}
-		handle_touch_down(x, y)
+		handle_touch_down(x, y, is_touch)
 	}
 
 	// handle_middle_click pastes the primary selection into an editable field
@@ -1628,7 +1633,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	}
 
 	// pointer_move_to handles a move of the pointer or of the first finger.
-	fn pointer_move_to(x f64, y f64) {
+	fn pointer_move_to(x f64, y f64, is_touch bool) {
 		// Recorded before any handler below can claim the move, so the
 		// tooltip always knows where the pointer is.
 		g_tooltip.pointer_moved(x, y, renderer_now_ms())
@@ -1642,7 +1647,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		}
 		update_hover()
 		if g_touch.down && g_touch.pointer_target.action_id.len > 0 {
-			handle_touch_move(x, y)
+			handle_touch_move(x, y, is_touch)
 			return
 		}
 		if menu_bar_handle_move(x, y) {
@@ -1652,12 +1657,12 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			update_dropdown_hover(x, y)
 		}
 		if g_touch.down {
-			handle_touch_move(x, y)
+			handle_touch_move(x, y, is_touch)
 		}
 	}
 
 	// pointer_release_at handles a release of the pointer or of the first finger.
-	fn pointer_release_at(x f64, y f64, button int) {
+	fn pointer_release_at(x f64, y f64, button int, is_touch bool) {
 		if voidptr(g_mouse_button_handler) != unsafe { nil } {
 			g_mouse_button_handler(button, false, x, y)
 		}
@@ -1665,13 +1670,13 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			publish_text_selection(x, y)
 		}
 		if g_touch.down && g_touch.pointer_target.action_id.len > 0 {
-			handle_touch_up(x, y)
+			handle_touch_up(x, y, is_touch)
 			return
 		}
 		if menu_bar_handle_up(x, y) {
 			return
 		}
-		handle_touch_up(x, y)
+		handle_touch_up(x, y, is_touch)
 	}
 
 	fn on_event(e &gg.Event, app &GgApp) {
@@ -1693,10 +1698,10 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		state.scheduler.invalidate(.build)
 		match e.typ {
 			.mouse_down {
-				pointer_press_at(f64(e.mouse_x), f64(e.mouse_y), int(e.mouse_button))
+				pointer_press_at(f64(e.mouse_x), f64(e.mouse_y), int(e.mouse_button), false)
 			}
 			.mouse_move {
-				pointer_move_to(f64(e.mouse_x), f64(e.mouse_y))
+				pointer_move_to(f64(e.mouse_x), f64(e.mouse_y), false)
 			}
 			.mouse_scroll {
 				// The content moves under a pointer that stays put, so whatever
@@ -1725,7 +1730,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 				update_hover()
 			}
 			.mouse_up {
-				pointer_release_at(f64(e.mouse_x), f64(e.mouse_y), int(e.mouse_button))
+				pointer_release_at(f64(e.mouse_x), f64(e.mouse_y), int(e.mouse_button), false)
 			}
 			// A touch screen's first finger is the pointer: it takes the mouse
 			// path above, so embedders that decide over-video input themselves
@@ -1733,21 +1738,21 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			.touches_began {
 				if e.num_touches > 0 {
 					x, y := touch_to_layout(e.touches[0])
-					pointer_press_at(x, y, 0)
+					pointer_press_at(x, y, 0, true)
 				}
 			}
 			.touches_moved {
 				if e.num_touches > 0 {
 					x, y := touch_to_layout(e.touches[0])
-					pointer_move_to(x, y)
+					pointer_move_to(x, y, true)
 				}
 			}
 			.touches_ended {
 				if e.num_touches > 0 {
 					x, y := touch_to_layout(e.touches[0])
-					pointer_release_at(x, y, 0)
+					pointer_release_at(x, y, 0, true)
 				} else {
-					pointer_release_at(g_touch.current_x, g_touch.current_y, 0)
+					pointer_release_at(g_touch.current_x, g_touch.current_y, 0, true)
 				}
 			}
 			.iconified, .suspended {
@@ -1823,9 +1828,10 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		return 'pointer:${phase}:${action_id}:${x}:${y}'
 	}
 
-	fn handle_touch_down(x f64, y f64) {
+	fn handle_touch_down(x f64, y f64, is_touch bool) {
 		g_touch = TouchState{
 			down: true
+			slop: is_touch
 			start_x: x
 			start_y: y
 			current_x: x
@@ -1838,7 +1844,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			update_dropdown_hover(x, y)
 			return
 		}
-		target := touch_hit_test(x, y)
+		target := touch_hit_test(x, y, is_touch)
 		if g_refresh_mode == .on_demand && target.long_press {
 			// check_long_press fires from inside drawn frames, and after the
 			// last input event only a few trailing frames follow; the ask keeps
@@ -1872,7 +1878,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		}
 	}
 
-	fn handle_touch_move(x f64, y f64) {
+	fn handle_touch_move(x f64, y f64, is_touch bool) {
 		if !g_touch.down {
 			return
 		}
@@ -1888,7 +1894,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		target := if g_touch.pointer_target.action_id.len > 0 {
 			g_touch.pointer_target
 		} else {
-			touch_hit_test(g_touch.start_x, g_touch.start_y)
+			touch_hit_test(g_touch.start_x, g_touch.start_y, is_touch)
 		}
 		if target.slider {
 			commit_slider(target, x, y)
@@ -1975,7 +1981,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		}
 	}
 
-	fn handle_touch_up(x f64, y f64) {
+	fn handle_touch_up(x f64, y f64, is_touch bool) {
 		if !g_touch.down {
 			return
 		}
@@ -1993,7 +1999,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		slider_target := if captured.action_id.len > 0 {
 			captured
 		} else {
-			touch_hit_test(g_touch.start_x, g_touch.start_y)
+			touch_hit_test(g_touch.start_x, g_touch.start_y, is_touch)
 		}
 		if slider_target.slider {
 			commit_slider(slider_target, x, y)
@@ -2022,7 +2028,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		mut target := if captured.action_id.len > 0 {
 			captured
 		} else {
-			touch_hit_test(g_touch.start_x, g_touch.start_y)
+			touch_hit_test(g_touch.start_x, g_touch.start_y, is_touch)
 		}
 		dx := x - g_touch.start_x
 		if g_touch.moved && dx < -72 {
@@ -2035,7 +2041,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if target.action_id.len > 0 && target.button_behavior {
 			if !g_touch.moved {
 				if current := current_button_behavior_target(target) {
-					if hit_target_contains(current, x, y) {
+					if touch_hit_target_contains(current, x, y, is_touch) {
 						button_action = target.action_id
 					}
 				}
@@ -2054,7 +2060,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if g_touch.moved {
 			return
 		}
-		target = touch_hit_test(x, y)
+		target = touch_hit_test(x, y, is_touch)
 		if target.checkbox {
 			commit_checkbox(target)
 			return
@@ -2114,7 +2120,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if elapsed < 450 {
 			return
 		}
-		target := touch_hit_test(g_touch.start_x, g_touch.start_y)
+		target := touch_hit_test(g_touch.start_x, g_touch.start_y, g_touch.slop)
 		if target.action_id.len > 0 && target.long_press {
 			g_touch.long_press_fired = true
 			fire_event('long:' + target.action_id)
@@ -2133,9 +2139,13 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 
 	// touch_hit_test is hit_test with a touch slop so controls smaller than the
 	// 44px minimum touch target stay reachable on touch screens. The slop only
-	// grows the hit rect; the visual control keeps its declared size. Mouse
-	// input keeps using hit_test so precision is unchanged.
-	fn touch_hit_test(x f64, y f64) HitTarget {
+	// grows the hit rect; the visual control keeps its declared size. Callers
+	// pass the gesture's slop flag: fingers get the slop, the mouse keeps
+	// exact hit-testing so precision is unchanged.
+	fn touch_hit_test(x f64, y f64, slop bool) HitTarget {
+		if !slop {
+			return hit_test(x, y)
+		}
 		min_target := 44.0
 		max_slop := 12.0
 		for i := g_hit_targets.len - 1; i >= 0; i-- {
@@ -2148,6 +2158,22 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			}
 		}
 		return HitTarget{}
+	}
+
+	// touch_hit_target_contains is hit_target_contains with the same slop
+	// touch_hit_test applies, so a release confirms what the press claimed:
+	// a press at the slop edge releases on the same target instead of
+	// silently dropping the tap the press just took.
+	fn touch_hit_target_contains(target HitTarget, x f64, y f64, slop bool) bool {
+		if !slop {
+			return hit_target_contains(target, x, y)
+		}
+		min_target := 44.0
+		max_slop := 12.0
+		slop_x := math.min(max_slop, math.max(0.0, (min_target - target.w) / 2.0))
+		slop_y := math.min(max_slop, math.max(0.0, (min_target - target.h) / 2.0))
+		return x >= target.x - slop_x && x <= target.x + target.w + slop_x
+			&& y >= target.y - slop_y && y <= target.y + target.h + slop_y
 	}
 
 	fn hit_target_contains(target HitTarget, x f64, y f64) bool {

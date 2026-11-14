@@ -1843,6 +1843,12 @@ fn windows_cleanup_node_resources(key string, hwnd voidptr, kind Kind) {
 		st.pointer_handle = unsafe { nil }
 		st.pointer_binding = WindowsPointerBinding{}
 	}
+	if hwnd == st.root {
+		// The gesture's window is gone: no UP can arrive anymore, so drop
+		// the touch claim instead of wedging all future touches.
+		st.touch_active = false
+		st.touch_primary = 0
+	}
 	if kind == .image {
 		bitmap := st.images[key] or { voidptr(unsafe { nil }) }
 		if hwnd != unsafe { nil } && C.ui2_win_is_window(hwnd) != 0 {

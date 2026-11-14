@@ -2289,10 +2289,19 @@ static inline int ui2_win_handle_touch(void *hwnd_ptr, uintptr_t wparam, intptr_
 		"CloseTouchInputHandle");
 	if (get_input == NULL || close_input == NULL) return 0;
 	unsigned int count = (unsigned int)(wparam & 0xffff);
-	if (count == 0) return 0;
+	// The input handle must be closed for every WM_TOUCH, even when there is
+	// nothing to decode or no room to decode it into; otherwise a dropped UP
+	// wedges the contact tracking on the V side with no further UP coming.
+	if (count == 0) {
+		close_input((void *)lparam);
+		return 0;
+	}
 	ui2_win_touch_point *inputs = (ui2_win_touch_point *)HeapAlloc(GetProcessHeap(), 0,
 		(size_t)count * sizeof(ui2_win_touch_point));
-	if (inputs == NULL) return 0;
+	if (inputs == NULL) {
+		close_input((void *)lparam);
+		return 0;
+	}
 	int handled = 0;
 	if (get_input((void *)lparam, count, inputs, (int)sizeof(ui2_win_touch_point))) {
 		for (unsigned int i = 0; i < count; i++) {
@@ -2328,7 +2337,10 @@ static inline int ui2_win_handle_gesture(void *hwnd_ptr, uintptr_t wparam, intpt
 	ui2_win_gesture_info info;
 	ZeroMemory(&info, sizeof(info));
 	info.size = sizeof(info);
-	if (!get_info((void *)lparam, &info)) return 0;
+	if (!get_info((void *)lparam, &info)) {
+		close_info((void *)lparam);
+		return 0;
+	}
 	int handled = 0;
 	if (info.id == GID_PAN) {
 		static LONG previous_x = 0;
@@ -2338,15 +2350,21 @@ static inline int ui2_win_handle_gesture(void *hwnd_ptr, uintptr_t wparam, intpt
 			previous_x = info.location.x;
 			previous_y = info.location.y;
 			tracking = 1;
-		} else if (tracking) {
-			int dx = (int)info.location.x - (int)previous_x;
-			int dy = (int)info.location.y - (int)previous_y;
+		} else {
+			// A BEGIN consumed by a failed decode leaves no baseline; adopt
+			// this packet's position so the pan that follows still flows.
+			// A BEGIN packet never scrolls on its own either way.
+			if (tracking) {
+				int dx = (int)info.location.x - (int)previous_x;
+				int dy = (int)info.location.y - (int)previous_y;
+				if (dx != 0 || dy != 0) {
+					handled = ui2_windows_touch_pan(dx, dy, (int)info.location.x,
+						(int)info.location.y);
+				}
+			}
 			previous_x = info.location.x;
 			previous_y = info.location.y;
-			if (dx != 0 || dy != 0) {
-				handled = ui2_windows_touch_pan(dx, dy, (int)info.location.x,
-					(int)info.location.y);
-			}
+			tracking = 1;
 		}
 		if ((info.flags & GF_END) != 0) {
 			tracking = 0;
