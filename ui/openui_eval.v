@@ -21,6 +21,7 @@ pub const openui_err_type_mismatch = 'type-mismatch'
 pub const openui_err_excess_args = 'excess-args'
 pub const openui_err_inline_reserved = 'inline-reserved'
 pub const openui_err_unknown_function = 'unknown-function'
+pub const openui_err_unknown_reference = 'unknown-reference'
 pub const openui_err_no_root = 'no-root'
 pub const openui_err_parse_failed = 'parse-failed'
 pub const openui_err_runtime = 'runtime-error'
@@ -225,9 +226,7 @@ pub fn openui_eval_program(statements []OpenuiStatement, mut scope OpenuiScope) 
 	for statement in statements {
 		if statement.name.starts_with('\$') {
 			key := statement.name[1..]
-			scope.nested++
 			value := scope.eval_expr(statement.expr, statement.name)
-			scope.nested--
 			scope.state_defaults[key] = value
 			if key !in scope.state_values {
 				scope.state_values[key] = value
@@ -254,11 +253,16 @@ fn (mut scope OpenuiScope) eval_statement(name string) OpenuiValue {
 		scope.fail(openui_err_runtime, name, 'circular reference `${name}`')
 		return openui_null()
 	}
+	// Bounded chains only: a finite but absurdly deep ref chain (a1=a2,
+	// a2=a3, ...) would otherwise recurse to a stack overflow. 200 hops
+	// is far above any legitimate program yet safely below native stacks.
+	if scope.visiting.len > 200 {
+		scope.fail(openui_err_runtime, name, 'reference chain too deep at `${name}`')
+		return openui_null()
+	}
 	expr := scope.statements[name] or { return openui_null() }
 	scope.visiting[name] = true
-	scope.nested++
 	value := scope.eval_expr(expr, name)
-	scope.nested--
 	scope.visiting.delete(name)
 	scope.values[name] = value
 	scope.resolved[name] = true
@@ -266,6 +270,13 @@ fn (mut scope OpenuiScope) eval_statement(name string) OpenuiValue {
 }
 
 fn (mut scope OpenuiScope) eval_expr(expr &OpenuiExpr, statement string) OpenuiValue {
+	// Depth, not just statement membership, decides top-level: any nested
+	// position (array items, call args, operators, templates) pushes past
+	// 1, so `Query`/`Mutation` used inline are caught wherever they hide.
+	scope.nested++
+	defer {
+		scope.nested--
+	}
 	match expr.kind {
 		.literal {
 			if expr.is_null {
@@ -288,7 +299,11 @@ fn (mut scope OpenuiScope) eval_expr(expr &OpenuiExpr, statement string) OpenuiV
 			if expr.value in scope.statements {
 				return scope.eval_statement(expr.value)
 			}
-			return openui_string(expr.value)
+			// Bare identifiers never coerce to strings here. VML enum
+			// literals are quoted in OpenUI programs, so an undefined
+			// name is an LLM typo: report it instead of rendering it.
+			scope.fail(openui_err_unknown_reference, statement, 'unknown reference `${expr.value}` at line ${expr.line}')
+			return openui_null()
 		}
 		.state_ref {
 			key := expr.value.split('.')[0]
@@ -575,8 +590,12 @@ fn (mut scope OpenuiScope) eval_component(name string, args []&OpenuiExpr, line 
 			continue
 		}
 		if param.schema.kind == .list {
+			needs_node := !isnil(param.schema.element) && param.schema.element.node_slot
 			if raw.kind != .list {
-				if openui_is_node(raw) {
+				// A single node is shorthand for a one-child list, but
+				// only where nodes belong. Anywhere else it is a loud
+				// type error, not a silent drop.
+				if openui_is_node(raw) && needs_node {
 					slots[param.name] = [raw]
 					continue
 				}
@@ -585,14 +604,28 @@ fn (mut scope OpenuiScope) eval_component(name string, args []&OpenuiExpr, line 
 			}
 			// Node items are child slots for the renderer; plain values stay
 			// in props so data components (Table, Chart) can read them.
+			// Nulls drop silently per the streaming-array rule; anything on
+			// the wrong side is a loud type error, not a silent split.
 			mut nodes := []OpenuiValue{}
 			mut plain := []OpenuiValue{}
 			for item in raw.items {
-				if openui_is_node(item) {
-					nodes << item
-				} else {
-					plain << item
+				if item.kind == .null_ || item.kind == .invalid {
+					continue
 				}
+				if openui_is_node(item) {
+					if needs_node {
+						nodes << item
+					} else {
+						scope.fail(openui_err_type_mismatch, statement, '`${param.name}` takes data, not components, at line ${line}')
+						return openui_null()
+					}
+					continue
+				}
+				if needs_node {
+					scope.fail(openui_err_type_mismatch, statement, '`${param.name}` takes components, not data, at line ${line}')
+					return openui_null()
+				}
+				plain << openui_coerce(item)
 			}
 			if nodes.len > 0 {
 				slots[param.name] = nodes
@@ -638,6 +671,13 @@ fn (mut scope OpenuiScope) eval_component(name string, args []&OpenuiExpr, line 
 		props[param.name] = openui_coerce(raw)
 	}
 	if saw_null_runtime {
+		return openui_null()
+	}
+	// One element writes back to one variable. Two bound props cannot
+	// share a single control identity, so reject instead of wiring one
+	// silently and dropping the other.
+	if binds.len > 1 {
+		scope.fail(openui_err_type_mismatch, statement, 'at most one `$bind` per component at line ${line}')
 		return openui_null()
 	}
 	return openui_make_node(name, props, slots, binds)
@@ -855,22 +895,32 @@ fn (mut scope OpenuiScope) eval_builtin_filter_sort(name string, args []&OpenuiE
 		scope.fail(openui_err_runtime, statement, 'bad `@Sort` args at line ${line}')
 		return openui_null()
 	}
-	mut sorted := items.items.clone()
+	// Decorate-sort-undecorate: keys are computed once, then V's sort
+	// (O(n log n)) orders indices. The old insertion sort recomputed
+	// string keys per comparison — O(n^2) allocs on hostile input.
 	field_name := field.text
-	for i := 1; i < sorted.len; i++ {
-		mut j := i
-		for j > 0 {
-			previous := openui_sort_key(sorted[j - 1], field_name)
-			current := openui_sort_key(sorted[j], field_name)
-			swap := if descending { current > previous } else { current < previous }
-			if !swap {
-				break
-			}
-			sorted[j - 1], sorted[j] = sorted[j], sorted[j - 1]
-			j--
+	mut decorated := []OpenuiSortEntry{cap: items.items.len}
+	for index, item in items.items {
+		decorated << OpenuiSortEntry{
+			key:   openui_sort_key(item, field_name)
+			index: index
 		}
 	}
+	if descending {
+		decorated.sort(a.key > b.key)
+	} else {
+		decorated.sort(a.key < b.key)
+	}
+	mut sorted := []OpenuiValue{cap: items.items.len}
+	for entry in decorated {
+		sorted << items.items[entry.index]
+	}
 	return openui_list(sorted)
+}
+
+struct OpenuiSortEntry {
+	key   string
+	index int
 }
 
 fn openui_sort_key(item OpenuiValue, field string) string {
@@ -894,6 +944,13 @@ fn (mut scope OpenuiScope) eval_builtin_math(name string, args []&OpenuiExpr, li
 			scope.fail(openui_err_runtime, statement, 'bad `@${name}` precision at line ${line}')
 			return openui_null()
 		})
+		// f64 carries ~15 significant digits; anything beyond that
+		// only feeds the multiply loop, so clamp instead of hanging.
+		if decimals < 0 {
+			decimals = 0
+		} else if decimals > 15 {
+			decimals = 15
+		}
 	}
 	apply := fn [name, decimals] (value OpenuiValue) OpenuiValue {
 		number := value.numeric() or { return openui_null() }
@@ -996,15 +1053,17 @@ fn (mut scope OpenuiScope) eval_custom_func(name string, impl OpenuiFuncImpl, ar
 			}
 			raw := scope.eval_expr(args[index], statement)
 			if raw.kind == .null_ || raw.kind == .invalid {
+				// Like component props, null skips an optional: the
+				// default (or omission) applies instead of an error.
+				if param.optional {
+					continue
+				}
 				arg := args[index]
 				if arg.kind == .literal && arg.is_null {
 					scope.fail(openui_err_null_required, statement, 'null `${param.name}` for `@${name}` at line ${line}')
 					return openui_null()
 				}
-				if !param.optional {
-					return openui_null()
-				}
-				continue
+				return openui_null()
 			}
 			if !openui_check_value(raw, param.schema) {
 				if param.optional {
@@ -1024,8 +1083,10 @@ fn (mut scope OpenuiScope) eval_custom_func(name string, impl OpenuiFuncImpl, ar
 }
 
 // eval_action_step builds one validated action step. Built-in mistakes are
-// reported and skipped; custom actions with any invalid argument are a
-// silent no-op; unknown names report `unknown-function`.
+// reported and skipped; per the spec ("A custom action with any invalid
+// argument, required or optional, is a no-op. It does not fall back to a
+// default."), custom actions with any invalid argument are a silent no-op;
+// unknown names report `unknown-function`.
 
 fn (mut scope OpenuiScope) eval_action_step(name string, args []&OpenuiExpr, line int, statement string, value_position bool) ?OpenuiActionCall {
 	match name {
@@ -1160,7 +1221,10 @@ fn (mut scope OpenuiScope) eval_query(expr &OpenuiExpr, statement string) Openui
 		scope.fail(openui_err_inline_reserved, statement, '`Query` must be top-level at line ${expr.line}')
 		return openui_null()
 	}
-	if expr.args.len < 2 || expr.args.len > 4 {
+	// Name, args, and defaults are all required; only the refresh
+	// interval is optional. Arity is checked first so a short call
+	// fails closed instead of indexing past `args`.
+	if expr.args.len < 3 || expr.args.len > 4 {
 		scope.fail(openui_err_type_mismatch, statement, 'bad `Query` args at line ${expr.line}')
 		return openui_null()
 	}

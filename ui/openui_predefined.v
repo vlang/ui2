@@ -60,7 +60,7 @@ pub fn openui_stack_component() OpenuiComponent {
 		params:      [
 			OpenuiParam{
 				name:   'children'
-				schema: openui_list_schema(openui_any_schema())
+				schema: openui_list_schema(openui_node_schema())
 			},
 		]
 		height:      0
@@ -75,7 +75,7 @@ pub fn openui_card_component() OpenuiComponent {
 		params:      [
 			OpenuiParam{
 				name:   'children'
-				schema: openui_list_schema(openui_any_schema())
+				schema: openui_list_schema(openui_node_schema())
 			},
 		]
 		height:      0
@@ -122,22 +122,35 @@ pub fn openui_button_component() OpenuiComponent {
 }
 
 const openui_table_max_rows = 20
+const openui_table_max_columns = 32
 
-fn openui_table_columns(props map[string]OpenuiValue) []string {
-	if raw := props['columns'] {
-		if raw.kind == .list {
-			mut columns := []string{}
-			for item in raw.items {
-				text := item.string_value().trim_space()
-				if text.len > 0 {
-					columns << text
-				}
-			}
-			if columns.len > 0 {
-				return columns
-			}
+fn openui_table_all_columns(props map[string]OpenuiValue) []string {
+	raw := props['columns'] or { return openui_table_inferred_columns(props) }
+	if raw.kind != .list {
+		return openui_table_inferred_columns(props)
+	}
+	mut columns := []string{}
+	for item in raw.items {
+		text := item.string_value().trim_space()
+		if text.len > 0 {
+			columns << text
 		}
 	}
+	if columns.len > 0 {
+		return columns
+	}
+	return openui_table_inferred_columns(props)
+}
+
+fn openui_table_columns(props map[string]OpenuiValue) []string {
+	all := openui_table_all_columns(props)
+	if all.len > openui_table_max_columns {
+		return all[..openui_table_max_columns]
+	}
+	return all
+}
+
+fn openui_table_inferred_columns(props map[string]OpenuiValue) []string {
 	rows := openui_table_rows(props)
 	if rows.len == 0 {
 		return []
@@ -145,6 +158,9 @@ fn openui_table_columns(props map[string]OpenuiValue) []string {
 	if rows[0].kind == .object {
 		mut keys := rows[0].fields.keys()
 		keys.sort()
+		if keys.len > openui_table_max_columns {
+			keys = keys[..openui_table_max_columns]
+		}
 		return keys
 	}
 	return ['']
@@ -158,11 +174,36 @@ fn openui_table_rows(props map[string]OpenuiValue) []OpenuiValue {
 	return raw.items
 }
 
+fn openui_table_footer(columns int, total_columns int, rows int, shown int, width f64, y f64, id string) []Element {
+	mut notes := []string{}
+	if rows > shown {
+		notes << '… and ${rows - shown} more'
+	}
+	// Cap the fan-out: each extra column multiplies every rendered row,
+	// with no upper bound from model output or tool data.
+	if total_columns > columns {
+		notes << 'showing ${columns} of ${total_columns} columns'
+	}
+	if notes.len == 0 {
+		return []Element{}
+	}
+	return [
+		label('${id}_more', notes.join(' · '), rect(0, y, width, 24), TextStyle{
+			size: 13
+		}),
+	]
+}
+
 fn openui_table_height(props map[string]OpenuiValue) f64 {
 	rows := openui_table_rows(props)
 	shown := if rows.len > openui_table_max_rows { openui_table_max_rows } else { rows.len }
 	body := if shown == 0 { 3 * 28.0 } else { f64(shown) * 28.0 }
-	footer := if rows.len > shown { 24.0 } else { 0.0 }
+	footer := if rows.len > shown
+		|| openui_table_all_columns(props).len > openui_table_max_columns {
+		24.0
+	} else {
+		0.0
+	}
 	return 16 + 30 + body + footer
 }
 
@@ -198,11 +239,9 @@ fn openui_render_table(ctx OpenuiCtx) Element {
 				y, cell, 28), TextStyle{})
 		}
 	}
-	if rows.len > shown {
-		kids << label('${ctx.id}_more', '… and ${rows.len - shown} more', rect(0, 38 +
-			f64(shown) * 28, width, 24), TextStyle{
-			size: 13
-		})
+	if rows.len > shown || openui_table_all_columns(ctx.props).len > columns.len {
+		kids << openui_table_footer(columns.len, openui_table_all_columns(ctx.props).len,
+			rows.len, shown, width, 38 + f64(shown) * 28, ctx.id)
 	}
 	if columns.len == 0 {
 		kids << label(ctx.id, 'No data', rect(0, 38, width, 3 * 28), TextStyle{})
@@ -246,6 +285,8 @@ fn openui_chart_type(name string) ChartType {
 	}
 }
 
+const openui_chart_max_points = 1000
+
 fn openui_render_chart(ctx OpenuiCtx) Element {
 	kind := openui_chart_type(ctx.string_prop('type'))
 	mut labels := []string{}
@@ -253,7 +294,10 @@ fn openui_render_chart(ctx OpenuiCtx) Element {
 	raw_labels := ctx.list_prop('labels')
 	raw_values := ctx.list_prop('values')
 	pairs := if raw_labels.len < raw_values.len { raw_labels.len } else { raw_values.len }
-	for index in 0 .. pairs {
+	// A chart cannot display unlimited points; beyond the cap the data
+	// is visual noise, so keep the first slice and document the limit.
+	showing := if pairs > openui_chart_max_points { openui_chart_max_points } else { pairs }
+	for index in 0 .. showing {
 		number := raw_values[index].numeric() or { continue }
 		labels << raw_labels[index].string_value()
 		values << number
@@ -283,7 +327,7 @@ fn openui_render_chart(ctx OpenuiCtx) Element {
 pub fn openui_chart_component() OpenuiComponent {
 	return OpenuiComponent{
 		name:        'Chart'
-		description: 'A read-only chart. Types: bar, line, pie, doughnut.'
+		description: 'A read-only chart. Types: bar, line, pie, doughnut. Shows the first 1000 points.'
 		params:      [
 			OpenuiParam{
 				name:   'type'
@@ -366,11 +410,11 @@ fn openui_render_select(ctx OpenuiCtx) Element {
 pub fn openui_select_component() OpenuiComponent {
 	return OpenuiComponent{
 		name:        'Select'
-		description: 'A dropdown. Runs its action when the selection changes.'
+		description: 'A dropdown two-way bound to a `$variable`. Runs its action when the selection changes.'
 		params:      [
 			OpenuiParam{
 				name:   'value'
-				schema: openui_string_schema()
+				schema: openui_bind_schema()
 			},
 			OpenuiParam{
 				name:   'options'

@@ -121,6 +121,7 @@ fn openui_tokenize_line(src string, line int) ![]OpenuiToken {
 			quote := c
 			pos++
 			mut val := []u8{}
+			mut closed := false
 			for pos < src.len {
 				q := src[pos]
 				pos++
@@ -136,10 +137,14 @@ fn openui_tokenize_line(src string, line int) ![]OpenuiToken {
 						else { val << next }
 					}
 				} else if q == quote {
+					closed = true
 					break
 				} else {
 					val << q
 				}
+			}
+			if !closed {
+				return error('unterminated string at line ${line}')
 			}
 			tokens << OpenuiToken{.string_lit, val.bytestr(), line}
 			continue
@@ -306,7 +311,24 @@ fn openui_tokenize_line(src string, line int) ![]OpenuiToken {
 struct OpenuiParser {
 	tokens []OpenuiToken
 mut:
-	pos int
+	pos   int
+	depth int
+}
+
+// openui_max_parse_depth bounds expression nesting. Model output is
+// untrusted; without it a single line of 100k `!` or `(` overflows the
+// native stack instead of failing closed.
+const openui_max_parse_depth = 256
+
+fn (mut p OpenuiParser) enter() ! {
+	if p.depth > openui_max_parse_depth {
+		return error('expression too deeply nested at line ${p.peek().line}')
+	}
+	p.depth++
+}
+
+fn (mut p OpenuiParser) leave() {
+	p.depth--
 }
 
 fn (mut p OpenuiParser) peek() OpenuiToken {
@@ -330,10 +352,18 @@ fn (mut p OpenuiParser) expect(kind OpenuiTokenKind) !OpenuiToken {
 }
 
 fn (mut p OpenuiParser) parse_expr() !&OpenuiExpr {
+	p.enter()!
+	defer {
+		p.leave()
+	}
 	return p.parse_ternary()
 }
 
 fn (mut p OpenuiParser) parse_ternary() !&OpenuiExpr {
+	p.enter()!
+	defer {
+		p.leave()
+	}
 	cond := p.parse_or()!
 	if p.peek().kind == .question {
 		line := p.advance().line
@@ -448,6 +478,10 @@ fn (mut p OpenuiParser) parse_mul() !&OpenuiExpr {
 }
 
 fn (mut p OpenuiParser) parse_unary() !&OpenuiExpr {
+	p.enter()!
+	defer {
+		p.leave()
+	}
 	token := p.peek()
 	if token.kind in [.bang, .minus] {
 		p.advance()

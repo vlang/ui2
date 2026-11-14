@@ -139,6 +139,10 @@ pub:
 	enum_values   []string
 	ref_component string
 	optional      bool
+	// node_slot marks a list element slot that only accepts rendered
+	// component nodes (e.g. container children). Data lists leave it
+	// unset and validate plain values against the element schema.
+	node_slot bool
 mut:
 	element  &OpenuiSchema = unsafe { nil }
 	default_ OpenuiValue
@@ -179,6 +183,17 @@ pub fn openui_list_schema(element OpenuiSchema) OpenuiSchema {
 	return OpenuiSchema{
 		kind:    .list
 		element: &element
+	}
+}
+
+// openui_node_schema describes one rendered component child. Container
+// children use `openui_list_schema(openui_node_schema())` so the evaluator
+// can tell node slots apart from plain data lists.
+
+pub fn openui_node_schema() OpenuiSchema {
+	return OpenuiSchema{
+		kind:      .object
+		node_slot: true
 	}
 }
 
@@ -271,7 +286,11 @@ pub:
 	description string
 	params      []OpenuiParam
 	height      f64 = 32
-mut:
+pub mut:
+	// render and height_for_props are pub mut (not plain mut) so host
+	// applications outside module ui2 can construct and register
+	// components. A missing render is a host bug; the renderer calls it
+	// unconditionally.
 	render           OpenuiRenderFn
 	height_for_props ?OpenuiHeightFn
 }

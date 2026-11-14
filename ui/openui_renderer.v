@@ -8,6 +8,15 @@ module ui2
 pub type OpenuiActionHandler = fn (event OpenuiActionEvent)
 pub type OpenuiErrorHandler = fn (errors []OpenuiError)
 
+// openui_default_live_text reads the live control value. It returns ''
+// for ids with no mounted control, which includes every headless render.
+
+fn openui_default_live_text(id string) string {
+	return text(id)
+}
+
+pub type OpenuiLiveTextFn = fn (id string) string
+
 pub struct OpenuiActionEvent {
 pub:
 	kind       string
@@ -34,14 +43,27 @@ pub mut:
 	state     map[string]OpenuiValue
 	response  string
 	streaming bool
+	// live_text reads the live control value for write-back. Hosts and
+	// tests can inject a source (e.g. seeded headless state); the default
+	// reads the mounted control and returns '' when there is none.
+	live_text OpenuiLiveTextFn = openui_default_live_text
 mut:
 	action_slots map[string][]OpenuiActionCall
 	action_seq   int
 	node_seq     int
+	// Ids are deterministic per render: counters restart on every render
+	// so the same tree mints the same element and action ids. Events are
+	// dispatched synchronously against the live tree, so a stale id can
+	// only come from replaying an id across a rebuild — and handle_event's
+	// false return flags exactly that.
 	// input_bindings maps a rendered element id to the `$variable` key its
 	// edits write back to. Rebuilt on every render like action_slots.
 	input_bindings map[string]string
-	last_info      OpenuiRenderInfo
+	// dirty tracks `$variable`s the user changed (Set actions, input
+	// write-backs). Only dirty keys survive a re-render; the rest take
+	// the response's current defaults. Reset clears the dirty mark.
+	dirty     map[string]bool
+	last_info OpenuiRenderInfo
 }
 
 pub fn new_openui_renderer(library OpenuiLibrary) OpenuiRenderer {
@@ -92,6 +114,8 @@ fn (renderer &OpenuiRenderer) form_state() map[string]OpenuiValue {
 pub fn (mut renderer OpenuiRenderer) render() (Element, OpenuiRenderInfo) {
 	renderer.action_slots = map[string][]OpenuiActionCall{}
 	renderer.input_bindings = map[string]string{}
+	renderer.action_seq = 0
+	renderer.node_seq = 0
 	content := strip_openui_markers(renderer.response)
 	statements := parse_openui_program(content) or {
 		info := OpenuiRenderInfo{
@@ -109,20 +133,25 @@ pub fn (mut renderer OpenuiRenderer) render() (Element, OpenuiRenderInfo) {
 	mut scope := new_openui_scope(renderer.library)
 	scope.tools = renderer.tools.clone()
 	scope.funcs = renderer.funcs.clone()
-	for key, value in renderer.state {
-		scope.state_values[key] = value
+	// Only user-edited keys survive a re-render, seeded into the fresh
+	// scope. Everything else takes the response's current defaults, so a
+	// revised `$default` applies on the next render while edits persist.
+	// Dirty marks clear only on Reset, never automatically: an edit
+	// outlives any number of streaming chunks until explicitly reset.
+	for key, _ in renderer.dirty {
+		if value := renderer.state[key] {
+			scope.state_values[key] = value
+		}
 	}
 	openui_eval_program(statements, mut scope)
-	for key, value in scope.state_values {
-		renderer.state[key] = value
-	}
+	renderer.state = scope.state_values.clone()
 	root_value, entry_errors := renderer.find_root(statements, scope)
 	mut errors := scope.errors.clone()
 	errors << entry_errors
 	if root_value.kind == .null_ || root_value.kind == .invalid || !openui_is_node(root_value) {
 		info := OpenuiRenderInfo{
 			errors:   errors
-			orphaned: openui_orphaned(statements, scope)
+			orphaned: openui_orphaned(statements, scope, renderer.library.root)
 		}
 		renderer.last_info = info
 		if !renderer.streaming {
@@ -133,7 +162,7 @@ pub fn (mut renderer OpenuiRenderer) render() (Element, OpenuiRenderInfo) {
 	element := renderer.render_node(root_value, 0, 0, renderer.width)
 	info := OpenuiRenderInfo{
 		errors:   errors
-		orphaned: openui_orphaned(statements, scope)
+		orphaned: openui_orphaned(statements, scope, renderer.library.root)
 	}
 	renderer.last_info = info
 	if !renderer.streaming {
@@ -174,17 +203,31 @@ fn (mut renderer OpenuiRenderer) find_root(statements []OpenuiStatement, scope O
 	}]
 }
 
-fn openui_orphaned(statements []OpenuiStatement, scope OpenuiScope) []string {
+fn openui_orphaned(statements []OpenuiStatement, scope OpenuiScope, root_component string) []string {
 	mut reachable := map[string]bool{}
 	mut stack := []string{}
 	if 'root' in scope.values {
 		stack << 'root'
 	}
+	// Without `root`, seed from the first node calling the root component
+	// (the same rule `find_root` uses), else the entry itself is reported
+	// orphaned. Fall back to the first node of any kind.
+	mut seeded := false
 	for statement in statements {
 		value := scope.values[statement.name] or { continue }
-		if openui_is_node(value) {
+		if openui_is_node(value) && openui_node_name(value) == root_component {
 			stack << statement.name
+			seeded = true
 			break
+		}
+	}
+	if !seeded {
+		for statement in statements {
+			value := scope.values[statement.name] or { continue }
+			if openui_is_node(value) {
+				stack << statement.name
+				break
+			}
 		}
 	}
 	for stack.len > 0 {
@@ -325,6 +368,9 @@ fn (mut renderer OpenuiRenderer) wire_binds(value OpenuiValue, id string) {
 fn (mut renderer OpenuiRenderer) wire_action(component OpenuiComponent, props map[string]OpenuiValue, rendered Element) Element {
 	// Attaches the first action prop to the element identity, so taps
 	// arrive at handle_event without component authors writing wiring.
+	// Steps register under the element id itself (not a fresh id) so an
+	// Input with `on_change` writes back and runs its steps on the same
+	// event. Anonymous elements (no id) keep a minted identity.
 	if rendered.action_id.len > 0 {
 		return rendered
 	}
@@ -335,6 +381,10 @@ fn (mut renderer OpenuiRenderer) wire_action(component OpenuiComponent, props ma
 		action := props[param.name] or { continue }
 		if action.kind != .action {
 			continue
+		}
+		if rendered.id.len > 0 {
+			renderer.action_slots[rendered.id] = action.steps.clone()
+			return with_action(rendered, rendered.id)
 		}
 		return with_action(rendered, renderer.register_action(action.steps))
 	}
@@ -359,9 +409,11 @@ pub fn (mut renderer OpenuiRenderer) handle_event(event_id string) bool {
 		return false
 	}
 	// Control edits land in the bound `$variable` before actions run, so
-	// `@ToAssistant` and `@Run` observe the fresh value.
+	// `@ToAssistant` and `@Run` observe the fresh value. The mark keeps
+	// the edit across re-renders; Reset clears it.
 	if var_key.len > 0 {
-		renderer.state[var_key] = openui_string(text(event_id))
+		renderer.state[var_key] = openui_string(renderer.live_text(event_id))
+		renderer.dirty[var_key] = true
 	}
 	for step in steps {
 		match step.name {
@@ -369,12 +421,15 @@ pub fn (mut renderer OpenuiRenderer) handle_event(event_id string) bool {
 				if step.args.len == 2 {
 					key := step.args[0].text
 					renderer.state[key] = step.args[1]
+					renderer.dirty[key] = true
 				}
 			}
 			'Reset' {
+				defaults := renderer.fresh_defaults()
 				for arg in step.args {
-					if default_ := renderer.default_state(arg.text) {
+					if default_ := defaults[arg.text] {
 						renderer.state[arg.text] = default_
+						renderer.dirty.delete(arg.text)
 					}
 				}
 			}
@@ -425,22 +480,19 @@ pub fn (mut renderer OpenuiRenderer) handle_event(event_id string) bool {
 	return true
 }
 
-fn (renderer &OpenuiRenderer) default_state(key string) ?OpenuiValue {
+// fresh_defaults evaluates the current response once in a clean scope and
+// returns its `$variable` defaults. Reset restores from here (single
+// parse+eval per event, not per key) instead of the live edited state.
+
+fn (mut renderer OpenuiRenderer) fresh_defaults() map[string]OpenuiValue {
+	mut defaults := map[string]OpenuiValue{}
 	content := strip_openui_markers(renderer.response)
-	statements := parse_openui_program(content) or { return none }
-	for statement in statements {
-		if statement.name == '\$' + key {
-			mut scope := new_openui_scope(renderer.library)
-			scope.tools = renderer.tools.clone()
-			scope.funcs = renderer.funcs.clone()
-			openui_eval_program(statements, mut scope)
-			if value := scope.state_defaults[key] {
-				return value
-			}
-			return none
-		}
-	}
-	return none
+	statements := parse_openui_program(content) or { return defaults }
+	mut scope := new_openui_scope(renderer.library)
+	scope.tools = renderer.tools.clone()
+	scope.funcs = renderer.funcs.clone()
+	openui_eval_program(statements, mut scope)
+	return scope.state_defaults.clone()
 }
 
 fn (mut renderer OpenuiRenderer) run_tool(name string) {
@@ -449,8 +501,10 @@ fn (mut renderer OpenuiRenderer) run_tool(name string) {
 	mut scope := new_openui_scope(renderer.library)
 	scope.tools = renderer.tools.clone()
 	scope.funcs = renderer.funcs.clone()
-	for key, value in renderer.state {
-		scope.state_values[key] = value
+	for key, _ in renderer.dirty {
+		if value := renderer.state[key] {
+			scope.state_values[key] = value
+		}
 	}
 	// Re-evaluation re-runs Queries with current `$var` args by itself;
 	// a Mutation needs an explicit tool call here.
@@ -459,10 +513,9 @@ fn (mut renderer OpenuiRenderer) run_tool(name string) {
 		renderer.state[key] = value
 	}
 	mutation := scope.statements[name] or { return }
-	if mutation.kind != .mutation {
+	if mutation.kind != .mutation || mutation.args.len == 0 {
 		return
 	}
-	scope.nested++
 	tool_name := scope.eval_expr(mutation.args[0], name)
 	mut plain := map[string]OpenuiValue{}
 	if mutation.args.len > 1 {
@@ -473,7 +526,6 @@ fn (mut renderer OpenuiRenderer) run_tool(name string) {
 			}
 		}
 	}
-	scope.nested--
 	if tool := scope.tools[tool_name.text] {
 		_ = tool(plain)
 	}
