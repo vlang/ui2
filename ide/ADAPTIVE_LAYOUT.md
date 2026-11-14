@@ -133,6 +133,13 @@ Unknown variation properties, invalid classes, invalid limits and duplicate
 selectors produce errors. `LayoutVariation` is metadata, not a rendered view.
 Dropdown `Option` children remain independent of this metadata.
 
+Stylesheets are orthogonal: `Style` blocks, `class:`, `style:`, and
+`enabled:` round-trip alongside `LayoutVariation` and are preserved by
+duplicate/undo/redo. Geometry varies by size class; text, events, classes,
+and styles are shared. Container queries in Preview evaluate against the
+scaled display frame, so verify breakpoints at 100% zoom or in the running
+app.
+
 ## Scope
 
 This is an Xcode-inspired adaptive workflow, **not** a general Auto Layout
