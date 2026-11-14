@@ -24,6 +24,9 @@ pub mut:
 	font_size     f64 = 14
 	checked       bool
 	event_handler string
+	classes       string
+	inline_style  string
+	scoped_style  string
 	layout        ui2.AdaptiveLayout
 	variations    []ui2.AdaptiveLayoutVariation
 }
@@ -39,41 +42,47 @@ struct IdeSnapshot {
 	adaptive          bool
 	breakpoint_width  f64 = 600
 	breakpoint_height f64 = 600
+	stylesheet_source string
 }
 
 @[heap]
 pub struct IdeApp {
 pub mut:
-	adaptive           bool
-	breakpoint_width   f64 = 600
-	breakpoint_height  f64 = 600
-	preview_width      f64
-	preview_height     f64
-	edit_width_class   ui2.AdaptiveSizeClass
-	edit_height_class  ui2.AdaptiveSizeClass
-	show_layout_guides bool = true
-	components         []DesignerComponent
-	selected_id        int
-	next_id            int    = 1
-	form_name          string = 'Form1'
-	form_width         f64    = default_form_width
-	form_height        f64    = default_form_height
-	form_background    u32    = 0xf8fafc
-	project_root       string
-	file_path          string
-	path_input         string
-	active_tab         string = 'designer'
-	inspector_tab      string = 'properties'
-	armed_kind         string
-	source_text        string
-	source_modified    bool
-	dirty              bool
-	show_grid          bool = true
-	snap_to_grid       bool = true
-	show_debug_overlay bool
-	output_open        bool   = true
-	status             string = 'Choose a component, then click the form to place it.'
-	messages           string
+	adaptive            bool
+	breakpoint_width    f64 = 600
+	breakpoint_height   f64 = 600
+	preview_width       f64
+	preview_height      f64
+	edit_width_class    ui2.AdaptiveSizeClass
+	edit_height_class   ui2.AdaptiveSizeClass
+	show_layout_guides  bool = true
+	components          []DesignerComponent
+	selected_id         int
+	next_id             int    = 1
+	form_name           string = 'Form1'
+	form_width          f64    = default_form_width
+	form_height         f64    = default_form_height
+	form_background     u32    = 0xf8fafc
+	stylesheet_source   string
+	stylesheet_error    string
+	style_doc_text      string
+	style_doc_modified  bool
+	style_scoped_drafts map[int]string
+	project_root        string
+	file_path           string
+	path_input          string
+	active_tab          string = 'designer'
+	inspector_tab       string = 'properties'
+	armed_kind          string
+	source_text         string
+	source_modified     bool
+	dirty               bool
+	show_grid           bool = true
+	snap_to_grid        bool = true
+	show_debug_overlay  bool
+	output_open         bool   = true
+	status              string = 'Choose a component, then click the form to place it.'
+	messages            string
 mut:
 	undo_stack         []IdeSnapshot
 	redo_stack         []IdeSnapshot
@@ -94,6 +103,7 @@ fn new_ide_app(root string) IdeApp {
 		project_root: real_root
 		path_input:   os.join_path(real_root, 'form.vml')
 	}
+	app.sync_style_drafts()
 	app.sync_source()
 	app.log('Ready. The form is 760 x 520 logical pixels.')
 	return app
@@ -111,6 +121,7 @@ fn (app &IdeApp) snapshot() IdeSnapshot {
 		form_width:        app.form_width
 		form_height:       app.form_height
 		form_background:   app.form_background
+		stylesheet_source: app.stylesheet_source
 	}
 }
 
@@ -126,6 +137,8 @@ fn (mut app IdeApp) restore(snapshot IdeSnapshot) {
 	app.form_width = snapshot.form_width
 	app.form_height = snapshot.form_height
 	app.form_background = snapshot.form_background
+	app.stylesheet_source = snapshot.stylesheet_source
+	app.sync_style_drafts()
 	app.sync_source()
 	app.dirty = true
 }
@@ -391,6 +404,13 @@ fn (app &IdeApp) inspector_property_ids() []string {
 	if app.inspector_tab == 'events' {
 		return if app.selected_id > 0 { ['property_event'] } else { []string{} }
 	}
+	if app.inspector_tab == 'style' {
+		return if app.selected_id == 0 {
+			['style_doc_editor']
+		} else {
+			['style_class', 'style_inline', 'style_scoped_editor']
+		}
+	}
 	if app.selected_id == 0 {
 		return [
 			'form_property_name',
@@ -534,7 +554,11 @@ fn (mut app IdeApp) delete_selected() {
 	}
 	app.checkpoint()
 	name := app.components[index].name
+	deleted_id := app.components[index].id
 	app.components.delete(index)
+	if deleted_id in app.style_scoped_drafts {
+		app.style_scoped_drafts.delete(deleted_id)
+	}
 	app.selected_id = 0
 	app.changed('Deleted `${name}`.')
 }
@@ -955,12 +979,20 @@ fn component_vml(component DesignerComponent) string {
 			properties << 'clickable: true'
 		}
 	}
+	if component.classes.trim_space().len > 0 {
+		properties << 'class: "${vml_escape(component.classes)}"'
+	}
+	if component.inline_style.trim_space().len > 0 {
+		properties << 'style: "${vml_escape(component.inline_style)}"'
+	}
 	for variation in component.variations { properties << adaptive_variation_vml(variation) }
-	if component.kind == 'dropdown' || component.variations.len > 0 {
+	has_scoped := component.scoped_style.trim_space().len > 0
+	if component.kind == 'dropdown' || component.variations.len > 0 || has_scoped {
 		mut lines := ['    ${tag} {']
 		for property in properties {
 			lines << '        ${property}'
 		}
+		lines << style_block_vml_lines(component.scoped_style, '        ')
 		lines << '    }'
 		return lines.join('\n')
 	}
@@ -981,6 +1013,7 @@ fn generate_vml(app &IdeApp) string {
 		lines << '    layout_breakpoint_width: ${app.breakpoint_width:g}'
 		lines << '    layout_breakpoint_height: ${app.breakpoint_height:g}'
 	}
+	lines << style_block_vml_lines(app.stylesheet_source, '    ')
 	for component in app.components {
 		lines << ''
 		lines << component_vml(component)
@@ -1020,10 +1053,24 @@ fn component_from_node(node &ui2.VNode, id int) !DesignerComponent {
 	if !valid_identifier(name) {
 		return error('`${name}` is not a valid component id')
 	}
+	mut scoped_sources := []string{}
 	for child in node.children {
+		if child.tag == 'Style' {
+			parse_ide_stylesheet(child.prop('source')) or {
+				return error('invalid `Style` block: ${err.msg()}')
+			}
+			scoped_sources << child.prop('source').trim_space()
+			continue
+		}
 		if child.tag != 'LayoutVariation' && (node.tag != 'Dropdown' || child.tag != 'Option') {
 			return error('nested `${child.tag}` inside `${name}` is not editable by the visual designer')
 		}
+	}
+	classes := validate_style_classes(node.prop('class')) or {
+		return error('invalid `class` on `${name}`: ${err.msg()}')
+	}
+	inline_style := validate_inline_style(node.prop('style')) or {
+		return error('invalid `style` on `${name}`: ${err.msg()}')
 	}
 	mut text := node.prop('text')
 	if kind == 'text_field' {
@@ -1058,6 +1105,9 @@ fn component_from_node(node &ui2.VNode, id int) !DesignerComponent {
 		} else {
 			node.prop('on_tap')
 		}
+		classes:       classes
+		inline_style:  inline_style
+		scoped_style:  scoped_sources.join('\n').trim_space()
 	}
 }
 
@@ -1068,8 +1118,16 @@ fn document_from_vml(source string) !IdeSnapshot {
 	}
 	mut components := []DesignerComponent{}
 	mut names := map[string]bool{}
+	mut doc_styles := []string{}
 	for child in root.children {
 		if child.tag in ['MenuItem', 'Option'] {
+			continue
+		}
+		if child.tag == 'Style' {
+			parse_ide_stylesheet(child.prop('source')) or {
+				return error('invalid `Style` block: ${err.msg()}')
+			}
+			doc_styles << child.prop('source').trim_space()
 			continue
 		}
 		kind := tag_component_kind(child.tag)
@@ -1082,6 +1140,10 @@ fn document_from_vml(source string) !IdeSnapshot {
 		}
 		names[component.name] = true
 		components << component
+	}
+	stylesheet_source := doc_styles.join('\n').trim_space()
+	if stylesheet_source.len > 0 {
+		parse_ide_stylesheet(stylesheet_source)!
 	}
 	form_name := root.prop_or('id', 'Form1')
 	if !valid_identifier(form_name) {
@@ -1107,11 +1169,15 @@ fn document_from_vml(source string) !IdeSnapshot {
 		form_width:        width
 		form_height:       height
 		form_background:   node_color(root, 'background', 0xf8fafc)!
+		stylesheet_source: stylesheet_source
 	}
 }
 
 fn (mut app IdeApp) apply_source(source string) ! {
 	document := document_from_vml(source)!
+	if app.style_doc_modified || app.style_scoped_drafts.len > 0 {
+		app.log('Discarded unapplied stylesheet edits; source is now truth.')
+	}
 	app.checkpoint()
 	app.restore(document)
 	app.reset_adaptive_preview()
@@ -1209,6 +1275,9 @@ fn (mut app IdeApp) new_document() {
 	app.form_width = default_form_width
 	app.form_height = default_form_height
 	app.form_background = 0xf8fafc
+	app.stylesheet_source = ''
+	app.stylesheet_error = ''
+	app.style_scoped_drafts = map[int]string{}
 	app.file_path = ''
 	app.path_input = os.join_path(app.project_root, 'form.vml')
 	app.active_tab = 'designer'
@@ -1217,6 +1286,7 @@ fn (mut app IdeApp) new_document() {
 	app.undo_stack = []IdeSnapshot{}
 	app.redo_stack = []IdeSnapshot{}
 	app.dirty = false
+	app.sync_style_drafts()
 	app.sync_source()
 	app.status = 'New Form1 created.'
 	app.log(app.status)

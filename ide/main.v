@@ -202,6 +202,9 @@ fn (mut app IdeApp) save_from_ui() bool {
 	if app.source_modified && !app.apply_source_editor() {
 		return false
 	}
+	if !app.apply_all_style_drafts() {
+		return false
+	}
 	app.save_document() or {
 		app.status = 'Save failed: ${err}'
 		app.log(app.status)
@@ -304,6 +307,9 @@ fn (mut app IdeApp) handle_event(event string) {
 		return
 	}
 	if app.handle_adaptive_event(event) { return }
+	if app.handle_style_event(event) {
+		return
+	}
 	if app.handle_property_event(event) {
 		return
 	}

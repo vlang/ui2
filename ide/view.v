@@ -381,14 +381,17 @@ fn build_object_inspector(layout IdeLayout, app &IdeApp) ui2.Element {
 		'${app.form_name}: Screen'
 	}
 	children << ui2.label('', selection_title, ui2.rect(8, 24, width - 16, 18), text_style(11, color_text, true))
-	tab_width := (width - 24) / 3
-	children << ide_button('inspector_properties', 'Properties', ui2.rect(6, 46, tab_width, 24), app.inspector_tab == 'properties')
+	tab_width := (width - 24) / 4
+	children << ide_button('inspector_properties', 'Props', ui2.rect(6, 46, tab_width, 24), app.inspector_tab == 'properties')
 	children << ide_button('inspector_layout', 'Layout', ui2.rect(12 + tab_width, 46, tab_width, 24), app.inspector_tab == 'layout')
 	children << ide_button('inspector_events', 'Events', ui2.rect(18 + tab_width * 2, 46, tab_width, 24), app.inspector_tab == 'events')
+	children << ide_button('inspector_style', 'Style', ui2.rect(24 + tab_width * 3, 46, tab_width, 24), app.inspector_tab == 'style')
 	property_children := if app.inspector_tab == 'layout' {
 		build_layout_inspector(width - 12, app)
 	} else if app.inspector_tab == 'events' {
 		build_events_inspector(width - 12, app)
+	} else if app.inspector_tab == 'style' {
+		build_style_inspector(width - 12, app)
 	} else if component := app.selected_component() {
 		build_component_inspector(width - 12, component)
 	} else {
@@ -600,7 +603,7 @@ fn preview_component(component DesignerComponent, scale f64) ui2.Element {
 		transparent: component.kind in ['label', 'checkbox']
 	}
 	id := 'preview_${component.id}'
-	return match component.kind {
+	base := match component.kind {
 		'label' { ui2.label(id, component.text, frame, style) }
 		'button' { ui2.button(id, component.text, frame, box, style) }
 		'text_field' {
@@ -625,6 +628,16 @@ fn preview_component(component DesignerComponent, scale f64) ui2.Element {
 		}
 		else { ui2.view(id, frame, box, []) }
 	}
+	mut out := ui2.Element{
+		...base
+		hoverable: true
+	}
+	for class in component.classes.fields() {
+		out = ui2.with_classes(out, class)
+	}
+	sheet := preview_element_sheet(component, id)
+	out = ui2.with_stylesheet(out, sheet)
+	return out
 }
 
 fn build_preview_form(layout IdeLayout, app &IdeApp) ui2.Element {
@@ -634,7 +647,8 @@ fn build_preview_form(layout IdeLayout, app &IdeApp) ui2.Element {
 		if component.layout.hidden || component.width <= 0 || component.height <= 0 { continue }
 		children << preview_component(component, layout.scale)
 	}
-	return panel('preview_form', layout.form, app.form_background, children)
+	base := panel('preview_form', layout.form, app.form_background, children)
+	return ui2.with_stylesheet(base, app.preview_document_sheet())
 }
 
 fn build_source_editor(layout IdeLayout, app &IdeApp) []ui2.Element {
