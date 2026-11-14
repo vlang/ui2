@@ -1456,6 +1456,9 @@ fn keyframe_stop_progress(token string) ?f64 {
 		return none
 	}
 	raw := token[..token.len - 1]
+	if raw.len == 0 {
+		return none
+	}
 	number := raw.f64()
 	if number < 0 || number > 100 {
 		return none

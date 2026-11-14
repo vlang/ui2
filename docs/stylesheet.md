@@ -684,10 +684,13 @@ by comma index, matching CSS. Timing functions: `linear`, `ease`,
 Button.loading { animation: pulse 1s ease-in-out infinite; }
 ```
 
-An animation starts when its rule newly matches an element (state entry) and
-runs through the runtime, so frames schedule themselves. `infinite` repeats.
-`animation-fill-mode`: `none` (revert), `forwards` (keep final, default),
-`backwards` (hold first stop during delay), `both`. `animation-delay` honored.
+An animation starts when its rule newly matches an element (state entry),
+including on the first styled frame, and runs through the runtime, so frames
+schedule themselves. `infinite` repeats; finite counts play that many times.
+`animation-delay` is honored. `animation-fill-mode`: `none` (revert, the
+default), `forwards` (keep the final stop), `backwards` (hold the first stop
+during delay), `both`. `animation-direction` is parsed but not honored yet:
+every iteration plays forward.
 
 ### Non-goals (v1)
 

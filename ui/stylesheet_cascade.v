@@ -56,6 +56,24 @@ pub mut:
 	play_state      string
 }
 
+// is_style_animation_prop reports whether prop is an animation declaration
+// the driver owns. Only exact names intercept: prefix matching would silently
+// swallow typos (`transitions:`, `transition-foo:`), which must keep falling
+// through to the unknown-property warning below.
+fn is_style_animation_prop(prop string) bool {
+	return match prop {
+		'transition', 'transition-property', 'transition-duration', 'transition-timing-function',
+		'transition-delay', 'animation', 'animation-name', 'animation-duration',
+		'animation-timing-function', 'animation-delay', 'animation-iteration-count',
+		'animation-direction', 'animation-fill-mode', 'animation-play-state' {
+			true
+		}
+		else {
+			false
+		}
+	}
+}
+
 // with_classes returns el with stylesheet classes added to the ones it
 // already carries, so wrapping a pre-classed element keeps its classes.
 pub fn with_classes(el Element, classes ...string) Element {
@@ -272,7 +290,7 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 			continue
 		}
 		prop := candidate.decl.prop
-		if prop.starts_with('transition') || prop.starts_with('animation') {
+		if is_style_animation_prop(prop) {
 			out = apply_style_animation_decl(out, prop, resolved[i])
 			continue
 		}

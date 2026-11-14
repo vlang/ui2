@@ -96,10 +96,12 @@ pub fn stylesheet_apply_frame(declared Element, env StyleMatchEnv) Element {
 	mut styled := declared
 	if !g_stylesheet_has_global {
 		if !element_has_scoped_stylesheet(declared) {
-			styled = declared
-		} else {
-			styled = apply_stylesheet(declared, Stylesheet{}, env)
+			// No sheet anywhere: the cascade would be a no-op and the tree
+			// carries no animation specs, so skip the drive too and keep
+			// the allocation-free fast path for unstyled applications.
+			return declared
 		}
+		styled = apply_stylesheet(declared, Stylesheet{}, env)
 	} else {
 		styled = apply_stylesheet(declared, g_stylesheet_global, env)
 	}

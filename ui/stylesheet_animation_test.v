@@ -73,6 +73,7 @@ fn test_stylesheet_animation_driver_transition() {
 	assert 'b' in g_animation_runtime.runs
 	clear_global_stylesheet()
 }
+
 // Inline wins: builder-set animation specs? Sheets only; inline ignore via ignore_stylesheet.
 fn test_stylesheet_animation_inline_wins() {
 	sheet := parse_stylesheet('Button { transition: opacity 0.2s; }')!
@@ -80,4 +81,136 @@ fn test_stylesheet_animation_inline_wins() {
 	assert el.style_transitions.len == 1
 	ignored := apply_stylesheet(Element{...el, ignore_stylesheet: true}, sheet, StyleMatchEnv{})
 	_ = ignored
+}
+
+fn anim_probe_btn(id string, opacity f64) Element {
+	return button(id, 'hi', rect(0, 0, 10, 10), BoxStyle{ opacity: opacity }, TextStyle{})
+}
+
+// First frame counts as entry: animations matching the initial tree play
+// instead of waiting for an unmatch/rematch cycle that may never come.
+fn test_stylesheet_animation_starts_on_first_frame() {
+	set_global_stylesheet(parse_stylesheet('@keyframes pulse { from { opacity: 1; } to { opacity: 0.5; } } Button.loading { animation: pulse 0.5s; }')!)
+	btn := with_classes(anim_probe_btn('pa', 1.0), 'loading')
+	_ = stylesheet_apply_frame(btn, StyleMatchEnv{})
+	_ = stylesheet_apply_frame(btn, StyleMatchEnv{})
+	assert 'pa' in g_animation_runtime.runs
+	clear_global_stylesheet()
+	cancel_animation('pa')
+}
+
+// Several changed shorthand entries animate concurrently: one tween child
+// per entry under a .parallel parent.
+fn test_stylesheet_transition_multi_entry_keeps_all_targets() {
+	set_global_stylesheet(parse_stylesheet('Button { transition: background 0.2s, opacity 0.15s; }')!)
+	b1 := button('pq', 'hi', rect(0, 0, 10, 10), BoxStyle{ bg: 0xffffff, opacity: 1.0 }, TextStyle{})
+	b2 := button('pq', 'hi', rect(0, 0, 10, 10), BoxStyle{ bg: 0x000000, opacity: 0.5 }, TextStyle{})
+	_ = stylesheet_apply_frame(b1, StyleMatchEnv{})
+	_ = stylesheet_apply_frame(b2, StyleMatchEnv{})
+	run := g_animation_runtime.runs['pq'] or { panic('no run for pq') }
+	assert 'background' in run.definition.properties
+	assert 'box.opacity' in run.definition.properties
+	clear_global_stylesheet()
+	cancel_animation('pq')
+}
+
+// Finite iteration counts play N times: the bool-only runtime repeat is
+// unrolled into N tween sequences.
+fn test_stylesheet_animation_finite_count_unrolls() {
+	set_global_stylesheet(parse_stylesheet('@keyframes bl { from { opacity: 1; } 50% { opacity: 0; } to { opacity: 1; } } Button.go { animation: bl 0.5s linear 2; }')!)
+	_ = stylesheet_apply_frame(anim_probe_btn('pk', 1.0), StyleMatchEnv{})
+	_ = stylesheet_apply_frame(with_classes(anim_probe_btn('pk', 1.0), 'go'), StyleMatchEnv{})
+	run := g_animation_runtime.runs['pk'] or { panic('no run for pk') }
+	assert run.definition.children.len == 4
+	assert !run.definition.repeat
+	clear_global_stylesheet()
+	cancel_animation('pk')
+}
+
+// A zero-duration animation has no stops to tween: starting an empty
+// Animation would replace and cancel the element's in-flight run.
+fn test_stylesheet_animation_zero_duration_starts_nothing() {
+	set_global_stylesheet(parse_stylesheet('@keyframes bl { from { opacity: 1; } to { opacity: 0; } } Button.go { animation: bl 0s; }')!)
+	_ = stylesheet_apply_frame(anim_probe_btn('pz', 1.0), StyleMatchEnv{})
+	_ = stylesheet_apply_frame(with_classes(anim_probe_btn('pz', 1.0), 'go'), StyleMatchEnv{})
+	assert 'pz' !in g_animation_runtime.runs
+	clear_global_stylesheet()
+}
+
+// Keyframe declarations resolve `@variables` against the keyframes' sheet
+// scope, the same way the cascade resolves ordinary declarations.
+fn test_stylesheet_animation_keyframes_resolve_variables() {
+	set_global_stylesheet(parse_stylesheet('@accent: #2563eb; @keyframes k { from { opacity: 1; } to { background: @accent; } } Button.go { animation: k 0.5s; }')!)
+	_ = stylesheet_apply_frame(anim_probe_btn('pv', 1.0), StyleMatchEnv{})
+	_ = stylesheet_apply_frame(with_classes(anim_probe_btn('pv', 1.0), 'go'), StyleMatchEnv{})
+	run := g_animation_runtime.runs['pv'] or { panic('no run for pv') }
+	assert 'background' in run.definition.properties
+	// The composed color must be the accent, not a zeroed fallback.
+	found := run.definition.targets.properties.filter(it.kind == .color && it.name == 'background')
+	assert found.len == 1
+	assert found[0].color == 0x2563eb
+	clear_global_stylesheet()
+	cancel_animation('pv')
+}
+
+// A garbage iteration count keeps the previous entry, never infinite:
+// f64('banana') == 0 collides with the infinite encoding.
+fn test_stylesheet_animation_iteration_garbage_keeps_previous() {
+	sheet := parse_stylesheet('Button { animation-iteration-count: banana; }')!
+	el := apply_stylesheet(button('b', 'hi', rect(0, 0, 10, 10), BoxStyle{}, TextStyle{}), sheet, StyleMatchEnv{})
+	assert el.style_animations.len == 1
+	assert el.style_animations[0].iteration_count == 1.0
+}
+
+// Near-miss property names fall through to the unknown-property warning
+// instead of vanishing inside the animation interceptor.
+fn test_stylesheet_animation_typo_warns_unknown_property() {
+	sheet := parse_stylesheet('Button { transitions: opacity 0.2s; transition-foo: 1s; }')!
+	_, warnings := apply_stylesheet_ex(button('b', 'hi', rect(0, 0, 10, 10), BoxStyle{}, TextStyle{}), sheet, StyleMatchEnv{})
+	assert warnings.any(it.message == 'unknown property' && it.prop == 'transitions')
+	assert warnings.any(it.message == 'unknown property' && it.prop == 'transition-foo')
+}
+
+// A bare `%` is not a keyframe stop.
+fn test_stylesheet_keyframes_reject_bare_percent() {
+	if _ := parse_stylesheet('@keyframes k { % { opacity: 1; } }') {
+		assert false, 'bare % must not parse as a stop'
+	} else {
+		assert err.msg().contains('percentage')
+	}
+}
+
+// Delay shifts the tween once: the frame node pre-adjusts elapsed and the
+// evaluator must not subtract the delay a second time.
+fn test_animation_delay_applies_once() {
+	reset_widget_animations()
+	definition := animation(AnimationConfig{
+		duration:   1.0
+		delay:      0.5
+		transition: .linear
+		x:          100
+	})
+	start_widget_animation_at('dz', definition, 1_000, false)
+	quarter := anim_test_find(apply_widget_animations_at(anim_test_root(view('dz', rect(0, 0, 100, 40), BoxStyle{}, [])), 1_750), 'dz')
+	assert quarter.frame.x == 25
+	done := anim_test_find(apply_widget_animations_at(anim_test_root(view('dz', rect(0, 0, 100, 40), BoxStyle{}, [])), 2_500), 'dz')
+	assert done.frame.x == 100
+	reset_widget_animations()
+}
+
+fn anim_test_root(element Element) Element {
+	return screen(0xffffff, [element])
+}
+
+fn anim_test_find(element Element, id string) Element {
+	if element.id == id {
+		return element
+	}
+	for child in element.children {
+		found := anim_test_find(child, id)
+		if found.id == id {
+			return found
+		}
+	}
+	return Element{}
 }

@@ -973,16 +973,13 @@ fn dispatch_animation_events(pending []PendingAnimationEvent) {
 fn evaluate_animation(definition Animation, start Element, elapsed f64) Element {
 	return match definition.kind {
 		.tween {
-			mut eff := elapsed
-			if definition.delay > 0.0 {
-				if elapsed < definition.delay {
-					return start
-				}
-				eff = elapsed - definition.delay
-			}
-			mut sample := eff
-			if definition.step > 0.0 && eff < definition.duration {
-				sample = math.floor(eff / definition.step) * definition.step
+			// Callers pass delay-adjusted elapsed (the frame node subtracts
+			// definition.delay, sequence children carry no delay), so no
+			// further adjustment here: subtracting again would run every
+			// delayed tween at double delay.
+			mut sample := elapsed
+			if definition.step > 0.0 && elapsed < definition.duration {
+				sample = math.floor(elapsed / definition.step) * definition.step
 			}
 			raw := if definition.duration == 0.0 {
 				1.0
@@ -1018,7 +1015,10 @@ fn evaluate_animation_sequence(children []Animation, start Element, elapsed f64)
 fn evaluate_animation_parallel(children []Animation, start Element, elapsed f64) Element {
 	mut current := start
 	for child in children {
-		evaluated := evaluate_animation(child, start, math.min(elapsed, child.duration))
+		// Children carry their own delays; adjust per child like the frame
+		// node does for single tweens (a delay not yet reached holds start).
+		adj := if elapsed > child.delay { elapsed - child.delay } else { 0.0 }
+		evaluated := evaluate_animation(child, start, math.min(adj, child.duration))
 		current = merge_animation_properties(current, evaluated, child.properties)
 	}
 	return current

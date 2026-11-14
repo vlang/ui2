@@ -24,11 +24,16 @@ Button:hover { background: #1d4ed8; opacity: 0.9; }
 Button.loading { animation: pulse 1s ease-in-out infinite; }
 '
 
+__global g_demo_loading = false
+
 fn build() ui2.Element {
-	mut loading := false
-	_ = loading
-	btn := ui2.button('pulse', 'Pulse (hover me)', ui2.rect(40, 60, 200, 44), ui2.BoxStyle{}, ui2.TextStyle{})
-	return ui2.view('root', ui2.rect(0, 0, demo_width, demo_height), ui2.BoxStyle{bg: 0xf1f5f9}, [btn])
+	classes := if g_demo_loading { 'loading' } else { '' }
+	label := if g_demo_loading { 'Pulsing (click to stop)' } else { 'Pulse (hover or click me)' }
+	mut btn := ui2.button('pulse', label, ui2.rect(40, 60, 200, 44), ui2.BoxStyle{}, ui2.TextStyle{})
+	if classes.len > 0 {
+		btn = ui2.with_classes(btn, classes)
+	}
+	return ui2.view('root', ui2.rect(0, 0, demo_width, demo_height), ui2.BoxStyle{ bg: 0xf1f5f9 }, [btn])
 }
 
 fn main() {
@@ -36,4 +41,8 @@ fn main() {
 	ui2.run_window('VSS animations', demo_width, demo_height, build, handle_event)
 }
 
-fn handle_event(_ string) {}
+fn handle_event(event string) {
+	if event == 'pulse' {
+		g_demo_loading = !g_demo_loading
+	}
+}

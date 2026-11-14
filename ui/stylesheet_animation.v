@@ -13,7 +13,7 @@ fn apply_style_animation_decl(el Element, prop string, value string) Element {
 		return out
 	}
 	if lower == 'animation' {
-		out.style_animations = parse_animation_shorthand(value, el.id)
+		out.style_animations = parse_animation_shorthand(value)
 		return out
 	}
 	if lower.starts_with('transition-') {
@@ -146,7 +146,7 @@ fn is_transition_property_name(tok string) bool {
 
 // ---- animations ----
 
-fn parse_animation_shorthand(value string, _ string) []StyleAnimation {
+fn parse_animation_shorthand(value string) []StyleAnimation {
 	mut out := []StyleAnimation{}
 	for entry in split_top_level_commas(value) {
 		tokens := split_shorthand_tokens(entry)
@@ -266,7 +266,13 @@ fn apply_animation_atomic(list []StyleAnimation, prop string, value string) []St
 				if trimmed.to_lower() == 'infinite' {
 					out[i].iteration_count = 0
 				} else {
-					out[i].iteration_count = trimmed.f64()
+					// Anything else is not a count: keep the previous entry
+					// instead of mistaking garbage for infinite (f64('x') == 0).
+					if count := parse_keyframe_number(trimmed) {
+						if count > 0 {
+							out[i].iteration_count = count
+						}
+					}
 				}
 			}
 			'animation-direction' { out[i].direction = trimmed.to_lower() }
@@ -402,7 +408,7 @@ fn parse_cubic_bezier(tok string) ?AnimationTransitionFn {
 }
 
 fn cubic_bezier_easing(x1 f64, y1 f64, x2 f64, y2 f64) AnimationTransitionFn {
-	return fn [x1, y1, x2, y2](t f64) f64 {
+	return fn [x1, y1, x2, y2] (t f64) f64 {
 		// Newton-Raphson to find u with bezier_x(u) = t
 		mut u := t
 		for _ in 0 .. 8 {
@@ -433,6 +439,7 @@ fn bezier_derivative(u f64, a f64, b f64) f64 {
 	mut v := 1.0 - u
 	return 3.0 * v * v * a + 6.0 * v * u * (b - a) + 3.0 * u * u * (1.0 - b)
 }
+
 // split_shorthand_tokens splits a shorthand value into tokens, keeping
 // parenthesized groups (such as cubic-bezier(...)) together.
 fn split_shorthand_tokens(s string) []string {
