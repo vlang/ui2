@@ -53,6 +53,27 @@ fn test_scaffold_skips_empty_strips_and_overlays() {
 	assert el.box.transparent
 }
 
+fn test_scaffold_skips_empty_strips_but_reserves_their_height() {
+	el := scaffold(
+		frame:             rect(0, 0, 400, 800)
+		top_bar_height:    56
+		bottom_bar_height: 64
+		content:           [label('body', 'Hi', rect(0, 0, 100, 24), TextStyle{})]
+	) or { panic(err) }
+	assert el.children.len == 1
+	assert el.children[0].frame == rect(0, 56, 400, 680)
+}
+
+fn test_scaffold_rejects_strips_with_children_but_no_height() {
+	if _ := scaffold(frame: rect(0, 0, 10, 10), top_bar: [label('t', 'T', rect(0, 0, 10, 10), TextStyle{})]) {
+		assert false, 'top bar children without height accepted'
+	}
+	if _ := scaffold(frame: rect(0, 0, 10, 10), bottom_bar: [
+		label('b', 'B', rect(0, 0, 10, 10), TextStyle{})]) {
+		assert false, 'bottom bar children without height accepted'
+	}
+}
+
 fn test_scaffold_background_paints_outer_frame() {
 	el := scaffold(frame: rect(0, 0, 400, 800), background: 0x0b1020) or { panic(err) }
 	assert !el.box.transparent

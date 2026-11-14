@@ -123,6 +123,19 @@ fn test_safe_viewport_shifts_children_and_extends_range() {
 	assert el.children[1].frame == rect(219, 89, 1, 1)
 }
 
+fn test_safe_viewport_keeps_a_nonzero_frame_origin() {
+	el := safe_viewport(
+		id:       'list'
+		frame:    rect(0, 32, 400, 400)
+		minimum:  LayoutPadding{
+			top: 20
+		}
+		children: [label('row', 'Row', rect(0, 0, 200, 40), TextStyle{})]
+	) or { panic(err) }
+	assert el.frame == rect(0, 32, 400, 400)
+	assert el.children[0].frame == rect(0, 20, 200, 40)
+}
+
 fn test_safe_viewport_ignores_hidden_children_in_range() {
 	el := safe_viewport(
 		id:       'list'
@@ -181,6 +194,8 @@ fn test_vml_safe_area_builds_padded_content() {
 		}
 	}', rect(0, 0, 400, 800)) or { panic(err) }
 	assert el.kind == .view
+	assert el.box.transparent
+	assert el.accessibility_role == 'group'
 	assert el.children.len == 1
 	assert el.children[0].frame == rect(0, 20, 400, 750)
 	assert el.children[0].children.len == 1

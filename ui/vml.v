@@ -1020,9 +1020,26 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 			pad := safe_area_padding(left, top, right, bottom, minimum)
 			inner := safe_content_rect(local, pad)
 			kids := v_children(node, rect(0, 0, inner.width, inner.height))!
-			return view(node.id, frame, v_box(node), [
-				view('', inner, BoxStyle{ transparent: true }, kids),
-			])
+			// Delegate to the constructor so frame validation, the group role
+			// and the transparent default stay in one place.
+			return safe_area(SafeAreaConfig{
+				id:         node.id
+				frame:      frame
+				left:       left
+				top:        top
+				right:      right
+				bottom:     bottom
+				minimum:    minimum
+				background: if node.prop_bool('transparent') {
+					none
+				} else if node.prop('background').len > 0 {
+					v_color(node, 'background', 0xffffff)
+				} else {
+					none
+				}
+				children:   kids
+				label:      node.prop('accessibility_label')
+			})!
 		}
 		'SafeViewport' {
 			left, top, right, bottom := v_safe_sides(node)
@@ -1042,11 +1059,14 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 				axis:                  mode
 				background:            if node.prop_bool('transparent') {
 					none
-				} else {
+				} else if node.prop('background').len > 0 {
 					v_color(node, 'background', 0xffffff)
+				} else {
+					none
 				}
 				persistent_scrollbars: node.prop_bool('persistent')
 				children:              kids
+				label:                 node.prop('accessibility_label')
 			})!
 		}
 		'View', 'Rectangle' {
@@ -1147,14 +1167,17 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 				snackbar_margin:   node.prop_or('snackbar_margin', '16').f64()
 				background:        if node.prop_bool('transparent') {
 					none
-				} else {
+				} else if node.prop('background').len > 0 {
 					v_color(node, 'background', 0xffffff)
+				} else {
+					none
 				}
 				top_bar:           top_bar
 				content:           content
 				bottom_bar:        bottom_bar
 				floating_action:   fab
 				snackbar:          snackbar
+				label:             node.prop('accessibility_label')
 			})!
 		}
 		'ProgressBar' {

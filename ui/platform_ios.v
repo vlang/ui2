@@ -30,6 +30,7 @@ fn native_haptic(style HapticStyle) bool {
 				return false
 			}
 			macos.msg_void(generator, 'impactOccurred')
+			macos.release(generator)
 		}
 		.medium {
 			generator := ios_impact_generator(1)
@@ -37,6 +38,7 @@ fn native_haptic(style HapticStyle) bool {
 				return false
 			}
 			macos.msg_void(generator, 'impactOccurred')
+			macos.release(generator)
 		}
 		.heavy {
 			generator := ios_impact_generator(2)
@@ -44,6 +46,7 @@ fn native_haptic(style HapticStyle) bool {
 				return false
 			}
 			macos.msg_void(generator, 'impactOccurred')
+			macos.release(generator)
 		}
 		.selection {
 			generator := macos.msg_id(macos.alloc('UISelectionFeedbackGenerator'), 'init')
@@ -51,6 +54,7 @@ fn native_haptic(style HapticStyle) bool {
 				return false
 			}
 			macos.msg_void(generator, 'selectionChanged')
+			macos.release(generator)
 		}
 		.success, .warning, .error {
 			generator := macos.msg_id(macos.alloc('UINotificationFeedbackGenerator'), 'init')
@@ -63,6 +67,7 @@ fn native_haptic(style HapticStyle) bool {
 				else { 2 }
 			}
 			macos.msg_void_i64(generator, 'notificationOccurred:', i64(kind))
+			macos.release(generator)
 		}
 	}
 	return true
@@ -109,6 +114,12 @@ fn native_share_text(text string) bool {
 	if g_root_vc == unsafe { nil } || g_root_view == unsafe { nil } {
 		return false
 	}
+	// UIKit presents view controllers on the main thread only; a share fired
+	// from a render or event thread answers false instead of presenting from
+	// the wrong thread.
+	if !macos.msg_bool(macos.get_class('NSThread'), 'isMainThread') {
+		return false
+	}
 	pool := macos.autorelease_pool_new()
 	defer {
 		macos.release(pool)
@@ -121,6 +132,7 @@ fn native_share_text(text string) bool {
 	activity := macos.msg_id2(macos.get_class('UIActivityViewController'), 'initWithActivityItems:applicationActivities:',
 		items, objc_nil())
 	if objc_is_nil(activity) {
+		macos.release(items)
 		return false
 	}
 	// iPad shows the sheet in a popover anchored to the root view; iPhone
@@ -133,5 +145,8 @@ fn native_share_text(text string) bool {
 	}
 	macos.msg_void_id_i64_id(top_view_controller(g_root_vc), 'presentViewController:animated:completion:',
 		activity, 1, objc_nil())
+	// The presentation retains both; the caller's +1 references are released.
+	macos.release(activity)
+	macos.release(items)
 	return true
 }

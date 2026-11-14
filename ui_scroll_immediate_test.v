@@ -611,6 +611,7 @@ fn test_text_area_wraps_words_and_preserves_explicit_blank_lines() {
 		assert 'columns' !in get_scroll_offsets_x()
 		assert 'columns' !in get_scroll_content_w()
 	}
+}
 
 fn test_text_area_line_ranges_follow_wrapped_source_runes() {
 	lines := ['one two', 'three']
@@ -662,5 +663,4 @@ fn test_text_area_vertical_and_line_boundary_navigation() {
 		anchor: 4
 		caret: 7
 	}
-}
 }

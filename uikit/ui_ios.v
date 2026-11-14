@@ -338,23 +338,15 @@ fn native_device_scale() f64 {
 	return scale
 }
 
-// native_safe_insets reports the main screen's safe area. safeAreaInsets
-// arrives as (top, left, bottom, right), the same order safe_area_top
-// already reads its first field from.
-// native_safe_insets reads the root view's safe area, the same rectangle
-// bounds() reports (UIScreen has no safeAreaInsets). UIEdgeInsets comes
-// back in Rect's slots as top, left, bottom, right, as in safe_area_top.
+// native_safe_insets reports the root view's safe area for the stylesheet
+// environment: the same insets safe_area_insets reads, or none before the
+// window exists (UIScreen has no safeAreaInsets, and bounds() covers launch
+// sizing instead).
 fn native_safe_insets() ?SafeInsets {
 	if g_root_view == unsafe { nil } {
 		return none
 	}
-	insets := macos.msg_rect(g_root_view, 'safeAreaInsets')
-	return SafeInsets{
-		top:    insets.x
-		right:  insets.height
-		bottom: insets.width
-		left:   insets.y
-	}
+	return safe_area_insets()
 }
 
 pub fn focused_text_area_id() string {
@@ -376,7 +368,9 @@ pub fn safe_area_insets() SafeInsets {
 	if g_root_view == unsafe { nil } {
 		return SafeInsets{}
 	}
-	// UIEdgeInsets lands in a rect as top, left, bottom, right.
+	// UIEdgeInsets {top, left, bottom, right} lands in the rect's slots in
+	// field order, so x is top, y is left, width is bottom and height is
+	// right. safe_area_top reads the same first field.
 	insets := macos.msg_rect(g_root_view, 'safeAreaInsets')
 	return SafeInsets{
 		left:   insets.y

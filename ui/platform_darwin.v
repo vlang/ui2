@@ -7,6 +7,10 @@ import macos
 
 #flag darwin -framework AppKit
 
+// native_haptic_supported reports whether the haptics API is present: macOS
+// always links NSHapticFeedbackManager, so this answers true wherever the
+// file compiles. Whether a buzz is felt is best-effort hardware-dependent —
+// Macs without Force Touch take the pattern silently.
 fn native_haptic_supported() bool {
 	return true
 }
@@ -21,6 +25,8 @@ fn native_haptic(style HapticStyle) bool {
 		return false
 	}
 	// NSHapticFeedbackPattern values: generic, alignment and level change.
+	// performFeedbackPattern is void and best-effort: without Force Touch
+	// hardware nothing is felt, but the call still takes.
 	pattern := match style {
 		.light { 0 }
 		.medium { 1 }

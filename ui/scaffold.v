@@ -14,12 +14,26 @@ pub fn scaffold_content_rect(frame Rect, top_bar_height f64, bottom_bar_height f
 }
 
 // scaffold_validate_sizes rejects bar heights and overlay margins that are
-// negative or non-finite before they can warp a scaffold.
+// negative or non-finite before they can warp a scaffold. A strip that holds
+// children must also reserve a positive height: a zero-height strip cannot
+// show them, and views do not clip, so the children would draw over the
+// content instead of erroring.
 fn scaffold_validate_sizes(top_bar_height f64, bottom_bar_height f64, fab_margin f64, snackbar_margin f64) ! {
 	for value in [top_bar_height, bottom_bar_height, fab_margin, snackbar_margin] {
 		if !component_finite(value) || value < 0 {
 			return error('scaffold bar heights and margins must be finite and non-negative')
 		}
+	}
+}
+
+// scaffold_validate_strips rejects a bar strip that holds children without
+// reserving any height for them.
+fn scaffold_validate_strips(top_bar_height f64, top_bar []Element, bottom_bar_height f64, bottom_bar []Element) ! {
+	if top_bar.len > 0 && top_bar_height <= 0 {
+		return error('scaffold top bar has children but top_bar_height is zero')
+	}
+	if bottom_bar.len > 0 && bottom_bar_height <= 0 {
+		return error('scaffold bottom bar has children but bottom_bar_height is zero')
 	}
 }
 
@@ -82,10 +96,21 @@ pub:
 // action and snackbar overlays docked inside the content box. Slot elements
 // keep their declared sizes; the scaffold chooses the strips they sit in and,
 // for the overlays, their positions.
+//
+// Size negotiation matches Compose: bars keep their declared heights and the
+// content absorbs any shortage (clamped at zero), so over-tall bars can extend
+// past the frame; overlays keep their declared sizes and dock inside the
+// content box, so an oversized overlay can cover the bars; the floating action
+// and the snackbar both dock at the content bottom independently, so setting
+// both without staggering them overlaps them. Callers that need tighter
+// behavior clamp the heights, shrink the overlays, or offset one overlay
+// above the other before building the scaffold.
 pub fn scaffold(config ScaffoldConfig) !Element {
 	component_validate_frame(config.frame)!
 	scaffold_validate_sizes(config.top_bar_height, config.bottom_bar_height, config.fab_margin,
 		config.snackbar_margin)!
+	scaffold_validate_strips(config.top_bar_height, config.top_bar, config.bottom_bar_height,
+		config.bottom_bar)!
 	local := component_local(config.frame)
 	content := scaffold_content_rect(local, config.top_bar_height, config.bottom_bar_height)
 	box := if bg := config.background {
@@ -94,13 +119,16 @@ pub fn scaffold(config ScaffoldConfig) !Element {
 		BoxStyle{ transparent: true }
 	}
 	mut children := []Element{cap: 5}
-	if config.top_bar_height > 0 || config.top_bar.len > 0 {
+	// A strip with no children is skipped outright, even when its height is
+	// positive: there is nothing to hit-test or draw, so no empty view node is
+	// emitted. The content box still reserves the declared heights.
+	if config.top_bar.len > 0 {
 		children << view('', rect(0, 0, local.width, config.top_bar_height), BoxStyle{
 			transparent: true
 		}, config.top_bar)
 	}
 	children << view('', content, BoxStyle{ transparent: true }, config.content)
-	if config.bottom_bar_height > 0 || config.bottom_bar.len > 0 {
+	if config.bottom_bar.len > 0 {
 		children << view('', rect(0, content.y + content.height, local.width, config.bottom_bar_height),
 			BoxStyle{ transparent: true }, config.bottom_bar)
 	}

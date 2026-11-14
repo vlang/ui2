@@ -2,19 +2,8 @@ module ui2
 
 import math
 
-// SafeInsets carries the operating-system intrusions around the edges of the
-// window in logical units: the status bar, display notch, camera housing and
-// home indicator on phones, and whatever similar chrome the desktop reserves.
-// Sides without an intrusion report zero. Values come from safe_area_insets,
-// which queries the platform, so they reflect the window the application runs
-// in rather than a constant per device.
-pub struct SafeInsets {
-pub:
-	left   f64
-	top    f64
-	right  f64
-	bottom f64
-}
+// SafeInsets is declared in ui/stylesheet_query.v (shared with the stylesheet
+// environment); safe_area_insets() below returns it.
 
 // safe_side resolves one edge of the effective safe padding: the system inset
 // when that side is enabled, the caller-supplied minimum otherwise, whichever
@@ -174,7 +163,7 @@ pub fn safe_viewport(config SafeViewportConfig) !Element {
 		BoxStyle{ transparent: true }
 	}
 	return component_finish(Element{
-		...scroll_with_mode(config.id, component_local(config.frame), 0xffffff, config.axis, content)
+		...scroll_with_mode(config.id, config.frame, 0xffffff, config.axis, content)
 		box:                   box
 		persistent_scrollbars: config.persistent_scrollbars
 		accessibility_label:   config.label

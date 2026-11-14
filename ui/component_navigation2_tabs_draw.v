@@ -194,7 +194,7 @@ fn tab_bar_badge_element(item TabBarItem, frame Rect, m TabBarMetrics, theme Com
 	}
 	return Element{
 		...with_classes(view('', frame, BoxStyle{
-			bg:     if item.enabled { bg } else { popover_blend(bg, colors.surface, 0.5) }
+			bg:     if item.enabled { bg } else { color_mix(bg, colors.surface, 0.5) }
 			radius: frame.height / 2
 		}, [
 			label('', item.badge, rect(0, 0, frame.width, frame.height), TextStyle{

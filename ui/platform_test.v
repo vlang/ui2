@@ -52,8 +52,16 @@ fn test_platform_supported_flags_match_the_backend() {
 		assert app_badge_supported()
 		assert open_url_supported()
 		assert share_supported()
+	} $else $if android {
+		// On-device Android answers haptic/share from the NativeActivity; under
+		// plain `v test` there is none, so the flags follow the activity.
+		has_activity := android_platform_activity() != unsafe { nil }
+		assert haptic_supported() == has_activity
+		assert !app_badge_supported()
+		assert open_url_supported() == has_activity
+		assert share_supported() == has_activity
 	} $else {
-		// Linux, the BSDs, Android and the custom renderer answer unsupported
+		// Linux, the BSDs and the custom renderer answer unsupported
 		// everywhere except URLs, which the nix desktops hand to xdg-open.
 		assert !haptic_supported()
 		assert !app_badge_supported()
