@@ -26,42 +26,39 @@ pub fn parse_openui_stored(raw string) OpenuiStoredMessage {
 	mut finished := false
 	mut mode := 'content'
 	mut current := []string{}
-	flush := fn [mode] (mut contents []string, mut context string, current []string) {
-		text := current.join('\n')
-		if mode == 'context' {
-			context = text
-		} else {
-			contents << text
-		}
-	}
 	lines := raw.split_into_lines()
 	for line in lines {
 		trimmed := line.trim_space()
 		if trimmed.starts_with(']]>openui:') {
 			rest := trimmed.all_after(']]>openui:')
-			if rest.starts_with('content') {
-				flush(mut contents, mut context, current)
+			if rest.starts_with('content') || rest.starts_with('context')
+				|| rest.starts_with('end') {
+				text := current.join('\n')
+				if mode == 'context' {
+					context = text
+				} else {
+					contents << text
+				}
 				current = []string{}
-				mode = 'content'
-				continue
-			}
-			if rest.starts_with('context') {
-				flush(mut contents, mut context, current)
-				current = []string{}
-				mode = 'context'
-				continue
-			}
-			if rest.starts_with('end') {
-				flush(mut contents, mut context, current)
-				current = []string{}
-				finished = true
-				mode = 'content'
+				if rest.starts_with('content') {
+					mode = 'content'
+				} else if rest.starts_with('context') {
+					mode = 'context'
+				} else {
+					finished = true
+					mode = 'content'
+				}
 				continue
 			}
 		}
 		current << line
 	}
-	flush(mut contents, mut context, current)
+	text := current.join('\n')
+	if mode == 'context' {
+		context = text
+	} else {
+		contents << text
+	}
 	mut content := ''
 	for part in contents {
 		if part.trim_space().len > 0 {
