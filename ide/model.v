@@ -23,6 +23,7 @@ pub mut:
 	color         u32 = 0x172033
 	font_size     f64 = 14
 	checked       bool
+	enabled       bool = true
 	event_handler string
 	classes       string
 	inline_style  string
@@ -53,6 +54,7 @@ pub mut:
 	breakpoint_height   f64 = 600
 	preview_width       f64
 	preview_height      f64
+	preview_dark        bool
 	edit_width_class    ui2.AdaptiveSizeClass
 	edit_height_class   ui2.AdaptiveSizeClass
 	show_layout_guides  bool = true
@@ -68,6 +70,7 @@ pub mut:
 	style_doc_text      string
 	style_doc_modified  bool
 	style_scoped_drafts map[int]string
+	cached_doc_sheet    ui2.Stylesheet
 	project_root        string
 	file_path           string
 	path_input          string
@@ -985,6 +988,9 @@ fn component_vml(component DesignerComponent) string {
 	if component.inline_style.trim_space().len > 0 {
 		properties << 'style: "${vml_escape(component.inline_style)}"'
 	}
+	if !component.enabled {
+		properties << 'enabled: false'
+	}
 	for variation in component.variations { properties << adaptive_variation_vml(variation) }
 	has_scoped := component.scoped_style.trim_space().len > 0
 	if component.kind == 'dropdown' || component.variations.len > 0 || has_scoped {
@@ -1100,6 +1106,7 @@ fn component_from_node(node &ui2.VNode, id int) !DesignerComponent {
 		})!
 		font_size:     node_number(node, 'font_size', 14)!
 		checked:       node.prop_bool('checked')
+		enabled:       node.prop('enabled') != 'false'
 		event_handler: if kind in ['text_field', 'text_area', 'dropdown'] {
 			node.prop('on_change')
 		} else {
@@ -1184,7 +1191,9 @@ fn (mut app IdeApp) apply_source(source string) ! {
 	app.source_text = generate_vml(app)
 	app.source_modified = false
 	app.active_tab = 'designer'
-	app.inspector_tab = 'properties'
+	if app.inspector_tab != 'style' {
+		app.inspector_tab = 'properties'
+	}
 	app.status = 'Source applied to the visual designer.'
 	app.log(app.status)
 }
@@ -1217,6 +1226,8 @@ fn (mut app IdeApp) open_document(raw_path string) ! {
 	document := document_from_vml(source)!
 	app.restore(document)
 	app.reset_adaptive_preview()
+	app.preview_dark = false
+	ui2.set_stylesheet_follow_system(true)
 	app.file_path = path
 	app.path_input = path
 	app.project_root = os.dir(path)
@@ -1278,6 +1289,8 @@ fn (mut app IdeApp) new_document() {
 	app.stylesheet_source = ''
 	app.stylesheet_error = ''
 	app.style_scoped_drafts = map[int]string{}
+	app.preview_dark = false
+	ui2.set_stylesheet_follow_system(true)
 	app.file_path = ''
 	app.path_input = os.join_path(app.project_root, 'form.vml')
 	app.active_tab = 'designer'

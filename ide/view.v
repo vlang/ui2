@@ -631,6 +631,7 @@ fn preview_component(component DesignerComponent, scale f64) ui2.Element {
 	mut out := ui2.Element{
 		...base
 		hoverable: true
+		enabled:   component.enabled
 	}
 	for class in component.classes.fields() {
 		out = ui2.with_classes(out, class)

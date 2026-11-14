@@ -129,6 +129,7 @@ fn (mut app IdeApp) sync_style_drafts() {
 	app.style_doc_text = app.stylesheet_source
 	app.style_doc_modified = false
 	app.style_scoped_drafts = map[int]string{}
+	app.cached_doc_sheet = parse_ide_stylesheet(app.stylesheet_source) or { ui2.Stylesheet{} }
 	app.stylesheet_error = style_lint_message(app.stylesheet_source)
 	if component := app.selected_component() {
 		scoped_msg := style_lint_message(component.scoped_style)
@@ -219,6 +220,7 @@ fn (mut app IdeApp) apply_style_doc() bool {
 	app.stylesheet_source = normalized
 	app.style_doc_text = normalized
 	app.style_doc_modified = false
+	app.cached_doc_sheet = parse_ide_stylesheet(normalized) or { ui2.Stylesheet{} }
 	app.changed('Updated document stylesheet.')
 	app.stylesheet_error = style_lint_message(app.stylesheet_source)
 	if app.stylesheet_error.len > 0 {
@@ -281,22 +283,44 @@ fn (mut app IdeApp) apply_scoped_style() bool {
 	return true
 }
 
-fn (mut app IdeApp) lint_style_doc() {
-	if app.stylesheet_source.trim_space().len == 0 && app.style_doc_text.trim_space().len == 0 {
-		app.status = 'No document stylesheet to lint.'
-		return
+fn (mut app IdeApp) lint_all_styles() {
+	mut parts := []string{}
+	doc_source := if app.style_doc_modified { app.style_doc_text } else { app.stylesheet_source }
+	doc_msg := style_lint_message(doc_source)
+	if doc_msg.len > 0 {
+		parts << 'document: ${doc_msg}'
 	}
-	source := if app.style_doc_modified { app.style_doc_text } else { app.stylesheet_source }
-	msg := style_lint_message(source)
-	app.stylesheet_error = msg
-	if msg.len == 0 {
-		app.status = 'Stylesheet is clean.'
-		app.log(app.status)
+	if component := app.selected_component() {
+		draft := app.scoped_draft_text(component)
+		scoped_msg := style_lint_message(draft)
+		if scoped_msg.len > 0 {
+			parts << 'scoped: ${scoped_msg}'
+		}
+		if component.inline_style.trim_space().len > 0 {
+			inline_msg := style_lint_message('* { ${component.inline_style} }')
+			if inline_msg.len > 0 {
+				parts << 'inline: ${inline_msg}'
+			}
+		}
+	}
+	if parts.len == 0 {
+		if doc_source.trim_space().len == 0 {
+			app.status = 'No stylesheet to lint.'
+		} else {
+			app.status = 'Stylesheets are clean.'
+			app.log(app.status)
+		}
+		app.stylesheet_error = ''
 	} else {
-		app.status = 'Stylesheet lint: ${msg}'
+		app.status = 'Stylesheet lint: ${parts.join('; ')}'
 		app.log(app.status)
+		app.stylesheet_error = parts.join('; ')
 	}
 	app.output_open = true
+}
+
+fn (mut app IdeApp) lint_style_doc() {
+	app.lint_all_styles()
 }
 
 fn (mut app IdeApp) apply_all_style_drafts() bool {
@@ -305,12 +329,12 @@ fn (mut app IdeApp) apply_all_style_drafts() bool {
 			return false
 		}
 	}
-	// Apply every pending scoped draft, not just the selection, so Save
-	// never drops unapplied per-component edits.
+	// Validate every pending scoped draft before mutating, then commit in
+	// one checkpoint so undo stays a single step.
+	mut pending := map[int]string{}
 	for id in app.style_scoped_drafts.keys() {
 		index := app.find_component_index(id)
 		if index < 0 {
-			app.style_scoped_drafts.delete(id)
 			continue
 		}
 		draft := app.style_scoped_drafts[id]
@@ -321,35 +345,68 @@ fn (mut app IdeApp) apply_all_style_drafts() bool {
 				return false
 			}
 		}
-		normalized := draft.trim_space()
-		if app.components[index].scoped_style == normalized {
-			app.style_scoped_drafts.delete(id)
+		if app.components[index].scoped_style != draft.trim_space() {
+			pending[id] = draft.trim_space()
+		}
+	}
+	if pending.len == 0 {
+		app.style_scoped_drafts = map[int]string{}
+		return true
+	}
+	app.checkpoint()
+	for id, normalized in pending {
+		index := app.find_component_index(id)
+		if index < 0 {
 			continue
 		}
-		// Checkpoint once for the batch; subsequent commits reuse it.
-		// Use a single checkpoint for the whole batch to keep undo clean.
-		app.checkpoint()
-		for inner_id in app.style_scoped_drafts.keys() {
-			inner_index := app.find_component_index(inner_id)
-			if inner_index < 0 {
-				continue
-			}
-			inner_draft := app.style_scoped_drafts[inner_id]
-			if inner_draft.trim_space().len > 0 {
-				parse_ide_stylesheet(inner_draft) or {
-					app.undo_stack.delete_last()
-					app.status = 'Scoped stylesheet error: ${err.msg()}'
-					app.log(app.status)
-					return false
-				}
-			}
-			app.components[inner_index].scoped_style = inner_draft.trim_space()
-		}
-		app.style_scoped_drafts = map[int]string{}
-		app.changed('Updated scoped stylesheets.')
-		break
+		app.components[index].scoped_style = normalized
 	}
+	app.style_scoped_drafts = map[int]string{}
+	app.changed('Updated scoped stylesheets.')
 	return true
+}
+
+fn (mut app IdeApp) toggle_selected_enabled() {
+	index := app.find_component_index(app.selected_id)
+	if index < 0 {
+		return
+	}
+	app.checkpoint()
+	app.components[index].enabled = !app.components[index].enabled
+	app.changed(if app.components[index].enabled {
+		'Enabled `${app.components[index].name}`.'
+	} else {
+		'Disabled `${app.components[index].name}` (:disabled rules now match).'
+	})
+}
+
+fn (mut app IdeApp) reset_inline_to_sheet_defaults() {
+	index := app.find_component_index(app.selected_id)
+	if index < 0 {
+		return
+	}
+	if app.components[index].background == 0xffffff
+		&& app.components[index].color == 0x111111 && app.components[index].font_size == 15 {
+		app.status = 'Inline already at sheet defaults.'
+		return
+	}
+	app.checkpoint()
+	app.components[index].background = 0xffffff
+	app.components[index].color = 0x111111
+	app.components[index].font_size = 15
+	app.changed('Reset inline colors for `${app.components[index].name}` to sheet defaults; sheets can now win.')
+}
+
+fn (mut app IdeApp) set_preview_dark(dark bool) {
+	app.preview_dark = dark
+	if dark {
+		ui2.set_stylesheet_dark(true)
+		app.status = 'Dark preview on (forced dark).'
+	} else {
+		ui2.set_stylesheet_follow_system(true)
+		app.status = 'Following system appearance.'
+	}
+	app.log(app.status)
 }
 
 fn (mut app IdeApp) handle_style_event(event string) bool {
@@ -368,7 +425,26 @@ fn (mut app IdeApp) handle_style_event(event string) bool {
 		app.edit_scoped_draft(ui2.text('style_scoped_editor'))
 		return true
 	}
-	mutates := event in ['style_class', 'style_inline', 'style_doc_apply', 'style_scoped_apply']
+	if event == 'style_enabled' {
+		if app.source_modified && !app.apply_source_editor() {
+			return true
+		}
+		app.toggle_selected_enabled()
+		return true
+	}
+	if event == 'style_reset_inline' {
+		if app.source_modified && !app.apply_source_editor() {
+			return true
+		}
+		app.reset_inline_to_sheet_defaults()
+		return true
+	}
+	if event == 'style_dark_preview' {
+		app.set_preview_dark(!app.preview_dark)
+		return true
+	}
+	mutates := event in ['style_class', 'style_inline', 'style_doc_apply', 'style_scoped_apply',
+		'style_all_lint']
 	if mutates && app.source_modified && !app.apply_source_editor() {
 		return true
 	}
@@ -382,8 +458,8 @@ fn (mut app IdeApp) handle_style_event(event string) bool {
 		'style_doc_apply' {
 			app.apply_style_doc()
 		}
-		'style_doc_lint' {
-			app.lint_style_doc()
+		'style_doc_lint', 'style_all_lint' {
+			app.lint_all_styles()
 		}
 		'style_scoped_apply' {
 			app.apply_scoped_style()
@@ -396,10 +472,8 @@ fn (mut app IdeApp) handle_style_event(event string) bool {
 }
 
 fn (app &IdeApp) preview_document_sheet() ui2.Stylesheet {
-	if app.stylesheet_source.trim_space().len == 0 {
-		return ui2.Stylesheet{}
-	}
-	return parse_ide_stylesheet(app.stylesheet_source) or { return ui2.Stylesheet{} }
+	// Cached on apply/restore so every preview build does not re-parse.
+	return app.cached_doc_sheet
 }
 
 fn preview_element_sheet(component DesignerComponent, preview_id string) ui2.Stylesheet {
