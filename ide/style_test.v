@@ -284,3 +284,44 @@ fn test_vss_apply_source_preserves_style_tab() {
 	assert app.stylesheet_source.contains('opacity')
 	assert app.components.len == 1
 }
+
+fn test_vss_undo_preserves_unapplied_style_drafts() {
+	mut app := new_ide_app('.')
+	app.add_component('button', 40, 48)
+	app.style_doc_text = 'Button { color: #111111; }'
+	app.style_doc_modified = true
+	assert app.apply_style_doc()
+	// Unapplied drafts: must survive an unrelated checkpoint + undo.
+	app.style_doc_text = 'Button { color: #222222; }'
+	app.style_doc_modified = true
+	app.style_scoped_drafts[app.selected_id] = 'Button { border-radius: 9px; }'
+	app.checkpoint()
+	app.undo()
+	assert app.stylesheet_source.contains('#111111')
+	assert app.style_doc_modified
+	assert app.style_doc_text.contains('#222222')
+	assert app.style_scoped_drafts[app.selected_id] == 'Button { border-radius: 9px; }'
+	app.redo()
+	assert app.style_doc_text.contains('#222222')
+	assert app.style_scoped_drafts[app.selected_id] == 'Button { border-radius: 9px; }'
+}
+
+fn test_vss_whitespace_scoped_edit_is_clean() {
+	mut app := new_ide_app('.')
+	app.add_component('label', 8, 8)
+	app.style_scoped_drafts[app.selected_id] = 'Label { color: #111111; }'
+	assert app.apply_scoped_style()
+	app.dirty = false
+	app.edit_scoped_draft('  Label { color: #111111; }  \n')
+	assert app.selected_id !in app.style_scoped_drafts
+	assert !app.dirty
+	assert app.status == 'Scoped stylesheet matches saved version.'
+}
+
+fn test_vss_scoped_apply_refreshes_lint_banner() {
+	mut app := new_ide_app('.')
+	app.add_component('button', 40, 48)
+	app.style_scoped_drafts[app.selected_id] = 'Button { frobnicate: 1; }'
+	assert app.apply_scoped_style()
+	assert app.stylesheet_error.contains('scoped:')
+}

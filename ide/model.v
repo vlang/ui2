@@ -33,17 +33,20 @@ pub mut:
 }
 
 struct IdeSnapshot {
-	components        []DesignerComponent
-	selected_id       int
-	next_id           int
-	form_name         string
-	form_width        f64
-	form_height       f64
-	form_background   u32
-	adaptive          bool
-	breakpoint_width  f64 = 600
-	breakpoint_height f64 = 600
-	stylesheet_source string
+	components          []DesignerComponent
+	selected_id         int
+	next_id             int
+	form_name           string
+	form_width          f64
+	form_height         f64
+	form_background     u32
+	adaptive            bool
+	breakpoint_width    f64 = 600
+	breakpoint_height   f64 = 600
+	stylesheet_source   string
+	style_doc_text      string
+	style_doc_modified  bool
+	style_scoped_drafts map[int]string
 }
 
 @[heap]
@@ -114,17 +117,20 @@ fn new_ide_app(root string) IdeApp {
 
 fn (app &IdeApp) snapshot() IdeSnapshot {
 	return IdeSnapshot{
-		adaptive:          app.adaptive
-		breakpoint_width:  app.breakpoint_width
-		breakpoint_height: app.breakpoint_height
-		components:        clone_designer_components(app.components)
-		selected_id:       app.selected_id
-		next_id:           app.next_id
-		form_name:         app.form_name
-		form_width:        app.form_width
-		form_height:       app.form_height
-		form_background:   app.form_background
-		stylesheet_source: app.stylesheet_source
+		adaptive:            app.adaptive
+		breakpoint_width:    app.breakpoint_width
+		breakpoint_height:   app.breakpoint_height
+		components:          clone_designer_components(app.components)
+		selected_id:         app.selected_id
+		next_id:             app.next_id
+		form_name:           app.form_name
+		form_width:          app.form_width
+		form_height:         app.form_height
+		form_background:     app.form_background
+		stylesheet_source:   app.stylesheet_source
+		style_doc_text:      app.style_doc_text
+		style_doc_modified:  app.style_doc_modified
+		style_scoped_drafts: app.style_scoped_drafts.clone()
 	}
 }
 
@@ -141,7 +147,12 @@ fn (mut app IdeApp) restore(snapshot IdeSnapshot) {
 	app.form_height = snapshot.form_height
 	app.form_background = snapshot.form_background
 	app.stylesheet_source = snapshot.stylesheet_source
-	app.sync_style_drafts()
+	// Undo restores the in-progress drafts too: wiping them here would
+	// silently discard unapplied stylesheet text on an unrelated undo.
+	app.style_doc_text = snapshot.style_doc_text
+	app.style_doc_modified = snapshot.style_doc_modified
+	app.style_scoped_drafts = snapshot.style_scoped_drafts.clone()
+	app.refresh_style_cache()
 	app.sync_source()
 	app.dirty = true
 }

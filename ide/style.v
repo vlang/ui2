@@ -129,6 +129,15 @@ fn (mut app IdeApp) sync_style_drafts() {
 	app.style_doc_text = app.stylesheet_source
 	app.style_doc_modified = false
 	app.style_scoped_drafts = map[int]string{}
+	app.refresh_style_cache()
+}
+
+// refresh_style_cache rebuilds the cached document sheet and the merged
+// lint banner from the current source, drafts and selection. Unlike
+// sync_style_drafts it never resets drafts, so commit paths (apply, style
+// setters, undo restore) can refresh the preview/banner without losing
+// unrelated pending edits.
+fn (mut app IdeApp) refresh_style_cache() {
 	app.cached_doc_sheet = parse_ide_stylesheet(app.stylesheet_source) or { ui2.Stylesheet{} }
 	app.stylesheet_error = style_lint_message(app.stylesheet_source)
 	if component := app.selected_component() {
@@ -198,6 +207,7 @@ fn (mut app IdeApp) set_inline_style(raw string) bool {
 	}
 	app.checkpoint()
 	app.components[index].inline_style = normalized
+	app.refresh_style_cache()
 	app.changed('Updated inline style for `${app.components[index].name}`.')
 	return true
 }
@@ -236,20 +246,13 @@ fn (mut app IdeApp) edit_scoped_draft(raw string) {
 	}
 	id := app.components[index].id
 	committed := app.components[index].scoped_style
-	if raw.trim_space() == committed.trim_space() && raw == committed {
+	// A whitespace-only difference counts as clean: drop the draft without
+	// marking dirty, exactly like an exact match.
+	if raw.trim_space() == committed.trim_space() {
 		if id in app.style_scoped_drafts {
 			app.style_scoped_drafts.delete(id)
 		}
 		app.status = 'Scoped stylesheet matches saved version.'
-		return
-	}
-	if raw.trim_space() == committed.trim_space() {
-		// Whitespace-only difference counts as clean to avoid sticky dirty.
-		if id in app.style_scoped_drafts {
-			app.style_scoped_drafts.delete(id)
-		}
-		app.dirty = true
-		app.status = 'Scoped stylesheet edited; apply it to update the designer.'
 		return
 	}
 	app.style_scoped_drafts[id] = raw
@@ -279,6 +282,7 @@ fn (mut app IdeApp) apply_scoped_style() bool {
 	app.checkpoint()
 	app.components[index].scoped_style = normalized
 	app.style_scoped_drafts.delete(id)
+	app.refresh_style_cache()
 	app.changed('Updated scoped stylesheet for `${app.components[index].name}`.')
 	return true
 }
@@ -362,6 +366,7 @@ fn (mut app IdeApp) apply_all_style_drafts() bool {
 		app.components[index].scoped_style = normalized
 	}
 	app.style_scoped_drafts = map[int]string{}
+	app.refresh_style_cache()
 	app.changed('Updated scoped stylesheets.')
 	return true
 }
