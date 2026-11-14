@@ -284,6 +284,8 @@ fn (mut renderer OpenuiRenderer) render_node(value OpenuiValue, x f64, y f64, wi
 	}
 	height := if kids.len > 0 {
 		cursor - y + 8
+	} else if height_fn := component.height_for_props {
+		height_fn(props)
 	} else {
 		component.height
 	}

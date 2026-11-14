@@ -28,8 +28,8 @@ fn test_openui_demo_builds_from_response() {
 	renderer.set_response(demo_response, false)
 	root, info := renderer.render()
 	assert info.errors.len == 0
-	assert root.children.len == 3
-	button := find_demo_element(root, root.children[2].id) or { panic('missing button') }
+	assert root.children.len == 4
+	button := find_demo_element(root, root.children[3].id) or { panic('missing button') }
 	assert button.action_id.len > 0
 	assert renderer.handle_event(button.action_id)
 	assert renderer.state['filter'] or { ui2.openui_null() }.string_value() == 'shut'

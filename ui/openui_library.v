@@ -159,6 +159,13 @@ pub fn openui_bool_schema() OpenuiSchema {
 	}
 }
 
+pub fn openui_schema_enum(values []string) OpenuiSchema {
+	return OpenuiSchema{
+		kind:        .string_
+		enum_values: values.clone()
+	}
+}
+
 pub fn openui_any_schema() OpenuiSchema {
 	return OpenuiSchema{
 		kind: .object
@@ -244,6 +251,8 @@ pub fn (ctx OpenuiCtx) box_style() BoxStyle {
 
 pub type OpenuiRenderFn = fn (ctx OpenuiCtx) Element
 
+pub type OpenuiHeightFn = fn (props map[string]OpenuiValue) f64
+
 pub struct OpenuiComponent {
 pub:
 	name        string
@@ -251,7 +260,8 @@ pub:
 	params      []OpenuiParam
 	height      f64 = 32
 mut:
-	render OpenuiRenderFn
+	render           OpenuiRenderFn
+	height_for_props ?OpenuiHeightFn
 }
 
 pub struct OpenuiFuncParam {

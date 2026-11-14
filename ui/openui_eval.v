@@ -556,16 +556,32 @@ fn (mut scope OpenuiScope) eval_component(name string, args []&OpenuiExpr, line 
 			continue
 		}
 		if param.schema.kind == .list {
-			if raw.kind == .list {
-				slots[param.name] = raw.items.clone()
-				continue
+			if raw.kind != .list {
+				if openui_is_node(raw) {
+					slots[param.name] = [raw]
+					continue
+				}
+				scope.fail(openui_err_type_mismatch, statement, '`${param.name}` wants a list at line ${line}')
+				return openui_null()
 			}
-			if openui_is_node(raw) {
-				slots[param.name] = [raw]
-				continue
+			// Node items are child slots for the renderer; plain values stay
+			// in props so data components (Table, Chart) can read them.
+			mut nodes := []OpenuiValue{}
+			mut plain := []OpenuiValue{}
+			for item in raw.items {
+				if openui_is_node(item) {
+					nodes << item
+				} else {
+					plain << item
+				}
 			}
-			scope.fail(openui_err_type_mismatch, statement, '`${param.name}` wants a list at line ${line}')
-			return openui_null()
+			if nodes.len > 0 {
+				slots[param.name] = nodes
+			}
+			if plain.len > 0 || nodes.len == 0 {
+				props[param.name] = openui_list(plain)
+			}
+			continue
 		}
 		if param.schema.kind == .action {
 			if raw.kind != .action {

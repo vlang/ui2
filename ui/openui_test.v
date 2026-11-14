@@ -155,3 +155,25 @@ fn test_openui_renderer_query_tool_and_set() {
 	assert renderer.last_info.errors.len == 0
 	assert element.children.len == 1
 }
+
+fn test_openui_table_renders_header_and_rows() {
+	lib := new_openui_default_library()
+	mut renderer := new_openui_renderer(lib)
+	renderer.set_response('rows = [{title: "Login fails", status: "open"}, {title: "Dark mode", status: "shut"}]\nroot = Stack([grid])\ngrid = Table(rows)', false)
+	element := renderer.root_element()
+	assert renderer.last_info.errors.len == 0
+	assert element.children.len == 1
+	grid := element.children[0]
+	assert grid.children.len == 2 + 2 * 2
+}
+
+fn test_openui_chart_renders_from_values() {
+	lib := new_openui_default_library()
+	mut renderer := new_openui_renderer(lib)
+	renderer.set_response('root = Stack([sales])\nsales = Chart("bar", ["Jan", "Feb"], [12, 19], "Sales")', false)
+	element := renderer.root_element()
+	assert renderer.last_info.errors.len == 0
+	assert element.children.len == 1
+	sales := element.children[0]
+	assert sales.children.len > 0
+}

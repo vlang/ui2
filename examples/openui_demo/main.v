@@ -12,9 +12,10 @@ const demo_height = 480
 const demo_response = '\$filter = "open"\n' +
 	'tickets = Query("list_tickets", {}, {rows: [{title: "Login fails", status: "open"}, {title: "Dark mode", status: "shut"}]})\n' +
 	'open = @Filter(tickets.rows, "status", "==", \$filter)\n' +
-	'root = Stack([heading, count, toggle])\n' +
+	'root = Stack([heading, count, grid, toggle])\n' +
 	'heading = TextContent("Support tickets", "large-heavy")\n' +
 	'count = TextContent("Open: " + @Count(open))\n' +
+	'grid = Table(open)\n' +
 	'toggle = Button("Show all", @Set(\$filter, "shut"))'
 
 struct DemoState {
