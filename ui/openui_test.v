@@ -177,3 +177,39 @@ fn test_openui_chart_renders_from_values() {
 	sales := element.children[0]
 	assert sales.children.len > 0
 }
+
+fn test_openui_input_binds_variable_round_trip() {
+	lib := new_openui_default_library()
+	mut renderer := new_openui_renderer(lib)
+	renderer.set_response('\$query = "login"\nroot = Stack([search])\nsearch = Input(\$query, "Search tickets")', false)
+	element := renderer.root_element()
+	assert renderer.last_info.errors.len == 0
+	assert element.children.len == 1
+	field := element.children[0]
+	assert field.kind == .text_field
+	assert field.text == 'login'
+	assert renderer.input_bindings[field.id] == 'query'
+	// Headless reads come back empty, but the event path resolves and writes.
+	assert renderer.handle_event(field.id)
+	assert 'query' in renderer.state
+}
+
+fn test_openui_input_rejects_plain_values() {
+	lib := new_openui_default_library()
+	mut scope := new_openui_scope(lib)
+	statements := parse_openui_program('root = Stack([search])\nsearch = Input("literal")')!
+	openui_eval_program(statements, mut scope)
+	assert scope.errors.any(it.code == openui_err_type_mismatch)
+}
+
+fn test_openui_select_renders_dropdown() {
+	lib := new_openui_default_library()
+	mut renderer := new_openui_renderer(lib)
+	renderer.set_response('root = Stack([pick])\npick = Select("open", ["open", "shut"])', false)
+	element := renderer.root_element()
+	assert renderer.last_info.errors.len == 0
+	assert element.children.len == 1
+	pick := element.children[0]
+	assert pick.kind == .dropdown
+	assert pick.text == 'open'
+}

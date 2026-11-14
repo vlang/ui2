@@ -35,6 +35,7 @@ fn openui_schema_text(schema OpenuiSchema) string {
 			}
 		}
 		.action { 'ActionExpression' }
+		.bind { '$var' }
 		.object {
 			if schema.ref_component.len > 0 {
 				schema.ref_component

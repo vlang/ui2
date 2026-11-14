@@ -18,6 +18,7 @@ pub enum OpenuiValueKind {
 	list
 	object
 	action
+	bind
 	null_
 }
 
@@ -100,6 +101,7 @@ pub fn (value OpenuiValue) string_value() string {
 		.list { value.items.len.str() }
 		.object { '' }
 		.action { '' }
+		.bind { '' }
 		.null_, .invalid { '' }
 	}
 }
@@ -112,6 +114,7 @@ pub fn (value OpenuiValue) truthy() bool {
 		.list { value.items.len > 0 }
 		.object { true }
 		.action { value.steps.len > 0 }
+		.bind { false }
 		.null_, .invalid { false }
 	}
 }
@@ -182,6 +185,15 @@ pub fn openui_list_schema(element OpenuiSchema) OpenuiSchema {
 pub fn openui_action_schema() OpenuiSchema {
 	return OpenuiSchema{
 		kind: .action
+	}
+}
+
+// openui_bind_schema marks a slot that takes a `$variable` reference. The
+// renderer passes the current value as the prop and writes edits back.
+
+pub fn openui_bind_schema() OpenuiSchema {
+	return OpenuiSchema{
+		kind: .bind
 	}
 }
 

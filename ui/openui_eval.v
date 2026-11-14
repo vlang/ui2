@@ -32,6 +32,7 @@ pub type OpenuiToolFn = fn (args map[string]OpenuiValue) OpenuiValue
 
 const openui_node_tag = '\$component'
 const openui_node_slots = '\$slots'
+const openui_node_binds = '\$binds'
 
 pub fn openui_is_node(value OpenuiValue) bool {
 	if value.kind != .object {
@@ -49,12 +50,26 @@ pub fn openui_node_name(value OpenuiValue) string {
 pub fn openui_node_props(value OpenuiValue) map[string]OpenuiValue {
 	mut props := map[string]OpenuiValue{}
 	for key, field in value.fields {
-		if key == openui_node_tag || key == openui_node_slots {
+		if key == openui_node_tag || key == openui_node_slots || key == openui_node_binds {
 			continue
 		}
 		props[key] = field
 	}
 	return props
+}
+
+pub fn openui_node_binds(value OpenuiValue) map[string]string {
+	mut binds := map[string]string{}
+	raw := value.fields[openui_node_binds] or { return binds }
+	if raw.kind != .object {
+		return binds
+	}
+	for key, field in raw.fields {
+		if field.kind == .string_ {
+			binds[key] = field.text
+		}
+	}
+	return binds
 }
 
 pub fn openui_node_slots(value OpenuiValue) map[string][]OpenuiValue {
@@ -73,7 +88,7 @@ pub fn openui_node_slots(value OpenuiValue) map[string][]OpenuiValue {
 	return slots
 }
 
-fn openui_make_node(component string, props map[string]OpenuiValue, slots map[string][]OpenuiValue) OpenuiValue {
+fn openui_make_node(component string, props map[string]OpenuiValue, slots map[string][]OpenuiValue, binds map[string]string) OpenuiValue {
 	mut fields := map[string]OpenuiValue{}
 	for key, value in props {
 		fields[key] = value
@@ -84,6 +99,11 @@ fn openui_make_node(component string, props map[string]OpenuiValue, slots map[st
 		slot_fields[key] = openui_list(items)
 	}
 	fields[openui_node_slots] = openui_object(slot_fields)
+	mut bind_fields := map[string]OpenuiValue{}
+	for key, name in binds {
+		bind_fields[key] = openui_string(name)
+	}
+	fields[openui_node_binds] = openui_object(bind_fields)
 	return openui_object(fields)
 }
 
@@ -151,6 +171,9 @@ fn openui_check_value(value OpenuiValue, schema OpenuiSchema) bool {
 		}
 		.action {
 			return value.kind == .action
+		}
+		.bind {
+			return false
 		}
 		.object {
 			return true
@@ -526,6 +549,7 @@ fn (mut scope OpenuiScope) eval_component(name string, args []&OpenuiExpr, line 
 	}
 	mut props := map[string]OpenuiValue{}
 	mut slots := map[string][]OpenuiValue{}
+	mut binds := map[string]string{}
 	mut saw_null_runtime := false
 	for index, param in component.params {
 		if index >= args.len {
@@ -578,6 +602,19 @@ fn (mut scope OpenuiScope) eval_component(name string, args []&OpenuiExpr, line 
 			}
 			continue
 		}
+		if param.schema.kind == .bind {
+			arg := args[index]
+			if arg.kind != .state_ref || arg.value.contains('.') {
+				scope.fail(openui_err_type_mismatch, statement, '`${param.name}` wants a `$variable` at line ${line}')
+				return openui_null()
+			}
+			key := arg.value
+			props[param.name] = scope.state_values[key] or {
+				scope.state_defaults[key] or { openui_null() }
+			}
+			binds[param.name] = key
+			continue
+		}
 		if param.schema.kind == .action {
 			if raw.kind != .action {
 				scope.fail(openui_err_type_mismatch, statement, '`${param.name}` wants an action at line ${line}')
@@ -603,7 +640,7 @@ fn (mut scope OpenuiScope) eval_component(name string, args []&OpenuiExpr, line 
 	if saw_null_runtime {
 		return openui_null()
 	}
-	return openui_make_node(name, props, slots)
+	return openui_make_node(name, props, slots, binds)
 }
 
 fn (mut scope OpenuiScope) eval_at_call(name string, args []&OpenuiExpr, line int, statement string) OpenuiValue {

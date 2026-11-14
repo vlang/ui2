@@ -311,6 +311,81 @@ pub fn openui_chart_component() OpenuiComponent {
 	}
 }
 
+fn openui_render_input(ctx OpenuiCtx) Element {
+	return text_field_with_change(ctx.id, ctx.string_prop('placeholder'), ctx.string_prop('value'),
+		ctx.frame, BoxStyle{
+			bg:            0xffffff
+			radius:        8
+			border_color:  0xe2e8f0
+			border_left:   1
+			border_top:    1
+			border_right:  1
+			border_bottom: 1
+		}, TextStyle{}, 0)
+}
+
+pub fn openui_input_component() OpenuiComponent {
+	return OpenuiComponent{
+		name:        'Input'
+		description: 'A text input two-way bound to a `$variable`. Edits write back; optional action runs after.'
+		params:      [
+			OpenuiParam{
+				name:   'value'
+				schema: openui_bind_schema()
+			},
+			OpenuiParam{
+				name:   'placeholder'
+				schema: openui_optional(openui_string_schema(), openui_string(''))
+			},
+			OpenuiParam{
+				name:   'on_change'
+				schema: openui_optional(openui_action_schema(), openui_null())
+			},
+		]
+		height:      36
+		render:      openui_render_input
+	}
+}
+
+fn openui_render_select(ctx OpenuiCtx) Element {
+	mut options := []string{}
+	for item in ctx.list_prop('options') {
+		options << item.string_value()
+	}
+	return dropdown(ctx.id, ctx.string_prop('value'), options, ctx.frame, BoxStyle{
+		bg:            0xffffff
+		radius:        8
+		border_color:  0xe2e8f0
+		border_left:   1
+		border_top:    1
+		border_right:  1
+		border_bottom: 1
+	}, TextStyle{})
+}
+
+pub fn openui_select_component() OpenuiComponent {
+	return OpenuiComponent{
+		name:        'Select'
+		description: 'A dropdown. Runs its action when the selection changes.'
+		params:      [
+			OpenuiParam{
+				name:   'value'
+				schema: openui_string_schema()
+			},
+			OpenuiParam{
+				name:   'options'
+				schema: openui_list_schema(openui_string_schema())
+			},
+			OpenuiParam{
+				name:   'on_select'
+				schema: openui_optional(openui_action_schema(), openui_null())
+			},
+		]
+		height:      36
+		render:      openui_render_select
+	}
+}
+
 // new_openui_default_library assembles the Tier-1 set with `Stack` as root.
 // Import only what the model needs: fewer components means better output.
 
@@ -322,5 +397,7 @@ pub fn new_openui_default_library() OpenuiLibrary {
 		openui_button_component(),
 		openui_table_component(),
 		openui_chart_component(),
+		openui_input_component(),
+		openui_select_component(),
 	])
 }

@@ -38,7 +38,10 @@ mut:
 	action_slots map[string][]OpenuiActionCall
 	action_seq   int
 	node_seq     int
-	last_info    OpenuiRenderInfo
+	// input_bindings maps a rendered element id to the `$variable` key its
+	// edits write back to. Rebuilt on every render like action_slots.
+	input_bindings map[string]string
+	last_info      OpenuiRenderInfo
 }
 
 pub fn new_openui_renderer(library OpenuiLibrary) OpenuiRenderer {
@@ -88,6 +91,7 @@ fn (renderer &OpenuiRenderer) form_state() map[string]OpenuiValue {
 
 pub fn (mut renderer OpenuiRenderer) render() (Element, OpenuiRenderInfo) {
 	renderer.action_slots = map[string][]OpenuiActionCall{}
+	renderer.input_bindings = map[string]string{}
 	content := strip_openui_markers(renderer.response)
 	statements := parse_openui_program(content) or {
 		info := OpenuiRenderInfo{
@@ -297,13 +301,30 @@ fn (mut renderer OpenuiRenderer) render_node(value OpenuiValue, x f64, y f64, wi
 		frame:    rect(x, y, width, height)
 	}
 	rendered := component.render(ctx)
+	renderer.wire_binds(value, ctx.id)
 	return renderer.wire_action(component, props, rendered)
 }
 
-// wire_action attaches the first action prop to the element identity, so
-// taps arrive at handle_event without component authors writing wiring.
+// wire_binds records `$variable` write-back targets for the rendered id.
+
+fn (mut renderer OpenuiRenderer) wire_binds(value OpenuiValue, id string) {
+	binds := openui_node_binds(value)
+	if binds.len == 0 {
+		return
+	}
+	if key := binds['value'] {
+		renderer.input_bindings[id] = key
+		return
+	}
+	for _, key in binds {
+		renderer.input_bindings[id] = key
+		return
+	}
+}
 
 fn (mut renderer OpenuiRenderer) wire_action(component OpenuiComponent, props map[string]OpenuiValue, rendered Element) Element {
+	// Attaches the first action prop to the element identity, so taps
+	// arrive at handle_event without component authors writing wiring.
 	if rendered.action_id.len > 0 {
 		return rendered
 	}
@@ -332,7 +353,16 @@ pub fn (mut renderer OpenuiRenderer) root_element() Element {
 // `@Run`) mean the host should rebuild, usually via `refresh()`.
 
 pub fn (mut renderer OpenuiRenderer) handle_event(event_id string) bool {
-	steps := renderer.action_slots[event_id] or { return false }
+	steps := renderer.action_slots[event_id] or { []OpenuiActionCall{} }
+	var_key := renderer.input_bindings[event_id] or { '' }
+	if steps.len == 0 && var_key.len == 0 {
+		return false
+	}
+	// Control edits land in the bound `$variable` before actions run, so
+	// `@ToAssistant` and `@Run` observe the fresh value.
+	if var_key.len > 0 {
+		renderer.state[var_key] = openui_string(text(event_id))
+	}
 	for step in steps {
 		match step.name {
 			'Set' {
