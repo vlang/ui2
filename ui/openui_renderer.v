@@ -422,29 +422,31 @@ fn (mut renderer OpenuiRenderer) run_tool(name string) {
 	for key, value in renderer.state {
 		scope.state_values[key] = value
 	}
+	// Re-evaluation re-runs Queries with current `$var` args by itself;
+	// a Mutation needs an explicit tool call here.
 	openui_eval_program(statements, mut scope)
 	for key, value in scope.state_values {
 		renderer.state[key] = value
 	}
-	query := scope.query_defs[name] or {
-		mutation := scope.mutation_defs[name] or { return }
-		tool_name := scope.eval_expr(mutation.args[0], name)
-		mut plain := map[string]OpenuiValue{}
-		if mutation.args.len > 1 {
-			call_args := scope.eval_expr(mutation.args[1], name)
-			if call_args.kind == .object {
-				for key, value in call_args.fields {
-					plain[key] = value
-				}
-			}
-		}
-		if tool := scope.tools[tool_name.text] {
-			result := tool(plain)
-			_ = result
-		}
+	mutation := scope.statements[name] or { return }
+	if mutation.kind != .mutation {
 		return
 	}
-	_ = query
+	scope.nested++
+	tool_name := scope.eval_expr(mutation.args[0], name)
+	mut plain := map[string]OpenuiValue{}
+	if mutation.args.len > 1 {
+		call_args := scope.eval_expr(mutation.args[1], name)
+		if call_args.kind == .object {
+			for key, value in call_args.fields {
+				plain[key] = value
+			}
+		}
+	}
+	scope.nested--
+	if tool := scope.tools[tool_name.text] {
+		_ = tool(plain)
+	}
 }
 
 fn (renderer &OpenuiRenderer) library_action(name string) OpenuiCustomAction {

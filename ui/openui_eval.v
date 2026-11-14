@@ -96,12 +96,8 @@ pub mut:
 	tools          map[string]OpenuiToolFn
 	funcs          map[string]OpenuiFuncImpl
 	statements     map[string]&OpenuiExpr
-	statement_line map[string]int
 	state_defaults map[string]OpenuiValue
 	state_values   map[string]OpenuiValue
-	query_defs     map[string]&OpenuiExpr
-	query_values   map[string]OpenuiValue
-	mutation_defs  map[string]&OpenuiExpr
 	values         map[string]OpenuiValue
 	resolved       map[string]bool
 	visiting       map[string]bool
@@ -202,7 +198,6 @@ fn openui_coerce(value OpenuiValue) OpenuiValue {
 pub fn openui_eval_program(statements []OpenuiStatement, mut scope OpenuiScope) {
 	for statement in statements {
 		scope.statements[statement.name] = statement.expr
-		scope.statement_line[statement.name] = statement.line
 	}
 	for statement in statements {
 		if statement.name.starts_with('\$') {
@@ -1139,7 +1134,6 @@ fn (mut scope OpenuiScope) eval_query(expr &OpenuiExpr, statement string) Openui
 		scope.fail(openui_err_type_mismatch, statement, 'bad `Query` name at line ${expr.line}')
 		return openui_null()
 	}
-	scope.query_defs[statement] = expr
 	if tool := scope.tools[name_value.text] {
 		mut plain := map[string]OpenuiValue{}
 		if call_args.kind == .object {
@@ -1147,12 +1141,9 @@ fn (mut scope OpenuiScope) eval_query(expr &OpenuiExpr, statement string) Openui
 				plain[key] = value
 			}
 		}
-		result := tool(plain)
-		scope.query_values[statement] = result
-		return result
+		return tool(plain)
 	}
 	scope.fail(openui_err_tool_not_found, statement, 'unknown tool `${name_value.text}` at line ${expr.line}')
-	scope.query_values[statement] = defaults
 	return defaults
 }
 
@@ -1170,7 +1161,6 @@ fn (mut scope OpenuiScope) eval_mutation(expr &OpenuiExpr, statement string) Ope
 		scope.fail(openui_err_type_mismatch, statement, 'bad `Mutation` name at line ${expr.line}')
 		return openui_null()
 	}
-	scope.mutation_defs[statement] = expr
 	return openui_object({
 		'status': openui_string('idle')
 	})
