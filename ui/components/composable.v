@@ -1,7 +1,5 @@
 module ui2
 
-import math
-
 // ComponentVariant is a reusable style bundle applied to a component's
 // BoxStyle and TextStyle. shadcn-style components are built from these
 // variants plus small named parts, so an application can change a button's
@@ -13,12 +11,19 @@ pub:
 	text TextStyle
 }
 
-// component_variant merges a base style with a variant's overrides. A
-// zero-value field keeps the base, so a variant only has to spell out what it
-// changes.
+// component_variant merges a base style with a variant's overrides. A field
+// left at its style default keeps the base, so a variant only has to spell
+// out what it changes. Explicitly setting a field to its style default
+// (BoxStyle{}.bg, TextStyle{}.color, TextStyle{}.size, TextStyle{}.lines) is
+// indistinguishable from leaving it unset, and zero-valued fields keep the
+// base the same way, so a variant cannot force black/zero through the merge.
 pub fn component_variant(base_box BoxStyle, base_text TextStyle, variant ComponentVariant) (BoxStyle, TextStyle) {
 	box := BoxStyle{
-		bg:            if variant.box.bg != 0 { variant.box.bg } else { base_box.bg }
+		bg:            if variant.box.bg != 0 && variant.box.bg != BoxStyle{}.bg {
+			variant.box.bg
+		} else {
+			base_box.bg
+		}
 		radius:        if variant.box.radius > 0 { variant.box.radius } else { base_box.radius }
 		transparent:   variant.box.transparent || base_box.transparent
 		border_color:  if variant.box.border_color != 0 {
@@ -63,7 +68,7 @@ pub fn component_variant(base_box BoxStyle, base_text TextStyle, variant Compone
 		}
 	}
 	text := TextStyle{
-		color:              if variant.text.color != 0 {
+		color:              if variant.text.color != 0 && variant.text.color != TextStyle{}.color {
 			variant.text.color
 		} else {
 			base_text.color
@@ -73,7 +78,11 @@ pub fn component_variant(base_box BoxStyle, base_text TextStyle, variant Compone
 		} else {
 			base_text.background_color
 		}
-		size:               if variant.text.size > 0 { variant.text.size } else { base_text.size }
+		size:               if variant.text.size > 0 && variant.text.size != TextStyle{}.size {
+			variant.text.size
+		} else {
+			base_text.size
+		}
 		font_family:        if variant.text.font_family.len > 0 {
 			variant.text.font_family
 		} else {
@@ -120,7 +129,7 @@ pub fn component_variant(base_box BoxStyle, base_text TextStyle, variant Compone
 		} else {
 			base_text.hyphenation_factor
 		}
-		lines:              if variant.text.lines != 0 {
+		lines:              if variant.text.lines != 0 && variant.text.lines != TextStyle{}.lines {
 			variant.text.lines
 		} else {
 			base_text.lines

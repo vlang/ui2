@@ -2,13 +2,49 @@ module ui2
 
 fn test_component_variant_fills_missing_fields_from_base() {
 	base_box := BoxStyle{ bg: 0x123456, radius: 8 }
-	base_text := TextStyle{ color: 0xabcdef, size: 14 }
+	base_text := TextStyle{ color: 0xabcdef, size: 14, lines: 0 }
 	variant := ComponentVariant{ name: 'accent', box: BoxStyle{ bg: 0xff0000 } }
 	box, text := component_variant(base_box, base_text, variant)
 	assert box.bg == 0xff0000
 	assert box.radius == 8
-	assert text.color == 0x111111
-	assert text.size == 15
+	// A variant that only spells out box fields keeps the base text: the
+	// TextStyle defaults (0x111111/15.0) count as unset, not as overrides.
+	assert text.color == 0xabcdef
+	assert text.size == 14
+	assert text.lines == 0
+}
+
+fn test_component_variant_explicit_text_overrides_base() {
+	base_box := BoxStyle{ bg: 0x123456, radius: 8 }
+	base_text := TextStyle{ color: 0xabcdef, size: 14 }
+	variant := ComponentVariant{
+		name: 'accent'
+		text: TextStyle{ color: 0xffffff, size: 18 }
+	}
+	_, text := component_variant(base_box, base_text, variant)
+	assert text.color == 0xffffff
+	assert text.size == 18
+}
+
+fn test_component_variant_default_bg_keeps_base() {
+	base_box := BoxStyle{ bg: 0x123456, radius: 8 }
+	base_text := TextStyle{ color: 0xabcdef, size: 14 }
+	// BoxStyle{}.bg (white) is the unset sentinel: a variant that does not
+	// name a bg must not whitewash a colored base.
+	variant := ComponentVariant{ name: 'ghost', box: BoxStyle{ transparent: true } }
+	box, text := component_variant(base_box, base_text, variant)
+	assert box.bg == 0x123456
+	assert box.transparent == true
+	assert text.color == 0xabcdef
+	assert text.size == 14
+}
+
+fn test_component_variant_caller_size_survives_preset() {
+	base_text := TextStyle{ color: 0xffffff, size: 18 }
+	presets := component_variant_presets()
+	_, style := component_variant(BoxStyle{ bg: 0xffffff, radius: 6 }, base_text, presets['destructive'])
+	assert style.color == 0xffffff
+	assert style.size == 18
 }
 
 fn test_component_variants_find_matches_by_name_and_defaults_to_first() {

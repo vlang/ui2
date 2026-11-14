@@ -1,7 +1,5 @@
 module ui2
 
-import math
-
 // composable_button is shadcn's button recipe: a variant selects the
 // appearance, a size selects the metrics, and the children are whatever the
 // caller supplies, positioned relative to the button's frame. The default
