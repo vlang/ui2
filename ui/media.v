@@ -32,6 +32,11 @@
 // microphone plus `media_start_recording` / `media_stop_recording`, and the
 // one-shot `media_capture_screen()`. Unsupported inputs report false instead
 // of failing.
+//
+// Threading: every `native_media_*` call must happen on the render thread.
+// Backends keep their state in unsynchronized maps and several platform
+// players deliver completion on their own threads, so a timer-thread
+// transport call racing `media_sync_native` is unsupported.
 @[has_globals]
 module ui2
 
@@ -216,6 +221,7 @@ mut:
 	duration       f64 = -1.0
 	error_msg      string
 	open_failed    bool // open was refused: do not retry every frame
+	pinned         bool // explicit media_open without an element: media_end_frame must not collect it
 	handle         voidptr
 	surface        voidptr
 	applied_muted  bool
@@ -265,6 +271,7 @@ fn media_close_session(mut session &MediaSession) {
 	session.duration = -1.0
 	session.error_msg = ''
 	session.open_failed = false
+	session.pinned = false
 	session.applied_volume = -1.0
 	session.applied_rate = -1.0
 	session.applied_muted = false
@@ -275,13 +282,17 @@ fn media_close_session(mut session &MediaSession) {
 
 // media_open preloads `src` for later transport calls without starting
 // playback. Elements open their own sessions during rendering; explicit
-// opens are for element-less (background audio) use.
+// opens are for element-less (background audio) use. An explicit session is
+// pinned: it survives media_end_frame until media_close, so background audio
+// is never collected between frames. Video needs a rendered element (its
+// device opens on attach); element-less video open+play is unsupported.
 pub fn media_open(id string, kind MediaKind, src string) bool {
 	if id.trim_space().len == 0 || src.trim_space().len == 0 {
 		return false
 	}
 	mut session := media_ensure_session(id, kind, src)
 	session.open_failed = false
+	session.pinned = true
 	if !native_media_open(id, kind, src) {
 		session.state = .error
 		session.error_msg = 'unsupported source'
@@ -293,7 +304,7 @@ pub fn media_open(id string, kind MediaKind, src string) bool {
 }
 
 // media_play starts or resumes `id`, opening its session when the matching
-// element (or an explicit `media_open`) has not done so yet. Recording
+// element (or an explicit `media_open`) has done so. Recording
 // sessions refuse playback; stop the take first.
 pub fn media_play(id string) bool {
 	mut session := media_session(id) or { return false }
@@ -315,7 +326,9 @@ pub fn media_play(id string) bool {
 	return true
 }
 
-// media_pause freezes `id` where it stands; a second pause is a no-op.
+// media_pause freezes `id` where it stands. Pausing a session that is not
+// playing is an idempotent no-op reporting success, so double-pause and
+// pause-after-stop never fail the caller.
 pub fn media_pause(id string) bool {
 	mut session := media_session(id) or { return false }
 	if session.state == .recording {
@@ -362,23 +375,26 @@ pub fn media_seek(id string, secs f64) bool {
 	if session.state == .recording {
 		return false
 	}
-	if secs < 0 {
+	if secs < 0 || secs != secs {
 		return false
 	}
 	return native_media_seek(session.id, secs)
 }
 
 // media_set_volume stores 0..1 (clamped) on the session and the player.
+// Anything but a number is refused. Setting a positive volume unmutes,
+// the way platform mixers do; silence explicitly with media_set_muted.
 pub fn media_set_volume(id string, volume f64) bool {
 	mut session := media_session(id) or { return false }
+	if volume != volume {
+		return false
+	}
 	clamped := media_clamped_volume(volume)
 	if !native_media_set_volume(id, clamped) {
 		return false
 	}
 	session.volume = clamped
-	if clamped == 0 {
-		session.muted = true
-	}
+	session.muted = clamped == 0
 	return true
 }
 
@@ -396,7 +412,7 @@ pub fn media_set_muted(id string, muted bool) bool {
 // where the platform allows it.
 pub fn media_set_rate(id string, rate f64) bool {
 	mut session := media_session(id) or { return false }
-	if rate <= 0 {
+	if rate != rate || rate <= 0 {
 		return false
 	}
 	if !native_media_set_rate(id, rate) {
@@ -482,24 +498,31 @@ pub fn media_can_seek(id string) bool {
 	return native_media_can_seek(session.id)
 }
 
-// media_recording_elapsed reads back seconds captured so far, or -1 when
-// `id` is not recording.
+// media_recording_elapsed reads back seconds captured so far (fractional),
+// or -1 when `id` is not recording.
 pub fn media_recording_elapsed(id string) f64 {
 	session := media_session(id) or { return -1.0 }
 	if session.state != .recording || session.record_start <= 0 {
 		return -1.0
 	}
-	return f64(time.now().unix() - session.record_start)
+	return f64(time.now().unix_milli() - session.record_start) / 1000.0
 }
 
 // media_start_recording captures `source` (microphone) to `output_path`
 // (WAV). Screen snapshots are one-shot — see `media_capture_screen`.
+// Starting while `id` is already recording is refused so a double-tap
+// cannot truncate the running take; stop it first.
 pub fn media_start_recording(id string, source MediaSource, output_path string) bool {
 	if id.trim_space().len == 0 || output_path.trim_space().len == 0 {
 		return false
 	}
 	if source != .microphone {
 		return false
+	}
+	if session := media_session(id) {
+		if session.state == .recording {
+			return false
+		}
 	}
 	mut session := media_ensure_session(id, .audio, '')
 	session.record_path = output_path
@@ -509,12 +532,13 @@ pub fn media_start_recording(id string, source MediaSource, output_path string) 
 		return false
 	}
 	session.state = .recording
-	session.record_start = time.now().unix()
+	session.record_start = time.now().unix_milli()
 	return true
 }
 
 // media_stop_recording finalizes the take started by `media_start_recording`
-// and leaves the file at its output path.
+// and leaves the file at its output path. Stopping when nothing is recording
+// is an idempotent no-op reporting success.
 pub fn media_stop_recording(id string) bool {
 	mut session := media_session(id) or { return false }
 	if session.state != .recording {
@@ -552,7 +576,8 @@ pub fn media_begin_frame() {
 // media_end_frame detaches video surfaces whose element was not rendered this
 // pass and closes sessions that settled quietly (idle, stopped, ended,
 // error). Playing, paused and recording sessions survive hiding so background
-// audio and takes are never cut by layout.
+// audio and takes are never cut by layout. Explicitly opened (pinned)
+// sessions survive too; only media_close releases them.
 pub fn media_end_frame() {
 	mut closing := []string{}
 	for id in g_media_sessions.keys() {
@@ -563,6 +588,9 @@ pub fn media_end_frame() {
 		if session.surface != unsafe { nil } {
 			native_media_detach(session.id)
 			session.surface = unsafe { nil }
+		}
+		if session.pinned {
+			continue
 		}
 		if session.state in [.idle, .stopped, .ended, .error] {
 			closing << id
@@ -585,6 +613,7 @@ pub fn media_sync_native(parent voidptr, el Element, frame Rect) {
 	}
 	mut session := media_ensure_session(el.id, el.media_kind, el.media_src)
 	session.seen_frame = g_media_frame
+	session.pinned = false
 	session.autoplay = el.autoplay
 	if el.media_kind == .audio && session.src.len > 0 && session.state == .idle
 		&& !session.open_failed {
@@ -600,6 +629,12 @@ pub fn media_sync_native(parent voidptr, el Element, frame Rect) {
 	}
 	if el.media_kind == .video {
 		if session.open_failed {
+			return
+		}
+		if parent == unsafe { nil } {
+			// No native parent (custom renderer on a platform without a
+			// window handle): wait for one instead of failing the session,
+			// so a future parent can still attach.
 			return
 		}
 		if native_media_attach(el.id, parent, frame.x, frame.y, frame.width, frame.height) {
@@ -624,13 +659,15 @@ pub fn media_sync_native(parent voidptr, el Element, frame Rect) {
 		}
 	}
 	if el.media_volume != session.applied_volume {
-		if native_media_set_volume(el.id, media_clamped_volume(el.media_volume)) {
-			session.volume = media_clamped_volume(el.media_volume)
-			session.applied_volume = session.volume
+		vol := media_clamped_volume(el.media_volume)
+		if vol == vol && native_media_set_volume(el.id, vol) {
+			session.volume = vol
+			session.applied_volume = vol
 		}
 	}
 	if el.media_rate != session.applied_rate {
-		if native_media_set_rate(el.id, el.media_rate) {
+		if el.media_rate == el.media_rate && el.media_rate > 0
+			&& native_media_set_rate(el.id, el.media_rate) {
 			session.rate = el.media_rate
 			session.applied_rate = el.media_rate
 		}

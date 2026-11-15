@@ -62,7 +62,9 @@
 @end
 
 // Sessions keyed by the ui2 element id. Main-thread only, like the rest of
-// the native backends' element state.
+// the native backends' element state: every entry point below must run on the
+// main thread, since AVPlayer/AVPlayerLayer/views and AVAudioSession are not
+// thread-safe.
 static NSMutableDictionary *ui2_media_sessions(void) {
 	static NSMutableDictionary *sessions = nil;
 	if (sessions == nil) {
@@ -403,8 +405,19 @@ int ui2_media_apple_can_seek(const char *cid) {
 
 int ui2_media_apple_record_start(const char *cid, const char *path) {
 	@autoreleasepool {
+		if (cid == NULL || path == NULL) return 0;
+		// Recording has no playback session behind it (the recorder is a
+		// button, not a .media element), so claim one here on first use.
 		Ui2MediaSession *session = ui2_media_session(cid);
-		if (session == nil || path == NULL) return 0;
+		if (session == nil) {
+			NSString *key = [NSString stringWithUTF8String:cid];
+			if (key == nil) return 0;
+			session = [[Ui2MediaSession alloc] init];
+			[ui2_media_sessions() setObject:session forKey:key];
+			[session release];
+			session = ui2_media_session(cid);
+		}
+		if (session == nil) return 0;
 		NSString *outPath = [NSString stringWithUTF8String:path];
 		if (outPath == nil || [outPath length] == 0) return 0;
 #if TARGET_OS_IPHONE
@@ -439,6 +452,7 @@ int ui2_media_apple_record_start(const char *cid, const char *path) {
 		[session->recorder release];
 		session->recorder = [recorder retain];
 		[recorder release];
+		[session->recordStart release];
 		session->recordStart = [[NSDate date] retain];
 		return 1;
 	}
@@ -449,6 +463,8 @@ int ui2_media_apple_record_stop(const char *cid) {
 		Ui2MediaSession *session = ui2_media_session(cid);
 		if (session == nil || session->recorder == nil) return 0;
 		[session->recorder stop];
+		[session->recordStart release];
+		session->recordStart = nil;
 		return 1;
 	}
 }

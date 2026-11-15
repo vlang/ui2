@@ -96,4 +96,7 @@ fn handle_media_event(event string) {
 
 fn main() {
 	ui2.run_window('Media Player', player_width, player_height, build_media_screen, handle_media_event)
+	// The loop above returns on quit: release the session so a playing clip
+	// does not outlive the window.
+	ui2.media_close(player_id)
 }

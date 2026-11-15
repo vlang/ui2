@@ -64,9 +64,45 @@ $if windows {
 			assert media_set_rate('mci-tone', 1.0)
 			assert media_set_loop('mci-tone', true)
 			assert media_set_loop('mci-tone', false)
+			assert !media_seek('mci-tone', math.nan())
+			assert !media_set_rate('mci-tone', math.nan())
+			assert !media_set_volume('mci-tone', math.nan())
+			assert media_set_volume('mci-tone', 0)
+			muted_sess := media_session('mci-tone') or { panic('mci-tone session lost') }
+			assert muted_sess.muted
+			assert media_set_volume('mci-tone', 0.5)
+			unmuted_sess := media_session('mci-tone') or { panic('mci-tone session lost') }
+			assert !unmuted_sess.muted
 			assert media_stop('mci-tone')
 			assert media_state('mci-tone') == .stopped
 		}
+	}
+
+	fn test_windows_mci_rejects_quoted_paths() {
+		// A `"` cannot be escaped in an MCI command string, so sources and
+		// take paths containing one are refused before any device opens.
+		// No MCI device is touched: this stays green without a driver.
+		assert !media_open('mci-quote', .audio, 'C:\\music\\a"b.wav')
+		media_close('mci-quote')
+		assert !media_start_recording('mci-quote-rec', .microphone, 'C:\\rec\\a"b.wav')
+		media_close('mci-quote-rec')
+	}
+
+	fn test_windows_mci_pinned_session_survives_end_frame() {
+		// Explicit opens are pinned: the frame collector must not reap a
+		// background session its element never rendered.
+		wav := os.join_path(os.temp_dir(), 'ui2_media_pinned.wav')
+		write_media_test_tone(wav, 1)
+		defer {
+			os.rm(wav) or {}
+		}
+		assert media_open('mci-pinned', .audio, wav)
+		defer {
+			media_close('mci-pinned')
+		}
+		media_begin_frame()
+		media_end_frame()
+		assert media_state('mci-pinned') == .stopped
 	}
 
 	fn test_windows_screen_capture_writes_a_bitmap() {
@@ -91,6 +127,8 @@ $if windows {
 				media_stop_recording('mci-memo')
 				media_close('mci-memo')
 			}
+			// A second start while recording must refuse, not truncate the take.
+			assert !media_start_recording('mci-memo', .microphone, rec)
 			time.sleep(300 * time.millisecond)
 			assert media_state('mci-memo') == .recording
 			assert media_recording_elapsed('mci-memo') >= 0

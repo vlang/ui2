@@ -34,6 +34,14 @@ fn media_mci(command string) (bool, string) {
 	return true, unsafe { string_from_wide2(&out[0], length) }
 }
 
+// media_win_quoted reports whether `s` is safe to interpolate into a quoted
+// MCI command string. MCI has no escape for an embedded quote, so a path
+// containing one is refused instead of breaking the command (or worse,
+// smuggling extra verbs into it).
+fn media_win_quoted(s string) bool {
+	return !s.contains('"')
+}
+
 fn media_win_alias(id string) string {
 	if alias := g_media_win_aliases[id] {
 		return alias
@@ -71,8 +79,14 @@ fn native_media_supported(kind MediaKind) bool {
 
 // native_media_open readies audio at once; video opens on attach, once its
 // parent window is known, so no stray popup ever appears for headless use.
+// A source with an embedded quote is refused: MCI cannot escape one.
+// Element-less video open+play is unsupported — video needs a rendered
+// element whose attach opens the device.
 fn native_media_open(id string, kind MediaKind, src string) bool {
 	if id.trim_space().len == 0 || src.trim_space().len == 0 {
+		return false
+	}
+	if !media_win_quoted(src) {
 		return false
 	}
 	if kind == .video {
@@ -85,7 +99,11 @@ fn native_media_open(id string, kind MediaKind, src string) bool {
 		media_win_drop_alias(id)
 		return false
 	}
-	media_mci('set ${alias} time format milliseconds')
+	set_ok, _ := media_mci('set ${alias} time format milliseconds')
+	if !set_ok {
+		media_win_drop_alias(id)
+		return false
+	}
 	g_media_win_open[id] = true
 	return true
 }
@@ -188,6 +206,8 @@ fn native_media_state(id string) MediaState {
 }
 
 fn native_media_can_seek(id string) bool {
+	// Open means seekable for local files; a stream may still refuse at
+	// runtime, and then the seek itself reports false.
 	return g_media_win_open[id] or { false }
 }
 
@@ -199,16 +219,23 @@ fn native_media_attach(id string, parent voidptr, x f64, y f64, w f64, h f64) bo
 	if session.kind != .video || parent == unsafe { nil } {
 		return false
 	}
+	if !media_win_quoted(session.src) {
+		return false
+	}
 	if !(g_media_win_open[id] or { false }) {
 		media_win_drop_alias(id)
 		alias := media_win_alias(id)
 		parent_handle := u64(parent)
-		ok, _ := media_mci('open "${session.src}" type ${media_win_type(session.kind, session.src)} alias ${alias} style child parent ${parent_handle}')
-		if !ok {
+		open_ok, _ := media_mci('open "${session.src}" type ${media_win_type(session.kind, session.src)} alias ${alias} style child parent ${parent_handle}')
+		if !open_ok {
 			media_win_drop_alias(id)
 			return false
 		}
-		media_mci('set ${alias} time format milliseconds')
+		set_ok, _ := media_mci('set ${alias} time format milliseconds')
+		if !set_ok {
+			media_win_drop_alias(id)
+			return false
+		}
 		g_media_win_open[id] = true
 		session.state = .stopped
 		session.duration = native_media_duration(id)
@@ -216,8 +243,10 @@ fn native_media_attach(id string, parent voidptr, x f64, y f64, w f64, h f64) bo
 	alias := g_media_win_aliases[id] or { return false }
 	rect := '${int(x)}:${int(y)}:${int(w)}:${int(h)}'
 	if g_media_win_rects[id] != rect {
-		media_mci('put ${alias} window at ${int(x)} ${int(y)} ${int(w)} ${int(h)}')
-		g_media_win_rects[id] = rect
+		put_ok, _ := media_mci('put ${alias} window at ${int(x)} ${int(y)} ${int(w)} ${int(h)}')
+		if put_ok {
+			g_media_win_rects[id] = rect
+		}
 	}
 	media_mci('window ${alias} state show')
 	session.surface = parent
@@ -236,24 +265,39 @@ fn native_media_capture_supported(source MediaSource) bool {
 	return source in [.microphone, .screen]
 }
 
-fn native_media_start_recording(id string, source MediaSource, output_path string) bool {
+fn native_media_start_recording(id string, source MediaSource, _output_path string) bool {
+	// The take's path lives on the session (the core stores it before this
+	// call); this layer only needs the device. A path with an embedded
+	// quote is refused at the core boundary by media_win_quoted below.
 	if source != .microphone {
 		return false
 	}
+	if session := media_session(id) {
+		if !media_win_quoted(session.record_path) {
+			return false
+		}
+	}
 	media_win_drop_alias(id)
 	alias := media_win_alias(id)
-	mut ok, _ := media_mci('open new type waveaudio alias ${alias}')
-	if !ok {
+	open_ok, _ := media_mci('open new type waveaudio alias ${alias}')
+	if !open_ok {
 		media_win_drop_alias(id)
 		return false
 	}
-	media_mci('set ${alias} time format milliseconds')
-	media_mci('set ${alias} samplespersec 44100')
-	media_mci('set ${alias} bitspersample 16')
-	media_mci('set ${alias} channels 1')
-	media_mci('set ${alias} bytespersec 88200')
-	media_mci('set ${alias} alignment 2')
-	ok, _ = media_mci('record ${alias}')
+	time_ok, _ := media_mci('set ${alias} time format milliseconds')
+	if !time_ok {
+		media_win_drop_alias(id)
+		return false
+	}
+	for format_cmd in ['set ${alias} samplespersec 44100', 'set ${alias} bitspersample 16',
+		'set ${alias} channels 1', 'set ${alias} bytespersec 88200', 'set ${alias} alignment 2'] {
+		format_ok, _ := media_mci(format_cmd)
+		if !format_ok {
+			media_win_drop_alias(id)
+			return false
+		}
+	}
+	ok, _ := media_mci('record ${alias}')
 	if !ok {
 		media_win_drop_alias(id)
 		return false
@@ -265,6 +309,10 @@ fn native_media_start_recording(id string, source MediaSource, output_path strin
 fn native_media_stop_recording(id string) bool {
 	alias := g_media_win_aliases[id] or { return false }
 	session := media_session(id) or { return false }
+	if !media_win_quoted(session.record_path) {
+		media_win_drop_alias(id)
+		return false
+	}
 	media_mci('stop ${alias}')
 	ok, _ := media_mci('save ${alias} "${session.record_path}"')
 	media_win_drop_alias(id)

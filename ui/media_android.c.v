@@ -13,6 +13,7 @@ fn C.ui2_media_android_play(id &char) int
 fn C.ui2_media_android_pause(id &char) int
 fn C.ui2_media_android_stop(id &char) int
 fn C.ui2_media_android_seek(id &char, ms int) int
+fn C.ui2_media_android_can_seek(id &char) int
 fn C.ui2_media_android_set_volume_db(id &char, millibel int) int
 fn C.ui2_media_android_set_mute(id &char, muted int) int
 fn C.ui2_media_android_set_rate(id &char, per_mille int) int
@@ -95,8 +96,10 @@ fn native_media_set_rate(id string, rate f64) bool {
 }
 
 fn native_media_set_loop(_id string, _loop bool) bool {
-	// No end-of-stream signal reaches this layer, so looping cannot settle.
-	return false
+	// Accepted like the Windows backend: no end-of-stream signal reaches
+	// this layer, so there is nothing to re-arm, but the flag must not fail
+	// the sync pass every frame.
+	return true
 }
 
 fn native_media_close(id string) {
@@ -133,7 +136,10 @@ fn native_media_state(id string) MediaState {
 }
 
 fn native_media_can_seek(id string) bool {
-	return media_session(id) != none
+	if media_session(id) == none {
+		return false
+	}
+	return C.ui2_media_android_can_seek(id.str) != 0
 }
 
 fn native_media_attach(_id string, _parent voidptr, _x f64, _y f64, _w f64, _h f64) bool {

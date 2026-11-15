@@ -113,4 +113,10 @@ fn handle_memo_event(event string) {
 
 fn main() {
 	ui2.run_window('Voice Memo', memo_width, memo_height, build_memo_screen, handle_memo_event)
+	// The loop above returns on quit: finalize a running take instead of
+	// abandoning it, then release the session.
+	if ui2.media_state(memo_id) == .recording {
+		ui2.media_stop_recording(memo_id)
+	}
+	ui2.media_close(memo_id)
 }

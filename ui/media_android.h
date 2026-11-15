@@ -142,15 +142,15 @@ static int ui2_media_android_open(const char *id, const char *src) {
 	SLDataSource audio_src;
 	SLDataLocator_OutputMix loc_mix;
 	SLDataSink audio_sink;
-	SLInterfaceID ids[3];
-	SLboolean req[3];
+	SLInterfaceID ids[4];
+	SLboolean req[4];
 	SLresult res;
 	SLuint32 container;
 	const char *mime;
 	if (!ui2_media_android_engine_ready()) return 0;
+	if (!ui2_media_android_play_format(src, &container, &mime)) return 0;
 	s = ui2_media_android_alloc(id);
 	if (s == NULL) return 0;
-	if (!ui2_media_android_play_format(src, &container, &mime)) return 0;
 	ui2_media_android_destroy_player(s);
 	loc_uri.locatorType = SL_DATALOCATOR_URI;
 	loc_uri.URI = (SLchar *)src;
@@ -166,11 +166,13 @@ static int ui2_media_android_open(const char *id, const char *src) {
 	ids[0] = SL_IID_PLAY;
 	ids[1] = SL_IID_SEEK;
 	ids[2] = SL_IID_VOLUME;
+	ids[3] = SL_IID_RATE;
 	req[0] = SL_BOOLEAN_TRUE;
 	req[1] = SL_BOOLEAN_TRUE;
 	req[2] = SL_BOOLEAN_TRUE;
+	req[3] = SL_BOOLEAN_FALSE;
 	res = (*ui2_media_android_engine)->CreateAudioPlayer(ui2_media_android_engine,
-		&s->player_obj, &audio_src, &audio_sink, 3, ids, req);
+		&s->player_obj, &audio_src, &audio_sink, 4, ids, req);
 	if (res != SL_RESULT_SUCCESS || s->player_obj == NULL) return 0;
 	res = (*s->player_obj)->Realize(s->player_obj, SL_BOOLEAN_FALSE);
 	if (res != SL_RESULT_SUCCESS) {
@@ -261,6 +263,12 @@ static int ui2_media_android_set_rate(const char *id, int per_mille) {
 	return (*s->rate)->SetRate(s->rate, (SLpermille)per_mille) == SL_RESULT_SUCCESS;
 }
 
+static int ui2_media_android_can_seek(const char *id) {
+	Ui2MediaAndroid *s = ui2_media_android_find(id);
+	if (s == NULL || s->seek == NULL) return 0;
+	return 1;
+}
+
 static int ui2_media_android_position_ms(const char *id) {
 	Ui2MediaAndroid *s = ui2_media_android_find(id);
 	SLmillisecond pos = 0;
@@ -318,9 +326,9 @@ static int ui2_media_android_record_start(const char *id, const char *path) {
 	SLuint32 container;
 	const char *mime;
 	if (!ui2_media_android_engine_ready()) return 0;
+	if (!ui2_media_android_record_format(path, &container, &mime)) return 0;
 	s = ui2_media_android_alloc(id);
 	if (s == NULL) return 0;
-	if (!ui2_media_android_record_format(path, &container, &mime)) return 0;
 	ui2_media_android_destroy_recorder(s);
 	loc_dev.locatorType = SL_DATALOCATOR_IODEVICE;
 	loc_dev.deviceType = SL_IODEVICE_AUDIOINPUT;

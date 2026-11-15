@@ -189,6 +189,14 @@ fn native_media_capture_screen(output_path string) bool {
 	if output_path.trim_space().len == 0 {
 		return false
 	}
+	// os.execute runs through the shell and the path interpolates inside
+	// double quotes, where `$`, backticks and `"` still expand: refuse
+	// those instead of letting a crafted path run commands.
+	for ch in output_path.bytes() {
+		if ch == `"` || ch == `$` || ch == `\`` {
+			return false
+		}
+	}
 	res := os.execute('screencapture -x -t png "${output_path}"')
 	return res.exit_code == 0
 }

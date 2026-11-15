@@ -1,5 +1,7 @@
 module ui2
 
+import math
+
 fn test_media_source_for_src_detects_urls() {
 	assert media_source_for_src('https://example.com/a.mp4') == .url
 	assert media_source_for_src('http://example.com/a.mp3') == .url
@@ -21,6 +23,7 @@ fn test_media_time_format_reads_like_a_player() {
 	assert media_time_format(3723) == '1:02:03'
 	assert media_time_format(-1) == '--:--'
 	assert media_time_format(-100) == '--:--'
+	assert media_time_format(math.nan()) == '--:--'
 }
 
 fn test_media_clamped_volume_stays_in_range() {
