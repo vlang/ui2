@@ -36,32 +36,31 @@ jobs:
             v_asset: v_windows.zip
             custom: true
     steps:
-      # setup-v builds source archives when the requested tree has no checked-in
-      # binary. V master currently fails that bootstrap on hosted runners, and
-      # the 0.5.2 source bootstrap can pick up an incompatible vc snapshot. Use
-      # the official 0.5.2 release binaries instead; 0.5.2 is ui2's documented
-      # minimum supported V version.
+      # Pinned post-0.5.2 master: ui2 uses generic math.min/max and newer
+      # os APIs that the 0.5.2 release binaries reject. Build from source
+      # at a verified commit instead of the 0.5.2 release binaries.
       - name: Setup V
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          curl --fail --location --retry 3 \
-            --output "$RUNNER_TEMP/v.zip" \
-            "https://github.com/vlang/v/releases/download/0.5.2/${{ matrix.v_asset }}"
-          unzip -q "$RUNNER_TEMP/v.zip" -d "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/v" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/v/v" version
+          git clone --depth 1 https://github.com/vlang/v "$RUNNER_TEMP/v-src"
+          git -C "$RUNNER_TEMP/v-src" fetch --depth 1 origin 5b2515a641d4f5c703b2eca04567485bc9909f87
+          git -C "$RUNNER_TEMP/v-src" checkout 5b2515a641d4f5c703b2eca04567485bc9909f87
+          make -C "$RUNNER_TEMP/v-src"
+          echo "$RUNNER_TEMP/v-src" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/v-src/v" version
 
       - name: Setup V
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $archive = Join-Path $env:RUNNER_TEMP 'v.zip'
-          Invoke-WebRequest -Uri "https://github.com/vlang/v/releases/download/0.5.2/${{ matrix.v_asset }}" -OutFile $archive
-          Expand-Archive -Path $archive -DestinationPath $env:RUNNER_TEMP -Force
-          $vdir = Join-Path $env:RUNNER_TEMP 'v'
-          $vdir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          & (Join-Path $vdir 'v.exe') version
+          git clone --depth 1 https://github.com/vlang/v (Join-Path $env:RUNNER_TEMP 'v-src')
+          $vsrc = Join-Path $env:RUNNER_TEMP 'v-src'
+          git -C $vsrc fetch --depth 1 origin 5b2515a641d4f5c703b2eca04567485bc9909f87
+          git -C $vsrc checkout 5b2515a641d4f5c703b2eca04567485bc9909f87
+          & (Join-Path $vsrc 'make.bat')
+          $vsrc | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & (Join-Path $vsrc 'v.exe') version
 
       # `import ui2` resolves through the checkout directory name, so the
       # repository has to land in a directory called `ui2`.

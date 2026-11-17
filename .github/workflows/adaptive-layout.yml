@@ -33,15 +33,15 @@ jobs:
           path: ui2
           persist-credentials: false
 
-      - name: Install V 0.5.2
+      - name: Install V (pinned master, post-0.5.2 for generic math/os APIs)
         shell: bash
         run: |
-          curl --fail --location --retry 3 \
-            --output "$RUNNER_TEMP/v.zip" \
-            https://github.com/vlang/v/releases/download/0.5.2/v_linux.zip
-          unzip -q "$RUNNER_TEMP/v.zip" -d "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/v" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/v/v" version
+          git clone --depth 1 https://github.com/vlang/v "$RUNNER_TEMP/v-src"
+          git -C "$RUNNER_TEMP/v-src" fetch --depth 1 origin 5b2515a641d4f5c703b2eca04567485bc9909f87
+          git -C "$RUNNER_TEMP/v-src" checkout 5b2515a641d4f5c703b2eca04567485bc9909f87
+          make -C "$RUNNER_TEMP/v-src"
+          echo "$RUNNER_TEMP/v-src" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/v-src/v" version
 
       - name: Install Linux development dependencies
         run: |
