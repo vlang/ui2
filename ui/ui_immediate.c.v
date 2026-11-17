@@ -2391,11 +2391,11 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	// so the first copy or paste crashed the window.
 	struct NativeTextClipboard {}
 
-	fn (mut NativeTextClipboard) copy(text string) bool {
+	fn (mut c NativeTextClipboard) copy(text string) bool {
 		return native_set_clipboard_text(text)
 	}
 
-	fn (NativeTextClipboard) paste() string {
+	fn (c NativeTextClipboard) paste() string {
 		return native_clipboard_text() or { '' }
 	}
 
