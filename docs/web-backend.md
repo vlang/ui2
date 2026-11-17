@@ -94,8 +94,8 @@ app already handles. Hover/clickable/draggable/long_press reuse the
 
 ## Milestones (tracking)
 
-- [ ] M0 — this doc + protocol sketch + `control_support(.web)` decision table
-- [ ] M1 — `ui/web_snapshot.v` (+`web_snapshot_test.v`): `Element -> JSON` round-trip for every `Kind`, golden file from `examples/counter`
+- [x] M0 — this doc + protocol sketch + `control_support(.web)` decision table
+- [x] M1 — `ui/web_snapshot.v` (+`web_snapshot_test.v`): `Element -> JSON` round-trip for every `Kind`, golden wire assertions
 - [ ] M2 — `ui/web.v`: `run_web_window(opts, build, event)` on `veb` + websocket; `GET /`, `/snapshot`, `/assets/*`; `refresh()` pushes snapshot; manual browser test
 - [ ] M3 — diff/patch (`seq`, keyed `key`/`id` reconciliation reuse), scroll/key/pointer/text event ingress, `examples/web_counter`
 - [ ] M4 — `web/renderer/` TS DOM renderer (no framework): snapshot render, patch apply, event send, resize/dpr, error overlay
