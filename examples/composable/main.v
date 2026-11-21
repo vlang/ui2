@@ -15,7 +15,7 @@ fn build_composable_screen() ui2.Element {
 		ui2.composable_button('ghost', ui2.rect(16, 120, width, 44), presets['ghost'], .medium, [], 'Ghost', ui2.TextStyle{ color: 0x111111 }) or { return ui2.screen(0xf1f5f9, []) },
 		ui2.composable_card('card', ui2.rect(16, 172, width, 120), presets['default'], ui2.ComponentParts{
 			body:   [ui2.label('body', 'Card body', ui2.rect(0, 0, width - 32, 24), ui2.TextStyle{})]
-			footer: [ui2.label('foot', 'Footer', ui2.rect(0, 0, width - 32, 20), ui2.TextStyle{ color: 0x64748b })]
+			footer: [ui2.label('foot', 'Footer', ui2.rect(0, 28, width - 32, 20), ui2.TextStyle{ color: 0x64748b })]
 		}) or { return ui2.screen(0xf1f5f9, []) },
 	])
 }

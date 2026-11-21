@@ -59,13 +59,24 @@ fn test_component_variants_find_matches_by_name_and_defaults_to_first() {
 }
 
 fn test_component_assemble_combines_parts_in_order() {
-	el := component_assemble(rect(0, 0, 100, 80), BoxStyle{ bg: 0xffffff }, ComponentParts{
+	el := component_assemble('assembled', rect(0, 0, 100, 80), BoxStyle{ bg: 0xffffff }, ComponentParts{
 		leading: [label('l', 'L', rect(0, 0, 20, 20), TextStyle{})]
 		body:    [label('b', 'B', rect(0, 0, 60, 20), TextStyle{})]
 	}) or { panic(err) }
+	assert el.id == 'assembled'
 	assert el.children.len == 2
 	assert el.children[0].id == 'l'
 	assert el.children[1].id == 'b'
+}
+
+fn test_component_assemble_rejects_id_collision_with_slot() {
+	component_assemble('l', rect(0, 0, 100, 80), BoxStyle{ bg: 0xffffff }, ComponentParts{
+		leading: [label('l', 'L', rect(0, 0, 20, 20), TextStyle{})]
+	}) or {
+		assert err.msg().contains('duplicate element id')
+		return
+	}
+	assert false, 'duplicate root/slot id accepted'
 }
 
 fn test_component_slot_reports_populated_parts() {
@@ -77,7 +88,9 @@ fn test_component_slot_reports_populated_parts() {
 
 fn test_composable_button_renders_caption_when_no_children() {
 	el := composable_button('btn', rect(0, 0, 120, 40), ComponentVariant{ name: 'default' }, .medium, [], 'Save', TextStyle{ color: 0x111111 }) or { panic(err) }
-	assert el.kind == .button
+	assert el.kind == .view
+	assert el.button_behavior
+	assert el.accessibility_role == 'button'
 	assert el.id == 'btn'
 	assert el.text == 'Save'
 	assert el.children.len == 1
@@ -96,18 +109,24 @@ fn test_composable_card_assembles_header_and_footer() {
 		body:   [label('body', 'Body', rect(0, 0, 180, 20), TextStyle{})]
 		footer: [label('foot', 'Foot', rect(0, 0, 180, 20), TextStyle{})]
 	}) or { panic(err) }
+	assert el.id == 'card'
 	assert el.children.len == 2
 	assert el.children[0].id == 'body'
 	assert el.children[1].id == 'foot'
 }
 
 fn test_composable_input_places_leading_and_trailing_slots() {
-	leading := label('search', 'Q', rect(0, 0, 16, 16), TextStyle{})
-	trailing := label('clear', '×', rect(0, 0, 16, 16), TextStyle{})
+	leading := label('search', 'Q', rect(0, 8, 16, 16), TextStyle{})
+	trailing := label('clear', '×', rect(184, 8, 16, 16), TextStyle{})
 	el := composable_input('q', rect(0, 0, 200, 32), ComponentVariant{ name: 'outline' }, leading, trailing, 'Search', '', TextStyle{}) or { panic(err) }
+	assert el.id == 'q'
 	assert el.children.len == 3
 	assert el.children[0].id == 'search'
+	assert el.children[1].id == 'q_field'
 	assert el.children[2].id == 'clear'
+	field := el.children[1].frame
+	assert field.x >= leading.frame.x + leading.frame.width
+	assert field.x + field.width <= trailing.frame.x
 }
 
 fn test_component_variant_presets_cover_shadcn_families() {

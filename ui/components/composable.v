@@ -180,15 +180,17 @@ pub:
 
 // component_assemble combines the parts into one container, honoring the
 // component's frame and box. Parts keep their own frames; the caller positions
-// them the way shadcn slot children are positioned by the parent.
-pub fn component_assemble(frame Rect, box BoxStyle, parts ComponentParts) !Element {
+// them the way shadcn slot children are positioned by the parent. The id names
+// the assembled root, so a component stays addressable by ID-based APIs and a
+// collision with a slot child is rejected when the tree is validated.
+pub fn component_assemble(id string, frame Rect, box BoxStyle, parts ComponentParts) !Element {
 	component_validate_frame(frame)!
 	mut children := []Element{cap: parts.leading.len + parts.body.len + parts.trailing.len + parts.footer.len}
 	children << parts.leading
 	children << parts.body
 	children << parts.trailing
 	children << parts.footer
-	return component_finish(view('', frame, box, children))
+	return component_finish(view(id, frame, box, children))
 }
 
 // component_slot reports whether a component exposes a named slot. This is
