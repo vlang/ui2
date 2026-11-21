@@ -197,22 +197,22 @@ pub fn styled_switch(config StyledSwitchConfig) !Element {
 			theme:         theme
 		)!
 	}
-	thumb := view(thumb_id, rect(thumb_x, (sm.height - sm.thumb) / 2, sm.thumb, sm.thumb),
+	thumb := with_classes(view(thumb_id, rect(thumb_x, (sm.height - sm.thumb) / 2, sm.thumb, sm.thumb),
 		BoxStyle{
 			bg:     thumb_color
 			radius: sm.thumb / 2
 			shadow: if config.enabled { box_shadow(0x000000, 0.2, 2, 0) } else { BoxShadow{} }
-		}, thumb_children)
+		}, thumb_children), 'switch-thumb')
 	mut children := []Element{}
 	if config.focused && config.enabled {
 		children << controls_focus_ring(track_frame, sm.height / 2, config.color or {
 			theme.primary
 		}, theme)
 	}
-	children << view('', track_frame, BoxStyle{
+	children << with_classes(view('', track_frame, BoxStyle{
 		bg:     track_color
 		radius: sm.height / 2
-	}, [thumb])
+	}, [thumb]), 'switch-track')
 	label_color := if config.enabled { theme.foreground } else { choice_disabled_text(theme) }
 	detail_color := if config.enabled {
 		theme.muted_foreground
@@ -223,7 +223,8 @@ pub fn styled_switch(config StyledSwitchConfig) !Element {
 		label_color, detail_color, frame.width, frame.height)
 	state_text := if config.checked { 'on' } else { 'off' }
 	el := Element{
-		...button_view(config.id, frame, BoxStyle{ transparent: true }, children)
+		...with_classes(button_view(config.id, frame, BoxStyle{ transparent: true }, children),
+			'switch')
 		action_id:           switch_action(config)
 		enabled:             config.enabled && !config.loading
 		accessibility_role:  'switch'

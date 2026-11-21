@@ -162,7 +162,7 @@ pub fn select_embedded_text_range(id string, start int, end int) {
 		units := if u32(character) > 0xffff { u64(2) } else { u64(1) }
 		if index < start { location += units } else if index < end { length += units }
 	}
-	macos.msg_void_range(editor, 'setSelectedRange:', macos.range(location, length))
+	darwin_msg_void_range(editor, 'setSelectedRange:', darwin_range(location, length))
 }
 
 // An input method is composing marked text in the field; leave its text alone.

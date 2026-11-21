@@ -1,0 +1,104 @@
+@accent: #2563eb;
+@accent-hover: #1d4ed8;
+@accent-ink: white;
+@danger: #dc2626;
+@danger-hover: #b91c1c;
+
+light {
+	@bg: #eef1f6;
+	@surface: #ffffff;
+	@ink: #172033;
+	@muted: #64748b;
+	@line: #cbd5e1;
+	@hero: linear-gradient(135deg, #4f46e5, #06b6d4);
+}
+dark {
+	@bg: #0f1420;
+	@surface: #1a2230;
+	@ink: #f1f5f9;
+	@muted: #94a3b8;
+	@line: #334155;
+	@hero: linear-gradient(135deg, #312e81, #0e7490);
+}
+
+Label { color: @ink; font-size: 14px; }
+Label.title { font-size: 22px; font-weight: bold; }
+Label.subtitle { color: @muted; font-size: 13px; }
+Label.h2 { font-size: 16px; font-weight: bold; }
+Label.readout { color: @muted; font-size: 12px; }
+Label.dsl-badge { color: @muted; font-size: 12px; font-style: italic; }
+
+Button {
+	background: @accent;
+	color: @accent-ink;
+	border-radius: 6px;
+	font-size: 14px;
+}
+Button:hover { opacity: 0.92; }
+Button:pressed { opacity: 0.78; }
+Button:disabled { opacity: 0.4; }
+Button.ghost {
+	background: @surface;
+	color: @accent;
+	border-color: @accent;
+	border-width: 1px;
+}
+Button.ghost:hover {
+	background: color-mix(in srgb, @accent 12%, @surface);
+	opacity: 1;
+}
+Button.danger { background: @danger; }
+Button.danger:hover { background: @danger-hover; opacity: 1; }
+
+View#topbar {
+	background: @surface;
+	border-color: @line;
+	border-width: 1px;
+}
+View.sidebar {
+	background: @surface;
+	border-color: @line;
+	border-width: 1px;
+}
+Button.nav {
+	background: @surface;
+	color: @muted;
+	border-radius: 6px;
+	font-size: 14px;
+}
+Button.nav:hover { color: @ink; }
+Button.nav.active {
+	background: @accent;
+	color: @accent-ink;
+}
+View.card {
+	background: @surface;
+	border-radius: 10px;
+	border-color: @line;
+	border-width: 1px;
+
+	--title-boost: 2px;
+	Label.card-title { font-size: calc(14px + var(--title-boost, 0px)); font-weight: bold; }
+	Label.card-note { color: @muted; font-size: 13px; }
+}
+@container card (min-width: 280px) {
+	View.card Label.card-title { font-size: 18px; }
+	View.card Label.card-note { font-size: 14px; }
+}
+Checkbox:checked { color: @accent; }
+
+@media (max-width: 860px) {
+	Label.title { font-size: 18px; }
+	Button.nav { font-size: 12px; }
+}
+@media (platform: windows) {
+	Button { border-radius: 2px; }
+	Button.nav { border-radius: 2px; }
+	View.card { border-radius: 4px; }
+}
+@media (prefers-color-scheme: dark) {
+	Label.dsl-badge { color: @accent; }
+}
+@media (min-resolution: 2dppx) {
+	Label.readout { font-size: 13px; }
+}
