@@ -347,7 +347,7 @@ fn tooltip_colors(config TooltipPopupConfig) (u32, u32, u32, u32) {
 		return config.theme.background, config.theme.foreground, config.theme.border, config.theme.muted_foreground
 	}
 	bg, fg := config.theme.colors(config.tone)
-	return bg, fg, bg, popover_blend(fg, bg, 0.3)
+	return bg, fg, bg, color_mix(fg, bg, 0.3)
 }
 
 fn tooltip_popup_layout(config TooltipPopupConfig) TooltipPopupLayout {

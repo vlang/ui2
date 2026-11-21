@@ -171,7 +171,7 @@ fn controls_focus_ring(frame Rect, radius f64, accent u32, theme ComponentTheme)
 	w := controls_ring
 	return view('', rect(frame.x - w, frame.y - w, frame.width + 2 * w, frame.height + 2 * w),
 		BoxStyle{
-			bg:     choice_mix(accent, theme.background, 0.5)
+			bg:     color_mix(accent, theme.background, 0.5)
 			radius: radius + w
 		}, []Element{})
 }
@@ -256,9 +256,9 @@ fn checkbox_indicator(frame Rect, mark_id string, checked bool, indeterminate bo
 	mut border := if on { theme.primary } else { theme.border }
 	mut mark := theme.primary_foreground
 	if !enabled {
-		fill = choice_mix(fill, theme.background, 0.5)
-		border = choice_mix(border, theme.background, 0.5)
-		mark = choice_mix(mark, fill, 0.3)
+		fill = color_mix(fill, theme.background, 0.5)
+		border = color_mix(border, theme.background, 0.5)
+		mark = color_mix(mark, fill, 0.3)
 	}
 	mut box_children := choice_ring(rect(0, 0, side, side), radius, border, fill, .all, false)
 	if on && mark_id.len > 0 {

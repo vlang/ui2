@@ -371,7 +371,7 @@ fn test_switch_color_disabled_loading_and_focus() {
 
 	disabled := styled_switch(StyledSwitchConfig{ ...base, enabled: false })!
 	assert !disabled.enabled
-	assert disabled.children[0].box.bg == choice_mix(theme.primary, theme.background, 0.5)
+	assert disabled.children[0].box.bg == color_mix(theme.primary, theme.background, 0.5)
 
 	loading := styled_switch(StyledSwitchConfig{ ...base, loading: true })!
 	assert !loading.enabled

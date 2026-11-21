@@ -92,9 +92,9 @@ fn radio_indicator(frame Rect, checked bool, enabled bool, theme ComponentTheme)
 	mut fill := if checked { theme.primary } else { theme.background }
 	mut dot := theme.primary_foreground
 	if !enabled {
-		ring = choice_mix(ring, theme.background, 0.5)
-		fill = choice_mix(fill, theme.background, 0.5)
-		dot = choice_mix(dot, theme.background, 0.3)
+		ring = color_mix(ring, theme.background, 0.5)
+		fill = color_mix(fill, theme.background, 0.5)
+		dot = color_mix(dot, theme.background, 0.3)
 	}
 	mut children := choice_ring(rect(0, 0, d, d), d / 2, ring, fill, .all, false)
 	if checked {

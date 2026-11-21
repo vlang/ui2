@@ -38,11 +38,11 @@ fn choice_labels(el Element) []string {
 // ── Shared helpers ──────────────────────────────────────────────────
 
 fn test_choice_colors_mix_contrast_and_legibility() {
-	assert choice_mix(0x000000, 0xffffff, 0) == 0x000000
-	assert choice_mix(0x000000, 0xffffff, 1) == 0xffffff
-	assert choice_mix(0x000000, 0xffffff, 0.5) == 0x808080
-	assert choice_mix(0x102030, 0x102030, 0.3) == 0x102030
-	assert choice_mix(0x000000, 0xffffff, 7) == 0xffffff
+	assert color_mix(0x000000, 0xffffff, 0) == 0x000000
+	assert color_mix(0x000000, 0xffffff, 1) == 0xffffff
+	assert color_mix(0x000000, 0xffffff, 0.5) == 0x808080
+	assert color_mix(0x102030, 0x102030, 0.3) == 0x102030
+	assert color_mix(0x000000, 0xffffff, 7) == 0xffffff
 	assert math.abs(choice_contrast(0x000000, 0xffffff) - 21) < 0.01
 	assert math.abs(choice_contrast(0x777777, 0x777777) - 1) < 1e-9
 	light := component_theme(false)

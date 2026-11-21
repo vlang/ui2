@@ -153,14 +153,14 @@ fn shimmer_base_color(theme ComponentTheme) u32 {
 	if feedback_is_dark(theme) {
 		return theme.muted
 	}
-	return interpolate_color(theme.muted, theme.border, 0.45)
+	return color_mix(theme.muted, theme.border, 0.45)
 }
 
 fn shimmer_highlight_default(theme ComponentTheme, base u32) u32 {
 	if feedback_is_dark(theme) {
-		return interpolate_color(base, theme.foreground, 0.16)
+		return color_mix(base, theme.foreground, 0.16)
 	}
-	return interpolate_color(base, theme.background, 0.8)
+	return color_mix(base, theme.background, 0.8)
 }
 
 fn shimmer_validate_duration(duration f64) !f64 {
@@ -251,7 +251,7 @@ pub fn shimmer(config ShimmerConfig) !Element {
 						inset), !config.once))
 				}
 				bands << view(part, rect(inset, 0, 0, shape.frame.height), BoxStyle{
-					bg: interpolate_color(base, highlight, f64(layer + 1) / f64(shimmer_layer_count))
+					bg: color_mix(base, highlight, f64(layer + 1) / f64(shimmer_layer_count))
 				}, []Element{})
 			}
 		}
@@ -301,7 +301,7 @@ pub fn shimmer_text_highlight(text_color u32, theme ComponentTheme) u32 {
 	if math.abs(feedback_luminance(target) - feedback_luminance(text_color)) < 0.1 {
 		target = if dark { theme.background } else { theme.foreground }
 	}
-	return interpolate_color(text_color, target, 0.45)
+	return color_mix(text_color, target, 0.45)
 }
 
 pub fn shimmer_text(config ShimmerTextConfig) !Element {

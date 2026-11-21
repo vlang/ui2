@@ -932,11 +932,11 @@ fn calendar_day_value(info CalendarDayInfo, mode CalendarMode) string {
 // ── Colors ──────────────────────────────────────────────────────────
 
 fn calendar_band_color(theme ComponentTheme, preview bool) u32 {
-	return choice_mix(theme.primary, theme.background, if preview { 0.9 } else { 0.8 })
+	return color_mix(theme.primary, theme.background, if preview { 0.9 } else { 0.8 })
 }
 
 fn calendar_hover_color(theme ComponentTheme) u32 {
-	return choice_mix(theme.muted, theme.border, 0.45)
+	return color_mix(theme.muted, theme.border, 0.45)
 }
 
 struct CalendarDayColors {
@@ -962,7 +962,7 @@ fn calendar_day_colors(theme ComponentTheme, info CalendarDayInfo, enabled bool)
 		fill = if enabled {
 			theme.primary
 		} else {
-			choice_mix(theme.primary, theme.background, 0.5)
+			color_mix(theme.primary, theme.background, 0.5)
 		}
 		filled = true
 		ink = theme.primary_foreground
@@ -978,7 +978,7 @@ fn calendar_day_colors(theme ComponentTheme, info CalendarDayInfo, enabled bool)
 		filled:    filled
 		ink:       ink
 		ring:      if info.selected {
-			choice_mix(theme.primary, theme.foreground, 0.45)
+			color_mix(theme.primary, theme.foreground, 0.45)
 		} else {
 			theme.primary
 		}
@@ -1042,7 +1042,7 @@ fn calendar_nav_button(config CalendarConfig, part string, symbol string, frame 
 	icon := math.round(cm.font * 1.1)
 	return Element{
 		...button_view(component_part_id(config.id, part), frame, component_box(theme.background,
-			if live { theme.border } else { choice_mix(theme.border, theme.background, 0.5) },
+			if live { theme.border } else { color_mix(theme.border, theme.background, 0.5) },
 			cm.radius), [choice_icon(symbol, datetime_center(local, icon, icon), color)])
 		key:                 part
 		enabled:             live

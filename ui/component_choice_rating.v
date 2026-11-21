@@ -87,8 +87,8 @@ pub fn rating(config RatingConfig) !Element {
 	mut filled_color := tone
 	mut empty_color := config.theme.border
 	if !config.enabled {
-		filled_color = choice_mix(filled_color, config.theme.background, 0.5)
-		empty_color = choice_mix(empty_color, config.theme.background, 0.4)
+		filled_color = color_mix(filled_color, config.theme.background, 0.5)
+		empty_color = color_mix(empty_color, config.theme.background, 0.4)
 	}
 	cell := math.max(0.0, math.min(rating_star_size(metrics), math.min(config.frame.width / f64(config.max),
 		config.frame.height)))

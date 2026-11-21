@@ -81,7 +81,7 @@ fn status_bar_items(config StatusBarConfig) []BarItem {
 // status_bar_background is the bar's default fill: the background tinted
 // toward the muted color, so the bar reads apart from the content above it.
 fn status_bar_background(theme ComponentTheme) u32 {
-	return choice_mix(theme.background, theme.muted, 0.75)
+	return color_mix(theme.background, theme.muted, 0.75)
 }
 
 // status_bar draws a status bar. Its text is small and muted, as GPUI Kit's
@@ -105,7 +105,7 @@ pub fn status_bar(config StatusBarConfig) !Element {
 		theme:      theme
 		metrics:    layout.metrics
 		foreground: config.style.foreground or {
-			choice_mix(theme.muted_foreground, theme.foreground, 0.4)
+			color_mix(theme.muted_foreground, theme.foreground, 0.4)
 		}
 		muted:      theme.muted_foreground
 		surface:    bars_surface_color(fill, config.style.gradient, fill)
