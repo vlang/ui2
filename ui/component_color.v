@@ -429,7 +429,7 @@ fn color_picker_layout(config ColorPickerConfig) ColorPickerLayout {
 	width := math.max(color_picker_panel_width(config), 0)
 	p := math.min(m.padding, width / 2)
 	inner := width - 2 * p
-	grid := color_picker_grid(config, m, p, inner)
+	picker_grid := color_picker_grid(config, m, p, inner)
 	shown := color_picker_panels(config)
 	current := color_picker_current_panel(config)
 	mut y := p
@@ -441,7 +441,7 @@ fn color_picker_layout(config ColorPickerConfig) ColorPickerLayout {
 	top := y
 	mut content := 0.0
 	for item in shown {
-		content = math.max(content, color_picker_content_height(config, item, m, grid, inner))
+		content = math.max(content, color_picker_content_height(config, item, m, picker_grid, inner))
 	}
 	mut area := Rect{}
 	mut sliders := []ColorPickerSlider{}
@@ -450,7 +450,7 @@ fn color_picker_layout(config ColorPickerConfig) ColorPickerLayout {
 	featured := color_picker_featured(config)
 	match current {
 		.spectrum {
-			area_height := color_picker_area_height(config, m, grid, inner)
+			area_height := color_picker_area_height(config, m, picker_grid, inner)
 			area = rect(p, top, inner, area_height)
 			mut row := top + area_height + m.gap
 			sliders << color_picker_bare_slider(.hue, p, row, inner, m)
@@ -461,20 +461,20 @@ fn color_picker_layout(config ColorPickerConfig) ColorPickerLayout {
 				row += m.thumb
 			}
 			row += m.gap
-			swatches << grid.place(featured[..math.min(featured.len, grid.columns)], 'f:',
+			swatches << picker_grid.place(featured[..math.min(featured.len, picker_grid.columns)], 'f:',
 				'', row)
 		}
 		.palette {
-			swatches << grid.place(featured, 'f:', '', top)
-			mut row := top + grid.block_height(featured.len) + m.gap
+			swatches << picker_grid.place(featured, 'f:', '', top)
+			mut row := top + picker_grid.block_height(featured.len) + m.gap
 			divider = rect(p, row, inner, 1)
 			row += 1 + m.gap
 			for index, palette in color_picker_palettes(config) {
 				if palette.colors.len == 0 {
 					continue
 				}
-				swatches << grid.place(palette.colors, 'p:${index}:', palette.name, row)
-				row += grid.block_height(palette.colors.len) + grid.gap
+				swatches << picker_grid.place(palette.colors, 'p:${index}:', palette.name, row)
+				row += picker_grid.block_height(palette.colors.len) + picker_grid.gap
 			}
 		}
 		.sliders {
@@ -911,8 +911,8 @@ pub fn color_picker_value_after_key(config ColorPickerConfig, part ColorPickerPa
 				else { fraction = current.hsla().l }
 			}
 			// Hue steps whole degrees; the others whole percent.
-			grid := if part == .hue { 1.0 / 360 } else { 0.01 }
-			step := if part == .hue { unit * 100 * grid } else { unit }
+			step_unit := if part == .hue { 1.0 / 360 } else { 0.01 }
+			step := if part == .hue { unit * 100 * step_unit } else { unit }
 			target := match event.code {
 				.home {
 					0.0
@@ -924,7 +924,7 @@ pub fn color_picker_value_after_key(config ColorPickerConfig, part ColorPickerPa
 					if !down && !up {
 						return none
 					}
-					color_picker_step(fraction, if up { step } else { -step }, grid, 0, 1)
+					color_picker_step(fraction, if up { step } else { -step }, step_unit, 0, 1)
 				}
 			}
 			next = match part {

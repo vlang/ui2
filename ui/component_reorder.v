@@ -167,17 +167,17 @@ pub fn reorder_layout(config ReorderConfig) !ReorderLayout {
 		}
 		sizes << length
 	}
-	list := virtual_list_sized(sizes, config.gap)!.padded(config.padding)!
+	item_list := virtual_list_sized(sizes, config.gap)!.padded(config.padding)!
 	viewport := if horizontal { config.frame.width } else { config.frame.height }
-	scrolls := list.total() > viewport + 0.5
+	scrolls := item_list.total() > viewport + 0.5
 	// The scroller is drawn over the content's far edge, so items keep clear of it.
 	scroller := if scrolls { reorder_scroller_width } else { 0.0 }
 	cross_extent := if horizontal { config.frame.height } else { config.frame.width }
 	cross := math.max(cross_extent - 2 * config.padding - scroller, 0)
 	mut items := []Rect{cap: sizes.len}
 	for index in 0 .. sizes.len {
-		start := list.item_start(index)
-		size := list.item_size(index)
+		start := item_list.item_start(index)
+		size := item_list.item_size(index)
 		items << if horizontal {
 			rect(start, config.padding, size, cross)
 		} else {
@@ -187,9 +187,9 @@ pub fn reorder_layout(config ReorderConfig) !ReorderLayout {
 	return ReorderLayout{
 		axis:     config.axis
 		items:    items
-		length:   list.total()
+		length:   item_list.total()
 		scrolls:  scrolls
-		list:     list
+		list:     item_list
 		viewport: viewport
 	}
 }
@@ -552,14 +552,14 @@ pub fn reorder_container(config ReorderConfig) !Element {
 	}
 	rows << lifted
 	local := rect(0, 0, config.frame.width, config.frame.height)
-	scroll_mode := if config.axis == .horizontal {
+	axis_mode := if config.axis == .horizontal {
 		ScrollMode.horizontal_only
 	} else {
 		ScrollMode.vertical_only
 	}
 	body := if layout.scrolls {
 		Element{
-			...scroll_with_mode(reorder_scroll_id(config.id), local, 0, scroll_mode, rows)
+			...scroll_with_mode(reorder_scroll_id(config.id), local, 0, axis_mode, rows)
 			box: BoxStyle{
 				transparent: true
 			}

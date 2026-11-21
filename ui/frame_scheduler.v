@@ -72,7 +72,7 @@ mut:
 	// deadlines and animation continuation call it so a suppressed frame
 	// callback still runs. It must only touch the platform loop's own
 	// synchronization; it runs under the coordinator mutex.
-	wake_fn fn ()
+	wake_fn fn () = unsafe { nil }
 }
 
 fn new_frame_coordinator() &FrameCoordinator {
@@ -126,6 +126,7 @@ pub fn (mut coordinator FrameCoordinator) set_wake_fn(wake fn ()) {
 	defer { coordinator.mutex.unlock() }
 	coordinator.wake_fn = wake
 }
+
 // arriving while the caller works therefore belong to the following frame.
 // now and deadlines use the same caller-supplied monotonic millisecond clock.
 fn (mut coordinator FrameCoordinator) begin_frame(now i64) ?FrameWork {

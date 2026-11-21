@@ -15,8 +15,9 @@
 #endif
 
 #include <windows.h>
-#ifdef __TINYC__
-// V's bundled tcc has no commdlg.h or shlobj.h: the names used are declared there.
+#if defined(__TINYC__) && !(defined(__has_include) && __has_include(<commdlg.h>) && __has_include(<shlobj.h>))
+// A tcc whose winapi set has no commdlg.h or shlobj.h (V's bundled tcc before vlang/tccbin's
+// Win32 GUI series): the names used are declared there. A tcc that has them reads them below.
 #include "tcc_compat_windows.h"
 #else
 #include <commdlg.h>

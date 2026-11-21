@@ -344,13 +344,6 @@ fn calendar_long_label(d CalendarDate) string {
 	return calendar_format(d, '%A, %B %-d, %Y')
 }
 
-// datetime_inset shrinks a frame by dx and dy on each side, never below zero.
-fn datetime_inset(frame Rect, dx f64, dy f64) Rect {
-	x := math.min(dx, frame.width / 2)
-	y := math.min(dy, frame.height / 2)
-	return rect(frame.x + x, frame.y + y, frame.width - 2 * x, frame.height - 2 * y)
-}
-
 // datetime_center places a w by h box in the middle of frame.
 fn datetime_center(frame Rect, w f64, h f64) Rect {
 	width := math.max(0.0, math.min(w, frame.width))
