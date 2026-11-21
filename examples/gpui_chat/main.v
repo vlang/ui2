@@ -126,7 +126,7 @@ const app_state = &App{
 }
 
 fn page_color(dark bool) u32 {
-	return if dark { 0x111827 } else { 0xeef2f7 }
+	return if dark { u32(0x111827) } else { u32(0xeef2f7) }
 }
 
 fn heading(text string, x f64, y f64, theme ui2.ComponentTheme) ui2.Element {

@@ -84,7 +84,7 @@ const slide_specs = [
 
 fn slide_card(spec SlideSpec, compact bool, theme ui2.ComponentTheme, dark bool) ui2.Element {
 	bg := if dark { spec.dark } else { spec.light }
-	ink := if dark { 0xf8fafc } else { spec.ink }
+	ink := if dark { u32(0xf8fafc) } else { spec.ink }
 	sub := if dark { theme.muted_foreground } else { 0x475569 }
 	if compact {
 		return ui2.view('', ui2.rect(0, 0, 0, 0), ui2.BoxStyle{

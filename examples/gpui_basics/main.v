@@ -171,7 +171,7 @@ fn lake_pixel(x int, y int) u32 {
 		if fy > far_ridge {
 			return mix(0x6b5b95, 0x4c3f73, (fy - far_ridge) / 50)
 		}
-		glow := math.max(0, 1 - sun / 140) * 0.5
+		glow := math.max(0.0, 1.0 - sun / 140.0) * 0.5
 		return mix(mix(0x1e3a8a, 0xf59e0b, fy / horizon), 0xfde68a, glow)
 	}
 	depth := (fy - horizon) / (270 - horizon)

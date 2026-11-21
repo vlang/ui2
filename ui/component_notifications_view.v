@@ -333,8 +333,8 @@ fn notification_icon(n Notification, frame Rect, theme ComponentTheme) ?Element 
 	if notification_kind_symbols_known() {
 		return notification_symbol(name, frame, color)
 	}
-	glyph, scale := notification_kind_glyph(n.kind)
-	return notification_ring_glyph(glyph, scale, frame, color, theme.background)
+	glyph, glyph_scale := notification_kind_glyph(n.kind)
+	return notification_ring_glyph(glyph, glyph_scale, frame, color, theme.background)
 }
 
 fn notification_card(config NotificationStackConfig, entry NotificationEntry, layout NotificationCardLayout) Element {

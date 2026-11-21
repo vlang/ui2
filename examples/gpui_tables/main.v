@@ -362,7 +362,7 @@ fn people_config(state &Gallery) ui2.DataTableConfig {
 						text: '${count_text(count)} people'
 						bold: true
 					}, ui2.TableCell{}, ui2.TableCell{}, ui2.TableCell{}, ui2.TableCell{
-						text: '$${total / 1e6:.2f}M'
+						text: '$' + '${total / 1e6:.2f}M'
 						bold: true
 					}, ui2.TableCell{
 						text: 'average ${int(progress / f64(state.people.len))}%'

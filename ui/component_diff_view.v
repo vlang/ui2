@@ -870,10 +870,12 @@ fn (b &DiffBuild) line_row(r int, row DiffRow, y f64, height f64, mut cells map[
 		if row.pair >= 0 {
 			partner := s.files[row.file].hunks[row.hunk].lines[row.pair]
 			partner_text := diff_display_text(partner.text)
-			old_ranges, new_ranges := if line.kind == .removed {
-				b.inline(display, partner_text)
+			mut old_ranges := []DiffInlineRange{}
+			mut new_ranges := []DiffInlineRange{}
+			if line.kind == .removed {
+				old_ranges, new_ranges = b.inline(display, partner_text)
 			} else {
-				b.inline(partner_text, display)
+				old_ranges, new_ranges = b.inline(partner_text, display)
 			}
 			ranges = if line.kind == .removed { old_ranges } else { new_ranges }
 		}
@@ -1146,9 +1148,9 @@ fn (b &DiffBuild) file_header(r int, row DiffRow, y f64, height f64) Element {
 	pill_h := math.round(m.text_size + 6)
 	status_text, status_tone := diff_status_badge(s, row.file)
 	tone_color := diff_tone_color(b.config.theme, status_tone)
-	badge, badge_w := b.pill(status_text, right, (h - pill_h) / 2, pill_h, tone_color,
+	badge_el, badge_w := b.pill(status_text, right, (h - pill_h) / 2, pill_h, tone_color,
 		choice_mix(c.header, tone_color, 0.16), 'status')
-	children << badge
+	children << badge_el
 	right -= badge_w + 10
 	total := file.additions + file.deletions
 	if total > 0 {

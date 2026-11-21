@@ -470,7 +470,7 @@ fn progress_card(variant ui2.ComponentThemeVariant, frame ui2.Rect) !ui2.Element
 	bar_width := frame.width - 32 - 96
 	mut children := []ui2.Element{}
 	for index, value in [64.0, 38] {
-		y := 46.0 + index * 34
+		y := 46.0 + f64(index) * 34.0
 		tone := if index == 0 { ui2.ComponentTone.primary } else { .success }
 		children << caption(['Upload', 'Sync'][index], ui2.rect(16, y - 6, 120, 15), theme)
 		children << caption('${int(value)}%', ui2.rect(16 + bar_width - 40, y - 6, 40, 15), theme)

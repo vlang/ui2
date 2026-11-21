@@ -198,7 +198,7 @@ fn demo_chart(code string, frame ui2.Rect, theme ui2.ComponentTheme) ui2.Element
 	pad := 14.0
 	chart_h := frame.height - 2 * pad - 36
 	slot := if values.len > 0 { (frame.width - 2 * pad) / f64(values.len) } else { 0.0 }
-	bar_w := math.min(48, slot * 0.6)
+	bar_w := math.min(48.0, slot * 0.6)
 	small := ui2.TextStyle{
 		color: theme.muted_foreground
 		size:  12

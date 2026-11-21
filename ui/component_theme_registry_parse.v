@@ -887,7 +887,7 @@ pub fn component_theme_set_from_json(source string) !ComponentThemeSet {
 		else { return error('theme JSON is not an object') }
 	}
 	mut entries := []json2.Any{}
-	if themes := object['themes'] {
+	if mut themes := object['themes'] {
 		entries = match themes {
 			[]json2.Any { themes }
 			else { return error('theme JSON "themes" is not an array') }

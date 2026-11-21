@@ -167,23 +167,23 @@ fn image_size_checked(width i64, height i64) ?ImageSize {
 }
 
 fn basics_be32(b []u8, at int) i64 {
-	return (i64(b[at]) << 24) | (i64(b[at + 1]) << 16) | (i64(b[at + 2]) << 8) | i64(b[at + 3])
+	return i64((u64(b[at]) << 24) | (u64(b[at + 1]) << 16) | (u64(b[at + 2]) << 8) | u64(b[at + 3]))
 }
 
 fn basics_be16(b []u8, at int) i64 {
-	return (i64(b[at]) << 8) | i64(b[at + 1])
+	return i64((u64(b[at]) << 8) | u64(b[at + 1]))
 }
 
 fn basics_le16(b []u8, at int) i64 {
-	return i64(b[at]) | (i64(b[at + 1]) << 8)
+	return i64(u64(b[at]) | (u64(b[at + 1]) << 8))
 }
 
 fn basics_le24(b []u8, at int) i64 {
-	return i64(b[at]) | (i64(b[at + 1]) << 8) | (i64(b[at + 2]) << 16)
+	return i64(u64(b[at]) | (u64(b[at + 1]) << 8) | (u64(b[at + 2]) << 16))
 }
 
 fn basics_le32(b []u8, at int) i64 {
-	return i64(b[at]) | (i64(b[at + 1]) << 8) | (i64(b[at + 2]) << 16) | (i64(b[at + 3]) << 24)
+	return i64(u64(b[at]) | (u64(b[at + 1]) << 8) | (u64(b[at + 2]) << 16) | (u64(b[at + 3]) << 24))
 }
 
 // image_webp_size reads the first chunk of a WebP file: lossy (VP8), lossless
@@ -198,12 +198,12 @@ fn image_webp_size(head []u8) ?ImageSize {
 			if head[20] != 0x2f {
 				return none
 			}
-			b1 := i64(head[22])
-			b2 := i64(head[23])
-			b3 := i64(head[24])
-			width := 1 + (i64(head[21]) | ((b1 & 0x3f) << 8))
+			b1 := u64(head[22])
+			b2 := u64(head[23])
+			b3 := u64(head[24])
+			width := 1 + (u64(head[21]) | ((b1 & 0x3f) << 8))
 			height := 1 + ((b1 >> 6) | (b2 << 2) | ((b3 & 0x0f) << 10))
-			return image_size_checked(width, height)
+			return image_size_checked(i64(width), i64(height))
 		}
 		'VP8X' {
 			return image_size_checked(1 + basics_le24(head, 24), 1 + basics_le24(head, 27))

@@ -9,6 +9,15 @@ const pc_specs_width = 720
 const pc_specs_height = 480
 const pc_specs_vml_source = $embed_file('pc_specs.vml').to_string()
 
+// exec_checked runs args and returns the result only when the command succeeds.
+fn exec_checked(args []string) ?os.Result {
+	res := os.exec(args)
+	if res.exit_code != 0 {
+		return none
+	}
+	return res
+}
+
 pub struct SpecRow {
 pub:
 	label string
@@ -48,24 +57,24 @@ fn cpu_model() string {
 		return 'Unknown'
 	}
 	$if macos {
-		return os.exec_opt(['sysctl', '-n', 'machdep.cpu.brand_string']) or {
+		return exec_checked(['sysctl', '-n', 'machdep.cpu.brand_string']) or {
 			return 'Unknown'
 		}.output.trim_space()
 	}
 	$if windows {
-		return os.exec_opt(['powershell', '-NoProfile', '-Command',
+		return exec_checked(['powershell', '-NoProfile', '-Command',
 			'(Get-CimInstance Win32_Processor).Name']) or {
 			return 'Unknown'
 		}.output.trim_space()
 	}
 	$if freebsd || netbsd || dragonfly || openbsd {
-		return os.exec_opt(['sysctl', '-n', 'hw.model']) or {
+		return exec_checked(['sysctl', '-n', 'hw.model']) or {
 			return 'Unknown'
 		}.output.trim_space()
 	}
 	$if solaris {
 		// kstat reports the CPU brand; the value follows the key and a tab.
-		out := os.exec_opt(['kstat', '-p', 'cpu_info:0:cpu_info0:brand']) or {
+		out := exec_checked(['kstat', '-p', 'cpu_info:0:cpu_info0:brand']) or {
 			return 'Unknown'
 		}
 		fields := out.output.trim_space().split('\t')
@@ -92,20 +101,20 @@ fn total_memory() u64 {
 		return 0
 	}
 	$if macos {
-		return os.exec_opt(['sysctl', '-n', 'hw.memsize']) or { return 0 }.output.trim_space().u64()
+		return exec_checked(['sysctl', '-n', 'hw.memsize']) or { return 0 }.output.trim_space().u64()
 	}
 	$if windows {
-		return os.exec_opt(['powershell', '-NoProfile', '-Command',
+		return exec_checked(['powershell', '-NoProfile', '-Command',
 			'(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory']) or {
 			return 0
 		}.output.trim_space().u64()
 	}
 	$if freebsd || netbsd || dragonfly || openbsd {
-		return os.exec_opt(['sysctl', '-n', 'hw.physmem']) or { return 0 }.output.trim_space().u64()
+		return exec_checked(['sysctl', '-n', 'hw.physmem']) or { return 0 }.output.trim_space().u64()
 	}
 	$if solaris {
 		// system_pages:physmem counts pages; the page size turns them into bytes.
-		out := os.exec_opt(['kstat', '-p', 'unix:0:system_pages:physmem']) or {
+		out := exec_checked(['kstat', '-p', 'unix:0:system_pages:physmem']) or {
 			return 0
 		}
 		fields := out.output.trim_space().split('\t')

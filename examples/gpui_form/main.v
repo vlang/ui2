@@ -929,7 +929,7 @@ fn newsletter_config(a &FormDemo) ui2.FormFieldConfig {
 // ── Build ───────────────────────────────────────────────────────────
 
 fn page_color(a &FormDemo) u32 {
-	return if a.dark { 0x0f172a } else { 0xf1f5f9 }
+	return if a.dark { u32(0x0f172a) } else { u32(0xf1f5f9) }
 }
 
 fn card(x f64, y f64, w f64, h f64, title string, note string, theme ui2.ComponentTheme) []ui2.Element {
