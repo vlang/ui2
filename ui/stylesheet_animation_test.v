@@ -1,5 +1,7 @@
 module ui2
 
+import math
+
 // Parse: @keyframes + transition/animation shorthands and atomic forms.
 fn test_stylesheet_animation_parse() {
 	sheet := parse_stylesheet('
@@ -61,6 +63,38 @@ fn test_stylesheet_animation_cubic_bezier() {
 	el := apply_stylesheet(button('b', 'hi', rect(0, 0, 10, 10), BoxStyle{}, TextStyle{}), sheet, StyleMatchEnv{})
 	assert el.style_transitions.len == 1
 	assert voidptr(el.style_transitions[0].timing_fn) != unsafe { nil }
+}
+
+fn test_stylesheet_animation_longhand_keywords_ignore_case() {
+	sheet := parse_stylesheet('View {
+		animation-name: Fade, NONE;
+		animation-duration: 1s;
+		animation-iteration-count: INFINITE;
+		animation-direction: REVERSE;
+		animation-fill-mode: BOTH;
+		animation-play-state: PAUSED;
+	}')!
+	el := apply_stylesheet(view('target', rect(0, 0, 10, 10), BoxStyle{}, []), sheet, StyleMatchEnv{})
+	spec := el.style_animations[0]
+	assert spec.name == 'Fade'
+	assert spec.infinite
+	assert spec.direction == 'reverse'
+	assert spec.fill_mode == 'both'
+	assert spec.play_state == 'paused'
+	assert el.style_animations[1].name == ''
+}
+
+fn test_stylesheet_cubic_bezier_handles_flat_derivatives() {
+	// x(u) = u^3: u = 0.01 at x = 0.000001.
+	start := parse_cubic_bezier('cubic-bezier(0, 1, 0, 1)') or { panic('invalid curve') }
+	assert start(0) == 0
+	assert start(1) == 1
+	assert math.abs(start(0.000001) - 0.029701) < 0.0000001
+	end := parse_cubic_bezier('cubic-bezier(1, 0, 1, 0)') or { panic('invalid curve') }
+	assert math.abs(end(0.999999) - 0.970299) < 0.0000001
+	// x'(u) vanishes inside the interval at u = 0.5.
+	middle := parse_cubic_bezier('cubic-bezier(1, 0, 0, 1)') or { panic('invalid curve') }
+	assert math.abs(middle(0.500004) - 0.514998) < 0.0000001
 }
 
 // Driver: a property change between builds starts a transition run.

@@ -39,7 +39,11 @@ fn build() ui2.Element {
 
 fn main() {
 	ui2.set_global_stylesheet(ui2.parse_stylesheet(demo_sheet) or { panic(err) })
-	ui2.run_window('VSS animations', demo_width, demo_height, build, handle_event)
+	$if ios {
+		ui2.run(build, handle_event)
+	} $else {
+		ui2.run_window('VSS animations', demo_width, demo_height, build, handle_event)
+	}
 }
 
 fn handle_event(event string) {

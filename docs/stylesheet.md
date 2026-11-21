@@ -695,6 +695,11 @@ values; pausing and resuming preserves elapsed time. Multiple comma-separated
 animations run independently. Finite iteration counts, including fractional
 counts, do not allocate copies of their keyframes.
 
+Animation keywords are case-insensitive; keyframe names are case-sensitive.
+Changes to scoped keyframes, resolved variables, and implicit endpoint values
+update an existing animation without restarting its clock. When a name appears
+more than once, changes to the list preserve matching timelines from the end.
+
 ### Non-goals (v1)
 
 Layout selectors, `!important`, and container units

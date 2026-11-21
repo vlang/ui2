@@ -63,7 +63,9 @@ fn resolve_style_transitions(values map[string]string) []StyleTransition {
 		} else {
 			StyleTransition{ properties: ['all'], duration: 0.2, timing: .out_cubic }
 		}
-		if prop := style_list_value(values, 'transition-property', i) { entry.properties = [prop] }
+		if prop := style_list_value(values, 'transition-property', i) {
+			entry.properties = [prop.to_lower()]
+		}
 		if raw := style_list_value(values, 'transition-duration', i) {
 			entry.duration = parse_time_seconds(raw) or { entry.duration }
 		}
@@ -100,7 +102,7 @@ fn parse_transition_shorthand(value string) []StyleTransition {
 				tr.timing = .linear
 				tr.timing_fn = f
 			} else {
-				tr.properties = [token.trim_space()]
+				tr.properties = [token.trim_space().to_lower()]
 			}
 		}
 		if tr.duration >= 0 { out << tr }
@@ -117,7 +119,7 @@ fn resolve_style_animations(values map[string]string) []StyleAnimation {
 	for i in 0 .. count {
 		mut entry := if base.len > 0 { base[i % base.len] } else { default_style_animation() }
 		if raw := style_list_value(values, 'animation-name', i) {
-			entry.name = if raw == 'none' { '' } else { raw }
+			entry.name = if raw.to_lower() == 'none' { '' } else { raw }
 		}
 		if raw := style_list_value(values, 'animation-duration', i) {
 			entry.duration = parse_time_seconds(raw) or { entry.duration }
@@ -135,16 +137,22 @@ fn resolve_style_animations(values map[string]string) []StyleAnimation {
 			}
 		}
 		if raw := style_list_value(values, 'animation-iteration-count', i) {
-			entry.iteration_count = if raw == 'infinite' {
+			entry.iteration_count = if raw.to_lower() == 'infinite' {
 				0.0
 			} else {
 				query_plain_number(raw) or { 1.0 }
 			}
-			entry.infinite = raw == 'infinite'
+			entry.infinite = raw.to_lower() == 'infinite'
 		}
-		if raw := style_list_value(values, 'animation-direction', i) { entry.direction = raw }
-		if raw := style_list_value(values, 'animation-fill-mode', i) { entry.fill_mode = raw }
-		if raw := style_list_value(values, 'animation-play-state', i) { entry.play_state = raw }
+		if raw := style_list_value(values, 'animation-direction', i) {
+			entry.direction = raw.to_lower()
+		}
+		if raw := style_list_value(values, 'animation-fill-mode', i) {
+			entry.fill_mode = raw.to_lower()
+		}
+		if raw := style_list_value(values, 'animation-play-state', i) {
+			entry.play_state = raw.to_lower()
+		}
 		out << entry
 	}
 	return out
@@ -305,20 +313,23 @@ fn parse_cubic_bezier(tok string) ?AnimationTransitionFn {
 
 fn cubic_bezier_easing(x1 f64, y1 f64, x2 f64, y2 f64) AnimationTransitionFn {
 	return fn [x1, y1, x2, y2] (t f64) f64 {
-		// Newton-Raphson to find u with bezier_x(u) = t
+		if t <= 0 { return 0 }
+		if t >= 1 { return 1 }
+		// Keep Newton steps bracketed. Flat derivatives can otherwise send a
+		// step to an endpoint and leave a large error after eight iterations.
+		mut low := 0.0
+		mut high := 1.0
 		mut u := t
-		for _ in 0 .. 8 {
+		for _ in 0 .. 40 {
 			x := bezier_component(u, x1, x2) - t
+			if x == 0 || high - low < 0.000000000001 { break }
+			if x < 0 { low = u } else { high = u }
 			dx := bezier_derivative(u, x1, x2)
-			if dx == 0 {
-				break
-			}
-			u -= x / dx
-			if u < 0 {
-				u = 0
-			}
-			if u > 1 {
-				u = 1
+			candidate := if dx > 0 { u - x / dx } else { -1.0 }
+			u = if candidate > low && candidate < high {
+				candidate
+			} else {
+				(low + high) / 2
 			}
 		}
 		return bezier_component(u, y1, y2)

@@ -25,6 +25,73 @@ fn style_reg_frame(active bool, now i64) Element {
 
 const style_reg_fade = '@keyframes fade { from { opacity: 0; } to { opacity: 1; } }'
 
+fn test_style_running_keyframes_pick_up_variable_changes_without_restarting() {
+	style_reg_reset('@keyframes fade { from { opacity: 0; } to { opacity: var(--alpha); } }
+		View { --alpha: 0.2; animation: fade 1s linear forwards; }
+		View.active { --alpha: 0.8; }')
+	defer { style_reg_cleanup() }
+	initial := style_reg_frame(false, 0)
+	assert apply_widget_animations_at(initial, 500).box.opacity == 0.1
+	updated := style_reg_frame(true, 500)
+	assert apply_widget_animations_at(updated, 500).box.opacity == 0.4
+	assert apply_widget_animations_at(updated, 1000).box.opacity == 0.8
+	// Filled animations also keep tracking their computed keyframe values.
+	filled := style_reg_frame(false, 1500)
+	assert apply_widget_animations_at(filled, 1500).box.opacity == 0.2
+	assert !custom_animations_need_frame(filled)
+}
+
+fn test_style_scoped_keyframe_changes_update_and_remove_existing_tracks() {
+	style_reg_reset('View { animation: fade 1s linear forwards; }')
+	defer { style_reg_cleanup() }
+	base := view('target', rect(0, 0, 100, 40), BoxStyle{}, [])
+	initial := Element{ ...base, stylesheet: parse_stylesheet(style_reg_fade)! }
+	style_animation_drive_at(apply_stylesheet(initial, global_stylesheet(), StyleMatchEnv{}), 0)
+	updated := Element{ ...base, stylesheet: parse_stylesheet('@keyframes fade { from { opacity: 0; } to { opacity: 0.6; } }')! }
+	styled := apply_stylesheet(updated, global_stylesheet(), StyleMatchEnv{})
+	style_animation_drive_at(styled, 500)
+	assert apply_widget_animations_at(styled, 500).box.opacity == 0.3
+	plain := apply_stylesheet(base, global_stylesheet(), StyleMatchEnv{})
+	style_animation_drive_at(plain, 600)
+	assert apply_widget_animations_at(plain, 600).box.opacity == 1
+	assert 'target' !in animation_runtime().style_runs
+}
+
+fn test_style_implicit_keyframe_endpoints_follow_underlying_changes() {
+	style_reg_reset('@keyframes fade { to { opacity: 0; } }
+		View { opacity: 0.8; animation: fade 1s linear; }
+		View.active { opacity: 0.4; }')
+	defer { style_reg_cleanup() }
+	initial := style_reg_frame(false, 0)
+	assert apply_widget_animations_at(initial, 500).box.opacity == 0.4
+	updated := style_reg_frame(true, 500)
+	assert apply_widget_animations_at(updated, 500).box.opacity == 0.2
+}
+
+fn test_style_repeated_names_match_existing_timelines_from_the_end() {
+	style_reg_reset(style_reg_fade + ' View { animation: fade 1s linear forwards; }
+		View.active { animation: fade 2s linear forwards, fade 1s linear forwards; }')
+	defer { style_reg_cleanup() }
+	_ = style_reg_frame(false, 0)
+	updated := style_reg_frame(true, 500)
+	assert apply_widget_animations_at(updated, 500).box.opacity == 0.5
+	assert apply_widget_animations_at(updated, 750).box.opacity == 0.75
+	// Removing a duplicate must retain the last matching clock too.
+	single := style_reg_frame(false, 750)
+	assert apply_widget_animations_at(single, 750).box.opacity == 0.75
+}
+
+fn test_style_transition_all_ignores_case_in_shorthand_and_longhand() {
+	for transition in ['transition: ALL 1s linear;',
+		'transition-property: ALL; transition-duration: 1s; transition-timing-function: linear;'] {
+		style_reg_reset('View { ' + transition + ' } View.active { opacity: 0; }')
+		_ = style_reg_frame(false, 0)
+		updated := style_reg_frame(true, 0)
+		assert apply_widget_animations_at(updated, 500).box.opacity == 0.5
+	}
+	style_reg_cleanup()
+}
+
 fn test_style_keyframes_apply_from_and_repeat_two_stop_animations() {
 	style_reg_reset(style_reg_fade + ' View { animation: fade 1s linear infinite; }')
 	defer { style_reg_cleanup() }
