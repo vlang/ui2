@@ -115,10 +115,31 @@ fn test_vml_scaffold_routes_slots() {
 	assert el.children[0].children[0].text == 'Title'
 	assert el.children[1].frame == rect(0, 56, 400, 680)
 	assert el.children[2].frame == rect(0, 736, 400, 64)
+	// Bottom children resolve against the slot-local rect; the bar wrapper
+	// supplies the absolute y, so the child's y stays at zero.
+	assert el.children[2].children[0].frame == rect(0, 0, 400, 64)
 	assert el.children[3].frame == rect(328, 664, 56, 56)
 }
 
-fn test_vml_scaffold_rejects_duplicate_and_unknown_slots() {
+fn test_vml_scaffold_preserves_box_styling() {
+	el := element_from_vml('Scaffold {
+		corner_radius: 12
+		border_width: 2
+		background: "#112233"
+		Label {
+			text: "Body"
+		}
+	}', rect(0, 0, 300, 200)) or { panic(err) }
+	assert !el.box.transparent
+	assert el.box.bg == 0x112233
+	assert el.box.radius == 12
+	assert el.box.border_left == 2
+	assert el.box.border_top == 2
+	assert el.box.border_right == 2
+	assert el.box.border_bottom == 2
+}
+
+fn test_vml_scaffold_rejects_duplicate_fab() {
 	element_from_vml('Scaffold {
 		Button {
 			slot: fab
@@ -133,6 +154,9 @@ fn test_vml_scaffold_rejects_duplicate_and_unknown_slots() {
 		return
 	}
 	assert false
+}
+
+fn test_vml_scaffold_rejects_unknown_slot() {
 	element_from_vml('Scaffold {
 		Label {
 			slot: sidebar

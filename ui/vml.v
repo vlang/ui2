@@ -986,8 +986,8 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 			content_box := scaffold_content_rect(local, top, bottom)
 			top_bar, content, bottom_bar, fab, snackbar := v_scaffold_slots(node, rect(0,
 				0, local.width, top), rect(0, 0, content_box.width, content_box.height),
-				rect(0, content_box.y + content_box.height, local.width, bottom))!
-			return scaffold(ScaffoldConfig{
+				rect(0, 0, local.width, bottom))!
+			base := scaffold(ScaffoldConfig{
 				id:                node.id
 				frame:             frame
 				top_bar_height:    top
@@ -1005,6 +1005,13 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 				floating_action:   fab
 				snackbar:          snackbar
 			})!
+			// ScaffoldConfig only carries a background colour; keep the node's
+			// own box styling (corner radius, borders, background) on the outer
+			// element instead of dropping it on the floor.
+			return Element{
+				...base
+				box: v_box(node)
+			}
 		}
 		'ProgressBar' {
 			return progress_bar(
