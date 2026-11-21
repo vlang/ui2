@@ -136,17 +136,26 @@ fn walk_style_animations(current Element, ancestor_sheets []Stylesheet, now i64,
 		}
 		mut next := []StyleKeyframeRun{}
 		mut used := map[int]bool{}
-		for slot, spec in current.style_animations {
+		// CSS matches repeated names from the end, retaining the last existing
+		// clock when an earlier duplicate is inserted or removed.
+		for slot := current.style_animations.len - 1; slot >= 0; slot-- {
+			spec := current.style_animations[slot]
 			if spec.name.len == 0 || spec.name == 'none' || spec.duration <= 0
 				|| (!spec.infinite && spec.iteration_count <= 0) {
 				continue
 			}
+			keyframes := find_keyframes(sheets, spec.name) or { continue }
+			tracks := build_keyframe_tracks(sheets, keyframes, current)
+			if tracks.len == 0 { continue }
 			mut found := false
-			for previous_index, previous in state.animations {
+			for previous_index := state.animations.len - 1; previous_index >= 0; previous_index-- {
+				previous := state.animations[previous_index]
 				if previous_index in used || previous.name != spec.name { continue }
 				used[previous_index] = true
-				mut run := StyleKeyframeRun{ ...previous, slot: slot }
-				if previous.spec != spec {
+				// Re-resolve computed keyframe values on each build so variable,
+				// scope and underlying-value changes take effect without a restart.
+				mut run := StyleKeyframeRun{ ...previous, slot: slot, tracks: tracks }
+				if previous.spec != spec || previous.tracks != tracks {
 					run.finished = false
 					changed = true
 				}
@@ -161,25 +170,21 @@ fn walk_style_animations(current Element, ancestor_sheets []Stylesheet, now i64,
 				}
 				run.paused = paused
 				run.spec = spec
-				next << run
+				next.prepend(run)
 				found = true
 				break
 			}
 			if found { continue }
-			if keyframes := find_keyframes(sheets, spec.name) {
-				tracks := build_keyframe_tracks(sheets, keyframes, current)
-				if tracks.len == 0 { continue }
-				next << StyleKeyframeRun{
-					name:       spec.name
-					slot:       slot
-					spec:       spec
-					tracks:     tracks
-					started_at: now
-					paused_at:  now
-					paused:     spec.play_state == 'paused'
-				}
-				changed = true
-			}
+			next.prepend(StyleKeyframeRun{
+				name:       spec.name
+				slot:       slot
+				spec:       spec
+				tracks:     tracks
+				started_at: now
+				paused_at:  now
+				paused:     spec.play_state == 'paused'
+			})
+			changed = true
 		}
 		if next.len != state.animations.len { changed = true }
 		state.animations = next
