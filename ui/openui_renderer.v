@@ -8,6 +8,12 @@ module ui2
 pub type OpenuiActionHandler = fn (event OpenuiActionEvent)
 pub type OpenuiErrorHandler = fn (errors []OpenuiError)
 
+// A single node reference can expand to two children, so a short program can
+// otherwise build exponentially many Elements. Bound both fan-out and depth.
+const openui_max_render_nodes = 512
+const openui_max_render_depth = 32
+const openui_max_query_cache_entries = 128
+
 // openui_default_live_text reads the live control value. It returns ''
 // for ids with no mounted control, which includes every headless render.
 
@@ -64,6 +70,15 @@ mut:
 	// the response's current defaults. Reset clears the dirty mark.
 	dirty     map[string]bool
 	last_info OpenuiRenderInfo
+	// last_good_response is replayed when a streaming chunk is truncated
+	// mid-token; the completed prefix stays on screen until it parses.
+	last_good_response string
+	// query_cache memoizes tool calls by tool name + effective arguments.
+	// Queries in later renders (including Reset/Run's re-evaluation) reuse
+	// the value until an argument changes or @Run refetches explicitly.
+	query_cache     map[string]OpenuiValue
+	render_nodes    int
+	render_overflow bool
 }
 
 pub fn new_openui_renderer(library OpenuiLibrary) OpenuiRenderer {
@@ -74,6 +89,8 @@ pub fn new_openui_renderer(library OpenuiLibrary) OpenuiRenderer {
 
 pub fn (mut renderer OpenuiRenderer) set_tool(name string, tool OpenuiToolFn) {
 	renderer.tools[name] = tool
+	// A replacement tool must not inherit memoized results from the old one.
+	renderer.query_cache = map[string]OpenuiValue{}
 }
 
 pub fn (mut renderer OpenuiRenderer) set_function(name string, func OpenuiFuncImpl) {
@@ -108,31 +125,126 @@ fn (renderer &OpenuiRenderer) form_state() map[string]OpenuiValue {
 	return renderer.state.clone()
 }
 
+// Cache keys are canonical so two renders with the same effective tool
+// arguments share one result, while any changed argument refetches.
+
+fn openui_value_cache_key(value OpenuiValue) string {
+	mut key := value.kind.str() + ':'
+	match value.kind {
+		.string_, .bind {
+			key += value.text
+		}
+		.number {
+			key += value.number.str()
+		}
+		.bool_ {
+			key += value.bool_.str()
+		}
+		.list {
+			for item in value.items {
+				key += '[' + openui_value_cache_key(item) + ']'
+			}
+		}
+		.object {
+			mut fields := value.fields.keys()
+			fields.sort()
+			for field in fields {
+				item := value.fields[field] or { openui_null() }
+				key += field + '=' + openui_value_cache_key(item) + ';'
+			}
+		}
+		.action {
+			for step in value.steps {
+				key += step.name + '('
+				for arg in step.args {
+					key += openui_value_cache_key(arg) + ','
+				}
+				key += ');'
+			}
+		}
+		.null_, .invalid {}
+	}
+	return key
+}
+
+fn openui_args_cache_key(args map[string]OpenuiValue) string {
+	mut keys := args.keys()
+	keys.sort()
+	mut parts := []string{cap: keys.len}
+	for key in keys {
+		value := args[key] or { openui_null() }
+		parts << '${key}=${openui_value_cache_key(value)}'
+	}
+	return parts.join('&')
+}
+
+// eval_scope builds a fresh evaluation scope whose tools memoize by
+// arguments. Every render, Reset, and Run re-evaluates the program, but only
+// a Query with new arguments reaches the host tool again.
+
+fn (mut renderer OpenuiRenderer) eval_scope() OpenuiScope {
+	mut scope := new_openui_scope(renderer.library)
+	mut cache := renderer.query_cache
+	for name, tool in renderer.tools {
+		scope.tools[name] = fn [mut cache, name, tool] (args map[string]OpenuiValue) OpenuiValue {
+			key := name + '|' + openui_args_cache_key(args)
+			if cached := cache[key] {
+				return cached
+			}
+			value := tool(args)
+			if cache.len < openui_max_query_cache_entries {
+				cache[key] = value
+			}
+			return value
+		}
+	}
+	scope.funcs = renderer.funcs.clone()
+	return scope
+}
+
+fn (mut renderer OpenuiRenderer) report_errors(errors []OpenuiError) {
+	if !renderer.streaming {
+		renderer.on_error(errors)
+	}
+}
+
 // render parses, evaluates, and maps the root node to an `Element`. It never
 // fails: problems come back as errors plus a fallback element.
+
+fn (mut renderer OpenuiRenderer) parse_failure(message string) (Element, OpenuiRenderInfo) {
+	info := OpenuiRenderInfo{
+		errors: [OpenuiError{
+			code:    openui_err_parse_failed
+			message: message
+		}]
+	}
+	renderer.last_info = info
+	renderer.report_errors(info.errors)
+	return renderer.fallback('No UI yet'), info
+}
 
 pub fn (mut renderer OpenuiRenderer) render() (Element, OpenuiRenderInfo) {
 	renderer.action_slots = map[string][]OpenuiActionCall{}
 	renderer.input_bindings = map[string]string{}
 	renderer.action_seq = 0
 	renderer.node_seq = 0
+	renderer.render_nodes = 0
+	renderer.render_overflow = false
 	content := strip_openui_markers(renderer.response)
 	statements := parse_openui_program(content) or {
-		info := OpenuiRenderInfo{
-			errors: [OpenuiError{
-				code:    openui_err_parse_failed
-				message: err.msg()
-			}]
+		// A token stream frequently ends inside a string or call. Replay the
+		// last complete program while streaming so normal token chunks never
+		// blank a finished layout; the final response still fails strictly.
+		if renderer.streaming && renderer.last_good_response.len > 0 {
+			parse_openui_program(renderer.last_good_response) or {
+				return renderer.parse_failure(err.msg())
+			}
+		} else {
+			return renderer.parse_failure(err.msg())
 		}
-		renderer.last_info = info
-		if !renderer.streaming {
-			renderer.on_error(info.errors)
-		}
-		return renderer.fallback('No UI yet'), info
 	}
-	mut scope := new_openui_scope(renderer.library)
-	scope.tools = renderer.tools.clone()
-	scope.funcs = renderer.funcs.clone()
+	renderer.last_good_response = content
+	mut scope := renderer.eval_scope()
 	// Only user-edited keys survive a re-render, seeded into the fresh
 	// scope. Everything else takes the response's current defaults, so a
 	// revised `$default` applies on the next render while edits persist.
@@ -154,19 +266,25 @@ pub fn (mut renderer OpenuiRenderer) render() (Element, OpenuiRenderInfo) {
 			orphaned: openui_orphaned(statements, scope, renderer.library.root)
 		}
 		renderer.last_info = info
-		if !renderer.streaming {
-			renderer.on_error(info.errors)
-		}
+		renderer.report_errors(info.errors)
 		return renderer.fallback('Nothing to show'), info
 	}
-	element := renderer.render_node(root_value, 0, 0, renderer.width)
+	element := renderer.render_node(root_value, 0, 0, renderer.width, 0)
+	if renderer.render_overflow {
+		errors << OpenuiError{
+			code:      openui_err_runtime
+			message:   'render budget exceeded: too many shared nodes'
+			statement: 'root'
+		}
+	}
 	info := OpenuiRenderInfo{
 		errors:   errors
 		orphaned: openui_orphaned(statements, scope, renderer.library.root)
 	}
 	renderer.last_info = info
-	if !renderer.streaming {
-		renderer.on_error(info.errors)
+	renderer.report_errors(info.errors)
+	if renderer.render_overflow {
+		return renderer.fallback('Too many nodes'), info
 	}
 	return element, info
 }
@@ -206,27 +324,32 @@ fn (mut renderer OpenuiRenderer) find_root(statements []OpenuiStatement, scope O
 fn openui_orphaned(statements []OpenuiStatement, scope OpenuiScope, root_component string) []string {
 	mut reachable := map[string]bool{}
 	mut stack := []string{}
-	if 'root' in scope.values {
+	explicit_root := 'root' in scope.values
+	if explicit_root {
 		stack << 'root'
 	}
-	// Without `root`, seed from the first node calling the root component
-	// (the same rule `find_root` uses), else the entry itself is reported
-	// orphaned. Fall back to the first node of any kind.
-	mut seeded := false
-	for statement in statements {
-		value := scope.values[statement.name] or { continue }
-		if openui_is_node(value) && openui_node_name(value) == root_component {
-			stack << statement.name
-			seeded = true
-			break
-		}
-	}
-	if !seeded {
+	// Fallback seeding applies only when there is no explicit root. Seeding
+	// anyway would mark an unused root-component sibling reachable.
+	if !explicit_root {
+		// Without `root`, seed from the first node calling the root component
+		// (the same rule `find_root` uses), else the entry itself is reported
+		// orphaned. Fall back to the first node of any kind.
+		mut seeded := false
 		for statement in statements {
 			value := scope.values[statement.name] or { continue }
-			if openui_is_node(value) {
+			if openui_is_node(value) && openui_node_name(value) == root_component {
 				stack << statement.name
+				seeded = true
 				break
+			}
+		}
+		if !seeded {
+			for statement in statements {
+				value := scope.values[statement.name] or { continue }
+				if openui_is_node(value) {
+					stack << statement.name
+					break
+				}
 			}
 		}
 	}
@@ -305,15 +428,25 @@ fn openui_expr_refs(expr &OpenuiExpr) []string {
 // render_node maps one evaluated node to an `Element`, stacking slot
 // children vertically inside the component frame.
 
-fn (mut renderer OpenuiRenderer) render_node(value OpenuiValue, x f64, y f64, width f64) Element {
+fn (mut renderer OpenuiRenderer) render_node(value OpenuiValue, x f64, y f64, width f64, depth int) Element {
+	// Shared references can expand exponentially; fail closed instead of
+	// recursing until the process runs out of stack or memory.
+	if renderer.render_nodes >= openui_max_render_nodes || depth > openui_max_render_depth {
+		renderer.render_overflow = true
+		return view('openui_budget', rect(x, y, width, 24), BoxStyle{}, [])
+	}
+	renderer.render_nodes++
 	component := renderer.library.find(openui_node_name(value)) or {
 		return view('openui_unknown', rect(x, y, width, 24), BoxStyle{}, [])
 	}
 	props := openui_node_props(value)
 	slots := openui_node_slots(value)
 	mut kids := []Element{}
-	mut cursor := y + 8
-	inner_x := x + 8
+	// Child frames are relative to their parent in ui2: the backend adds
+	// the parent position when drawing them. Keep both cursor and child
+	// frames local, with only ctx.frame using absolute coordinates.
+	mut cursor := 8.0
+	inner_x := 8.0
 	inner_width := if width > 16 { width - 16 } else { width }
 	for param in component.params {
 		if param.schema.kind != .list {
@@ -324,13 +457,13 @@ fn (mut renderer OpenuiRenderer) render_node(value OpenuiValue, x f64, y f64, wi
 			if !openui_is_node(item) {
 				continue
 			}
-			child := renderer.render_node(item, inner_x, cursor, inner_width)
+			child := renderer.render_node(item, inner_x, cursor, inner_width, depth + 1)
 			cursor += child.frame.height + 8
 			kids << child
 		}
 	}
 	height := if kids.len > 0 {
-		cursor - y + 8
+		cursor + 8
 	} else if height_fn := component.height_for_props {
 		height_fn(props)
 	} else {
@@ -398,12 +531,25 @@ pub fn (mut renderer OpenuiRenderer) root_element() Element {
 	return element
 }
 
+// refresh_action_steps re-evaluates the action expressions against the
+// current state. Arguments are evaluated during the build, so without this
+// a bound control's edit (or an earlier @Set) would never be observed by a
+// later step. Rebuild silently: the host still owns the real refresh.
+
+fn (mut renderer OpenuiRenderer) refresh_action_steps(event_id string, fallback []OpenuiActionCall) []OpenuiActionCall {
+	was_streaming := renderer.streaming
+	renderer.streaming = true
+	_, _ = renderer.render()
+	renderer.streaming = was_streaming
+	return renderer.action_slots[event_id] or { fallback }
+}
+
 // handle_event runs the action steps registered for an event id. It returns
 // true when the id was known. State-changing steps (`@Set`, `@Reset`,
 // `@Run`) mean the host should rebuild, usually via `refresh()`.
 
 pub fn (mut renderer OpenuiRenderer) handle_event(event_id string) bool {
-	steps := renderer.action_slots[event_id] or { []OpenuiActionCall{} }
+	mut steps := renderer.action_slots[event_id] or { []OpenuiActionCall{} }
 	var_key := renderer.input_bindings[event_id] or { '' }
 	if steps.len == 0 && var_key.len == 0 {
 		return false
@@ -415,13 +561,19 @@ pub fn (mut renderer OpenuiRenderer) handle_event(event_id string) bool {
 		renderer.state[var_key] = openui_string(renderer.live_text(event_id))
 		renderer.dirty[var_key] = true
 	}
-	for step in steps {
+	if var_key.len > 0 && steps.len > 0 {
+		steps = renderer.refresh_action_steps(event_id, steps)
+	}
+	for index := 0; index < steps.len; index++ {
+		step := steps[index]
 		match step.name {
 			'Set' {
 				if step.args.len == 2 {
 					key := step.args[0].text
 					renderer.state[key] = step.args[1]
 					renderer.dirty[key] = true
+					// Later steps must see this write, not the pre-event value.
+					steps = renderer.refresh_action_steps(event_id, steps)
 				}
 			}
 			'Reset' {
@@ -432,10 +584,15 @@ pub fn (mut renderer OpenuiRenderer) handle_event(event_id string) bool {
 						renderer.dirty.delete(arg.text)
 					}
 				}
+				steps = renderer.refresh_action_steps(event_id, steps)
 			}
 			'Run' {
 				if step.args.len == 1 {
-					renderer.run_tool(step.args[0].text)
+					if !renderer.run_tool(step.args[0].text) {
+						// A failed tool stops the rest of the sequence.
+						return true
+					}
+					steps = renderer.refresh_action_steps(event_id, steps)
 				}
 			}
 			'ToAssistant' {
@@ -488,47 +645,75 @@ fn (mut renderer OpenuiRenderer) fresh_defaults() map[string]OpenuiValue {
 	mut defaults := map[string]OpenuiValue{}
 	content := strip_openui_markers(renderer.response)
 	statements := parse_openui_program(content) or { return defaults }
-	mut scope := new_openui_scope(renderer.library)
-	scope.tools = renderer.tools.clone()
-	scope.funcs = renderer.funcs.clone()
+	mut scope := renderer.eval_scope()
 	openui_eval_program(statements, mut scope)
 	return scope.state_defaults.clone()
 }
 
-fn (mut renderer OpenuiRenderer) run_tool(name string) {
+fn (mut renderer OpenuiRenderer) report_tool_error(code string, message string, statement string) {
+	renderer.report_errors([OpenuiError{
+		code:      code
+		message:   message
+		statement: statement
+	}])
+}
+
+// run_tool reports execution failures instead of swallowing them, so a
+// failed mutation stops @Run's remaining steps and reaches on_error.
+
+fn (mut renderer OpenuiRenderer) run_tool(name string) bool {
 	content := strip_openui_markers(renderer.response)
-	statements := parse_openui_program(content) or { return }
-	mut scope := new_openui_scope(renderer.library)
-	scope.tools = renderer.tools.clone()
-	scope.funcs = renderer.funcs.clone()
+	statements := parse_openui_program(content) or {
+		renderer.report_tool_error(openui_err_parse_failed, err.msg(), name)
+		return false
+	}
+	mut scope := renderer.eval_scope()
 	for key, _ in renderer.dirty {
 		if value := renderer.state[key] {
 			scope.state_values[key] = value
 		}
 	}
-	// Re-evaluation re-runs Queries with current `$var` args by itself;
-	// a Mutation needs an explicit tool call here.
 	openui_eval_program(statements, mut scope)
 	for key, value in scope.state_values {
 		renderer.state[key] = value
 	}
-	mutation := scope.statements[name] or { return }
-	if mutation.kind != .mutation || mutation.args.len == 0 {
-		return
+	statement := scope.statements[name] or {
+		// @Run on an ordinary statement is a harmless no-op.
+		return true
 	}
-	tool_name := scope.eval_expr(mutation.args[0], name)
+	if statement.kind != .query && statement.kind != .mutation {
+		return true
+	}
+	if statement.args.len == 0 {
+		return true
+	}
+	tool_name := scope.eval_expr(statement.args[0], name)
+	if tool_name.kind != .string_ || tool_name.text.len == 0 {
+		renderer.report_tool_error(openui_err_type_mismatch, 'bad tool name for `${name}`', name)
+		return false
+	}
 	mut plain := map[string]OpenuiValue{}
-	if mutation.args.len > 1 {
-		call_args := scope.eval_expr(mutation.args[1], name)
+	if statement.args.len > 1 {
+		call_args := scope.eval_expr(statement.args[1], name)
 		if call_args.kind == .object {
 			for key, value in call_args.fields {
 				plain[key] = value
 			}
 		}
 	}
-	if tool := scope.tools[tool_name.text] {
-		_ = tool(plain)
+	// Explicit refetch: drop the memo entry so this call reaches the tool,
+	// then cache the fresh value for subsequent renders.
+	cache_key := tool_name.text + '|' + openui_args_cache_key(plain)
+	renderer.query_cache.delete(cache_key)
+	if tool := renderer.tools[tool_name.text] {
+		value := tool(plain)
+		if renderer.query_cache.len < openui_max_query_cache_entries {
+			renderer.query_cache[cache_key] = value
+		}
+		return true
 	}
+	renderer.report_tool_error(openui_err_tool_not_found, 'unknown tool `${tool_name.text}`', name)
+	return false
 }
 
 fn (renderer &OpenuiRenderer) library_action(name string) OpenuiCustomAction {

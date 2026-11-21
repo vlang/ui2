@@ -30,9 +30,13 @@ fn openui_custom_library() ui2.OpenuiLibrary {
 }
 
 fn main() {
+	window_width := 640
 	mut renderer := ui2.new_openui_renderer(openui_custom_library())
+	// Layout must match the window: child frames are local to their parent,
+	// but the root width comes from the renderer, not run_window.
+	renderer.width = window_width
 	renderer.set_response('root = Stack([b])\nb = Badge("generative")', false)
-	ui2.run_window('OpenUI custom', 640, 480, fn [mut renderer] () ui2.Element {
+	ui2.run_window('OpenUI custom', window_width, 480, fn [mut renderer] () ui2.Element {
 		return renderer.root_element()
 	}, fn [mut renderer] (id string) {
 		if renderer.handle_event(id) {

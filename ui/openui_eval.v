@@ -1,5 +1,7 @@
 module ui2
 
+import strconv
+
 // OpenUI Lang evaluator: turns parsed statements into values and nodes.
 //
 // Component calls become node objects (an object carrying `$component`,
@@ -27,6 +29,12 @@ pub const openui_err_parse_failed = 'parse-failed'
 pub const openui_err_runtime = 'runtime-error'
 pub const openui_err_tool_not_found = 'tool-not-found'
 pub const openui_err_tool_error = 'tool-error'
+
+// Bounds for untrusted model output. The parser bounds nesting at 256, but
+// a flat `1 + 1 + ...` chain is built iteratively and creates an equally
+// deep AST, so traversal needs its own limit. Schema lists nest too.
+const openui_max_eval_depth = 512
+const openui_max_schema_depth = 64
 
 pub type OpenuiFuncImpl = fn (args map[string]OpenuiValue) OpenuiValue
 pub type OpenuiToolFn = fn (args map[string]OpenuiValue) OpenuiValue
@@ -140,7 +148,36 @@ fn (mut scope OpenuiScope) fail(code string, statement string, message string) {
 	}
 }
 
+// openui_strict_number is a fallible numeric parse. `string.f64()` silently
+// returns 0 for "abc" and accepts trailing characters ("12abc"), so schema
+// validation must not use it: invalid text has to fail, not pass as zero.
+fn openui_strict_number(text string) ?f64 {
+	trimmed := text.trim_space()
+	if trimmed.len == 0 {
+		return none
+	}
+	mut has_digit := false
+	for c in trimmed.bytes() {
+		if c >= `0` && c <= `9` {
+			has_digit = true
+			break
+		}
+	}
+	// Reject NaN/Inf spellings: a schema number must carry digits.
+	if !has_digit {
+		return none
+	}
+	return strconv.atof64(trimmed) or { return none }
+}
+
 fn openui_check_value(value OpenuiValue, schema OpenuiSchema) bool {
+	return openui_check_value_depth(value, schema, 0)
+}
+
+fn openui_check_value_depth(value OpenuiValue, schema OpenuiSchema, depth int) bool {
+	if depth > openui_max_schema_depth {
+		return false
+	}
 	if value.kind == .null_ || value.kind == .invalid {
 		return schema.optional
 	}
@@ -158,8 +195,8 @@ fn openui_check_value(value OpenuiValue, schema OpenuiSchema) bool {
 			if value.kind == .number {
 				return true
 			}
-			if value.kind == .string_ && value.text.len > 0 {
-				_ := value.text.f64()
+			if value.kind == .string_ {
+				_ = openui_strict_number(value.text) or { return false }
 				return true
 			}
 			return false
@@ -168,7 +205,19 @@ fn openui_check_value(value OpenuiValue, schema OpenuiSchema) bool {
 			return value.kind == .bool_
 		}
 		.list {
-			return value.kind == .list
+			if value.kind != .list {
+				return false
+			}
+			// A list schema is only as valid as its items: `[{}]` must not
+			// satisfy `number[]` just because the outer value is a list.
+			if !isnil(schema.element) {
+				for item in value.items {
+					if !openui_check_value_depth(item, *schema.element, depth + 1) {
+						return false
+					}
+				}
+			}
+			return true
 		}
 		.action {
 			return value.kind == .action
@@ -177,6 +226,9 @@ fn openui_check_value(value OpenuiValue, schema OpenuiSchema) bool {
 			return false
 		}
 		.object {
+			if schema.node_slot {
+				return openui_is_node(value)
+			}
 			return true
 		}
 		.null_ {
@@ -186,6 +238,18 @@ fn openui_check_value(value OpenuiValue, schema OpenuiSchema) bool {
 			return false
 		}
 	}
+}
+
+// openui_node_matches validates a single rendered child, including an
+// optional `.ref` component restriction on the slot.
+fn openui_node_matches(value OpenuiValue, schema OpenuiSchema) bool {
+	if !openui_is_node(value) {
+		return false
+	}
+	if schema.ref_component.len > 0 && openui_node_name(value) != schema.ref_component {
+		return false
+	}
+	return true
 }
 
 fn openui_coerce(value OpenuiValue) OpenuiValue {
@@ -223,17 +287,30 @@ pub fn openui_eval_program(statements []OpenuiStatement, mut scope OpenuiScope) 
 	for statement in statements {
 		scope.statements[statement.name] = statement.expr
 	}
+	// Last definition wins for duplicate `$name` statements. Evaluate each
+	// state once from `statements` (the final definition map) instead of the
+	// original list, or the first duplicate would seed the live value while
+	// the later one only replaced the default.
+	mut state_keys := []string{}
 	for statement in statements {
 		if statement.name.starts_with('\$') {
 			key := statement.name[1..]
-			value := scope.eval_expr(statement.expr, statement.name)
-			scope.state_defaults[key] = value
-			if key !in scope.state_values {
-				scope.state_values[key] = value
+			if key !in state_keys {
+				state_keys << key
 			}
-			scope.values[statement.name] = value
-			scope.resolved[statement.name] = true
 		}
+	}
+	for key in state_keys {
+		name := '\$' + key
+		expr := scope.statements[name] or { continue }
+		value := scope.eval_expr(expr, name)
+		scope.state_defaults[key] = value
+		// An externally seeded (dirty) value survives a revised default.
+		if key !in scope.state_values {
+			scope.state_values[key] = value
+		}
+		scope.values[name] = value
+		scope.resolved[name] = true
 	}
 	for statement in statements {
 		if statement.name.starts_with('\$') {
@@ -262,7 +339,13 @@ fn (mut scope OpenuiScope) eval_statement(name string) OpenuiValue {
 	}
 	expr := scope.statements[name] or { return openui_null() }
 	scope.visiting[name] = true
+	// A referenced statement is its own top-level expression. Inheriting the
+	// caller's nesting would make a forward-referenced `Query` inside a
+	// layout arg look inline and cache null without ever calling the tool.
+	saved_nested := scope.nested
+	scope.nested = 0
 	value := scope.eval_expr(expr, name)
+	scope.nested = saved_nested
 	scope.visiting.delete(name)
 	scope.values[name] = value
 	scope.resolved[name] = true
@@ -276,6 +359,13 @@ fn (mut scope OpenuiScope) eval_expr(expr &OpenuiExpr, statement string) OpenuiV
 	scope.nested++
 	defer {
 		scope.nested--
+	}
+	// The parser's nesting cap does not bound iterative builds such as a
+	// long flat `1 + 1 + ...` chain, which still recurses here. Fail closed
+	// with a runtime error before the native stack is exhausted.
+	if scope.nested > openui_max_eval_depth {
+		scope.fail(openui_err_runtime, statement, 'expression too deep at line ${expr.line}')
+		return openui_null()
 	}
 	match expr.kind {
 		.literal {
@@ -575,6 +665,22 @@ fn (mut scope OpenuiScope) eval_component(name string, args []&OpenuiExpr, line 
 			scope.fail(openui_err_missing_required, statement, 'missing `${param.name}` for `${name}` at line ${line}')
 			return openui_null()
 		}
+		// Binds are validated from their reference syntax, not from the
+		// evaluated value: `$q = null` is still a valid editable field,
+		// not a runtime null that drops the whole component.
+		if param.schema.kind == .bind {
+			arg := args[index]
+			if arg.kind != .state_ref || arg.value.contains('.') {
+				scope.fail(openui_err_type_mismatch, statement, '`${param.name}` wants a `$variable` at line ${line}')
+				return openui_null()
+			}
+			key := arg.value
+			props[param.name] = scope.state_values[key] or {
+				scope.state_defaults[key] or { openui_null() }
+			}
+			binds[param.name] = key
+			continue
+		}
 		raw := scope.eval_expr(args[index], statement)
 		if raw.kind == .null_ || raw.kind == .invalid {
 			if param.schema.optional {
@@ -590,12 +696,14 @@ fn (mut scope OpenuiScope) eval_component(name string, args []&OpenuiExpr, line 
 			continue
 		}
 		if param.schema.kind == .list {
-			needs_node := !isnil(param.schema.element) && param.schema.element.node_slot
+			has_element := !isnil(param.schema.element)
+			element := if has_element { *param.schema.element } else { OpenuiSchema{} }
+			needs_node := has_element && element.node_slot
 			if raw.kind != .list {
 				// A single node is shorthand for a one-child list, but
 				// only where nodes belong. Anywhere else it is a loud
 				// type error, not a silent drop.
-				if openui_is_node(raw) && needs_node {
+				if openui_is_node(raw) && needs_node && openui_node_matches(raw, element) {
 					slots[param.name] = [raw]
 					continue
 				}
@@ -613,7 +721,7 @@ fn (mut scope OpenuiScope) eval_component(name string, args []&OpenuiExpr, line 
 					continue
 				}
 				if openui_is_node(item) {
-					if needs_node {
+					if needs_node && openui_node_matches(item, element) {
 						nodes << item
 					} else {
 						scope.fail(openui_err_type_mismatch, statement, '`${param.name}` takes data, not components, at line ${line}')
@@ -625,7 +733,17 @@ fn (mut scope OpenuiScope) eval_component(name string, args []&OpenuiExpr, line 
 					scope.fail(openui_err_type_mismatch, statement, '`${param.name}` takes components, not data, at line ${line}')
 					return openui_null()
 				}
-				plain << openui_coerce(item)
+				if has_element && !openui_check_value(item, element) {
+					scope.fail(openui_err_type_mismatch, statement, 'bad `${param.name}` item at line ${line}')
+					return openui_null()
+				}
+				// Only numeric item schemas coerce text to numbers: string
+				// lists and enums keep the declared type and text.
+				plain << if has_element && element.kind == .number {
+					openui_coerce(item)
+				} else {
+					item
+				}
 			}
 			if nodes.len > 0 {
 				slots[param.name] = nodes
@@ -635,17 +753,15 @@ fn (mut scope OpenuiScope) eval_component(name string, args []&OpenuiExpr, line 
 			}
 			continue
 		}
-		if param.schema.kind == .bind {
-			arg := args[index]
-			if arg.kind != .state_ref || arg.value.contains('.') {
-				scope.fail(openui_err_type_mismatch, statement, '`${param.name}` wants a `$variable` at line ${line}')
+		if param.schema.node_slot {
+			// A single rendered child is a scalar node slot. It belongs in
+			// `$slots` (not data props) so the renderer attaches it as a
+			// child, with the same node/reference validation as list slots.
+			if !openui_node_matches(raw, param.schema) {
+				scope.fail(openui_err_type_mismatch, statement, '`${param.name}` wants a component at line ${line}')
 				return openui_null()
 			}
-			key := arg.value
-			props[param.name] = scope.state_values[key] or {
-				scope.state_defaults[key] or { openui_null() }
-			}
-			binds[param.name] = key
+			slots[param.name] = [raw]
 			continue
 		}
 		if param.schema.kind == .action {
@@ -668,7 +784,9 @@ fn (mut scope OpenuiScope) eval_component(name string, args []&OpenuiExpr, line 
 			scope.fail(openui_err_type_mismatch, statement, 'bad `${param.name}` for `${name}` at line ${line}')
 			return openui_null()
 		}
-		props[param.name] = openui_coerce(raw)
+		// Coercion is a number-schema concern. TextContent("001") must stay
+		// the string "001", as must string enums and identifiers.
+		props[param.name] = if param.schema.kind == .number { openui_coerce(raw) } else { raw }
 	}
 	if saw_null_runtime {
 		return openui_null()
@@ -1072,7 +1190,13 @@ fn (mut scope OpenuiScope) eval_custom_func(name string, impl OpenuiFuncImpl, ar
 				scope.fail(openui_err_type_mismatch, statement, 'bad `${param.name}` for `@${name}` at line ${line}')
 				return openui_null()
 			}
-			call_args[param.name] = openui_coerce(raw)
+			// Only number params coerce text. A validated string "001" must
+			// reach the host unchanged, not as the number 1.
+			call_args[param.name] = if param.schema.kind == .number {
+				openui_coerce(raw)
+			} else {
+				raw
+			}
 		}
 	} else {
 		for index, arg in args {
@@ -1190,7 +1314,9 @@ fn (mut scope OpenuiScope) eval_custom_action(action OpenuiCustomAction, args []
 		if !openui_check_value(raw, param.schema) {
 			return none
 		}
-		evaluated << openui_coerce(raw)
+		// Preserve validated strings and other non-numbers so a string ID
+		// like "001" is dispatched unchanged to the host action.
+		evaluated << if param.schema.kind == .number { openui_coerce(raw) } else { raw }
 	}
 	return OpenuiActionCall{
 		name: action.name
@@ -1199,11 +1325,24 @@ fn (mut scope OpenuiScope) eval_custom_action(action OpenuiCustomAction, args []
 }
 
 fn (mut scope OpenuiScope) eval_action_list(args []&OpenuiExpr, line int, statement string) OpenuiValue {
+	// `Action([@Set($q, "x"), @ToAssistant("done")])` documents the steps
+	// as one array argument. Unwrap it so each step is wired; `Action([])`
+	// becomes an action with no steps.
+	mut step_args := args
+	mut unwrapped := false
+	if args.len == 1 && args[0].kind == .array {
+		step_args = args[0].args
+		unwrapped = true
+	}
 	mut steps := []OpenuiActionCall{}
-	for arg in args {
+	for arg in step_args {
 		if arg.kind != .at_call {
+			if unwrapped {
+				scope.fail(openui_err_type_mismatch, statement, '`Action` array must contain action steps at line ${line}')
+				return openui_null()
+			}
 			mut plain := []OpenuiValue{}
-			for item in args {
+			for item in step_args {
 				plain << scope.eval_expr(item, statement)
 			}
 			return openui_list(plain)

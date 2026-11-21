@@ -65,8 +65,9 @@ fn demo_on_action(event ui2.OpenuiActionEvent) {
 }
 
 fn main() {
-	state_renderer := &ui2.OpenuiRenderer{
+	mut state_renderer := &ui2.OpenuiRenderer{
 		library: ui2.new_openui_default_library()
+		width:   demo_width
 	}
 	mut state := demo_state
 	state.renderer = state_renderer

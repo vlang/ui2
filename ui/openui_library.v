@@ -1,5 +1,7 @@
 module ui2
 
+import strconv
+
 // OpenUI Lang support: component registry, values, and schemas.
 //
 // OpenUI Lang is the contract between a model and the application: the app
@@ -124,7 +126,21 @@ pub fn (value OpenuiValue) numeric() !f64 {
 		return value.number
 	}
 	if value.kind == .string_ && value.text.len > 0 {
-		return value.text.f64()
+		// `string.f64()` swallows parse errors and accepts trailing junk, so
+		// use the fallible parser: invalid text must not pass as a number.
+		// Require a digit as well, matching schema validation (NaN/Inf are
+		// not numeric props).
+		trimmed := value.text.trim_space()
+		mut has_digit := false
+		for c in trimmed.bytes() {
+			if c >= `0` && c <= `9` {
+				has_digit = true
+				break
+			}
+		}
+		if trimmed.len > 0 && has_digit {
+			return strconv.atof64(trimmed)
+		}
 	}
 	return error('expected a number')
 }
@@ -218,6 +234,7 @@ pub fn openui_optional(schema OpenuiSchema, default_ OpenuiValue) OpenuiSchema {
 		enum_values:   schema.enum_values.clone()
 		ref_component: schema.ref_component
 		optional:      true
+		node_slot:     schema.node_slot
 		element:       schema.element
 		default_:      default_
 	}

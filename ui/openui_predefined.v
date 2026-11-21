@@ -158,9 +158,8 @@ fn openui_table_inferred_columns(props map[string]OpenuiValue) []string {
 	if rows[0].kind == .object {
 		mut keys := rows[0].fields.keys()
 		keys.sort()
-		if keys.len > openui_table_max_columns {
-			keys = keys[..openui_table_max_columns]
-		}
+		// Return every key: openui_table_columns caps what is displayed,
+		// and the full count is needed for the truncation footer.
 		return keys
 	}
 	return ['']
@@ -244,7 +243,9 @@ fn openui_render_table(ctx OpenuiCtx) Element {
 			rows.len, shown, width, 38 + f64(shown) * 28, ctx.id)
 	}
 	if columns.len == 0 {
-		kids << label(ctx.id, 'No data', rect(0, 38, width, 3 * 28), TextStyle{})
+		// The enclosing view already owns ctx.id; duplicate ids are rejected
+		// by validate_element_tree, so the empty state gets its own id.
+		kids << label('${ctx.id}_empty', 'No data', rect(0, 38, width, 3 * 28), TextStyle{})
 	}
 	return view(ctx.id, ctx.frame, BoxStyle{
 		bg:            0xffffff

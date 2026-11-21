@@ -295,6 +295,14 @@ fn openui_tokenize_line(src string, line int) ![]OpenuiToken {
 				tokens << OpenuiToken{.bang, '!', line}
 				pos++
 			}
+			`<` {
+				tokens << OpenuiToken{.lt, '<', line}
+				pos++
+			}
+			`>` {
+				tokens << OpenuiToken{.gt, '>', line}
+				pos++
+			}
 			`.` {
 				tokens << OpenuiToken{.dot, '.', line}
 				pos++

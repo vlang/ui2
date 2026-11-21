@@ -111,8 +111,20 @@ pub fn generate_system_prompt(library OpenuiLibrary, options OpenuiPromptOptions
 	lines << 'Positional args map to props in declaration order; `null` skips an optional.'
 	lines << 'Forward references are allowed. Last definition wins for duplicates.'
 	lines << 'Every program defines `root = ${library.root}(...)`.'
-	lines << 'Only `Action([...])` runs without `@`; everything else needs it.'
+	lines << 'Components, `Query`, `Mutation`, and `Action([...])` are bare calls; built-in and custom functions and actions are prefixed with `@`.'
 	lines << ''
+	mut grouped := map[string]bool{}
+	for group in library.groups {
+		for name in group.components {
+			grouped[name] = true
+		}
+	}
+	mut ungrouped := []OpenuiComponent{}
+	for component in library.components {
+		if component.name !in grouped {
+			ungrouped << component
+		}
+	}
 	if library.groups.len > 0 {
 		for group in library.groups {
 			lines << '### ${group.name}'
@@ -122,6 +134,14 @@ pub fn generate_system_prompt(library OpenuiLibrary, options OpenuiPromptOptions
 			}
 			for note in group.notes {
 				lines << note
+			}
+			lines << ''
+		}
+		// A group never hides a registered component from the model.
+		if ungrouped.len > 0 {
+			lines << '### Other components'
+			for component in ungrouped {
+				lines << openui_component_signature(component)
 			}
 			lines << ''
 		}
