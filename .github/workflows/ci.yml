@@ -123,6 +123,20 @@ jobs:
       - name: Build all examples
         run: v run ui2/examples/build_examples.vsh ${{ matrix.custom && '-d ui2_custom_rendering' || '' }}
 
+      - name: Test web protocol and diff
+        if: ${{ !matrix.custom }}
+        run: |
+          v test ui2/ui/web_snapshot_test.v
+          v test ui2/ui/web_protocol_test.v
+          v test ui2/ui/web_diff_test.v
+          v test ui2/ui/web_renderer_test.v
+
+      # The web backend's headless build is verified on Linux and Windows;
+      # macOS headless still pulls in native AppKit bridge code (pre-existing).
+      - name: Check headless web backend
+        if: ${{ !matrix.custom && runner.os != 'macOS' }}
+        run: v -d ui2_headless -check ui2/examples/web_counter
+
       - name: Smoke-test custom renderer at runtime
         if: runner.os == 'Linux' && matrix.custom
         run: |

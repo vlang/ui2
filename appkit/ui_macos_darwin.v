@@ -256,6 +256,7 @@ fn run_window_with_min_size(title string, width int, height int, min_width int, 
 	native_run_app()
 }
 
+	$if !ui2_headless ? {
 pub fn refresh() {
 	mut st := state()
 	if native_is_nil(st.root_view) || voidptr(st.build_screen) == unsafe { nil } {
@@ -279,6 +280,7 @@ pub fn refresh() {
 	}
 	schedule_screenshot_capture()
 }
+	}
 
 // refresh_element reconciles one existing keyed subtree without rebuilding the
 // rest of the window. It is intended for high-frequency virtualized content
@@ -439,12 +441,14 @@ pub fn refresh_on_demand() bool {
 }
 
 // scroll_offset returns the current vertical scroll position of a Scroll element.
+	$if !ui2_headless ? {
 pub fn scroll_offset(id string) f64 {
 	st := state()
 	scrollv := st.views[id] or { return 0 }
 	r := macos.msg_rect(scrollv, 'documentVisibleRect')
 	return r.y
 }
+	}
 
 // scroll_horizontal_offset returns how far a Scroll element is scrolled sideways. It
 // stays zero for one whose scroll_mode leaves the horizontal axis out.
@@ -534,6 +538,7 @@ fn apply_scroll_offset(mut st RuntimeState, id string) {
 	st.pending_scroll_x.delete(id)
 }
 
+	$if !ui2_headless ? {
 pub fn text(id string) string {
 	st := state()
 	native := st.views[id] or { return '' }
@@ -551,7 +556,9 @@ pub fn text(id string) string {
 	}
 	return native_text(native)
 }
+	}
 
+	$if !ui2_headless ? {
 pub fn set_text(id string, t string) {
 	st := state()
 	native := st.views[id] or { return }
@@ -576,7 +583,9 @@ pub fn set_text(id string, t string) {
 	}
 	native_set_text(native, t)
 }
+	}
 
+	$if !ui2_headless ? {
 pub fn slider_value(id string) f64 {
 	st := state()
 	native := st.views[id] or { return 0 }
@@ -586,6 +595,7 @@ pub fn slider_value(id string) f64 {
 	spec := st.slider_specs[u64(voidptr(native))] or { return 0 }
 	return native_snap_slider_value(native, spec)
 }
+	}
 
 pub fn set_slider_value(id string, value f64) {
 	st := state()

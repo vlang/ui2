@@ -181,3 +181,18 @@ fn test_web_snapshot_decode_rejects_ambiguous_tree() {
 	}
 	assert false, 'expected ambiguous decoded tree to fail validation'
 }
+
+fn test_web_snapshot_message_with_type_field_decodes() {
+	// The v0 envelope adds a `type` discriminator; web_snapshot_decode must
+	// ignore it and still validate/return the inner WebSnapshot tree.
+	root := screen(0xffffff, [label('ok', 'Hi', rect(0, 0, 40, 20), TextStyle{})])
+	raw := web_snapshot_message('App', 640, 480, 1.25, 12, root)
+	assert raw.contains('"type":"snapshot"')
+	snap := web_snapshot_decode(raw)!
+	assert snap.title == 'App'
+	assert snap.width == 640
+	assert snap.height == 480
+	assert snap.dpr == 1.25
+	assert snap.seq == 12
+	assert snap.root == root
+}

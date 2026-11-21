@@ -30,6 +30,23 @@ macOS and Windows use native widgets by default. Pass the compile-time define
 v -d ui2_custom_rendering run examples/users/main.v
 ```
 
+## Web backend (experimental)
+
+The same `BuildFn` / `EventFn` pair can run in a browser through a small V
+server and a framework-free DOM renderer. Build with `-d ui2_headless` and call
+`ui2.run_web_window(...)`; the server owns all state and streams snapshots and
+keyed patches over HTTP + WebSocket. The VS Code extension can open the same
+app in a preview panel.
+
+```sh
+v -d ui2_headless run examples/web_counter/main.v
+```
+
+See [docs/web-backend.md](docs/web-backend.md) for the roadmap and protocol,
+[docs/web-backend-usage.md](docs/web-backend-usage.md) for the API and event
+mapping, and [docs/web-backend-vscode.md](docs/web-backend-vscode.md) for the
+editor preview spec.
+
 ## Requirements
 
 `ui2` needs V 0.5.2 or newer. The module is split across `ui/`, `appkit/`,

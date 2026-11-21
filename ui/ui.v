@@ -490,6 +490,23 @@ pub enum BackendSupport {
 
 // control_support makes backend differences explicit. Partial means the
 // control works but lacks some native behavior (for example Android rich text).
+//
+// .web backend decision table (selected at compile time with -d ui2_headless;
+// see docs/web-backend.md and docs/web-backend-usage.md):
+//
+//   | Kind                                                                  | Support    |
+//   |-----------------------------------------------------------------------|------------|
+//   | text_area, dropdown, opengl                                           | partial    |
+//   | screen, view, label, image, button, checkbox, text_field, scroll,     |            |
+//   |   slider, switch_control, toggle_button                              | supported  |
+//
+//   text_area    plain <textarea>; rich text runs are not rendered.
+//   dropdown     native <select> listbox; no custom popup.
+//   opengl       placeholder <canvas>; no GL texture on the web backend.
+// Platform APIs that are not Kind values (menu bar, system tray, message_box,
+// file_dialog, clipboard) degrade per API in docs/web-backend-usage.md; they
+// never fail silently. This table documents the web backend only and does not
+// change the runtime result of control_support.
 pub fn control_support(kind Kind) BackendSupport {
 	$if (macos || windows) && ui2_custom_rendering ? {
 		return match kind {

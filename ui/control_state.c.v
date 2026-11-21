@@ -20,7 +20,7 @@ pub fn control_checked(id string) bool {
 		}
 		native := st.views[id] or { return false }
 		return macos.msg_i64(native, 'state') != 0
-	} $else $if windows {
+	} $else $if windows && !ui2_headless ? {
 		st := windows_state()
 		if (st.view_kinds[id] or { Kind.view }) !in [.checkbox, .switch_control, .toggle_button] {
 			return false
@@ -50,7 +50,7 @@ pub fn set_control_checked(id string, value bool) {
 			native := st.views[id] or { return }
 			macos.msg_void_i64(native, 'setState:', if value { i64(1) } else { i64(0) })
 		}
-	} $else $if windows {
+	} $else $if windows && !ui2_headless ? {
 		st := windows_state()
 		kind := st.view_kinds[id] or { return }
 		if kind == .switch_control { set_switch_active(id, value) }
