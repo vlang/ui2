@@ -48,6 +48,33 @@ To use `ui2` from a project outside this repository, link the clone into
 ln -s "$(pwd)" ~/.vmodules/ui2
 ```
 
+## Generative UI (OpenUI Lang)
+
+A model can describe a UI as OpenUI Lang text and `ui2` can render it directly
+to `ui2.Element`: define a component library and host tools, build the model's
+system prompt with `generate_system_prompt`, then feed the streamed response to
+`OpenuiRenderer`. The renderer plugs into `run_window` like any other build
+function, so generated UIs use the same event loop and backends as the rest of
+ui2.
+
+```v okfmt
+mut renderer := ui2.new_openui_renderer(ui2.new_openui_default_library())
+renderer.width = 640 // match the width passed to run_window
+renderer.set_response(response, false)
+ui2.run_window('Assistant', 640, 480,
+	fn [mut renderer] () ui2.Element { return renderer.root_element() },
+	fn [mut renderer] (id string) {
+		if renderer.handle_event(id) {
+			ui2.refresh()
+		}
+	})
+```
+
+Setup, the response language, tools and actions, custom components, prompt
+generation, and error codes are in the [OpenUI Lang guide](docs/openui-lang.md).
+The runnable demos are [openui_demo](examples/openui_demo/main.v) and
+[openui_custom](examples/openui_custom/main.v).
+
 ## State and identity
 
 - `Element.id` identifies a mounted control for `text`, `set_text`, `focus`, and

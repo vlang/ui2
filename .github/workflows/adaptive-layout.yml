@@ -37,15 +37,14 @@ jobs:
           path: ui2
           persist-credentials: false
 
-      - name: Install V 0.5.2
+      - name: Install V from source
         shell: bash
         run: |
-          curl --fail --location --retry 3 \
-            --output "$RUNNER_TEMP/v.zip" \
-            https://github.com/vlang/v/releases/download/0.5.2/v_linux.zip
-          unzip -q "$RUNNER_TEMP/v.zip" -d "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/v" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/v/v" version
+          # ui2 needs a V newer than the 0.5.2 release binaries (see ci.yml).
+          git clone --depth 1 https://github.com/vlang/v "$RUNNER_TEMP/v-src"
+          make -C "$RUNNER_TEMP/v-src"
+          echo "$RUNNER_TEMP/v-src" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/v-src/v" version
 
       - name: Install Linux development dependencies
         run: |
