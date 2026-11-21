@@ -330,6 +330,14 @@ static inline void *ui2_win_hover_target(void *root, int *x, int *y) {
 	return current;
 }
 
+#define UI2_WIN_SLIDER_STEPS 10000
+
+static inline int ui2_win_is_trackbar(HWND hwnd) {
+	wchar_t class_name[64];
+	int length = GetClassNameW(hwnd, class_name, 64);
+	return length > 0 && wcscmp(class_name, TRACKBAR_CLASSW) == 0;
+}
+
 static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM wparam,
 		LPARAM lparam, UINT_PTR subclass_id, DWORD_PTR reference_data) {
 	(void)subclass_id;
@@ -359,8 +367,53 @@ static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM
 		ui2_windows_control_pointer(hwnd, message, GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
 		if (!IsWindow(hwnd)) return 0;
 	}
+	if (message == WM_ERASEBKGND && ui2_win_is_trackbar(hwnd)) {
+		return 1;
+	}
 	if (message == WM_ERASEBKGND && ui2_windows_is_transparent_button(hwnd)) {
 		return 1;
+	}
+	if (message == WM_PAINT && ui2_win_is_trackbar(hwnd)) {
+		PAINTSTRUCT paint;
+		HDC dc = BeginPaint(hwnd, &paint);
+		RECT area;
+		GetClientRect(hwnd, &area);
+		HBRUSH white = CreateSolidBrush(RGB(255, 255, 255));
+		FillRect(dc, &area, white);
+		DeleteObject(white);
+		LONG style = GetWindowLongW(hwnd, GWL_STYLE);
+		int vertical = (style & TBS_VERT) != 0;
+		int length = vertical ? area.bottom - area.top : area.right - area.left;
+		int pos = (int)SendMessageW(hwnd, TBM_GETPOS, 0, 0);
+		if (pos < 0) pos = 0;
+		if (pos > UI2_WIN_SLIDER_STEPS) pos = UI2_WIN_SLIDER_STEPS;
+		int margin = vertical ? 10 : 9;
+		int extent = length - margin * 2;
+		if (extent < 1) extent = 1;
+		int thumb = margin + (int)(((double)pos / UI2_WIN_SLIDER_STEPS) * extent);
+		HBRUSH track = CreateSolidBrush(RGB(203, 213, 225));
+		HBRUSH filled = CreateSolidBrush(RGB(191, 219, 254));
+		HBRUSH handle = CreateSolidBrush(RGB(37, 99, 235));
+		if (vertical) {
+			RECT rail = { area.right / 2 - 2, margin, area.right / 2 + 2, area.bottom - margin };
+			RECT done = { rail.left, thumb, rail.right, rail.bottom };
+			RECT knob = { area.right / 2 - 7, thumb - 5, area.right / 2 + 7, thumb + 5 };
+			FillRect(dc, &rail, track);
+			FillRect(dc, &done, filled);
+			FillRect(dc, &knob, handle);
+		} else {
+			RECT rail = { margin, area.bottom / 2 - 2, area.right - margin, area.bottom / 2 + 2 };
+			RECT done = { rail.left, rail.top, thumb, rail.bottom };
+			RECT knob = { thumb - 5, area.bottom / 2 - 8, thumb + 5, area.bottom / 2 + 8 };
+			FillRect(dc, &rail, track);
+			FillRect(dc, &done, filled);
+			FillRect(dc, &knob, handle);
+		}
+		DeleteObject(track);
+		DeleteObject(filled);
+		DeleteObject(handle);
+		EndPaint(hwnd, &paint);
+		return 0;
 	}
 	if (message == WM_PAINT) {
 		if (ui2_windows_paint_transparent_button(hwnd)) return 0;
@@ -741,8 +794,6 @@ static inline void *ui2_win_create_widget(int kind, void *parent_ptr, int x, int
 	}
 	return hwnd;
 }
-
-#define UI2_WIN_SLIDER_STEPS 10000
 
 static inline void ui2_win_slider_set_normalized(void *hwnd_ptr,
 		double normalized, int vertical) {

@@ -1160,6 +1160,7 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 				node.prop('on_tap')
 			}
 			return slider(
+				box:         v_box(node)
 				id:          node.id
 				action_id:   action_id
 				frame:       frame
