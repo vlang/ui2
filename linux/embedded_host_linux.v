@@ -1,5 +1,8 @@
+// vfmt off
+// Keep Sokol's native imports inside the backend switch.
 module ui2
 
+$if !ui2_headless ? {
 import sokol.sapp
 
 #include "@VMODROOT/linux/embedded_host_linux.h"
@@ -9,4 +12,5 @@ pub fn embedded_host_action(action string) {
 	if action == 'close' { sapp.request_quit(); return }
 	operation := match action { 'minimize' { 0 } 'zoom' { 1 } 'drag' { 2 } else { return } }
 	C.ui2_x11_window_action(sapp.x11_get_display(), u64(sapp.x11_get_window()), i32(operation))
+}
 }

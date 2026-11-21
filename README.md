@@ -579,9 +579,9 @@ accent/mode studio, and `examples/stylesheet_plugins` wires every plugin
 hook to a live-reloaded sheet. `with_platform_design` presets cover the
 common per-OS looks (glass on macOS/iOS, Material on Android, one design
 everywhere when forced), VML documents style themselves with in-document
-`Style` blocks (`examples/counter`), and composite components expose
-styleable part classes (`.switch-track`, `.picker-option.selected`,
-`.tab.selected`). The full guide — selectors, specificity, every property,
+`Style` blocks (`examples/counter`), composite components expose
+styleable part classes, and VSS now drives ui2's animation runtime via
+`transition:` and `@keyframes`/`animation:`. The full guide — selectors, specificity, every property,
 media/container reference, scoping, the DSL, plugins, lint, dark mode,
 platform adaptation, VML styling, component classes, migration and
 troubleshooting — is [docs/stylesheet.md](docs/stylesheet.md).
@@ -1013,6 +1013,96 @@ the event being handled has just added, call `refresh()` first so the element
 has its new range. The iOS backend scrolls the same modes but does not expose
 these functions.
 
+## Scaffold
+
+`scaffold` lays a screen out the way Compose's `Scaffold` does: a top bar, a
+bottom bar, content filling the box between them, and optional floating
+action and snackbar overlays docked inside the content box. Slot elements
+keep their declared sizes, except that the snackbar stretches to the content
+width inside its margin. Bar children are positioned relative to their strip,
+content children relative to the content box, and the overlays are placed by
+the scaffold itself:
+
+```v
+ui2.scaffold(
+    id:                'app'
+    frame:             ui2.bounds()
+    top_bar_height:    56
+    bottom_bar_height: 64
+    top_bar:           [ui2.label('title', 'Scaffold', ui2.rect(16, 0, 200, 56), style)]
+    content:           [ui2.label('body', 'Hello', ui2.rect(16, 16, 200, 24), style)]
+    bottom_bar:        [ui2.label('nav', 'Nav', ui2.rect(16, 0, 200, 64), style)]
+    floating_action:   ui2.button('add', '+', ui2.rect(0, 0, 56, 56), fab_box, fab_text)
+    snackbar:          ui2.label('snack', 'Saved', ui2.rect(0, 0, 100, 40), snack_text)
+)!
+```
+
+```vml
+Scaffold {
+    id: app
+    top_bar_height: 56
+    bottom_bar_height: 64
+
+    Label { slot: top text: "Scaffold" }
+    Label { text: "Hello" }
+    Label { slot: bottom text: "Nav" }
+    Button { slot: fab text: "+" x: 0 y: 0 width: 56 height: 56 }
+}
+```
+
+Children without a `slot` land in the content box. At most one `fab` and one
+`snackbar` child are allowed. Named slots are `top`, `bottom`, `content`, `fab`,
+and `snackbar`; unknown slots are rejected while the document loads.
+`scaffold_content_rect` exposes the content box for code that places its own
+overlays. When the bars exceed the available height, the content height is zero
+and the bars overlap, with the bottom bar anchored to the bottom edge.
+When both overlays are visible, the snackbar sits above the floating action
+with `snackbar_margin` between them, keeping the action accessible.
+
+## Safe areas
+
+A `SafeArea` insets its children by the operating-system intrusions — the
+status bar, display notch, camera housing, and home indicator on phones —
+after Flutter's `SafeArea`. Each side can be switched off individually, and
+`minimum` keeps at least that much room where the platform reports nothing.
+Children are positioned relative to the safe content box:
+
+```v
+content := ui2.safe_area(
+    id:    'safe'
+    frame: ui2.bounds()
+    minimum: ui2.LayoutPadding{ top: 8, bottom: 8 }
+    children: [ui2.label('title', 'Hello', ui2.rect(0, 0, 200, 24), style)]
+)!
+```
+
+```vml
+SafeArea {
+    id: safe
+    minimum_top: 8
+    minimum_bottom: 8
+}
+```
+
+`SafeViewport` is the scrolling equivalent, after Flutter's `SliverSafeArea`:
+the scroll pane spans the whole frame while its content clears the intrusions,
+so the first and last rows are never hidden behind a notch or home indicator.
+`scroll_mode` chooses the axes, as in `scroll_with_mode`:
+
+```vml
+SafeViewport {
+    id: list
+    scroll_mode: vertical_only
+}
+```
+
+`safe_area_insets()` reports the current intrusions per side (zero where the
+platform keeps them outside the content rect, as on desktop); `safe_area_top()`
+is the top edge of the same value. iOS reads the view's `safeAreaInsets`, so
+changes after rotating the phone are picked up on the next build. Other
+backends currently report zero insets. Insets are relative to the window;
+when nesting safe containers, disable sides already handled by the parent.
+
 ## Fonts and text sizes
 
 `TextStyle.size` is in points. Win32 and the Linux and BSD desktops resolve a
@@ -1425,6 +1515,8 @@ Typed-VML ports from `v-ui` include:
   a custom `theme()` function, `@supports` at-rules, a `:--has-tooltip`
   pseudo-class, a debug transform, a lint rule, `@import` across files,
   and mtime-gated live reload.
+- `v run examples/stylesheet_animation/main.v` — VSS-driven animations:
+  hover transitions and an infinite pulse via `@keyframes`/`animation`.
 
 Run the calculator demo with:
 

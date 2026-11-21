@@ -29,7 +29,7 @@ $if !ui2_custom_rendering ? {
 				macos.add_method(cls, 'windowShouldClose:', ui2_embedded_panel_close, 'B@:@')
 				macos.register_class_pair(cls)
 			}
-			window := macos.msg_id_rect_u64_u64_bool(macos.alloc('NSPanel'), 'initWithContentRect:styleMask:backing:defer:', macos.rect(0, 0, width, height), 3, 2, false)
+			window := darwin_msg_id_rect_u64_u64_bool(macos.alloc('NSPanel'), 'initWithContentRect:styleMask:backing:defer:', macos.rect(0, 0, width, height), 3, 2, false)
 			delegate := native_new_object('UI2EmbeddedPanelDelegate')
 			root := native_new_flipped_view(native_rect(0, 0, width, height), BoxStyle{})
 			macos.msg_void1(window, 'setContentView:', root)
@@ -40,7 +40,7 @@ $if !ui2_custom_rendering ? {
 			screen := macos.msg_id(state().window, 'screen')
 			visible := macos.msg_rect(screen, 'visibleFrame')
 			frame := macos.msg_rect(window, 'frame')
-			macos.msg_void_point(window, 'setFrameOrigin:', macos.point(visible.x + (visible.width - frame.width) / 2,
+			darwin_msg_void_point(window, 'setFrameOrigin:', darwin_point(visible.x + (visible.width - frame.width) / 2,
 				visible.y + (visible.height - frame.height) / 2))
 			panel = EmbeddedPanel{window: window, root: root, delegate: delegate}
 			registry.panels[id] = panel
