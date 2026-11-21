@@ -1129,11 +1129,11 @@ fn list_loading_element(id string, frame Rect, rows int, m ListMetrics, theme Co
 		second := math.round(m.small * 0.8)
 		y := top + math.round((m.row_two - first - second - 6) / 2)
 		shapes << ShimmerShape{
-			frame:  rect(m.inner, y, math.min(192, frame.width * 0.55), first)
+			frame:  rect(m.inner, y, math.min(192.0, frame.width * 0.55), first)
 			radius: 4
 		}
 		shapes << ShimmerShape{
-			frame:  rect(m.inner, y + first + 6, math.min(256, frame.width * 0.75), second)
+			frame:  rect(m.inner, y + first + 6, math.min(256.0, frame.width * 0.75), second)
 			radius: 4
 		}
 	}

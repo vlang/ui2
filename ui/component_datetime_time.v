@@ -745,7 +745,7 @@ pub fn time_field(config TimeFieldConfig) !Element {
 		segments << time_field_segment_element(config, segment, frame, tm)
 		x += width
 	}
-	mut children := colons
+	mut children := colons.clone()
 	children << segments
 	if stepper_w > 0 {
 		sx := w - stepper_w

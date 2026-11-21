@@ -14,7 +14,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		copies  int
 	}
 
-	fn (mut cb FakeClipboard) copy(text string) bool {
+	fn (mut cb FakeClipboard) copy_text(text string) bool {
 		cb.copies++
 		if !cb.accepts {
 			return false
@@ -43,19 +43,12 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	}
 
 	fn reset_clipboard_test(text string, kind Kind) {
-		g_text_values = map[string]string{}
-		g_text_props = map[string]string{}
-		g_text_editors = map[string]TextEditor{}
-		g_text_kinds = {
-			'field': kind
-		}
-		g_text_secure = map[string]bool{}
-		g_active_fields = {
-			'field': true
-		}
-		g_focused_field = 'field'
-		g_hit_targets = [HitTarget{id: 'field', action_id: 'changed', text_field: kind == .text_field, text_area: kind == .text_area, emit_change: true}]
-		g_event_handler = capture_clipboard_test_event
+		reset_clipboard_test_globals()
+		set_test_text_kind('field', kind)
+		set_test_active_field('field')
+		set_test_focused_field('field')
+		set_test_hit_targets([HitTarget{id: 'field', action_id: 'changed', text_field: kind == .text_field, text_area: kind == .text_area, emit_change: true}])
+		set_test_event_handler(capture_clipboard_test_event)
 		clipboard_test_events = []string{}
 		replace_text_value('field', text)
 		replace_text_editor('field', text_editor(text.clone()))
@@ -63,15 +56,15 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 
 	fn finish_clipboard_test() {
 		forget_text_state('field')
-		g_active_fields = map[string]bool{}
-		g_focused_field = ''
-		g_hit_targets = []HitTarget{}
-		g_event_handler = EventFn(unsafe { nil })
-		g_clipboard_override = none
+		clear_test_active_fields()
+		clear_embedded_focus()
+		set_test_hit_targets([]HitTarget{})
+		set_test_event_handler(EventFn(unsafe { nil }))
+		clear_clipboard_override_for_test()
 	}
 
 	fn select_field_range(anchor int, caret int) {
-		mut editor := g_text_editors['field'] or { panic('missing editor') }
+		mut editor := get_test_text_editor('field') or { panic('missing editor') }
 		editor.set_selection(anchor, caret)
 		replace_text_editor('field', editor)
 	}
@@ -80,7 +73,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		reset_clipboard_test('abc', .text_field)
 		handle_key_down(.left, 0)
 		handle_key_down(.backspace, 0)
-		handle_char_input(`x`, 0)
+		handle_char_input(u32(`x`), 0)
 		assert text('field') == 'axc'
 		assert clipboard_test_events == ['changed', 'changed']
 		finish_clipboard_test()
@@ -89,18 +82,18 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	fn test_char_input_drops_shortcut_letters_and_control_characters() {
 		reset_clipboard_test('', .text_field)
 		// The chord's own letter arrives as a char event on macOS and X11.
-		handle_char_input(`v`, u32(gg.Modifier.ctrl))
-		handle_char_input(`v`, u32(gg.Modifier.super))
-		handle_char_input(`v`, u32(gg.Modifier.ctrl) | u32(gg.Modifier.shift))
+		handle_char_input(u32(`v`), u32(gg.Modifier.ctrl))
+		handle_char_input(u32(`v`), u32(gg.Modifier.super))
+		handle_char_input(u32(`v`), u32(gg.Modifier.ctrl) | u32(gg.Modifier.shift))
 		// Backspace on macOS also reports DEL after the key event.
 		handle_char_input(127, 0)
 		handle_char_input(8, 0)
 		assert text('field') == ''
 		assert clipboard_test_events == []
 		// Windows reports AltGr as Ctrl+Alt, and AltGr characters are text.
-		handle_char_input(`@`, u32(gg.Modifier.ctrl) | u32(gg.Modifier.alt))
-		handle_char_input(`a`, u32(gg.Modifier.shift))
-		handle_char_input(`b`, 0)
+		handle_char_input(u32(`@`), u32(gg.Modifier.ctrl) | u32(gg.Modifier.alt))
+		handle_char_input(u32(`a`), u32(gg.Modifier.shift))
+		handle_char_input(u32(`b`), 0)
 		assert text('field') == '@ab'
 		assert clipboard_test_events == ['changed', 'changed', 'changed']
 		finish_clipboard_test()
@@ -109,7 +102,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	fn test_copy_and_cut_use_the_selection() {
 		reset_clipboard_test('hello world', .text_field)
 		mut fake := &FakeClipboard{}
-		g_clipboard_override = fake
+		set_clipboard_override_for_test(fake)
 		select_field_range(0, 5)
 		handle_key_down(.c, primary_modifier())
 		assert fake.text == 'hello'
@@ -120,7 +113,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		handle_key_down(.x, primary_modifier())
 		assert fake.text == ' world'
 		assert text('field') == 'hello'
-		editor := g_text_editors['field'] or { panic('missing editor') }
+		editor := get_test_text_editor('field') or { panic('missing editor') }
 		assert editor.selection.anchor == 5
 		assert editor.selection.caret == 5
 		assert clipboard_test_events == ['changed']
@@ -137,13 +130,13 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	fn test_cut_keeps_the_text_when_the_clipboard_rejects_it() {
 		reset_clipboard_test('hello world', .text_field)
 		mut fake := &FakeClipboard{accepts: false}
-		g_clipboard_override = fake
+		set_clipboard_override_for_test(fake)
 		select_field_range(6, 11)
 		handle_key_down(.x, primary_modifier())
 		assert fake.copies == 1
 		assert fake.text == ''
 		assert text('field') == 'hello world'
-		editor := g_text_editors['field'] or { panic('missing editor') }
+		editor := get_test_text_editor('field') or { panic('missing editor') }
 		assert editor.selection.anchor == 6
 		assert editor.selection.caret == 11
 		assert clipboard_test_events == []
@@ -153,7 +146,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	fn test_paste_replaces_the_selection_and_flattens_newlines_in_single_line_fields() {
 		reset_clipboard_test('hello world', .text_field)
 		mut fake := &FakeClipboard{text: 'big\r\nwide\nnew\rworld'}
-		g_clipboard_override = fake
+		set_clipboard_override_for_test(fake)
 		select_field_range(6, 11)
 		handle_key_down(.v, primary_modifier())
 		assert text('field') == 'hello big wide new world'
@@ -166,7 +159,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		finish_clipboard_test()
 
 		reset_clipboard_test('first', .text_area)
-		g_clipboard_override = &FakeClipboard{text: '\nsecond\n'}
+		set_clipboard_override_for_test(&FakeClipboard{text: '\nsecond\n'})
 		handle_key_down(.v, primary_modifier())
 		assert text('field') == 'first\nsecond\n'
 		assert clipboard_test_events == ['changed']
@@ -177,16 +170,16 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		// A password field masks only at draw time, so the editor holds the
 		// plaintext; copy and cut must be consumed without reaching the clipboard.
 		reset_clipboard_test('secret', .text_field)
-		g_text_secure['field'] = true
+		set_test_text_secure('field', true)
 		mut fake := &FakeClipboard{text: 'pasted'}
-		g_clipboard_override = fake
+		set_clipboard_override_for_test(fake)
 		select_field_range(0, 6)
 		handle_key_down(.c, primary_modifier())
 		handle_key_down(.x, primary_modifier())
 		assert fake.copies == 0
 		assert fake.text == 'pasted'
 		assert text('field') == 'secret'
-		cut_editor := g_text_editors['field'] or { panic('missing editor') }
+		cut_editor := get_test_text_editor('field') or { panic('missing editor') }
 		assert cut_editor.selection.anchor == 0
 		assert cut_editor.selection.caret == 6
 		assert clipboard_test_events == []
@@ -200,7 +193,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 		// The same field id without the flag copies as usual.
 		reset_clipboard_test('secret', .text_field)
 		mut plain := &FakeClipboard{}
-		g_clipboard_override = plain
+		set_clipboard_override_for_test(plain)
 		select_field_range(0, 6)
 		handle_key_down(.c, primary_modifier())
 		assert plain.text == 'secret'
@@ -210,7 +203,7 @@ $if (android || linux || ((macos || windows) && ui2_custom_rendering ?)) && !ui2
 	fn test_clipboard_shortcuts_need_the_primary_modifier() {
 		reset_clipboard_test('hello', .text_field)
 		mut fake := &FakeClipboard{text: 'pasted'}
-		g_clipboard_override = fake
+		set_clipboard_override_for_test(fake)
 		select_field_range(0, 5)
 		handle_key_down(.c, 0)
 		handle_key_down(.v, u32(gg.Modifier.shift))

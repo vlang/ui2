@@ -1014,6 +1014,49 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 				scroll_mode: mode
 			}
 		}
+		'SafeArea' {
+			left, top, right, bottom := v_safe_sides(node)
+			minimum := v_safe_minimum(node)!
+			pad := safe_area_padding(left, top, right, bottom, minimum)
+			inner := safe_content_rect(local, pad)
+			kids := v_children(node, rect(0, 0, inner.width, inner.height))!
+			return Element{
+				...safe_area(
+					id:       node.id
+					frame:    frame
+					left:     left
+					top:      top
+					right:    right
+					bottom:   bottom
+					minimum:  minimum
+					children: kids
+				)!
+				box: v_box(node)
+			}
+		}
+		'SafeViewport' {
+			left, top, right, bottom := v_safe_sides(node)
+			minimum := v_safe_minimum(node)!
+			mode := scroll_mode(node.prop_or('scroll_mode', ''))!
+			pad := safe_area_padding(left, top, right, bottom, minimum)
+			inner := safe_content_rect(local, pad)
+			kids := v_children(node, rect(0, 0, inner.width, inner.height))!
+			return Element{
+				...safe_viewport(SafeViewportConfig{
+					id:                    node.id
+					frame:                 frame
+					left:                  left
+					top:                   top
+					right:                 right
+					bottom:                bottom
+					minimum:               minimum
+					axis:                  mode
+					persistent_scrollbars: node.prop_bool('persistent')
+					children:              kids
+				})!
+				box: v_box(node)
+			}
+		}
 		'View', 'Rectangle' {
 			return view(node.id, frame, v_box(node), v_children(node, local)!)
 		}
@@ -1097,7 +1140,42 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 			return view(node.id, frame, v_box(node), [label('${node.id}_title', node.prop_or('title', node.prop('text')), rect(12, 8, frame.width - 24, 20), v_text_style(node))])
 		}
 		'Scaffold' {
-			return view(node.id, frame, v_box(node), v_children(node, local)!)
+			top := node.prop_or('top_bar_height', '0').f64()
+			bottom := node.prop_or('bottom_bar_height', '0').f64()
+			fab_margin := node.prop_or('fab_margin', '16').f64()
+			snackbar_margin := node.prop_or('snackbar_margin', '16').f64()
+			component_validate_frame(frame)!
+			scaffold_validate_sizes(top, bottom, fab_margin, snackbar_margin)!
+			content_box := scaffold_content_rect(local, top, bottom)
+			top_bar, content, bottom_bar, fab, snackbar := v_scaffold_slots(node, rect(0,
+				0, local.width, top), rect(0, 0, content_box.width, content_box.height),
+				rect(0, 0, local.width, bottom), snackbar_margin)!
+			// Preserve the old plain Scaffold tree, including direct-child
+			// stylesheet selectors, when no strips or overlays are requested.
+			if top == 0 && bottom == 0 && top_bar.len == 0 && bottom_bar.len == 0
+				&& fab == none && snackbar == none {
+				return view(node.id, frame, v_box(node), content)
+			}
+			base := scaffold(ScaffoldConfig{
+				id:                node.id
+				frame:             frame
+				top_bar_height:    top
+				bottom_bar_height: bottom
+				fab_margin:        fab_margin
+				snackbar_margin:   snackbar_margin
+				top_bar:           top_bar
+				content:           content
+				bottom_bar:        bottom_bar
+				floating_action:   fab
+				snackbar:          snackbar
+			})!
+			// ScaffoldConfig only carries a background colour; keep the node's
+			// own box styling (corner radius, borders, background) on the outer
+			// element instead of dropping it on the floor.
+			return Element{
+				...base
+				box: v_box(node)
+			}
 		}
 		'ProgressBar' {
 			return progress_bar(
@@ -1359,6 +1437,80 @@ fn v_keyboard(raw string) int {
 		'decimal', 'numeric', 'number' { keyboard_decimal }
 		else { keyboard_default }
 	}
+}
+
+// v_scaffold_slots routes a Scaffold's children into their slots: `slot: top`
+// for the top bar, `slot: bottom` for the bottom bar, `slot: fab` for the
+// floating action, `slot: snackbar` for the snackbar, and `slot: content` or
+// no slot property for the content box. Frames resolve against each slot's
+// own box, with coordinates starting at its top-left corner. At most one fab
+// and one snackbar child are allowed.
+fn v_scaffold_slots(node &VNode, top_box Rect, content_box Rect, bottom_box Rect, snackbar_margin f64) !([]Element, []Element, []Element, ?Element, ?Element) {
+	mut top_bar := []Element{}
+	mut content := []Element{}
+	mut bottom_bar := []Element{}
+	mut fab := ?Element(none)
+	mut snackbar := ?Element(none)
+	for child in node.children {
+		if v_is_layout_metadata(child) {
+			continue
+		}
+		match child.prop_or('slot', 'content') {
+			'top' {
+				top_bar << node_to_element(child, top_box)!
+			}
+			'bottom' {
+				bottom_bar << node_to_element(child, bottom_box)!
+			}
+			'fab' {
+				if fab != none {
+					return error('Scaffold accepts at most one fab child')
+				}
+				fab = node_to_element(child, content_box)!
+			}
+			'snackbar' {
+				if snackbar != none {
+					return error('Scaffold accepts at most one snackbar child')
+				}
+				// Resolve descendants against the width the scaffold will give
+				// this overlay, so nested layouts fit inside its side margins.
+				area := scaffold_snackbar_frame(content_box, content_box.height, snackbar_margin)
+				mut props := child.props.clone()
+				props['width'] = area.width.str()
+				snackbar_node := VNode{
+					...child
+					props: props
+				}
+				snackbar = node_to_element(&snackbar_node, rect(0, 0, area.width, content_box.height))!
+			}
+			'content' {
+				content << node_to_element(child, content_box)!
+			}
+			else {
+				return error('unknown scaffold slot `${child.prop('slot')}`')
+			}
+		}
+	}
+	return top_bar, content, bottom_bar, fab, snackbar
+}
+
+// v_safe_sides reads which system intrusions a SafeArea or SafeViewport
+// avoids. Every side defaults to true, after Flutter's SafeArea flags.
+fn v_safe_sides(node &VNode) (bool, bool, bool, bool) {
+	return node.prop_or('left', 'true') == 'true', node.prop_or('top', 'true') == 'true', node.prop_or('right', 'true') == 'true', node.prop_or('bottom', 'true') == 'true'
+}
+
+// v_safe_minimum reads the minimum padding a SafeArea or SafeViewport keeps on
+// every side, even where the platform reports no intrusion.
+fn v_safe_minimum(node &VNode) !LayoutPadding {
+	minimum := LayoutPadding{
+		left:   node.prop_or('minimum_left', '0').f64()
+		top:    node.prop_or('minimum_top', '0').f64()
+		right:  node.prop_or('minimum_right', '0').f64()
+		bottom: node.prop_or('minimum_bottom', '0').f64()
+	}
+	safe_validate_minimum(minimum)!
+	return minimum
 }
 
 fn v_column(node &VNode, frame Rect) !Element {

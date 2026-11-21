@@ -52,17 +52,14 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 		return true
 	}
 
-	// The copy tools daemonize while they hold the pasted selection: an xclip
-	// keeps serving it after the command answers, carrying whatever file
-	// descriptors it inherited, and a redirect-through-pipes run made the
-	// caller wait for the daemon's whole life — the slurp never saw EOF until
-	// another claimant took the selection over, so every copy froze the
-	// event thread until the next copy. Nothing reads the child's output:
-	// stdin is the file, stdout and stderr travel with the caller's own
-	// descriptors, and wait() answers the immediate child only. wl-copy does
-	// not answer at all (it serves until superseded), so for it the run is
-	// fire-and-forget and never waited.
+	// The tools fork a selection owner after acquiring the clipboard. Wait for
+	// the initial process so failures reach the caller, and redirect both output
+	// streams so the owner cannot keep a captured pipe open. File-backed stdin
+	// stays available until the initial process has consumed it and exited.
 	fn native_clipboard_write(copy_args []string, text string) bool {
+		if copy_args.len == 0 {
+			return false
+		}
 		path := os.join_path(os.temp_dir(), 'ui2-clipboard-${os.getpid()}-${time.sys_mono_now()}.txt')
 		os.write_file(path, text) or { return false }
 		defer {
@@ -71,26 +68,16 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 		$if clipboard_stage_probe ? {
 			eprintln('KW stage: file ${time.sys_mono_now()}')
 		}
-		mut p := os.new_process(copy_args[0])
-		p.set_args(copy_args[1..])
-		p.set_stdin_path(path)
-		p.run()
-		$if clipboard_stage_probe ? {
-			eprintln('KW stage: post-run ${time.sys_mono_now()}')
-		}
-		if copy_args[0].contains('wl-copy') {
-			return true
-		}
-		p.wait()
+		// Pass paths and tool arguments as positional parameters. The shell
+		// supplies redirection only; it must not interpret any of their contents.
+		mut args := ['/bin/sh', '-c', 'input=$1; shift; exec "$@" < "$input" > /dev/null 2>&1',
+			'ui2-clipboard', path]
+		args << copy_args
+		result := os.exec(args)
 		$if clipboard_stage_probe ? {
 			eprintln('KW stage: post-wait ${time.sys_mono_now()}')
 		}
-		code := p.code
-		p.close()
-		$if clipboard_stage_probe ? {
-			eprintln('KW stage: post-close ${time.sys_mono_now()}')
-		}
-		return code == 0
+		return result.exit_code == 0
 	}
 
 	fn native_set_clipboard_text(text string) bool {
