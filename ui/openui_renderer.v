@@ -379,7 +379,16 @@ fn openui_orphaned(statements []OpenuiStatement, scope OpenuiScope, root_compone
 }
 
 fn openui_expr_refs(expr &OpenuiExpr) []string {
+	return openui_expr_refs_at(expr, 0)
+}
+
+// openui_expr_refs_at walks an expression with a depth budget so deeply
+// nested input cannot overflow the C stack.
+fn openui_expr_refs_at(expr &OpenuiExpr, depth int) []string {
 	mut refs := []string{}
+	if depth > 64 {
+		return refs
+	}
 	match expr.kind {
 		.ref {
 			refs << expr.value
@@ -387,38 +396,38 @@ fn openui_expr_refs(expr &OpenuiExpr) []string {
 		.state_ref, .literal {
 		}
 		.member {
-			refs << openui_expr_refs(expr.target)
+			refs << openui_expr_refs_at(expr.target, depth + 1)
 		}
 		.unary {
-			refs << openui_expr_refs(expr.left)
+			refs << openui_expr_refs_at(expr.left, depth + 1)
 		}
 		.binary {
-			refs << openui_expr_refs(expr.left)
-			refs << openui_expr_refs(expr.right)
+			refs << openui_expr_refs_at(expr.left, depth + 1)
+			refs << openui_expr_refs_at(expr.right, depth + 1)
 		}
 		.ternary {
-			refs << openui_expr_refs(expr.left)
-			refs << openui_expr_refs(expr.middle)
-			refs << openui_expr_refs(expr.right)
+			refs << openui_expr_refs_at(expr.left, depth + 1)
+			refs << openui_expr_refs_at(expr.middle, depth + 1)
+			refs << openui_expr_refs_at(expr.right, depth + 1)
 		}
 		.call, .at_call, .action_list {
 			for arg in expr.args {
-				refs << openui_expr_refs(arg)
+				refs << openui_expr_refs_at(arg, depth + 1)
 			}
 		}
 		.array {
 			for arg in expr.args {
-				refs << openui_expr_refs(arg)
+				refs << openui_expr_refs_at(arg, depth + 1)
 			}
 		}
 		.object {
 			for key in expr.field_order {
-				refs << openui_expr_refs(expr.fields[key] or { continue })
+				refs << openui_expr_refs_at(expr.fields[key] or { continue }, depth + 1)
 			}
 		}
 		.query, .mutation {
 			for arg in expr.args {
-				refs << openui_expr_refs(arg)
+				refs << openui_expr_refs_at(arg, depth + 1)
 			}
 		}
 	}
@@ -449,9 +458,8 @@ fn (mut renderer OpenuiRenderer) render_node(value OpenuiValue, x f64, y f64, wi
 	inner_x := 8.0
 	inner_width := if width > 16 { width - 16 } else { width }
 	for param in component.params {
-		if param.schema.kind != .list {
-			continue
-		}
+		// node_slots() normalizes scalar node params to a single-item list too,
+		// so render every param whose slot holds node values, not just lists.
 		items := slots[param.name] or { continue }
 		for item in items {
 			if !openui_is_node(item) {
