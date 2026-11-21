@@ -63,7 +63,7 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 	// recorder that ignores SIGTERM for two seconds. The return value says
 	// whether the take finalized cleanly.
 	fn media_nix_finalize_recorder(id string) bool {
-		proc := g_media_nix_recorders[id] or { return false }
+		mut proc := g_media_nix_recorders[id] or { return false }
 		mut graceful := true
 		if proc.is_alive() {
 			proc.signal_term()
@@ -104,7 +104,7 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 	}
 
 	fn native_media_play(id string) bool {
-		if proc := g_media_nix_players[id] {
+		if mut proc := g_media_nix_players[id] {
 			if proc.is_alive() {
 				if g_media_nix_paused[id] {
 					proc.signal_continue()
@@ -127,7 +127,7 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 	}
 
 	fn native_media_pause(id string) bool {
-		if proc := g_media_nix_players[id] {
+		if mut proc := g_media_nix_players[id] {
 			if proc.is_alive() {
 				proc.signal_stop()
 				g_media_nix_paused[id] = true
@@ -176,7 +176,7 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 	}
 
 	fn native_media_state(id string) MediaState {
-		if proc := g_media_nix_players[id] {
+		if mut proc := g_media_nix_players[id] {
 			if proc.is_alive() {
 				return if g_media_nix_paused[id] { .paused } else { .playing }
 			}
@@ -244,6 +244,6 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 		}
 		mut argv := cmd.clone()
 		argv << output_path
-		return os.system_args(argv) == 0
+		return os.exec(argv).exit_code == 0
 	}
 }

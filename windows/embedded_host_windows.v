@@ -27,7 +27,7 @@ $if ui2_custom_rendering ? {
 			'zoom' { C.ShowWindow(window, if C.IsZoomed(window) != 0 { i32(9) } else { i32(3) }) }
 			'drag' {
 				C.ReleaseCapture()
-				C.SendMessageW(window, 0x00a1, 2, 0)
+				C.SendMessageW(window, 0x00a1, u32(2), 0)
 			}
 			else {}
 		}

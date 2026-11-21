@@ -4055,6 +4055,9 @@ fn page_focused_text_area(direction int) {
 					}, clip)
 				}
 			}
+			.media {
+				media_sync_native(native_window_handle(), el, area)
+			}
 		}
 	}
 

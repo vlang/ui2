@@ -4,12 +4,12 @@
 // custom renderer's window content (custom renderer).
 module ui2
 
+import os
+
 #flag darwin -framework AVFoundation -framework QuartzCore -framework Cocoa
 #flag darwin -fno-objc-arc
 #include "@VMODROOT/ui/media_apple.h"
 #include "@VMODROOT/ui/media_apple.m"
-
-import os
 
 fn C.ui2_media_apple_open(cid &char, kind &char, src &char) int
 fn C.ui2_media_apple_attach(cid &char, parent voidptr, x f64, y f64, w f64, h f64) voidptr
