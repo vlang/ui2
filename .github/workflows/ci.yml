@@ -31,6 +31,9 @@ jobs:
           - os: windows-latest
             custom: true
     env:
+      # The macOS release's optional TCC points libc at a protected DriverKit
+      # location; use the runner's supported compiler instead.
+      VFLAGS: ${{ runner.os == 'macOS' && '-cc clang' || '' }}
       # The V master commit ui2 is built with. Pinned, not "latest": move it on purpose, in its
       # own commit, after building ui2 with the new one. V 0.5.2 cannot build ui2 master (it
       # rejects `array2 = array1`, `uint` in a C declaration, `math.max` with mixed int/f64 and a
@@ -73,13 +76,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --quiet -y --no-install-recommends \
-            libx11-dev libxcursor-dev libxi-dev libgl1-mesa-dev libasound2-dev xvfb
+            libx11-dev libxcursor-dev libxi-dev libxrandr-dev libxinerama-dev \
+            libxfixes-dev libgl1-mesa-dev libegl-dev libasound2-dev xvfb
 
       - name: Test component catalog and primitives
-        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/component_catalog_test.v
+        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/component_catalog_test.v
 
       - name: Test VML menu declarations
-        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/vml_menu_test.v
+        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/vml_menu_test.v
 
       - name: Test embedder window API
         run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/embed_test.v
@@ -90,11 +94,11 @@ jobs:
       - name: Test immediate scrolling
         if: runner.os == 'Linux' || matrix.custom
         run: |
-          v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/ui_scroll_immediate_test.v
+          v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui_scroll_immediate_test.v
           v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/examples/scrollview
 
       - name: Test custom renderer pipeline
-        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/ui_custom_rendering_test.v
+        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui_custom_rendering_test.v
 
       - name: Test C ABI and build C example
         if: runner.os != 'Windows'
@@ -105,7 +109,7 @@ jobs:
 
       - name: Test immediate text clipboard shortcuts
         if: runner.os == 'Linux' || matrix.custom
-        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui/ui_text_clipboard_immediate_test.v
+        run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/ui_text_clipboard_immediate_test.v
 
       - name: Build all examples
         run: v run ui2/examples/build_examples.vsh ${{ matrix.custom && '-d ui2_custom_rendering' || '' }}

@@ -427,10 +427,10 @@ pub fn combobox(config ComboboxConfig) !Element {
 	mut children := []Element{}
 	if layout.icon.width > 0 {
 		children << Element{
-			...view('', layout.icon, BoxStyle{ transparent: true }, [
+			...with_classes(view('', layout.icon, BoxStyle{ transparent: true }, [
 				inputs_symbol(config.icon, inputs_centered_square(component_local(layout.icon),
 					icon_size), theme.muted_foreground),
-			])
+			]), 'combobox-icon')
 			key: 'icon'
 		}
 	}
@@ -450,17 +450,17 @@ pub fn combobox(config ComboboxConfig) !Element {
 		theme:       theme
 	)
 	children << Element{
-		...field
+		...with_classes(field, 'combobox-field')
 		accessibility_value: if config.state.open { 'expanded' } else { 'collapsed' }
 	}
 	if layout.clear.width > 0 {
 		children << Element{
-			...button_view(combobox_clear_action(config.id), layout.clear, BoxStyle{
+			...with_classes(button_view(combobox_clear_action(config.id), layout.clear, BoxStyle{
 				bg: theme.background
 			}, [
 				inputs_symbol('xmark', inputs_centered_square(component_local(layout.clear),
 					metrics.font_size - 2), theme.muted_foreground),
-			])
+			]), 'combobox-clear')
 			key:                 'clear'
 			tooltip:             'Clear'
 			accessibility_label: 'Clear'
@@ -468,7 +468,7 @@ pub fn combobox(config ComboboxConfig) !Element {
 	}
 	chevron := metrics.font_size
 	children << Element{
-		...button_view(combobox_toggle_action(config.id), layout.toggle, BoxStyle{
+		...with_classes(button_view(combobox_toggle_action(config.id), layout.toggle, BoxStyle{
 			transparent: true
 		}, [
 			inputs_symbol(if config.state.open { 'chevron.up' } else { 'chevron.down' },
@@ -477,15 +477,15 @@ pub fn combobox(config ComboboxConfig) !Element {
 				} else {
 					theme.border
 				}),
-		])
+		]), 'combobox-toggle')
 		key:                 'toggle'
 		enabled:             config.enabled
 		cursor:              cursor_pointing_hand
 		accessibility_label: if config.state.open { 'Hide options' } else { 'Show options' }
 	}
 	return component_finish(Element{
-		...view(config.id, config.frame, inputs_frame_box(theme, config.invalid, metrics.radius),
-			children)
+		...with_classes(view(config.id, config.frame, inputs_frame_box(theme, config.invalid, metrics.radius),
+			children), 'combobox')
 		accessibility_role:  'group'
 		accessibility_label: description
 	})

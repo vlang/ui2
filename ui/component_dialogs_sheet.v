@@ -195,7 +195,8 @@ pub fn sheet(config SheetConfig) !Element {
 		}
 	}
 	children << Element{
-		...view(sheet_panel_id(config.id), geom.surface, sheet_panel_box(config), panel_children)
+		...with_classes(view(sheet_panel_id(config.id), geom.surface, sheet_panel_box(config), panel_children),
+			'sheet-panel')
 		key:                 'panel'
 		accessibility_role:  'group'
 		accessibility_label: config.title
@@ -203,7 +204,8 @@ pub fn sheet(config SheetConfig) !Element {
 	// Without a backdrop the root covers only the panel, so the rest of the
 	// window keeps working.
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{ transparent: true }, children)
+		...with_classes(view(config.id, config.frame, BoxStyle{ transparent: true }, children),
+			'sheet')
 		hidden:              !config.open
 		accessibility_role:  'dialog'
 		accessibility_label: config.title

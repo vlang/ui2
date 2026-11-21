@@ -111,11 +111,12 @@ pub fn linear_progress(config LinearProgressConfig) !Element {
 	feedback_validate_length('progress transition', config.transition)!
 	feedback_validate_length('progress duration', config.duration)!
 	width := config.frame.width
-	thickness := math.min(if config.thickness > 0 {
+	thick := if config.thickness > 0 {
 		config.thickness
 	} else {
 		linear_progress_thickness(config.size)
-	}, config.frame.height)
+	}
+	thickness := math.min(thick, config.frame.height)
 	requested_radius := config.radius or { thickness / 2 }
 	feedback_validate_length('progress radius', requested_radius)!
 	radius := math.min(requested_radius, thickness / 2)
@@ -131,8 +132,8 @@ pub fn linear_progress(config LinearProgressConfig) !Element {
 	if config.loading {
 		if config.reduce_motion {
 			feedback_clear_parts(config.id, 'loading')
-			indicator = view('', rect(width * 0.325, 0, width * 0.35, thickness), indicator_box,
-				[]Element{})
+			indicator = with_classes(view('', rect(width * 0.325, 0, width * 0.35, thickness), indicator_box,
+				[]Element{}), 'linear-progress-indicator')
 		} else {
 			signature := feedback_signature([width, period], []u32{})
 			part := component_part_id(config.id, 'loading:${signature}')
@@ -140,7 +141,8 @@ pub fn linear_progress(config LinearProgressConfig) !Element {
 				component_keep_animating(part, feedback_span_loop(period, linear_progress_loading_spans(width),
 					true))
 			}
-			indicator = view(part, rect(0, 0, 0, thickness), indicator_box, []Element{})
+			indicator = with_classes(view(part, rect(0, 0, 0, thickness), indicator_box, []Element{}),
+				'linear-progress-indicator')
 		}
 	} else {
 		feedback_clear_parts(config.id, 'loading')
@@ -151,15 +153,17 @@ pub fn linear_progress(config LinearProgressConfig) !Element {
 		} else {
 			config.transition
 		})
-		indicator = view(part, rect(0, 0, target, thickness), indicator_box, []Element{})
+		indicator = with_classes(view(part, rect(0, 0, target, thickness), indicator_box,
+			[]Element{}), 'linear-progress-indicator')
 	}
-	track_view := view('', rect(0, (config.frame.height - thickness) / 2, width, thickness),
+	track_view := with_classes(view('', rect(0, (config.frame.height - thickness) / 2, width, thickness),
 		BoxStyle{
 			bg:     track
 			radius: radius
-		}, [indicator])
+		}, [indicator]), 'linear-progress-track')
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{ transparent: true }, [track_view])
+		...with_classes(view(config.id, config.frame, BoxStyle{ transparent: true }, [track_view]),
+			'linear-progress')
 		accessibility_role:  'progressbar'
 		accessibility_label: config.accessibility_label
 		accessibility_value: if config.loading { '' } else { progress_value_text(percent) }
@@ -263,16 +267,18 @@ pub fn progress_circle(config ProgressCircleConfig) !Element {
 	feedback_validate_length('progress circle thickness', config.thickness)!
 	feedback_validate_length('progress circle duration', config.duration)!
 	fit := math.min(config.frame.width, config.frame.height)
-	diameter := math.min(if config.diameter > 0 {
+	want := if config.diameter > 0 {
 		config.diameter
 	} else {
 		progress_circle_diameter(config.size)
-	}, fit)
-	stroke := math.min(if config.thickness > 0 {
+	}
+	diameter := math.min(want, fit)
+	stroke_want := if config.thickness > 0 {
 		config.thickness
 	} else {
 		progress_circle_thickness(diameter)
-	}, diameter / 2)
+	}
+	stroke := math.min(stroke_want, diameter / 2)
 	ring := (diameter - stroke) / 2
 	color := config.color or { feedback_tone_color(config.theme, config.tone) }
 	background := config.background or { config.theme.background }
@@ -304,7 +310,7 @@ pub fn progress_circle(config ProgressCircleConfig) !Element {
 	}
 	metrics := component_metrics(config.size)
 	if config.label.len > 0 || config.caption.len > 0 {
-		inner := math.max(diameter - 2 * stroke, 0)
+		inner := math.max(diameter - 2 * stroke, 0.0)
 		label_height := if config.label.len > 0 {
 			math.min(metrics.font_size * 1.4, inner)
 		} else {

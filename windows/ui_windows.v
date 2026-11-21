@@ -254,16 +254,26 @@ fn windows_pack_shape(el Element) WindowsShape {
 // into its own paint cycle (dc nil) or into a DC a descendant asked for.
 fn windows_paint_box(hwnd voidptr, dc voidptr, key string, box BoxStyle, transparent int) {
 	mesh := windows_gradient_mesh(box, C.ui2_win_client_width(hwnd), C.ui2_win_client_height(hwnd))
-	vertices := if mesh.vertices.len > 0 { &mesh.vertices[0] } else { unsafe { nil } }
-	triangles := if mesh.triangles.len > 0 { &mesh.triangles[0] } else { unsafe { nil } }
+	mut vertices := &C.ui2_win_mesh_vertex(unsafe { nil })
+	if mesh.vertices.len > 0 {
+		vertices = &mesh.vertices[0]
+	}
+	mut triangles := &u32(unsafe { nil })
+	if mesh.triangles.len > 0 {
+		triangles = &mesh.triangles[0]
+	}
 	opacity := if box.transparent { 1.0 } else { box_fill_opacity(box) }
 	st := windows_state()
 	mut shape_ptr := &C.ui2_win_shape(unsafe { nil })
 	mut packed := C.ui2_win_shape{}
 	if shape := st.node_shapes[key] {
 		style := shape.style
+		mut shape_commands := &f64(unsafe { nil })
+		if shape.commands.len > 0 {
+			shape_commands = &shape.commands[0]
+		}
 		packed = C.ui2_win_shape{
-			commands:       if shape.commands.len > 0 { &shape.commands[0] } else { unsafe { nil } }
+			commands:       shape_commands
 			count:          shape.commands.len / 7
 			has_fill:       windows_bool(style.fill != none && style.fill_opacity > 0)
 			fill:           style.fill or { 0 }
@@ -757,7 +767,7 @@ pub fn refresh() {
 	if st.root == unsafe { nil } || st.rendering || voidptr(st.build_screen) == unsafe { nil } {
 		return
 	}
-	declared := st.build_screen()
+	declared := stylesheet_apply_frame(stylesheet_frame_build(st.build_screen), stylesheet_windows_env())
 	root := windows_symbol_images_as_labels(apply_widget_animations(declared))
 	validate_element_tree(root) or {
 		eprintln('ui2: ${err}')
@@ -1037,6 +1047,49 @@ pub fn focused_id() string {
 	return st.node_ids[key] or { '' }
 }
 
+// stylesheet_windows_env reads this frame's interaction state for the
+// stylesheet cascade. The native backend tracks hover and focus; it has no
+// press-target tracking, so :pressed stays unmatched here.
+fn stylesheet_windows_env() StyleMatchEnv {
+	st := windows_state()
+	hovered := if st.hovered.len > 0 { st.hovered.last() } else { '' }
+	env := stylesheet_frame_env(hovered, '', focused_id())
+	return StyleMatchEnv{
+		...env
+		dpi: native_device_scale()
+	}
+}
+
+// native_device_scale reports the window's device pixel ratio from the
+// device context's DPI. Without per-monitor calls this is the system DPI,
+// which is what resolution queries need.
+fn native_device_scale() f64 {
+	st := windows_state()
+	if st.root == unsafe { nil } {
+		return 1.0
+	}
+	dc := C.GetDC(st.root)
+	if dc == unsafe { nil } {
+		return 1.0
+	}
+	dpi := C.GetDeviceCaps(dc, 90)
+	C.ReleaseDC(st.root, dc)
+	if dpi <= 0 {
+		return 1.0
+	}
+	return f64(dpi) / 96.0
+}
+
+// native_safe_insets reports the display safe area. Win32 windows are
+// rectangular, so there is none and env() uses its fallback.
+fn native_safe_insets() ?SafeInsets {
+	return none
+}
+
+fn C.GetDC(hwnd voidptr) voidptr
+fn C.GetDeviceCaps(dc voidptr, index int) int
+fn C.ReleaseDC(hwnd voidptr, dc voidptr) int
+
 pub fn focused_text_area_id() string {
 	st := windows_state()
 	focused := C.ui2_win_focus_handle()
@@ -1060,9 +1113,7 @@ pub fn dismiss_keyboard() {
 	C.ui2_win_clear_focus(st.root)
 }
 
-pub fn safe_area_top() f64 {
-	return 0
-}
+
 
 pub fn start_barcode_scan() {
 	st := windows_state()
@@ -1431,6 +1482,7 @@ fn windows_widget_kind(kind Kind) int {
 		.switch_control { 11 }
 		.toggle_button { 12 }
 		.screen { 0 }
+		.opengl { 0 }
 	}
 }
 
@@ -2313,7 +2365,7 @@ fn ui2_windows_window_proc(hwnd voidptr, message u32, wparam u64, lparam i64) i6
 				return 0
 			}
 			if wparam in [u64(0x0d), u64(0x20)]
-				&& (uint(lparam) & (uint(1) << 30)) == 0 {
+				&& (u32(lparam) & (u32(1) << 30)) == 0 {
 				binding := st.pointer_bindings[windows_handle_id(hwnd)] or {
 					WindowsPointerBinding{}
 				}
@@ -2486,7 +2538,7 @@ fn ui2_windows_control_pointer(hwnd voidptr, message u32, local_x int, local_y i
 	mut y := i32(local_y)
 	C.ui2_win_point_to_root(hwnd, st.root, &x, &y)
 	if message == win_wm_lbutton_down {
-		mut target := voidptr(uint(hwnd))
+		mut target := hwnd
 		mut binding := WindowsPointerBinding{}
 		for target != unsafe { nil } {
 			handle := windows_handle_id(target)

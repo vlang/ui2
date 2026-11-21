@@ -264,7 +264,10 @@ Repeater {
 
 A `Button` can be styled directly in VML. Leave `native` unset when the
 application should own its colors and shape; `native: true` requests the
-standard native-style appearance instead.
+standard native-style appearance instead. For one shared look across many
+buttons, prefer a sheet rule (`Button.primary { ... }` in a `Style` block
+or the global sheet, matched with `class: primary`) over repeating props —
+see [Styling](#styling).
 
 ```vml
 Button {
@@ -548,6 +551,44 @@ gradient's per-stop opacity, and it draws no shadows: Win32 child windows cannot
 paint outside themselves. Screenshots taken with `UI2_SCREENSHOT_PATH` on AppKit
 do not show CoreAnimation shadows, which `cacheDisplayInRect:` does not render.
 
+## Styling
+
+`ui2` stylesheets (`vss`) bring QSS/CSS-style rules to every backend:
+type, `#id` and `.class` selectors, `:hover`/`:disabled` states, `@media`
+and `@container` queries, variables, and light/dark blocks. The cascade is
+theme tokens, then the global sheet, then per-subtree scopes, then inline
+`BoxStyle`/`TextStyle` — which always win, so adopting a sheet never breaks
+existing builders. Rules index by subject at parse time, so large sheets
+stay cheap; see [docs/stylesheet.md](docs/stylesheet.md) for the full
+guide.
+
+```v
+ui2.set_global_stylesheet(ui2.parse_stylesheet('
+@accent: #2563eb;
+light { @bg: #f1f5f9; @ink: #172033; }
+dark  { @bg: #172033; @ink: #f8fafc; }
+Button { background: @accent; color: white; border-radius: 6px; }
+Button:hover { opacity: 0.92; }
+Button:disabled { opacity: 0.4; }
+Label.title { font-size: 22px; font-weight: bold; }
+@media (max-width: 560px) { Label.title { font-size: 18px; } }
+') or { panic(err) })
+```
+
+`examples/stylesheet_demo` is the first tour, `examples/stylesheet_gallery`
+the deep showcase, `examples/stylesheet_responsive` splits layout (V) from
+style (sheet), `examples/stylesheet_theme` is a variable-driven
+accent/mode studio, and `examples/stylesheet_plugins` wires every plugin
+hook to a live-reloaded sheet. `with_platform_design` presets cover the
+common per-OS looks (glass on macOS/iOS, Material on Android, one design
+everywhere when forced), VML documents style themselves with in-document
+`Style` blocks (`examples/counter`), composite components expose
+styleable part classes, and VSS now drives ui2's animation runtime via
+`transition:` and `@keyframes`/`animation:`. The full guide — selectors, specificity, every property,
+media/container reference, scoping, the DSL, plugins, lint, dark mode,
+platform adaptation, VML styling, component classes, migration and
+troubleshooting — is [docs/stylesheet.md](docs/stylesheet.md).
+
 ## Backend capabilities
 
 Call `control_support(kind)` to query support. macOS implements every shared
@@ -748,6 +789,54 @@ for native and custom-rendered windows alike. Linux and the BSDs drive
 `wl-copy`/`wl-paste` under Wayland, or `xclip` or `xsel` under X11, so one of
 them has to be installed; Android has no clipboard this layer can reach. Check
 `clipboard_supported()` before offering a copy action.
+
+## Platform integration
+
+`haptic` plays a haptic on phones and Force Touch trackpads, `set_app_badge`
+stamps a number on the application icon, `open_url` opens a link with its
+default handler, and `share_text` opens the platform share sheet. Every call
+reports whether the platform accepted the request, and every family has a
+`*_supported` capability query, after the clipboard and dialog APIs:
+
+```v
+if ui2.haptic_supported() {
+    ui2.haptic(.success)
+}
+ui2.set_app_badge(3) // zero clears the stamp
+if ui2.open_url('https://vlang.io') {
+    // request submitted to the browser, mail client or owning app
+}
+if ui2.share_text('Look at this') {
+    // share sheet requested; the user may still cancel
+}
+```
+
+Only `http` and `https` links with a host and `mailto` links with a recipient
+address are accepted. Surrounding URL whitespace is trimmed; embedded spaces
+and control characters are rejected. Blank share text and negative badge
+counts are rejected without touching the
+platform. Haptics run on iOS (impact, selection and notification generators),
+macOS (`NSHapticFeedbackManager`) and Android (the vibrator through JNI);
+badges on iOS and macOS dock tiles; links on iOS, macOS, Windows
+(`ShellExecute`), Android (an `ACTION_VIEW` intent) and the Linux and BSD
+desktops (`xdg-open`); the share sheet on iOS (`UIActivityViewController`)
+and Android (`ACTION_SEND` through the chooser). The rest answer unsupported,
+so gate the buttons on the capability queries. Run
+`v run examples/platform_integration/main.v` for a demo.
+
+Call these integrations from the main UI thread on iOS; calls from other
+threads return false. URL opening on iOS and Unix desktops is asynchronous, so
+true means the request was submitted, rather than confirming the final result.
+Unix launchers are reaped in the background so a browser that stays running
+does not block the UI. Haptic feedback also depends on hardware and user
+settings. On Android, include
+`<uses-permission android:name="android.permission.VIBRATE"/>` in the app
+manifest; `haptic_supported()` checks this permission and the vibration motor.
+Badge display on iOS requires the user's notification authorization.
+
+Android bridge tests use a mock JVM and the NDK's JNI declarations, including
+failed Java calls, reference cleanup, and Unicode payloads. Run them with
+`python3 tests/platform_android/run.py /path/to/android-ndk`.
 
 ## File and folder dialogs
 
@@ -950,6 +1039,96 @@ the element exists is taken up when it is first laid out. To scroll to content
 the event being handled has just added, call `refresh()` first so the element
 has its new range. The iOS backend scrolls the same modes but does not expose
 these functions.
+
+## Scaffold
+
+`scaffold` lays a screen out the way Compose's `Scaffold` does: a top bar, a
+bottom bar, content filling the box between them, and optional floating
+action and snackbar overlays docked inside the content box. Slot elements
+keep their declared sizes, except that the snackbar stretches to the content
+width inside its margin. Bar children are positioned relative to their strip,
+content children relative to the content box, and the overlays are placed by
+the scaffold itself:
+
+```v
+ui2.scaffold(
+    id:                'app'
+    frame:             ui2.bounds()
+    top_bar_height:    56
+    bottom_bar_height: 64
+    top_bar:           [ui2.label('title', 'Scaffold', ui2.rect(16, 0, 200, 56), style)]
+    content:           [ui2.label('body', 'Hello', ui2.rect(16, 16, 200, 24), style)]
+    bottom_bar:        [ui2.label('nav', 'Nav', ui2.rect(16, 0, 200, 64), style)]
+    floating_action:   ui2.button('add', '+', ui2.rect(0, 0, 56, 56), fab_box, fab_text)
+    snackbar:          ui2.label('snack', 'Saved', ui2.rect(0, 0, 100, 40), snack_text)
+)!
+```
+
+```vml
+Scaffold {
+    id: app
+    top_bar_height: 56
+    bottom_bar_height: 64
+
+    Label { slot: top text: "Scaffold" }
+    Label { text: "Hello" }
+    Label { slot: bottom text: "Nav" }
+    Button { slot: fab text: "+" x: 0 y: 0 width: 56 height: 56 }
+}
+```
+
+Children without a `slot` land in the content box. At most one `fab` and one
+`snackbar` child are allowed. Named slots are `top`, `bottom`, `content`, `fab`,
+and `snackbar`; unknown slots are rejected while the document loads.
+`scaffold_content_rect` exposes the content box for code that places its own
+overlays. When the bars exceed the available height, the content height is zero
+and the bars overlap, with the bottom bar anchored to the bottom edge.
+When both overlays are visible, the snackbar sits above the floating action
+with `snackbar_margin` between them, keeping the action accessible.
+
+## Safe areas
+
+A `SafeArea` insets its children by the operating-system intrusions — the
+status bar, display notch, camera housing, and home indicator on phones —
+after Flutter's `SafeArea`. Each side can be switched off individually, and
+`minimum` keeps at least that much room where the platform reports nothing.
+Children are positioned relative to the safe content box:
+
+```v
+content := ui2.safe_area(
+    id:    'safe'
+    frame: ui2.bounds()
+    minimum: ui2.LayoutPadding{ top: 8, bottom: 8 }
+    children: [ui2.label('title', 'Hello', ui2.rect(0, 0, 200, 24), style)]
+)!
+```
+
+```vml
+SafeArea {
+    id: safe
+    minimum_top: 8
+    minimum_bottom: 8
+}
+```
+
+`SafeViewport` is the scrolling equivalent, after Flutter's `SliverSafeArea`:
+the scroll pane spans the whole frame while its content clears the intrusions,
+so the first and last rows are never hidden behind a notch or home indicator.
+`scroll_mode` chooses the axes, as in `scroll_with_mode`:
+
+```vml
+SafeViewport {
+    id: list
+    scroll_mode: vertical_only
+}
+```
+
+`safe_area_insets()` reports the current intrusions per side (zero where the
+platform keeps them outside the content rect, as on desktop); `safe_area_top()`
+is the top edge of the same value. iOS reads the view's `safeAreaInsets`, so
+changes after rotating the phone are picked up on the next build. Other
+backends currently report zero insets. Insets are relative to the window;
+when nesting safe containers, disable sides already handled by the parent.
 
 ## Fonts and text sizes
 
@@ -1222,7 +1401,8 @@ codes for known keys, so command shortcuts are independent of the input source.
 
 Typed-VML ports from `v-ui` include:
 
-- `v run examples/counter/main.v` — the 7GUIs counter.
+- `v run examples/counter/main.v` — the 7GUIs counter, with its look in an
+  in-document VML `Style` block instead of repeated inline props.
 - `v run examples/temperature_converter/main.v` — the two-way 7GUIs
   temperature converter.
 - `v run examples/flight_booker/main.v` — the validated 7GUIs flight booker.
@@ -1348,6 +1528,22 @@ Typed-VML ports from `v-ui` include:
 - `v run examples/custom_window/main.v` — a borderless desktop widget with
   ui2-drawn chrome, draggable content, and genuinely transparent space between
   its rounded surfaces on the native macOS and Windows backends.
+- `v run examples/stylesheet_demo/main.v` — the stylesheet first tour:
+  global, scoped and DSL-built rules, light/dark toggle, hover, disabled and
+  checked states.
+- `v run examples/stylesheet_gallery/main.v` — the deep stylesheet showcase:
+  section nav, container queries on two card widths, an accent cycler, and a
+  live query readout.
+- `v run examples/stylesheet_responsive/main.v` — bounds-driven columns in V
+  with media and container breakpoints in the sheet.
+- `v run examples/stylesheet_theme/main.v` — four accents times
+  light/dark/system from one variable sheet with a gradient hero.
+- `v run examples/stylesheet_plugins/main.v` — the plugin system:
+  a custom `theme()` function, `@supports` at-rules, a `:--has-tooltip`
+  pseudo-class, a debug transform, a lint rule, `@import` across files,
+  and mtime-gated live reload.
+- `v run examples/stylesheet_animation/main.v` — VSS-driven animations:
+  hover transitions and an infinite pulse via `@keyframes`/`animation`.
 
 Run the calculator demo with:
 
@@ -1471,3 +1667,8 @@ remove observers, delegates, actions, menus, and pointer registries on unmount.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+### Embedding controls in an existing host
+
+UI2 exposes native and custom-renderer embedding APIs, vector decorations and
+explicit button icon sizing. See [Embedding UI2 controls](docs/embedding.md).

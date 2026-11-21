@@ -166,8 +166,11 @@ pub:
 	values map[string]SettingValue // Missing keys use the item's default.
 	state  SettingsState
 	// group_variant is the surface of every group that does not set its own.
-	group_variant      SettingsGroupVariant
-	nav_width          f64    = 240
+	group_variant SettingsGroupVariant
+	nav_width     f64 = 240
+	// transparent leaves the view's own surfaces unpainted, so what it sits on
+	// shows through, as in a translucent modal.
+	transparent        bool
 	search_placeholder string = 'Search settings'
 	empty_title        string = 'No matching settings'
 	empty_description  string = 'Try another word, or clear the search.'
@@ -465,7 +468,7 @@ fn settings_validate(config SettingsConfig) ! {
 			return error('setting page `${pid}` is listed twice')
 		}
 		page_ids[pid] = true
-		if page.icon.len > 0 && !symbol_known(page.icon) {
+		if page.icon.len > 0 && !page.icon.contains('/') && !symbol_known(page.icon) {
 			return error('setting page `${pid}` uses icon `${page.icon}`, which not every renderer can draw; pick a name from symbol_names()')
 		}
 		if !component_finite(page.title_suffix_width) || page.title_suffix_width < 0 {
