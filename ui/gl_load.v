@@ -140,8 +140,8 @@ pub fn configure_gl_libraries(load GlLoad) {
 // be undone by unsetting the environment, and a vendor that crashes while
 // initializing would take the window down with it. The child dies with the
 // verdict and never reaches the window.
-$if linux {
-	fn egl_vendor_initializes(manifest string) bool {
+fn egl_vendor_initializes(manifest string) bool {
+	$if linux {
 		pid := C.fork()
 		if pid < 0 {
 			return true // cannot fork: keep the pin, the flag is only a hint
@@ -166,6 +166,10 @@ $if linux {
 		return (status & 0x7f) == 0 && ((status >> 8) & 0xff) == 0
 	}
 
+	return true
+}
+
+$if linux {
 	fn C.fork() i32
 
 	fn C.wait(status &i32) i32

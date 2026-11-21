@@ -120,7 +120,7 @@ fn test_safe_viewport_shifts_children_and_extends_range() {
 	assert el.children.len == 2
 	assert el.children[0].frame == rect(10, 20, 200, 40)
 	// The child reaches (210, 60); the trailing padding extends the range.
-	assert el.children[1].frame == rect(219, 89, 1, 1)
+	assert el.children[1].frame == rect(220, 90, 0, 0)
 }
 
 fn test_safe_viewport_ignores_hidden_children_in_range() {
@@ -140,7 +140,7 @@ fn test_safe_viewport_ignores_hidden_children_in_range() {
 		]
 	) or { panic(err) }
 	assert el.children.len == 3
-	assert el.children[2].frame == rect(199, 89, 1, 1)
+	assert el.children[2].frame == rect(200, 90, 0, 0)
 }
 
 fn test_safe_viewport_axis_and_scroller_options() {
@@ -214,4 +214,50 @@ fn test_vml_safe_area_rejects_bad_minimum() {
 		return
 	}
 	assert false
+}
+
+fn test_safe_viewport_preserves_nonzero_frame_origin() {
+	frame := rect(37, 53, 240, 180)
+	el := safe_viewport(frame: frame)!
+	assert el.frame == frame
+	vml := element_from_vml('SafeViewport { x: 37 y: 53 width: 240 height: 180 }', rect(0, 0, 400, 300))!
+	assert vml.frame == frame
+}
+
+fn test_safe_viewport_empty_content_keeps_leading_and_trailing_padding() {
+	el := safe_viewport(
+		frame:   rect(0, 0, 5, 5)
+		minimum: LayoutPadding{ left: 10, top: 20, right: 3, bottom: 4 }
+	)!
+	assert scroll_content_width(el.children) == 13
+	assert el.children.last().frame.y + el.children.last().frame.height == 24
+}
+
+fn test_safe_viewport_fractional_padding_does_not_force_one_unit_extent() {
+	el := safe_viewport(
+		frame:   rect(0, 0, 0.25, 0.25)
+		minimum: LayoutPadding{ right: 0.5, bottom: 0.5 }
+	)!
+	assert scroll_content_width(el.children) == 0.5
+	assert el.children.last().frame.y + el.children.last().frame.height == 0.5
+}
+
+fn test_vml_safe_containers_preserve_box_decorations_and_group_role() {
+	for tag in ['SafeArea', 'SafeViewport'] {
+		el := element_from_vml('${tag} { background: #123456 radius: 6 border_width: 2 accessibility_label: "Content" }', rect(0, 0, 300, 200))!
+		assert el.box.bg == 0x123456
+		assert el.box.radius == 6
+		assert el.box.border_left == 2 && el.box.border_bottom == 2
+		assert el.accessibility_label == 'Content'
+		if tag == 'SafeArea' {
+			assert el.accessibility_role == 'group'
+		}
+	}
+}
+
+fn test_safe_viewport_empty_content_keeps_leading_padding_only() {
+	el := safe_viewport(frame: rect(0, 0, 5, 5), minimum: LayoutPadding{ left: 10, top: 20 })!
+	assert el.children.len == 1
+	assert scroll_content_width(el.children) == 10
+	assert el.children[0].frame.y + el.children[0].frame.height == 20
 }

@@ -16,6 +16,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		style         TextStyle
 		rendered_size int
 		lines         []string
+		content       Rect // Last drawn content box, in window coordinates.
 	}
 
 	// Viewports are full layout boxes; areas are their visible, hittable parts.

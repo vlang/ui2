@@ -6,7 +6,6 @@ module ui2
 $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris || ((macos || windows) && ui2_custom_rendering ?)) && !ui2_headless ? {
 	import gg
 	import math
-	import sokol.sgl
 
 	// ShapeGeometry is a shape turned into triangles in its frame's coordinates,
 	// kept per element id: the custom renderer draws every frame, and ear clipping
@@ -152,13 +151,13 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			return
 		}
 		if c.a != 255 {
-			sgl.load_pipeline(im_alpha_pipeline())
+			im_load_alpha(ctx)
 		}
-		sgl.c4b(c.r, c.g, c.b, c.a)
-		sgl.begin_triangles()
+		im_c4b(ctx, c.r, c.g, c.b, c.a)
+		im_begin_triangles(ctx)
 		for p in tris {
-			sgl.v2f(f32((x + p.x) * scale), f32((y + p.y) * scale))
+			im_v2f(ctx, f32((x + p.x) * scale), f32((y + p.y) * scale))
 		}
-		sgl.end()
+		im_end(ctx)
 	}
 }

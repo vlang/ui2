@@ -270,7 +270,7 @@ pub fn refresh() {
 		return
 	}
 	st.rendering = true
-	root := st.build_screen()
+	root := stylesheet_apply_frame(stylesheet_frame_build(st.build_screen), stylesheet_appkit_env())
 	render_root(root)
 	st.rendering = false
 	if st.refresh_pending {
@@ -672,6 +672,38 @@ pub fn focus(id string) {
 	}
 }
 
+// stylesheet_appkit_env reads this frame's interaction state for the
+// stylesheet cascade. AppKit tracks hover and focus; it has no press-target
+// tracking, so :pressed stays unmatched here.
+fn stylesheet_appkit_env() StyleMatchEnv {
+	st := state()
+	hovered := if st.hovered.len > 0 { st.hovered.last() } else { '' }
+	env := stylesheet_frame_env(hovered, '', focused_id())
+	return StyleMatchEnv{
+		...env
+		dpi: native_device_scale()
+	}
+}
+
+// native_device_scale reports the window's backing-store scale.
+fn native_device_scale() f64 {
+	st := state()
+	if native_is_nil(st.window) {
+		return 1.0
+	}
+	scale := macos.msg_f64(st.window, 'backingScaleFactor')
+	if scale <= 0 {
+		return 1.0
+	}
+	return scale
+}
+
+// native_safe_insets reports the display safe area. Desktop windows are
+// full rectangles, so there is none and env() uses its fallback.
+fn native_safe_insets() ?SafeInsets {
+	return none
+}
+
 // focused_id returns the declarative id of the control that currently owns
 // keyboard focus. NSTextField edits through a shared field editor, so compare
 // that responder with each field's currentEditor as well as direct responders.
@@ -778,15 +810,7 @@ pub fn quit() {
 	native_terminate_app()
 }
 
-pub fn safe_area_insets() SafeInsets {
-	// macOS keeps its menu bar and camera housing outside the content rect
-	// ui2 lays out, so there is no inset left to avoid.
-	return SafeInsets{}
-}
 
-pub fn safe_area_top() f64 {
-	return safe_area_insets().top
-}
 
 pub fn start_barcode_scan() {
 	st := state()
@@ -1629,9 +1653,7 @@ fn ui2_root_mouse_moved(self voidptr, _cmd voidptr, event voidptr) {
 	if NativeView(self) != st.root_view {
 		return
 	}
-	// NOTE(V 0.5.2 CI): `macos.msg_point` does not exist in 0.5.2; hover
-	// geometry is not asserted in CI tests, so zero is safe.
-	st.hover_window_point = DarwinPoint{}
+	st.hover_window_point = darwin_msg_point(event, 'locationInWindow')
 	st.hover_root_point = native_event_point(st.root_view, event)
 	st.hover_inside = true
 	native_update_hover()
@@ -1659,10 +1681,11 @@ fn native_hovered_chain(window_point DarwinPoint) []string {
 	// hitTest: takes a point in the receiver's superview, which for the window's
 	// content view shares the window's coordinates.
 	superview := macos.msg_id(st.root_view, 'superview')
-	// NOTE(V 0.5.2 CI): `msg_point_point_id` (convertPoint) does not exist in
-	// 0.5.2; hover hit-testing is not asserted in CI tests, so use the window
-	// point directly.
-	point := window_point
+	point := if objc_is_nil(superview) {
+		window_point
+	} else {
+		darwin_msg_point_point_id(superview, 'convertPoint:fromView:', window_point, objc_nil())
+	}
 	mut hit_view := NativeView(C.ui2_macos_msg_id_point(st.root_view, macos.sel('hitTest:'), point.x,
 		point.y))
 	mut inner_first := []string{}
@@ -2139,11 +2162,11 @@ fn native_set_delegate(delegate NativeView) {
 }
 
 fn native_new_window(frame NativeRect, title string) NativeView {
-	// NOTE(V 0.5.2 CI): `msg_id_rect_u64_u64_bool` does not exist in 0.5.2's
-	// bridge. Window creation is not exercised by CI tests (they only build,
-	// and the Linux smoke test does not run on macOS), so return nil here to
-	// keep 0.5.2 green. Full macOS window support requires a newer V.
-	return unsafe { nil }
+	style := ns_window_style_titled | ns_window_style_closable | ns_window_style_miniaturizable | ns_window_style_resizable
+	window := darwin_msg_id_rect_u64_u64_bool(macos.alloc('UI2Window'), 'initWithContentRect:styleMask:backing:defer:', appkit_rect(frame), style, ns_backing_store_buffered, false)
+	macos.msg_void1(window, 'setTitle:', macos.nsstring(title))
+	macos.msg_void_bool(window, 'setReleasedWhenClosed:', false)
+	return window
 }
 
 fn native_make_key_and_order_front(window NativeView) {
@@ -2155,8 +2178,7 @@ fn native_set_content_view(window NativeView, view NativeView) {
 }
 
 fn native_set_content_min_size(window NativeView, width f64, height f64) {
-	// NOTE(V 0.5.2 CI): `msg_void_point`/`macos.point` do not exist in 0.5.2;
-	// min-size is not asserted in CI tests, so no-op is safe.
+	darwin_msg_void_point(window, 'setContentMinSize:', darwin_point(width, height))
 }
 
 fn native_bounds(view NativeView) NativeRect {
@@ -2363,7 +2385,7 @@ fn native_update_image(image_view NativeView, frame NativeRect, path string, rot
 		macos.msg_void1(image_view, 'setImage:', macos.Id(unsafe { nil }))
 		return
 	}
-	tints := false // NOTE(V 0.5.2 CI): `macos.responds_to` does not exist in 0.5.2; skip tint check (cosmetic, not asserted in CI tests).
+	tints := darwin_responds_to(image_view, 'setContentTintColor:')
 	mut st := state()
 	pointer := u64(voidptr(image_view))
 	if path.starts_with('symbol:') {
@@ -2432,9 +2454,14 @@ struct LabelPlacement {
 
 // The text field a label draws with: the view itself, or the one it holds.
 fn label_text_field(view NativeView) NativeView {
-	// NOTE(V 0.5.2 CI): `msg_bool_id` does not exist in 0.5.2; assume the view
-	// itself is the field (labels in CI tests are simple, not nested).
-	return view
+	if darwin_msg_bool_id(view, 'isKindOfClass:', macos.get_class('NSTextField')) {
+		return view
+	}
+	subviews := macos.msg_id(view, 'subviews')
+	if native_is_nil(subviews) || macos.msg_u64(subviews, 'count') == 0 {
+		return view
+	}
+	return NativeView(macos.msg_id_u64(subviews, 'objectAtIndex:', 0))
 }
 
 fn native_update_label(view NativeView, frame NativeRect, text string, text_hex u32, size f64, family string, bold bool, italic bool, underline bool, align int, lines int, valign VAlign, boxed bool) {
@@ -2473,10 +2500,26 @@ fn native_update_label(view NativeView, frame NativeRect, text string, text_hex 
 // sets labels up, for the size of its cell: the text's width plus the inset an
 // NSTextField draws it with.
 fn native_measure_text_width(text string, style TextStyle) f64 {
-	// NOTE(V 0.5.2 CI): `msg_point` (NSSize) does not exist in 0.5.2; return 0
-	// here (callers fall back to CPU measurement where it matters, and CI tests
-	// do not assert exact AppKit widths).
-	return 0.0
+	mut st := state()
+	if native_is_nil(st.measure_label) {
+		st.measure_label = macos.msg_id_rect(macos.alloc('NSTextField'), 'initWithFrame:',
+			appkit_rect(native_rect(0, 0, 100, 20)))
+		macos.msg_void_bool(st.measure_label, 'setEditable:', false)
+		macos.msg_void_bool(st.measure_label, 'setSelectable:', false)
+		macos.msg_void_bool(st.measure_label, 'setBordered:', false)
+		macos.msg_void_bool(st.measure_label, 'setBezeled:', false)
+		macos.msg_void_bool(st.measure_label, 'setDrawsBackground:', false)
+		native_apply_line_limit(st.measure_label, 1)
+	}
+	field := st.measure_label
+	macos.msg_void1(field, 'setFont:', native_text_style_font(TextStyle{
+		size:        style.size
+		font_family: style.font_family
+		bold:        style.bold
+		italic:      style.italic
+	}))
+	macos.msg_void1(field, 'setStringValue:', macos.nsstring(text))
+	return darwin_msg_point(macos.msg_id(field, 'cell'), 'cellSize').x
 }
 
 // Put the text field back over the whole area the label was laid out with, then move
@@ -3156,6 +3199,7 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 		macos.msg_void1(tv, 'setString:', macos.nsstring(el.text))
 		return
 	}
+	selection := native_text_view_selected_range(tv)
 	macos.msg_void_bool(tv, 'setRichText:', true)
 	native_text_view_set_attributed_string(tv, el.text, el.text_style.color, el.text_style.background_color, el.text_style.size, el.text_style.font_family, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.text_style.strikethrough, el.text_style.vertical_align)
 	base_length := native_utf16_length(el.text)
@@ -3174,6 +3218,8 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 		}
 		location += length
 	}
+	// Applying effects changes the selected range; rendering must preserve it.
+	native_text_view_restore_selected_range(tv, selection.location, selection.length, false)
 }
 
 fn text_style_effect_value(style TextStyle) int {
