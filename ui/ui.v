@@ -947,9 +947,11 @@ pub fn with_action(el Element, action_id string) Element {
 // with_secure_entry makes a text field use the platform's native password
 // control while retaining the field's change and submit bindings.
 pub fn with_secure_entry(el Element) Element {
+	// Secure fields never publish their plaintext as an accessibility value.
 	return Element{
 		...el
-		secure: true
+		secure:              true
+		accessibility_value: ''
 	}
 }
 

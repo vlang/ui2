@@ -1929,7 +1929,10 @@ fn apply_common_native_state(native NativeView, el Element) {
 		return
 	}
 	macos.msg_void1(native, 'setIdentifier:', macos.nsstring(el.id))
-	native_apply_common_view_state(native, el.hidden, el.enabled, el.accessibility_role, el.accessibility_label, el.accessibility_value)
+	// Secure fields never publish their plaintext to native accessibility.
+	// Passing an empty value also clears anything a previous non-secure state set.
+	secure_value := if el.secure { '' } else { el.accessibility_value }
+	native_apply_common_view_state(native, el.hidden, el.enabled, el.accessibility_role, el.accessibility_label, secure_value)
 }
 
 fn remove_stale_nodes(active map[string]bool) {

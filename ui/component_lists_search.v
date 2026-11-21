@@ -538,7 +538,7 @@ pub fn searchable_list(config SearchableListConfig) !Element {
 				key: 'results'
 			},
 		])
-		accessibility_role:  'group'
+		accessibility_role:  'search'
 		accessibility_label: config.accessibility_label
 	})
 }

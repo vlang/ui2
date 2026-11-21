@@ -1649,7 +1649,10 @@ fn render_element(parent View, el Element, key string, mut active map[string]boo
 	}
 
 	register_native_handlers(native, el)
-	native_apply_common_view_state(native, el.hidden, el.enabled, el.accessibility_role, el.accessibility_label, el.accessibility_value)
+	// Secure fields never publish their plaintext to native accessibility.
+	// Passing an empty value also clears anything a previous non-secure state set.
+	secure_value := if el.secure { '' } else { el.accessibility_value }
+	native_apply_common_view_state(native, el.hidden, el.enabled, el.accessibility_role, el.accessibility_label, secure_value)
 	if el.id.len > 0 {
 		remember(el.id, native)
 		g_view_kinds[el.id] = el.kind

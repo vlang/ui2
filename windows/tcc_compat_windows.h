@@ -186,8 +186,14 @@ WINBOOL WINAPI SHGetPathFromIDListW(PCIDLIST_ABSOLUTE, LPWSTR);
 #ifndef STATE_SYSTEM_FOCUSABLE
 #define STATE_SYSTEM_FOCUSABLE 0x100000
 #endif
+#ifndef STATE_SYSTEM_CHECKED
+#define STATE_SYSTEM_CHECKED 0x10
+#endif
 #ifndef EVENT_OBJECT_INVOKED
 #define EVENT_OBJECT_INVOKED 0x8013
+#endif
+#ifndef EVENT_OBJECT_STATECHANGE
+#define EVENT_OBJECT_STATECHANGE 0x800a
 #endif
 typedef struct IAccessible IAccessible;
 typedef struct IAccessibleVtbl {

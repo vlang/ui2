@@ -167,8 +167,8 @@ mut:
 
 __global g_accessibility_keys = AccessibilityKeys{}
 
-fn accessibility_traits(role string) u64 {
-	return match role {
+fn accessibility_traits(role string, value string) u64 {
+	base := match role {
 		'button' { extern_u64('UIAccessibilityTraitButton', 1) }
 		'image', 'img' { extern_u64('UIAccessibilityTraitImage', 4) }
 		'link' { extern_u64('UIAccessibilityTraitLink', 2) }
@@ -177,6 +177,10 @@ fn accessibility_traits(role string) u64 {
 		'switch' { extern_u64('UIAccessibilityTraitButton', 1) }
 		else { extern_u64('UIAccessibilityTraitNone', 0) }
 	}
+	if value in ['checked', 'on', 'selected', 'pressed'] {
+		return base | extern_u64('UIAccessibilityTraitSelected', 0x80)
+	}
+	return base
 }
 
 fn saved_accessibility_value(value macos.Id) macos.Id {
@@ -208,7 +212,7 @@ fn apply_accessibility_string(view View, raw string, getter string, setter strin
 	}
 }
 
-fn apply_accessibility_traits(view View, role string, enabled bool) {
+fn apply_accessibility_traits(view View, role string, value string, enabled bool) {
 	key := voidptr(&g_accessibility_keys.role)
 	saved := macos.get_associated_object(view, key)
 	if role.len > 0 {
@@ -220,7 +224,7 @@ fn apply_accessibility_traits(view View, role string, enabled bool) {
 		} else {
 			extern_u64('UIAccessibilityTraitNotEnabled', 0x100)
 		}
-		macos.msg_void_u64(view, 'setAccessibilityTraits:', accessibility_traits(role) | disabled_trait)
+		macos.msg_void_u64(view, 'setAccessibilityTraits:', accessibility_traits(role, value) | disabled_trait)
 	} else if !objc_is_nil(saved) {
 		macos.msg_void_u64(view, 'setAccessibilityTraits:', macos.msg_u64(saved, 'unsignedLongLongValue'))
 		macos.set_associated_object(view, key, objc_nil(), macos.assoc_retain_nonatomic)
@@ -249,7 +253,7 @@ fn native_apply_common_view_state(view View, hidden bool, enabled bool, role str
 	macos.msg_void_bool(view, 'setHidden:', hidden)
 	apply_accessibility_string(view, label, 'accessibilityLabel', 'setAccessibilityLabel:', voidptr(&g_accessibility_keys.label))
 	apply_accessibility_string(view, value, 'accessibilityValue', 'setAccessibilityValue:', voidptr(&g_accessibility_keys.value))
-	apply_accessibility_traits(view, role, enabled)
+	apply_accessibility_traits(view, role, value, enabled)
 	apply_accessibility_element(view, role.len > 0 || label.len > 0 || value.len > 0)
 	if objc_is_kind_of(view, 'UIControl') {
 		macos.msg_void_bool(view, 'setEnabled:', enabled)

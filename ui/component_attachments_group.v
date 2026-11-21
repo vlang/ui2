@@ -35,7 +35,7 @@ pub:
 	// surface is the color behind the group, which items use to round image
 	// tiles on the custom renderer; it defaults to the theme's background.
 	surface             ?u32
-	accessibility_label string = 'Attachments'
+	accessibility_label string
 	theme               ComponentTheme // For every item.
 }
 

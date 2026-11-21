@@ -204,7 +204,12 @@ fn test_attachment_defaults_to_a_complete_medium_chip() {
 	assert el.accessibility_label == 'quarterly-report.pdf, PDF · 2.4 MB'
 	assert el.accessibility_value == 'Ready'
 	labels := attachments_labels(el)
-	assert labels == ['quarterly-report.pdf', 'PDF · 2.4 MB']
+	// The chip shortens the name to fit its measured width, so on platforms
+	// whose em runs wider the label is a middle-ellipsis, never a clipping.
+	assert labels.len == 2 && labels[1] == 'PDF · 2.4 MB'
+	title := labels[0]
+	assert title == 'quarterly-report.pdf'
+		|| (title.contains('…') && title.ends_with('.pdf') && title.starts_with('quarter'))
 	assert attachments_symbols(el) == ['doc.text.fill']
 	card := attachments_card(el, 'report')
 	assert card.box.border_left == 1

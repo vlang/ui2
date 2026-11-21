@@ -33,15 +33,15 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		// The IDE's 9px resize handles move outside the original press almost
 		// immediately. They identify themselves by action_id, not an element id.
 		g_hit_targets = [HitTarget{action_id: 'resize_widget', w: 9, h: 9, draggable: true}]
-		handle_touch_down(4, 4)
-		handle_touch_move(20, 20)
+		handle_touch_down(4, 4, false)
+		handle_touch_move(20, 20, false)
 		// Simulate the next frame rebuilding the hit targets at new coordinates.
 		g_hit_targets = [
 			HitTarget{action_id: 'resize_widget', x: 20, y: 20, w: 9, h: 9, draggable: true},
 			HitTarget{action_id: 'unrelated', w: 9, h: 9, slider: true},
 		]
-		handle_touch_move(50, 60)
-		handle_touch_up(70, 80)
+		handle_touch_move(50, 60, false)
+		handle_touch_up(70, 80, false)
 		assert pointer_capture_events == [
 			pointer_event_id('down', 'resize_widget', 4, 4),
 			pointer_event_id('drag', 'resize_widget', 20, 20),
@@ -49,19 +49,19 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			pointer_event_id('up', 'resize_widget', 70, 80),
 		]
 		assert !g_touch.down
-		handle_touch_move(90, 90)
-		handle_touch_up(90, 90)
+		handle_touch_move(90, 90, false)
+		handle_touch_up(90, 90, false)
 		assert pointer_capture_events.len == 4
 	}
 
 	fn test_capture_is_released_and_the_next_press_uses_the_new_target() {
 		reset_pointer_capture_test()
 		g_hit_targets = [HitTarget{action_id: 'first', w: 20, h: 20, clickable: true}]
-		handle_touch_down(5, 5)
+		handle_touch_down(5, 5, false)
 		g_hit_targets = [HitTarget{action_id: 'second', w: 20, h: 20, clickable: true}]
-		handle_touch_up(5, 5)
-		handle_touch_down(5, 5)
-		handle_touch_up(5, 5)
+		handle_touch_up(5, 5, false)
+		handle_touch_down(5, 5, false)
+		handle_touch_up(5, 5, false)
 		assert pointer_capture_events == [
 			pointer_event_id('down', 'first', 5, 5),
 			pointer_event_id('up', 'first', 5, 5),
@@ -73,7 +73,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	fn test_capture_survives_a_frame_with_no_hit_targets_and_cancels_on_focus_loss() {
 		reset_pointer_capture_test()
 		g_hit_targets = [HitTarget{action_id: 'drag', w: 20, h: 20, draggable: true}]
-		handle_touch_down(5, 5)
+		handle_touch_down(5, 5, false)
 		g_hit_targets = []HitTarget{}
 		on_event(&gg.Event{typ: .mouse_move, mouse_x: 40, mouse_y: 50}, &GgApp{})
 		on_event(&gg.Event{typ: .unfocused}, &GgApp{})
@@ -90,9 +90,9 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	fn test_cancelling_an_ordinary_button_does_not_activate_it() {
 		reset_pointer_capture_test()
 		g_hit_targets = [HitTarget{action_id: 'button', w: 20, h: 20}]
-		handle_touch_down(5, 5)
+		handle_touch_down(5, 5, false)
 		on_event(&gg.Event{typ: .touches_cancelled}, &GgApp{})
-		handle_touch_up(5, 5)
+		handle_touch_up(5, 5, false)
 		assert pointer_capture_events.len == 0
 		assert !g_touch.down
 	}
@@ -105,8 +105,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              56
 			button_behavior: true
 		}]
-		handle_touch_down(20, 20)
-		handle_touch_up(20, 20)
+		handle_touch_down(20, 20, false)
+		handle_touch_up(20, 20, false)
 		assert pointer_capture_events == ['save_card']
 	}
 
@@ -119,7 +119,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              56
 			button_behavior: true
 		}]
-		handle_touch_down(20, 20)
+		handle_touch_down(20, 20, false)
 		g_hit_targets = [HitTarget{
 			id:             'card'
 			action_id:      'replacement'
@@ -127,7 +127,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              56
 			button_behavior: true
 		}]
-		handle_touch_up(20, 20)
+		handle_touch_up(20, 20, false)
 		assert pointer_capture_events == ['original']
 	}
 
@@ -140,7 +140,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              20
 			button_behavior: true
 		}]
-		handle_touch_down(10, 10)
+		handle_touch_down(10, 10, false)
 		// Releasing in the old frame must not activate after the view moves.
 		g_hit_targets = [HitTarget{
 			id:             'card'
@@ -150,7 +150,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              20
 			button_behavior: true
 		}]
-		handle_touch_up(10, 10)
+		handle_touch_up(10, 10, false)
 		assert pointer_capture_events.len == 0
 
 		// A resize that excludes the unchanged pointer also cancels activation.
@@ -162,7 +162,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              20
 			button_behavior: true
 		}]
-		handle_touch_down(30, 10)
+		handle_touch_down(30, 10, false)
 		g_hit_targets = [HitTarget{
 			id:             'card'
 			action_id:      'save'
@@ -170,7 +170,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              20
 			button_behavior: true
 		}]
-		handle_touch_up(30, 10)
+		handle_touch_up(30, 10, false)
 		assert pointer_capture_events.len == 0
 
 		// The current frame is authoritative while the captured action stays fixed.
@@ -182,7 +182,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              20
 			button_behavior: true
 		}]
-		handle_touch_down(2, 10)
+		handle_touch_down(2, 10, false)
 		g_hit_targets = [HitTarget{
 			id:             'card'
 			action_id:      'replacement'
@@ -191,7 +191,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              20
 			button_behavior: true
 		}]
-		handle_touch_up(7, 10)
+		handle_touch_up(7, 10, false)
 		assert pointer_capture_events == ['save']
 
 		// Disabled and removed views are absent from the current hit-target frame.
@@ -203,9 +203,9 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              20
 			button_behavior: true
 		}]
-		handle_touch_down(10, 10)
+		handle_touch_down(10, 10, false)
 		g_hit_targets = []HitTarget{}
-		handle_touch_up(10, 10)
+		handle_touch_up(10, 10, false)
 		assert pointer_capture_events.len == 0
 
 		// Another element occupying the old rectangle is not the pressed target.
@@ -217,7 +217,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              20
 			button_behavior: true
 		}]
-		handle_touch_down(10, 10)
+		handle_touch_down(10, 10, false)
 		g_hit_targets = [HitTarget{
 			id:             'replacement'
 			action_id:      'save'
@@ -225,7 +225,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              20
 			button_behavior: true
 		}]
-		handle_touch_up(10, 10)
+		handle_touch_up(10, 10, false)
 		assert pointer_capture_events.len == 0
 
 		// Keeping the view but removing semantic behavior also cancels activation.
@@ -237,7 +237,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              20
 			button_behavior: true
 		}]
-		handle_touch_down(10, 10)
+		handle_touch_down(10, 10, false)
 		g_hit_targets = [HitTarget{
 			id:        'card'
 			action_id: 'save'
@@ -245,7 +245,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:         20
 			clickable: true
 		}]
-		handle_touch_up(10, 10)
+		handle_touch_up(10, 10, false)
 		assert pointer_capture_events.len == 0
 
 		// Id-less duplicate actions are ambiguous after a rebuild and must not fire.
@@ -254,8 +254,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			HitTarget{action_id: 'save', w: 40, h: 20, button_behavior: true},
 			HitTarget{action_id: 'save', w: 40, h: 20, button_behavior: true},
 		]
-		handle_touch_down(10, 10)
-		handle_touch_up(10, 10)
+		handle_touch_down(10, 10, false)
+		handle_touch_up(10, 10, false)
 		assert pointer_capture_events.len == 0
 	}
 
@@ -267,8 +267,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              56
 			button_behavior: true
 		}]
-		handle_touch_down(20, 20)
-		handle_touch_up(160, 20)
+		handle_touch_down(20, 20, false)
+		handle_touch_up(160, 20, false)
 		assert pointer_capture_events.len == 0
 
 		// Children are registered after their parent and reverse hit testing
@@ -277,8 +277,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			HitTarget{action_id: 'card', w: 120, h: 56, button_behavior: true},
 			HitTarget{action_id: 'child', x: 10, y: 10, w: 40, h: 30},
 		]
-		handle_touch_down(20, 20)
-		handle_touch_up(20, 20)
+		handle_touch_down(20, 20, false)
+		handle_touch_up(20, 20, false)
 		assert pointer_capture_events == ['child']
 	}
 
@@ -290,12 +290,12 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			h:              56
 			button_behavior: true
 		}]
-		handle_touch_down(20, 20)
-		handle_touch_move(50, 20)
-		handle_touch_up(20, 20)
+		handle_touch_down(20, 20, false)
+		handle_touch_move(50, 20, false)
+		handle_touch_up(20, 20, false)
 		assert pointer_capture_events.len == 0
 
-		handle_touch_down(20, 20)
+		handle_touch_down(20, 20, false)
 		cancel_touch()
 		assert pointer_capture_events.len == 0
 	}
@@ -309,8 +309,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			clickable:      true
 			button_behavior: true
 		}]
-		handle_touch_down(20, 20)
-		handle_touch_up(20, 20)
+		handle_touch_down(20, 20, false)
+		handle_touch_up(20, 20, false)
 		assert pointer_capture_events == [
 			pointer_event_id('down', 'surface', 20, 20),
 			pointer_event_id('up', 'surface', 20, 20),
@@ -329,8 +329,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			clickable:      true
 			button_behavior: true
 		}]
-		handle_touch_down(20, 20)
-		handle_touch_up(20, 20)
+		handle_touch_down(20, 20, false)
+		handle_touch_up(20, 20, false)
 		assert pointer_capture_events == [
 			pointer_event_id('down', 'surface', 20, 20),
 			pointer_event_id('up', 'surface', 20, 20),
@@ -344,10 +344,17 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		register_scroll_view('pane', frame, frame, 400, true, true, true)
 		g_hit_targets = [HitTarget{action_id: 'view', w: 100, h: 100, draggable: true}]
 		bar := scrollbar_geometry(frame, 400, 0, true)
-		handle_touch_down(bar.thumb.x + 1, bar.thumb.y + 1)
+		handle_touch_down(bar.thumb.x + 1, bar.thumb.y + 1, false)
 		assert g_touch.scrollbar_drag
-		handle_touch_move(bar.thumb.x + 1, 60)
-		handle_touch_up(bar.thumb.x + 1, 60)
+		handle_touch_move(bar.thumb.x + 1, 60, false)
+		handle_touch_up(bar.thumb.x + 1, 60, false)
 		assert pointer_capture_events.len == 0
 	}
+}
+
+// The tests above exercise the custom renderer and only compile with it; this
+// one keeps `v test` green on the native backends, where the file would
+// otherwise contain no test functions at all.
+fn test_pointer_capture_immediate_suite_needs_custom_renderer() {
+	assert true
 }
