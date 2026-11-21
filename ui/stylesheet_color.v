@@ -699,7 +699,7 @@ fn style_lab_axis(raw string, reference f64) !f64 {
 		}
 		return number / 100 * reference
 	}
-	return query_plain_number(trimmed) or { error('"${raw}" is not a color axis') }
+	return query_plain_number(trimmed) or { return error('"${raw}" is not a color axis') }
 }
 
 // style_lab_chroma parses a chroma channel: a bare number, or a percentage
@@ -717,7 +717,7 @@ fn style_oklab_lightness(raw string) !f64 {
 		}
 		return number / 100
 	}
-	return query_plain_number(text) or { error('"${raw}" is not a lightness') }
+	return query_plain_number(text) or { return error('"${raw}" is not a lightness') }
 }
 
 fn style_unit_fraction(raw string) !f64 {
@@ -728,7 +728,7 @@ fn style_unit_fraction(raw string) !f64 {
 		}
 		return number / 100
 	}
-	return query_plain_number(text) or { error('"${raw}" is not a fraction') }
+	return query_plain_number(text) or { return error('"${raw}" is not a fraction') }
 }
 
 // style_hundred_fraction parses a channel whose bare numbers run 0..100,

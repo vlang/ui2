@@ -30,6 +30,51 @@ pub:
 	message string
 }
 
+// StyleTransition describes a `transition:` declaration: which properties
+// animate, how long, which easing, and how long to delay.
+pub struct StyleTransition {
+pub mut:
+	properties []string
+	duration   f64
+	timing     AnimationTransition
+	timing_fn  AnimationTransitionFn
+	delay      f64
+}
+
+// StyleAnimation describes an `animation:` declaration referencing a
+// `@keyframes` name.
+pub struct StyleAnimation {
+pub mut:
+	name            string
+	duration        f64
+	timing          AnimationTransition
+	timing_fn       AnimationTransitionFn
+	delay           f64
+	iteration_count f64 = 1
+	infinite        bool
+	direction       string = 'normal'
+	fill_mode       string = 'none'
+	play_state      string = 'running'
+}
+
+// is_style_animation_prop reports whether prop is an animation declaration
+// the driver owns. Only exact names intercept: prefix matching would silently
+// swallow typos (`transitions:`, `transition-foo:`), which must keep falling
+// through to the unknown-property warning below.
+fn is_style_animation_prop(prop string) bool {
+	return match prop {
+		'transition', 'transition-property', 'transition-duration', 'transition-timing-function',
+		'transition-delay', 'animation', 'animation-name', 'animation-duration',
+		'animation-timing-function', 'animation-delay', 'animation-iteration-count',
+		'animation-direction', 'animation-fill-mode', 'animation-play-state' {
+			true
+		}
+		else {
+			false
+		}
+	}
+}
+
 // with_classes returns el with stylesheet classes added to the ones it
 // already carries, so wrapping a pre-classed element keeps its classes.
 pub fn with_classes(el Element, classes ...string) Element {
@@ -84,7 +129,7 @@ pub fn apply_stylesheet_ex(root Element, global Stylesheet, env StyleMatchEnv) (
 // variables of any mode, so it can contribute nothing to a cascade.
 fn stylesheet_is_empty(sheet Stylesheet) bool {
 	return sheet.rules.len == 0 && sheet.variables.len == 0 && sheet.light_vars.len == 0
-		&& sheet.dark_vars.len == 0
+		&& sheet.dark_vars.len == 0 && sheet.keyframes.len == 0
 }
 
 // element_has_scoped_stylesheet reports whether any element in the tree
@@ -184,7 +229,7 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 		}
 	}
 	if candidates.len == 0 {
-		return el, inherited
+		return Element{ ...el, style_custom_properties: inherited.clone() }, inherited
 	}
 	// Usually already ordered (rules author low→high specificity): one linear
 	// check, which is also the sort's fixed point, skips the closure sort.
@@ -245,13 +290,23 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 		if !apply[i] {
 			continue
 		}
-		out = apply_declaration(&el, out, candidate.decl.prop, resolved[i], candidate.length, mut
+		prop := candidate.decl.prop
+		if is_style_animation_prop(prop) {
+			if (prop.starts_with('transition') && (el.style_transitions.len > 0 || el.style_transition_values.len > 0))
+				|| (prop.starts_with('animation') && (el.style_animations.len > 0 || el.style_animation_values.len > 0)) {
+				continue
+			}
+			out = apply_style_animation_decl(out, prop, resolved[i])
+			continue
+		}
+		out = apply_declaration(&el, out, prop, resolved[i], candidate.length, mut
 			fill, mut warnings, mut color_cache, mut len_cache, mut split_cache)
 	}
 	out = style_fill_finish(&el, out, fill)
 	if raw.len == 0 && scope.resolved.len == 0 {
 		// No custom properties produced: the inherited map passes through
 		// shared instead of cloned.
+		out.style_custom_properties = inherited.clone()
 		return out, inherited
 	}
 	mut merged := inherited.clone()
@@ -261,6 +316,7 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 	for key, value in scope.resolved {
 		merged[key] = value
 	}
+	out.style_custom_properties = merged.clone()
 	return out, merged
 }
 
