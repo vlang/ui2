@@ -43,7 +43,7 @@ pub fn style_rule(selector string, props map[string]string) !StyleRule {
 // with the same grammar as the string form. Empty preludes mean no queries.
 pub fn style_rule_guarded(selector string, props map[string]string, media_src string, container_src string) !StyleRule {
 	base := style_rule(selector, props)!
-	media := if media_src.trim_space().len > 0 {
+	media_queries := if media_src.trim_space().len > 0 {
 		parse_media_prelude(media_src)!
 	} else {
 		[]MediaQuery{}
@@ -55,7 +55,7 @@ pub fn style_rule_guarded(selector string, props map[string]string, media_src st
 	}
 	return StyleRule{
 		...base
-		media:      media
+		media:      media_queries
 		containers: containers
 	}
 }

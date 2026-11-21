@@ -290,11 +290,11 @@ fn native_media_attach(id string, parent voidptr, x f64, y f64, w f64, h f64) bo
 		}
 	}
 	alias := g_media_win_aliases[id] or { return false }
-	rect := '${int(x)}:${int(y)}:${int(w)}:${int(h)}'
-	if g_media_win_rects[id] != rect {
+	rect_key := '${int(x)}:${int(y)}:${int(w)}:${int(h)}'
+	if g_media_win_rects[id] != rect_key {
 		put_ok, _ := media_mci('put ${alias} window at ${int(x)} ${int(y)} ${int(w)} ${int(h)}')
 		if put_ok {
-			g_media_win_rects[id] = rect
+			g_media_win_rects[id] = rect_key
 		}
 	}
 	media_mci('window ${alias} state show')

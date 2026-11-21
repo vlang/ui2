@@ -346,13 +346,13 @@ fn (mut p StyleParser) parse_container_condition() !MediaCondition {
 // appear inside.
 
 fn (mut p StyleParser) parse_query_block(q StyleQueryCtx) ![]StyleRule {
-	mut media := q.media.clone()
+	mut media_queries := q.media.clone()
 	mut containers := q.containers.clone()
 	if p.src[p.pos..].starts_with('@media') {
 		for _ in 0 .. 6 {
 			p.advance()
 		}
-		media << p.parse_media_queries()!
+		media_queries << p.parse_media_queries()!
 	} else if p.src[p.pos..].starts_with('@container') {
 		for _ in 0 .. 10 {
 			p.advance()
@@ -367,7 +367,7 @@ fn (mut p StyleParser) parse_query_block(q StyleQueryCtx) ![]StyleRule {
 	}
 	p.advance()
 	return p.parse_block(StyleQueryCtx{
-		media:      media
+		media:      media_queries
 		containers: containers
 	}, false)
 }
