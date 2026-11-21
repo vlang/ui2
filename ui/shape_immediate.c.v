@@ -151,13 +151,13 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			return
 		}
 		if c.a != 255 {
-			ctx.r.load_pipeline(ctx.pipeline.alpha)
+			im_load_alpha(ctx)
 		}
-		ctx.r.c4b(c.r, c.g, c.b, c.a)
-		ctx.r.begin_triangles()
+		im_c4b(ctx, c.r, c.g, c.b, c.a)
+		im_begin_triangles(ctx)
 		for p in tris {
-			ctx.r.v2f(f32((x + p.x) * scale), f32((y + p.y) * scale))
+			im_v2f(ctx, f32((x + p.x) * scale), f32((y + p.y) * scale))
 		}
-		ctx.r.end()
+		im_end(ctx)
 	}
 }

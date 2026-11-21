@@ -248,7 +248,8 @@ pub fn pie_chart_label_layout(arcs []PieChartArc, cx f64, cy f64, edge_radius f6
 		}
 		p := pie_chart_point(cx, cy, label_radius, (a.start + a.end) / 2)
 		wanted[i] = p.y
-		sides[if p.x >= cx - 1e-9 { 0 } else { 1 }] << i
+		slot := if p.x >= cx - 1e-9 { 0 } else { 1 }
+		sides[slot] << i
 	}
 	mut out := []PieChartLabelPlacement{}
 	for side, members in sides {

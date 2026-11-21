@@ -206,7 +206,7 @@ pub fn bubble_layout(config BubbleConfig) BubbleLayout {
 		} else {
 			sx + edge
 		}
-		rx = math.max(0, math.min(rx, row - region_width))
+		rx = math.max(0.0, math.min(rx, row - region_width))
 		ry := if config.reaction_side == .top {
 			0.0
 		} else {

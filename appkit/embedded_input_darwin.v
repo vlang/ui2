@@ -15,12 +15,13 @@ $if !ui2_custom_rendering ? {
 	const embedded_key_current_ = &EmbeddedKeyCurrent{}
 	fn embedded_current_key_event() voidptr {
 		current := embedded_key_current_
-		return if current.event != unsafe { nil } { current.event } else { voidptr(macos.msg_id(native_current_app(), 'currentEvent')) }
+		if current.event != unsafe { nil } { return current.event }
+		return voidptr(macos.msg_id(native_current_app(), 'currentEvent'))
 	}
 	pub fn embedded_key_panel() string { return embedded_event_panel(embedded_current_key_event()) }
 	pub fn install_embedded_keys(handler KeyEventFn) {
 		on_key_event(handler)
-		C.ui2_install_embedded_key_monitor(state().window, ui2_embedded_key_event)
+		C.ui2_install_embedded_key_monitor(voidptr(state().window), ui2_embedded_key_event)
 	}
 	pub fn remove_embedded_keys() { C.ui2_remove_embedded_key_monitor(); C.ui2_remove_embedded_wheel_monitor() }
 
@@ -64,7 +65,7 @@ $if !ui2_custom_rendering ? {
 		}
 	}
 	pub fn install_embedded_menus(app_name string, menus []Menu) {
-		publish_menu_context(state().event_handler, app_name, state().window)
+		publish_menu_context(state().event_handler, app_name, voidptr(state().window))
 		set_menu_bar(menus)
 	}
 	fn C.ui2_install_embedded_wheel_monitor(callback fn (voidptr) i32)

@@ -508,7 +508,7 @@ fn bar_chart_geometry(config BarChartConfig) !BarChartGeometry {
 		stride := if config.tick_margin > 0 {
 			config.tick_margin
 		} else if horizontal {
-			int(math.max(1, math.ceil((label_height + 2) / math.max(1.0, step))))
+			int(math.max(1.0, math.ceil((label_height + 2) / math.max(1.0, step))))
 		} else {
 			plot_label_stride(config.categories, step, tick_style, 8)
 		}

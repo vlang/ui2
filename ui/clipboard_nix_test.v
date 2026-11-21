@@ -28,3 +28,18 @@ fn test_native_clipboard_write_answers_with_a_daemon_alive() ! {
 	assert native_set_primary_text(probe), 'second primary write failed'
 	eprintln('second primary: ${f64(time.sys_mono_now() - t0) / 1_000_000.0:.1f}ms')
 }
+
+fn test_native_clipboard_write_quotes_paths_and_reports_copy_failure() ! {
+	$if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
+		dir := os.join_path(os.temp_dir(), 'ui2-copy-test-${os.getpid()}-${time.sys_mono_now()}')
+		os.mkdir_all(dir)!
+		defer { os.rmdir_all(dir) or {} }
+		script := os.join_path(dir, "wl-copy 'fixture.sh")
+		output := os.join_path(dir, "copy 'result.txt")
+		os.write_file(script, 'cat > "$1"')!
+		assert native_clipboard_write(['/bin/sh', script, output], 'quoted clipboard contents')
+		assert os.read_file(output)! == 'quoted clipboard contents'
+		os.write_file(script, 'exit 7')!
+		assert !native_clipboard_write(['/bin/sh', script], 'must fail')
+	}
+}
