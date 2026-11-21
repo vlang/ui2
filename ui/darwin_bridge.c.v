@@ -1,6 +1,8 @@
 module ui2
 
-$if ((macos && !ui2_custom_rendering ?) || ios) && !ui2_headless ? {
+// Runtime bridges are shared by native controls and renderer-independent
+// integrations such as the clipboard and tray images.
+$if (macos || ios) && !ui2_headless ? {
 	import macos
 
 	#include "@VMODROOT/ui/darwin_bridge.h"

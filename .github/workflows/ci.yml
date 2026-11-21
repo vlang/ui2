@@ -22,7 +22,7 @@ jobs:
     env:
       # The macOS release's optional TCC points libc at a protected DriverKit
       # location; use the runner's supported compiler instead.
-      VFLAGS: ${{ runner.os == 'macOS' && '-cc clang' || '' }}
+      VFLAGS: ${{ matrix.os == 'macos-latest' && '-cc clang' || '' }}
     strategy:
       fail-fast: false
       matrix:
