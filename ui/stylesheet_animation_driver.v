@@ -1,28 +1,84 @@
 @[has_globals]
 module ui2
 
-// runtime but keyed to declared (pre-animation) trees.
+import math
+
 __global g_style_prev_elements = map[string]Element{}
 __global g_style_prev_valid = false
-// Tracks which (id, animation-name) pairs were matching on the previous
-// frame, so keyframes animations start only on entry.
-__global g_style_prev_anim_matches = map[string]bool{}
 
-fn style_animation_drive(current Element) {
-	had_prev := g_style_prev_valid
-	new_elements := index_elements_by_id(current)
-	if had_prev {
-		drive_transitions(g_style_prev_elements, current)
-	}
-	drive_keyframes(current, had_prev)
-	g_style_prev_elements = new_elements.clone()
-	g_style_prev_valid = true
+struct StyleTransitionRun {
+	start      AnimationProperty
+	target     AnimationProperty
+	spec       StyleTransition
+	started_at i64
 }
 
-// drive_transitions walks old and current in parallel by id and starts a
-// tween for every transitioned property whose resolved value changed.
-fn drive_transitions(old map[string]Element, current Element) {
-	walk_for_transitions(current, old)
+struct StylePropertyStop {
+	at    f64
+	value AnimationProperty
+}
+
+struct StyleKeyframeTrack {
+	property string
+	stops    []StylePropertyStop
+}
+
+struct StyleKeyframeRun {
+	name   string
+	slot   int
+	tracks []StyleKeyframeTrack
+mut:
+	spec       StyleAnimation
+	started_at i64
+	paused_at  i64
+	paused     bool
+	finished   bool
+}
+
+struct StyleElementAnimations {
+mut:
+	transitions map[string]StyleTransitionRun
+	animations  []StyleKeyframeRun
+}
+
+fn style_animation_history_exists() bool {
+	return g_style_prev_valid
+}
+
+fn clear_style_animations() {
+	mut runtime := animation_runtime()
+	runtime.mutex.lock()
+	runtime.style_runs = map[string]StyleElementAnimations{}
+	runtime.mutex.unlock()
+	reset_style_animation_history()
+}
+
+fn reset_style_animation_history() {
+	g_style_prev_elements = map[string]Element{}
+	g_style_prev_valid = false
+}
+
+// CSS owns a separate set of timelines. Removing a rule never cancels an
+// imperative animation on the same element, and each comma entry keeps its clock.
+fn style_animation_drive(current Element) {
+	style_animation_drive_at(current, animation_now_ms())
+}
+
+fn style_animation_drive_at(current Element, now i64) {
+	mut runtime := animation_runtime()
+	runtime.mutex.lock()
+	mut seen := map[string]bool{}
+	mut changed := walk_style_animations(current, []Stylesheet{}, now, mut seen)
+	for id, _ in runtime.style_runs {
+		if id !in seen {
+			runtime.style_runs.delete(id)
+			changed = true
+		}
+	}
+	runtime.mutex.unlock()
+	g_style_prev_elements = index_elements_by_id(current)
+	g_style_prev_valid = true
+	if changed { schedule_animation_frames() }
 }
 
 fn index_elements_by_id(root Element) map[string]Element {
@@ -30,85 +86,141 @@ fn index_elements_by_id(root Element) map[string]Element {
 	mut stack := [root]
 	for stack.len > 0 {
 		el := stack.pop()
-		if el.id.len > 0 {
-			out[el.id] = el
-		}
-		for child in el.children {
-			stack << child
-		}
+		if el.id.len > 0 { out[el.id] = el }
+		for child in el.children { stack << child }
 	}
 	return out
 }
 
-fn walk_for_transitions(current Element, old_by_id map[string]Element) {
+fn walk_style_animations(current Element, ancestor_sheets []Stylesheet, now i64, mut seen map[string]bool) bool {
+	mut changed := false
+	mut sheets := ancestor_sheets.clone()
+	if !stylesheet_is_empty(current.stylesheet) { sheets << current.stylesheet }
 	if current.id.len > 0 {
-		if old_el := old_by_id[current.id] {
-			if current.style_transitions.len > 0 {
-				mut entries := []TransitionEntry{}
-				for tr in current.style_transitions {
-					targets := changed_transition_targets(old_el, current, tr)
-					if targets.len > 0 {
-						entries << TransitionEntry{ targets: targets, spec: tr }
-					}
+		seen[current.id] = true
+		mut runtime := animation_runtime()
+		mut state := runtime.style_runs[current.id] or { StyleElementAnimations{} }
+		mut covered := map[string]bool{}
+		if old_el := g_style_prev_elements[current.id] {
+			displayed, _ := apply_style_animation_node(old_el, now)
+			state = runtime.style_runs[current.id] or { state }
+			for spec in current.style_transitions {
+				props := if spec.properties.len == 0 || spec.properties == ['all'] {
+					all_animatable_properties()
+				} else {
+					spec.properties
 				}
-				if entries.len == 1 {
-					start_transition(current.id, old_el, entries[0].targets, entries[0].spec)
-				} else if entries.len > 1 {
-					start_parallel_transitions(current.id, old_el, entries)
+				for prop in props {
+					for name in css_anim_properties(prop) { covered[name] = true }
+				}
+				for target in changed_transition_targets(old_el, current, spec) {
+					if spec.duration <= 0 {
+						state.transitions.delete(target.name)
+						continue
+					}
+					state.transitions[target.name] = StyleTransitionRun{
+						start:      style_property_value(displayed, target.name)
+						target:     target
+						spec:       spec
+						started_at: now
+					}
+					changed = true
 				}
 			}
+		}
+		for name, _ in state.transitions {
+			if name !in covered {
+				state.transitions.delete(name)
+				changed = true
+			}
+		}
+		mut next := []StyleKeyframeRun{}
+		mut used := map[int]bool{}
+		for slot, spec in current.style_animations {
+			if spec.name.len == 0 || spec.name == 'none' || spec.duration <= 0
+				|| (!spec.infinite && spec.iteration_count <= 0) {
+				continue
+			}
+			mut found := false
+			for previous_index, previous in state.animations {
+				if previous_index in used || previous.name != spec.name { continue }
+				used[previous_index] = true
+				mut run := StyleKeyframeRun{ ...previous, slot: slot }
+				if previous.spec != spec {
+					run.finished = false
+					changed = true
+				}
+				paused := spec.play_state == 'paused'
+				if paused && !run.paused {
+					run.paused_at = now
+					changed = true
+				}
+				if !paused && run.paused {
+					run.started_at += now - run.paused_at
+					changed = true
+				}
+				run.paused = paused
+				run.spec = spec
+				next << run
+				found = true
+				break
+			}
+			if found { continue }
+			if keyframes := find_keyframes(sheets, spec.name) {
+				tracks := build_keyframe_tracks(sheets, keyframes, current)
+				if tracks.len == 0 { continue }
+				next << StyleKeyframeRun{
+					name:       spec.name
+					slot:       slot
+					spec:       spec
+					tracks:     tracks
+					started_at: now
+					paused_at:  now
+					paused:     spec.play_state == 'paused'
+				}
+				changed = true
+			}
+		}
+		if next.len != state.animations.len { changed = true }
+		state.animations = next
+		if state.animations.len > 0 || state.transitions.len > 0 {
+			runtime.style_runs[current.id] = state
+		} else {
+			runtime.style_runs.delete(current.id)
 		}
 	}
 	for child in current.children {
-		walk_for_transitions(child, old_by_id)
+		child_changed := walk_style_animations(child, sheets, now, mut seen)
+		changed = changed || child_changed
 	}
+	return changed
 }
 
-// TransitionEntry is one shorthand entry's changed targets plus its timing.
-struct TransitionEntry {
-	targets []AnimationProperty
-	spec    StyleTransition
-}
-
-// changed_transition_targets diffs old vs current for one transition entry,
-// returning the tween targets for every covered animatable property whose
-// resolved value changed.
-fn changed_transition_targets(old_el Element, current Element, tr StyleTransition) []AnimationProperty {
+fn changed_transition_targets(old_el Element, current Element, spec StyleTransition) []AnimationProperty {
 	mut targets := []AnimationProperty{}
-	props := if tr.properties.len == 0 || (tr.properties.len == 1 && tr.properties[0] == 'all') {
+	props := if spec.properties.len == 0 || spec.properties == ['all'] {
 		all_animatable_properties()
 	} else {
-		tr.properties.clone()
+		spec.properties
 	}
-	for p in props {
-		for ap in css_anim_properties(p) {
-			if ap == '' {
+	for prop in props {
+		for name in css_anim_properties(prop) {
+			if !is_animatable_property(name, .number) && !is_animatable_property(name, .color) {
 				continue
 			}
-			if !is_animatable_property(ap, .number) && !is_animatable_property(ap, .color) {
-				continue
-			}
-			kind := if is_animatable_property(ap, .color) {
-				AnimationPropertyKind.color
-			} else {
-				AnimationPropertyKind.number
-			}
-			old_val_num := animation_number_property_value(old_el, ap)
-			new_val_num := animation_number_property_value(current, ap)
-			old_val_col := animation_color_property_value(old_el, ap)
-			new_val_col := animation_color_property_value(current, ap)
-			if kind == .number {
-				if old_val_num != new_val_num {
-					targets << animation_number_property(ap, new_val_num)
-				}
-			} else {
-				if old_val_col != new_val_col {
-					targets << animation_color_property(ap, new_val_col)
-				}
-			}
+			old := style_property_value(old_el, name)
+			target := style_property_value(current, name)
+			if old != target { targets << target }
 		}
 	}
 	return targets
+}
+
+fn style_property_value(el Element, name string) AnimationProperty {
+	if is_animatable_property(name, .color) {
+		return animation_color_property(name, animation_color_property_value(el, name))
+	}
+	return animation_number_property(name, animation_number_property_value(el, name))
 }
 
 fn css_anim_properties(name string) []string {
@@ -133,15 +245,6 @@ fn css_anim_properties(name string) []string {
 	}
 }
 
-// css_anim_property kept for single-property callers (returns first).
-fn css_anim_property(name string) string {
-	props := css_anim_properties(name)
-	if props.len > 0 {
-		return props[0]
-	}
-	return ''
-}
-
 fn all_animatable_properties() []string {
 	// A conservative subset of commonly transitioned properties.
 	return ['x', 'y', 'width', 'height', 'rotation', 'background', 'corner_radius', 'text_color',
@@ -150,293 +253,179 @@ fn all_animatable_properties() []string {
 		'box.shadow.y', 'padding_left']
 }
 
-fn start_transition(id string, old_el Element, targets []AnimationProperty, tr StyleTransition) {
-	seed_transition_run(id, old_el)
-	// Transitions overlay the declared end value, which the cascade already
-	// provides, so release the run on completion instead of retaining it.
-	mut anim := animation(AnimationConfig{
-		duration:      tr.duration
-		delay:         tr.delay
-		transition:    tr.timing
-		transition_fn: tr.timing_fn
-		fill_mode:     'none'
-		properties:    targets
-	})
-	anim.start(id)
-}
-
-// start_parallel_transitions runs several changed shorthand entries
-// concurrently: one tween child per entry under a .parallel parent, so the
-// second entry no longer replaces the first. The parent lives as long as
-// the slowest child.
-fn start_parallel_transitions(id string, old_el Element, entries []TransitionEntry) {
-	seed_transition_run(id, old_el)
-	mut children := []Animation{}
-	mut slowest := 0.0
-	for entry in entries {
-		tr := entry.spec
-		children << animation(AnimationConfig{
-			duration:      tr.duration
-			delay:         tr.delay
-			transition:    tr.timing
-			transition_fn: tr.timing_fn
-			fill_mode:     'none'
-			properties:    entry.targets
-		})
-		if tr.duration + tr.delay > slowest {
-			slowest = tr.duration + tr.delay
-		}
-	}
-	anim := Animation{
-		duration:   slowest
-		fill_mode:  'none'
-		kind:       .parallel
-		children:   children
-		properties: collect_animation_properties(children)
-	}
-	anim.start(id)
-}
-
-// seed_transition_run records the previous displayed element so the runtime
-// captures it as the tween's start: start() sees previous.initialized==true
-// and uses previous.last (old_el) as the tween's start, animating old -> new.
-// Without the seed, a first transition would start at the new value (zero distance).
-fn seed_transition_run(id string, old_el Element) {
-	mut runtime := g_animation_runtime
-	runtime.mutex.lock()
-	if id !in runtime.runs {
-		runtime.runs[id] = AnimationRun{
-			initialized: true
-			start:       old_el
-			last:        old_el
-			status:      .running
-		}
-	}
-	runtime.mutex.unlock()
-}
-
-// drive_keyframes starts @keyframes animations on entry: any (id, name)
-// pair matching the current tree that did not match the previous frame
-// starts. The first styled frame counts as entry for everything it matches,
-// so animations present at load play instead of waiting for a rematch.
-fn drive_keyframes(current Element, had_prev bool) {
-	mut old_matches := map[string]bool{}
-	if had_prev {
-		old_matches = g_style_prev_anim_matches.clone()
-	}
-	mut new_matches := map[string]bool{}
-	walk_for_keyframes(current, []Stylesheet{}, old_matches, mut new_matches)
-	g_style_prev_anim_matches = new_matches.clone()
-}
-
-fn walk_for_keyframes(current Element, ancestor_sheets []Stylesheet, old_matches map[string]bool, mut new_matches map[string]bool) {
-	mut sheets := ancestor_sheets.clone()
-	if !stylesheet_is_empty(current.stylesheet) {
-		sheets << current.stylesheet
-	}
-	if current.id.len > 0 && current.style_animations.len > 0 {
-		for anim in current.style_animations {
-			if anim.name.len == 0 {
-				continue
-			}
-			key := current.id + '\x00' + anim.name
-			new_matches[key] = true
-			if anim.play_state == 'paused' {
-				cancel_animation(current.id)
-				continue
-			}
-			if !(old_matches[key] or { false }) {
-				// newly matching: start
-				if kf := find_keyframes(sheets, anim.name) {
-					start_keyframes(current.id, sheets, kf, anim)
-				}
-			}
-		}
-	}
-	for child in current.children {
-		walk_for_keyframes(child, sheets, old_matches, mut new_matches)
-	}
-}
-
 fn find_keyframes(sheets []Stylesheet, name string) ?StyleKeyframes {
 	for i := sheets.len - 1; i >= 0; i-- {
-		if kf := sheets[i].keyframes[name] {
-			return kf
-		}
+		if kf := sheets[i].keyframes[name] { return kf }
 	}
-	if g_stylesheet_has_global {
-		if kf := g_stylesheet_global.keyframes[name] {
-			return kf
-		}
+	if has_global_stylesheet() {
+		if kf := global_stylesheet().keyframes[name] { return kf }
 	}
 	return none
 }
 
-fn start_keyframes(id string, sheets []Stylesheet, kf StyleKeyframes, spec StyleAnimation) {
-	// Build an Animation as a sequence of tweens between stops.
-	// We need start values; runtime captures from declared element on first frame.
-	mut base := []Animation{}
-	for i in 1 .. kf.stops.len {
-		prev := kf.stops[i - 1]
-		cur := kf.stops[i]
-		targets := keyframe_targets(sheets, cur)
-		dur := spec.duration * (cur.stop - prev.stop)
-		if dur <= 0 || targets.len == 0 {
-			continue
-		}
-		base << animation(AnimationConfig{
-			duration:      dur
-			transition:    spec.timing
-			transition_fn: spec.timing_fn
-			properties:    targets
-		})
-	}
-	if base.len == 0 {
-		// No animatable stops (zero duration, a single stop, or values that
-		// do not resolve): starting an empty Animation would replace and
-		// cancel the element's in-flight run, so do nothing.
-		return
-	}
-	mut children := base.clone()
-	if spec.iteration_count > 1 && spec.iteration_count <= max_keyframes_unroll {
-		// Finite counts are unrolled: the runtime only repeats forever.
-		// Counts above the cap degrade to infinite (see repeat below)
-		// instead of allocating millions of tweens.
-		for _ in 1 .. int(spec.iteration_count) {
-			children << base
+fn build_keyframe_tracks(sheets []Stylesheet, kf StyleKeyframes, declared Element) []StyleKeyframeTrack {
+	mut stops := map[string][]StylePropertyStop{}
+	for frame in kf.stops {
+		for value in keyframe_targets_for_element(sheets, frame, declared) {
+			mut track := stops[value.name] or { []StylePropertyStop{} }
+			if track.len > 0 && track.last().at == frame.stop { track.delete_last() }
+			track << StylePropertyStop{ at: frame.stop, value: value }
+			stops[value.name] = track
 		}
 	}
-	mut total := 0.0
-	for child in children {
-		total += child.duration
+	mut tracks := []StyleKeyframeTrack{}
+	for property, values in stops {
+		mut track := values.clone()
+		underlying := style_property_value(declared, property)
+		if track[0].at != 0 { track.prepend(StylePropertyStop{ at: 0, value: underlying }) }
+		if track.last().at != 1 { track << StylePropertyStop{ at: 1, value: underlying } }
+		tracks << StyleKeyframeTrack{ property: property, stops: track }
 	}
-	mut anim := Animation{}
-	if children.len == 1 && spec.iteration_count <= 1 {
-		anim = children[0]
-		anim.delay = spec.delay
-		anim.fill_mode = spec.fill_mode
-		anim.transition_fn = spec.timing_fn
-	} else {
-		anim = Animation{
-			duration:      total
-			delay:         spec.delay
-			transition:    spec.timing
-			transition_fn: spec.timing_fn
-			fill_mode:     spec.fill_mode
-			repeat:        spec.iteration_count == 0 || spec.iteration_count > max_keyframes_unroll
-			kind:          .sequence
-			children:      children
-			properties:    collect_animation_properties(children)
-		}
-	}
-	anim.start(id)
+	return tracks
 }
 
-// max_keyframes_unroll caps finite iteration-count unrolling; larger counts
-// repeat forever instead of allocating one tween per iteration.
-const max_keyframes_unroll = 256
-
-// keyframe_targets resolves one stop's declarations to tween targets.
-// Colors resolve through the theme token parser; `@variable` references
-// resolve against the keyframes' own sheet scope (then the global sheet).
-// Anything else that does not resolve is skipped, never zeroed.
 fn keyframe_targets(sheets []Stylesheet, stop StyleKeyframe) []AnimationProperty {
+	return keyframe_targets_for_element(sheets, stop, Element{})
+}
+
+fn keyframe_targets_for_element(sheets []Stylesheet, stop StyleKeyframe, declared Element) []AnimationProperty {
+	mut scopes := []Stylesheet{}
+	if has_global_stylesheet() { scopes << global_stylesheet() }
+	scopes << sheets
+	qenv := stylesheet_query_env(stylesheet_dark_mode(), stylesheet_live_dpi())
+	lctx := StyleLengthCtx{
+		win_w:  qenv.width
+		win_h:  qenv.height
+		cont_w: declared.frame.width
+		cont_h: declared.frame.height
+		insets: qenv.insets
+	}
 	mut targets := []AnimationProperty{}
 	for decl in stop.declarations {
-		ap := css_anim_property(decl.prop)
-		if !is_animatable_property(ap, .number) && !is_animatable_property(ap, .color) {
-			continue
-		}
-		if is_animatable_property(ap, .color) {
-			if token := keyframe_color_token(sheets, decl.value) {
-				targets << animation_color_property(ap, token.over(0xffffff))
-			}
-			continue
-		}
-		if val := parse_keyframe_number(decl.value) {
-			targets << animation_number_property(ap, val)
-		}
-	}
-	return targets
-}
-
-// keyframe_color_token resolves a keyframe color: a `@variable` first,
-// otherwise a literal theme color.
-fn keyframe_color_token(sheets []Stylesheet, raw string) ?ComponentThemeToken {
-	t := raw.trim_space()
-	if t.starts_with('@') {
-		if v := keyframes_var_value(sheets, t) {
-			if token := component_theme_token(v) {
-				return token
-			}
-		}
-		return none
-	}
-	if token := component_theme_token(t) {
-		return token
-	}
-	return none
-}
-
-// keyframes_var_value looks a `@name` up in the keyframes' sheet scope,
-// innermost first, then the global sheet. The cascade resolves the same way
-// for ordinary declarations.
-fn keyframes_var_value(sheets []Stylesheet, name string) ?string {
-	dark := stylesheet_dark_mode()
-	for i := sheets.len - 1; i >= 0; i-- {
-		if v := sheets[i].resolve_var(name, dark) {
-			return v
-		}
-	}
-	if g_stylesheet_has_global {
-		if v := g_stylesheet_global.resolve_var(name, dark) {
-			return v
-		}
-	}
-	return none
-}
-
-// parse_keyframe_number parses a plain number with an optional unit suffix
-// (`8px`, `50%`, `.5`). Non-numeric values return none so typos never tween
-// to zero.
-fn parse_keyframe_number(raw string) ?f64 {
-	t := raw.trim_space()
-	if t.len == 0 {
-		return none
-	}
-	mut end := t.len
-	for end > 0 {
-		c := t[end - 1]
-		if (c >= `a` && c <= `z`) || (c >= `A` && c <= `Z`) || c == `%` {
-			end--
-		} else {
-			break
-		}
-	}
-	num := t[..end].trim_space()
-	if num.len == 0 {
-		return none
-	}
-	c0 := num[0]
-	if !(c0 >= `0` && c0 <= `9`) && c0 != `+` && c0 != `-` && c0 != `.` {
-		return none
-	}
-	return num.f64()
-}
-
-fn collect_animation_properties(children []Animation) []string {
-	mut out := []string{}
-	for c in children {
-		for p in c.properties {
-			if p !in out {
-				out << p
-			}
-			for pp in c.animated_properties() {
-				if pp !in out {
-					out << pp
+		value := cascade_resolve_value(decl.value, scopes, stylesheet_dark_mode(), declared.style_custom_properties, map[string]string{}) or { continue }
+		for name in css_anim_properties(decl.prop) {
+			if is_animatable_property(name, .color) {
+				token := component_theme_token(value) or { continue }
+				targets << animation_color_property(name, token.over(0xffffff))
+			} else if is_animatable_property(name, .number) {
+				mut number := 0.0
+				if name == 'box.opacity' {
+					raw := value.trim_space()
+					percent := raw.ends_with('%')
+					n := query_plain_number(if percent { raw[..raw.len - 1] } else { raw }) or { continue }
+					number = unit_clamp(if percent { n / 100 } else { n })
+				} else {
+					number = style_length_px(value, lctx) or { continue }
 				}
+				targets << animation_number_property(name, number)
 			}
 		}
 	}
-	return out
+	return normalized_animation_properties(targets)
+}
+
+// Iterations are evaluated arithmetically, so fractional and large finite
+// counts remain finite without allocating copies of their keyframes.
+fn style_keyframe_position(run StyleKeyframeRun, now i64) (f64, bool, bool) {
+	clock := if run.paused { run.paused_at } else { now }
+	elapsed := f64(clock - run.started_at) / 1000.0 - run.spec.delay
+	mut position := 0.0
+	mut cycle := 0.0
+	mut finished := false
+	if elapsed < 0 {
+		if run.spec.fill_mode !in ['backwards', 'both'] { return 0, false, false }
+	} else {
+		iterations := elapsed / run.spec.duration
+		if !run.spec.infinite && iterations >= run.spec.iteration_count {
+			finished = true
+			if run.spec.fill_mode !in ['forwards', 'both'] { return 0, false, true }
+			cycle = math.floor(run.spec.iteration_count)
+			position = math.fmod(run.spec.iteration_count, 1)
+			if position == 0 {
+				position = 1
+				cycle = math.max(cycle - 1, 0)
+			}
+		} else {
+			cycle = math.floor(iterations)
+			position = math.fmod(iterations, 1)
+		}
+	}
+	reversed := run.spec.direction == 'reverse'
+		|| (run.spec.direction == 'alternate' && math.fmod(cycle, 2) == 1)
+		|| (run.spec.direction == 'alternate-reverse' && math.fmod(cycle, 2) == 0)
+	return if reversed { 1 - position } else { position }, true, finished
+}
+
+fn style_apply_property_pair(el Element, from AnimationProperty, to AnimationProperty, progress f64) Element {
+	start := apply_animation_targets(el, AnimationTargets{ properties: [from] }, 1)
+	return apply_animation_targets(start, AnimationTargets{ properties: [to] }, progress)
+}
+
+// Called under the animation runtime mutex, alongside the imperative pass.
+fn apply_style_animation_node(declared Element, now i64) (Element, bool) {
+	mut runtime := animation_runtime()
+	mut state := runtime.style_runs[declared.id] or { return declared, false }
+	mut out := declared
+	for i in 0 .. state.animations.len {
+		mut run := state.animations[i]
+		position, contributes, finished := style_keyframe_position(run, now)
+		run.finished = finished
+		state.animations[i] = run
+		if !contributes { continue }
+		for track in run.tracks {
+			for stop in 1 .. track.stops.len {
+				left := track.stops[stop - 1]
+				right := track.stops[stop]
+				if position > right.at && stop < track.stops.len - 1 { continue }
+				progress := unit_clamp((position - left.at) / (right.at - left.at))
+				eased := apply_animation_transition(Animation{ transition: run.spec.timing, transition_fn: run.spec.timing_fn }, progress)
+				out = style_apply_property_pair(out, left.value, right.value, eased)
+				break
+			}
+		}
+	}
+	// CSS transitions have precedence over keyframe animation values.
+	for name, run in state.transitions {
+		elapsed := f64(now - run.started_at) / 1000.0 - run.spec.delay
+		if elapsed >= run.spec.duration {
+			state.transitions.delete(name)
+			continue
+		}
+		progress := unit_clamp(elapsed / run.spec.duration)
+		eased := apply_animation_transition(Animation{ transition: run.spec.timing, transition_fn: run.spec.timing_fn }, progress)
+		out = style_apply_property_pair(out, run.start, run.target, eased)
+	}
+	runtime.style_runs[declared.id] = state
+	return out, true
+}
+
+fn style_animation_needs_frame(id string) bool {
+	runtime := animation_runtime()
+	state := runtime.style_runs[id] or { return false }
+	return state.transitions.len > 0 || state.animations.any(!it.paused && !it.finished)
+}
+
+fn style_animations_need_frames(now i64) bool {
+	runtime := animation_runtime()
+	for _, state in runtime.style_runs {
+		for _, run in state.transitions {
+			if f64(now - run.started_at) <= (run.spec.duration + run.spec.delay) * 1000 + 34 {
+				return true
+			}
+		}
+		for run in state.animations {
+			if run.paused || run.finished { continue }
+			if run.spec.infinite || f64(now - run.started_at) <= (run.spec.duration * run.spec.iteration_count + run.spec.delay) * 1000 + 34 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+fn element_has_style_animation_specs(el Element) bool {
+	if el.style_transitions.len > 0 || el.style_animations.len > 0 || el.style_transition_values.len > 0 || el.style_animation_values.len > 0 {
+		return true
+	}
+	return el.children.any(element_has_style_animation_specs(it))
 }

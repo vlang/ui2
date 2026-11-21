@@ -689,8 +689,11 @@ including on the first styled frame, and runs through the runtime, so frames
 schedule themselves. `infinite` repeats; finite counts play that many times.
 `animation-delay` is honored. `animation-fill-mode`: `none` (revert, the
 default), `forwards` (keep the final stop), `backwards` (hold the first stop
-during delay), `both`. `animation-direction` is parsed but not honored yet:
-every iteration plays forward.
+during delay), `both`. `animation-direction` supports `normal`, `reverse`, `alternate`, and
+`alternate-reverse`. Removing the matching animation declaration releases its
+values; pausing and resuming preserves elapsed time. Multiple comma-separated
+animations run independently. Finite iteration counts, including fractional
+counts, do not allocate copies of their keyframes.
 
 ### Non-goals (v1)
 

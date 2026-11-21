@@ -100,6 +100,10 @@ pub:
 // interaction env, filled in by each backend.
 pub fn stylesheet_query_env(dark bool, dpi f64) StyleQueryEnv {
 	area := bounds()
+	mut insets := ?SafeInsets(none)
+	$if !ui2_headless ? {
+		insets = native_safe_insets()
+	}
 	return StyleQueryEnv{
 		width:    area.width
 		height:   area.height
@@ -107,7 +111,7 @@ pub fn stylesheet_query_env(dark bool, dpi f64) StyleQueryEnv {
 		platform: stylesheet_platform_name()
 		coarse:   stylesheet_is_coarse_pointer()
 		dark:     dark
-		insets:   native_safe_insets()
+		insets:   insets
 	}
 }
 

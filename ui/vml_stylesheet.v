@@ -130,6 +130,10 @@ fn v_inline_style(node &VNode, el Element, frame Rect) !Element {
 		value := cascade_resolve_inner(decl.value, mut scope) or {
 			return error('invalid `style` on <${node.tag}> (line ${node.line}): ${err.msg()}')
 		}
+		if is_style_animation_prop(decl.prop) {
+			out = apply_style_animation_decl(out, decl.prop, value)
+			continue
+		}
 		out = apply_declaration(&el, out, decl.prop, value, lctx, mut fill, mut warnings, mut
 			color_cache, mut len_cache, mut split_cache)
 	}

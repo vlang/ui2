@@ -93,6 +93,11 @@ pub:
 	col   int
 }
 
+struct StyleKeyframeEntry {
+	value          StyleKeyframes
+	imports_before int
+}
+
 struct StyleQueryCtx {
 	media      [][]MediaQuery
 	containers [][]ContainerQuery
@@ -132,6 +137,7 @@ mut:
 	// variable definition with the number of imports before it.
 	import_rule_pos []int
 	var_log         []StyleVarEntry
+	keyframe_log    []StyleKeyframeEntry
 pub mut:
 	rules      []StyleRule
 	variables  map[string]string
@@ -207,6 +213,7 @@ mut:
 	imports         []string
 	import_rule_pos []int
 	var_log         []StyleVarEntry
+	keyframe_log    []StyleKeyframeEntry
 	keyframes       map[string]StyleKeyframes
 }
 
@@ -247,6 +254,7 @@ pub fn parse_stylesheet(source string) !Stylesheet {
 		import_rule_pos: parser.import_rule_pos
 		var_log:         parser.var_log
 		rule_index:      stylesheet_index_rules(rules)
+		keyframe_log:    parser.keyframe_log
 		keyframes:       parser.keyframes
 	}
 }
@@ -306,14 +314,12 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 	sheet := parse_stylesheet(source) or {
 		// Point at the file: `theme.vss:3:1: ...` instead of `stylesheet:3:1:`.
 		msg := err.msg()
-		// NOTE(V 0.5.2 CI): `if` as a function argument returns void in 0.5.2;
-		// bind it first (same on newer toolchains).
-		pointed := if msg.starts_with('stylesheet:') {
+		detail := if msg.starts_with('stylesheet:') {
 			'${path}:${msg['stylesheet:'.len..]}'
 		} else {
 			'${path}: ${msg}'
 		}
-		return error(pointed)
+		return error(detail)
 	}
 	if sheet.imports.len == 0 {
 		return sheet
@@ -326,6 +332,7 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 	mut keyframes := map[string]StyleKeyframes{}
 	mut next_rule := 0
 	mut next_var := 0
+	mut next_keyframe := 0
 	for i, name in sheet.imports {
 		// Own rules and variables written before this `@import` come first.
 		pos := if i < sheet.import_rule_pos.len { sheet.import_rule_pos[i] } else { 0 }
@@ -337,6 +344,11 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 			style_apply_var_entry(sheet.var_log[next_var], mut variables, mut light_vars, mut
 				dark_vars)
 			next_var++
+		}
+		for next_keyframe < sheet.keyframe_log.len && sheet.keyframe_log[next_keyframe].imports_before <= i {
+			entry := sheet.keyframe_log[next_keyframe]
+			keyframes[entry.value.name] = entry.value
+			next_keyframe++
 		}
 		target := if os.is_abs_path(name) { name } else { os.join_path(base, name) }
 		sub := load_stylesheet_file(target, confine, mut visited)!
@@ -360,8 +372,10 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 			dark_vars)
 		next_var++
 	}
-	for key, value in sheet.keyframes {
-		keyframes[key] = value
+	for next_keyframe < sheet.keyframe_log.len {
+		entry := sheet.keyframe_log[next_keyframe]
+		keyframes[entry.value.name] = entry.value
+		next_keyframe++
 	}
 	return Stylesheet{
 		rules:      rules
@@ -506,6 +520,7 @@ fn (mut p StyleParser) parse_block_inner(q StyleQueryCtx, top_level bool, eof_ok
 				&& style_keyword_end(p.src, p.pos + 10) {
 				kf := p.parse_keyframes()!
 				p.keyframes[kf.name] = kf
+				p.keyframe_log << StyleKeyframeEntry{ value: kf, imports_before: p.imports.len }
 				continue
 			}
 			// Builtins (`@import`, `@name: value;`) take precedence over plugin
@@ -1459,7 +1474,7 @@ fn keyframe_stop_progress(token string) ?f64 {
 	if raw.len == 0 {
 		return none
 	}
-	number := raw.f64()
+	number := query_plain_number(raw) or { return none }
 	if number < 0 || number > 100 {
 		return none
 	}

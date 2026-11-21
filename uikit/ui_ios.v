@@ -372,13 +372,7 @@ pub fn dismiss_keyboard() {
 	}
 }
 
-pub fn safe_area_top() f64 {
-	if g_root_view == unsafe { nil } {
-		return 0
-	}
-	insets := macos.msg_rect(g_root_view, 'safeAreaInsets')
-	return insets.x
-}
+
 
 pub fn start_barcode_scan() {
 	if g_root_vc == unsafe { nil } {

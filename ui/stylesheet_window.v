@@ -18,15 +18,21 @@ __global g_stylesheet_force_dark = false
 __global g_stylesheet_last_dpi = 1.0
 __global g_stylesheet_frame_building = 0
 
+fn global_stylesheet() Stylesheet {
+	return g_stylesheet_global
+}
+
+fn has_global_stylesheet() bool {
+	return g_stylesheet_has_global
+}
+
 // set_global_stylesheet installs the process-wide sheet. Call refresh()
 // afterwards when the window is already up; before run_window nothing else
 // is needed.
 pub fn set_global_stylesheet(sheet Stylesheet) {
 	g_stylesheet_global = sheet
 	g_stylesheet_has_global = true
-	g_style_prev_elements = map[string]Element{}
-	g_style_prev_valid = false
-	g_style_prev_anim_matches = map[string]bool{}
+	clear_style_animations()
 }
 
 // clear_global_stylesheet removes the process-wide sheet. Call refresh()
@@ -34,9 +40,7 @@ pub fn set_global_stylesheet(sheet Stylesheet) {
 pub fn clear_global_stylesheet() {
 	g_stylesheet_global = Stylesheet{}
 	g_stylesheet_has_global = false
-	g_style_prev_elements = map[string]Element{}
-	g_style_prev_valid = false
-	g_style_prev_anim_matches = map[string]bool{}
+	clear_style_animations()
 }
 
 // set_stylesheet_follow_system resumes (or stops) tracking the operating
@@ -96,12 +100,13 @@ pub fn stylesheet_apply_frame(declared Element, env StyleMatchEnv) Element {
 	mut styled := declared
 	if !g_stylesheet_has_global {
 		if !element_has_scoped_stylesheet(declared) {
-			// No sheet anywhere: the cascade would be a no-op and the tree
-			// carries no animation specs, so skip the drive too and keep
-			// the allocation-free fast path for unstyled applications.
-			return declared
+			if !element_has_style_animation_specs(declared) {
+				if style_animation_history_exists() { clear_style_animations() }
+				return declared
+			}
+		} else {
+			styled = apply_stylesheet(declared, Stylesheet{}, env)
 		}
-		styled = apply_stylesheet(declared, Stylesheet{}, env)
 	} else {
 		styled = apply_stylesheet(declared, g_stylesheet_global, env)
 	}

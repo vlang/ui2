@@ -476,6 +476,10 @@ pub mut:
 	// vss animation specs (declarations collected by the cascade):
 	style_transitions []StyleTransition
 	style_animations  []StyleAnimation
+mut:
+	style_transition_values map[string]string
+	style_animation_values  map[string]string
+	style_custom_properties map[string]string
 }
 
 pub enum BackendSupport {

@@ -6,9 +6,6 @@ $if !ui2_custom_rendering ? {
 import macos
 import math
 
-// NOTE(V 0.5.2 CI): `DarwinPoint`/`DarwinRange` are defined in
-// `button_image_darwin.v` (earlier file order) so 0.5.2 sees them.
-
 type VoidCallback = fn ()
 
 @[inline]
@@ -358,9 +355,11 @@ fn native_control_is_editing(control macos.Id) bool {
 }
 
 fn native_control_selected_range(control macos.Id) DarwinRange {
-	// NOTE(V 0.5.2 CI): `DarwinRange`/`msg_range` do not exist in 0.5.2, so
-	// return zero; selection restore is not asserted in CI tests.
-	return DarwinRange{}
+	if objc_is_nil(control) {
+		return darwin_range(0, 0)
+	}
+	editor := macos.msg_id(control, 'currentEditor')
+	return if objc_is_nil(editor) { darwin_range(0, 0) } else { darwin_msg_range(editor, 'selectedRange') }
 }
 
 fn native_focus_view(view macos.Id) bool {
@@ -433,14 +432,17 @@ fn native_dragging_text(info macos.Id) string {
 }
 
 fn native_dragging_point(view macos.Id, info macos.Id) DarwinPoint {
-	// NOTE(V 0.5.2 CI): see native_event_point above.
-	return DarwinPoint{}
+	if objc_is_nil(view) || objc_is_nil(info) {
+		return darwin_point(0, 0)
+	}
+	return darwin_msg_point_point_id(view, 'convertPoint:fromView:', darwin_msg_point(info, 'draggingLocation'), objc_nil())
 }
 
 fn native_event_point(view macos.Id, event macos.Id) DarwinPoint {
-	// NOTE(V 0.5.2 CI): `macos.msg_point*` do not exist in 0.5.2, so return
-	// zero; embedded wheel tests do not run on macOS CI (Linux/custom only).
-	return DarwinPoint{}
+	if objc_is_nil(view) || objc_is_nil(event) {
+		return darwin_point(0, 0)
+	}
+	return darwin_msg_point_point_id(view, 'convertPoint:fromView:', darwin_msg_point(event, 'locationInWindow'), objc_nil())
 }
 
 fn native_current_event_modifier_flags() u64 {

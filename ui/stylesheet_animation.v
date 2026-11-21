@@ -1,285 +1,193 @@
 module ui2
 
-// apply_style_animation_decl folds one transition/animation declaration into
-// el's style_transitions / style_animations lists. Shorthands reset the
-// whole list; atomic properties update entries positionally (creating them
-// with defaults as needed), matching CSS list alignment.
-
+// Keep longhand source lists until the controlling property/name list is known.
+// This makes list repetition independent of declaration order.
 fn apply_style_animation_decl(el Element, prop string, value string) Element {
+	if !style_animation_decl_valid(prop, value) { return el }
 	mut out := el
-	lower := prop.to_lower()
-	if lower == 'transition' {
-		out.style_transitions = parse_transition_shorthand(value)
-		return out
-	}
-	if lower == 'animation' {
-		out.style_animations = parse_animation_shorthand(value)
-		return out
-	}
-	if lower.starts_with('transition-') {
-		out.style_transitions = apply_transition_atomic(out.style_transitions, lower, value)
-		return out
-	}
-	if lower.starts_with('animation-') {
-		out.style_animations = apply_animation_atomic(out.style_animations, lower, value)
-		return out
+	if prop == 'transition' || prop.starts_with('transition-') {
+		mut values := el.style_transition_values.clone()
+		if prop == 'transition' { values.clear() }
+		values[prop] = value
+		out.style_transition_values = values.clone()
+		out.style_transitions = resolve_style_transitions(values)
+	} else {
+		mut values := el.style_animation_values.clone()
+		if prop == 'animation' { values.clear() }
+		values[prop] = value
+		out.style_animation_values = values.clone()
+		out.style_animations = resolve_style_animations(values)
 	}
 	return out
 }
 
-// ---- transitions ----
-
-fn parse_transition_shorthand(value string) []StyleTransition {
-	mut out := []StyleTransition{}
-	for entry in split_top_level_commas(value) {
-		tokens := split_shorthand_tokens(entry)
-		if tokens.len == 0 {
-			continue
+fn style_animation_decl_valid(prop string, value string) bool {
+	for raw in split_top_level_commas(value) {
+		v := raw.trim_space()
+		if prop.ends_with('-duration') || prop.ends_with('-delay') {
+			n := parse_time_seconds(v) or { return false }
+			if prop.ends_with('-duration') && n < 0 { return false }
+		} else if prop.ends_with('-timing-function') {
+			if parse_timing_token(v) == none && parse_cubic_bezier(v) == none { return false }
+		} else if prop == 'animation-iteration-count' {
+			if !is_iteration_token(v) { return false }
+		} else if prop == 'animation-direction' && !is_direction_token(v) {
+			return false
+		} else if prop == 'animation-fill-mode' && !is_fill_token(v) {
+			return false
+		} else if prop == 'animation-play-state' && !is_play_state_token(v) {
+			return false
 		}
-		mut props := []string{}
-		mut duration := 0.2
-		mut timing := AnimationTransition.out_cubic
-		mut timing_fn := AnimationTransitionFn(unsafe { nil })
-		mut delay := 0.0
-		mut seen_duration := false
-		for tok in tokens {
-			l := tok.to_lower()
-			if l == 'all' {
-				props << 'all'
-			} else if d := parse_time_seconds(tok) {
-				if !seen_duration {
-					duration = d
-					seen_duration = true
-				} else {
-					delay = d
-				}
-			} else if t := parse_timing_token(tok) {
-				timing = t
-				timing_fn = unsafe { nil }
-			} else if f := parse_cubic_bezier(tok) {
-				timing = .linear
-				timing_fn = f
-			} else if is_transition_property_name(tok) {
-				props << tok
-			}
-		}
-		if props.len == 0 {
-			props = ['all']
-		}
-		out << StyleTransition{
-			properties: props
-			duration:   duration
-			timing:     timing
-			timing_fn:  timing_fn
-			delay:      delay
-		}
-	}
-	return out
-}
-
-fn apply_transition_atomic(list []StyleTransition, prop string, value string) []StyleTransition {
-	vals := split_top_level_commas(value)
-	n := if vals.len > list.len { vals.len } else { list.len }
-	mut out := []StyleTransition{len: n}
-	for i in 0 .. n {
-		base := if i < list.len {
-			list[i]
-		} else {
-			StyleTransition{ properties: ['all'], duration: 0.2, timing: .out_cubic, delay: 0.0 }
-		}
-		out[i] = base
-	}
-	for i, v in vals {
-		trimmed := v.trim_space()
-		match prop {
-			'transition-property' {
-				mut props := []string{}
-				for p in trimmed.split(',') {
-					pp := p.trim_space()
-					if pp.len > 0 {
-						props << pp
-					}
-				}
-				if props.len == 0 {
-					props = ['all']
-				}
-				out[i].properties = props
-			}
-			'transition-duration' {
-				if d := parse_time_seconds(trimmed) {
-					out[i].duration = d
-				}
-			}
-			'transition-timing-function' {
-				if t := parse_timing_token(trimmed) {
-					out[i].timing = t
-					out[i].timing_fn = unsafe { nil }
-				} else if f := parse_cubic_bezier(trimmed) {
-					out[i].timing = .linear
-					out[i].timing_fn = f
-				}
-			}
-			'transition-delay' {
-				if d := parse_time_seconds(trimmed) {
-					out[i].delay = d
-				}
-			}
-			else {}
-		}
-	}
-	return out
-}
-
-fn is_transition_property_name(tok string) bool {
-	if parse_time_seconds(tok) != none {
-		return false
-	}
-	if parse_timing_token(tok) != none {
-		return false
-	}
-	l := tok.to_lower()
-	if l == 'all' || l == 'none' {
-		return false
 	}
 	return true
 }
 
-// ---- animations ----
+fn style_list_value(values map[string]string, prop string, index int) ?string {
+	raw := values[prop] or { return none }
+	list := split_top_level_commas(raw)
+	return list[index % list.len].trim_space()
+}
 
-fn parse_animation_shorthand(value string) []StyleAnimation {
-	mut out := []StyleAnimation{}
-	for entry in split_top_level_commas(value) {
-		tokens := split_shorthand_tokens(entry)
-		if tokens.len == 0 {
-			continue
+fn resolve_style_transitions(values map[string]string) []StyleTransition {
+	mut base := [StyleTransition{ properties: ['all'], duration: 0.2, timing: .out_cubic }]
+	if shorthand := values['transition'] { base = parse_transition_shorthand(shorthand) }
+	mut count := base.len
+	if props := values['transition-property'] {
+		if props.trim_space().to_lower() == 'none' { return []StyleTransition{} }
+		count = split_top_level_commas(props).len
+	}
+	mut out := []StyleTransition{}
+	for i in 0 .. count {
+		mut entry := if base.len > 0 {
+			base[i % base.len]
+		} else {
+			StyleTransition{ properties: ['all'], duration: 0.2, timing: .out_cubic }
 		}
-		mut name := ''
-		mut duration := 0.0
-		mut timing := AnimationTransition.out_cubic
-		mut timing_fn := AnimationTransitionFn(unsafe { nil })
-		mut delay := 0.0
-		mut iters := 1.0
-		mut infinite := false
-		mut direction := 'normal'
-		mut fill := 'none'
-		mut play := 'running'
-		mut seen_duration := false
-		for tok in tokens {
-			l := tok.to_lower()
-			if name == '' && !is_time_token(tok) && !is_timing_token(tok) && !is_iteration_token(tok)
-				&& !is_direction_token(tok) && !is_fill_token(tok) && !is_play_state_token(tok)
-				&& parse_cubic_bezier(tok) == none {
-				name = tok
-				continue
-			}
-			if d := parse_time_seconds(tok) {
-				if !seen_duration {
-					duration = d
-					seen_duration = true
-				} else {
-					delay = d
-				}
-				continue
-			}
-			if t := parse_timing_token(tok) {
-				// only assign if token is a timing keyword (parse_timing_token returns none otherwise)
-				timing = t
-				timing_fn = unsafe { nil }
-				continue
-			} else if f := parse_cubic_bezier(tok) {
-				timing = .linear
-				timing_fn = f
-				continue
-			}
-			if is_iteration_token(tok) {
-				if l == 'infinite' {
-					infinite = true
-					iters = 0
-				} else {
-					iters = tok.f64()
-				}
-				continue
-			}
-			if is_direction_token(tok) {
-				direction = l
-				continue
-			}
-			if is_fill_token(tok) {
-				fill = l
-				continue
-			}
-			if is_play_state_token(tok) {
-				play = l
-				continue
+		if prop := style_list_value(values, 'transition-property', i) { entry.properties = [prop] }
+		if raw := style_list_value(values, 'transition-duration', i) {
+			entry.duration = parse_time_seconds(raw) or { entry.duration }
+		}
+		if raw := style_list_value(values, 'transition-delay', i) {
+			entry.delay = parse_time_seconds(raw) or { entry.delay }
+		}
+		if raw := style_list_value(values, 'transition-timing-function', i) {
+			entry.timing_fn = unsafe { nil }
+			if timing := parse_timing_token(raw) {
+				entry.timing = timing
+			} else if f := parse_cubic_bezier(raw) {
+				entry.timing = .linear
+				entry.timing_fn = f
 			}
 		}
-		if name == '' {
-			continue
-		}
-		out << StyleAnimation{
-			name:            name
-			duration:        if duration <= 0 { 0.0 } else { duration }
-			timing:          timing
-			timing_fn:       timing_fn
-			delay:           delay
-			iteration_count: if infinite { 0 } else { iters }
-			direction:       direction
-			fill_mode:       fill
-			play_state:      play
-		}
+		out << entry
 	}
 	return out
 }
 
-fn apply_animation_atomic(list []StyleAnimation, prop string, value string) []StyleAnimation {
-	vals := split_top_level_commas(value)
-	n := if vals.len > list.len { vals.len } else { list.len }
-	mut out := []StyleAnimation{len: n}
-	for i in 0 .. n {
-		base := if i < list.len {
-			list[i]
-		} else {
-			StyleAnimation{ name: '', duration: 0.0, timing: .out_cubic, delay: 0.0, iteration_count: 1.0, direction: 'normal', fill_mode: 'none', play_state: 'running' }
+fn parse_transition_shorthand(value string) []StyleTransition {
+	if value.trim_space().to_lower() == 'none' { return []StyleTransition{} }
+	mut out := []StyleTransition{}
+	for entry in split_top_level_commas(value) {
+		mut tr := StyleTransition{ properties: ['all'], duration: 0.2, timing: .out_cubic }
+		mut times := 0
+		for token in split_shorthand_tokens(entry) {
+			if n := parse_time_seconds(token) {
+				if times == 0 { tr.duration = n } else { tr.delay = n }
+				times++
+			} else if t := parse_timing_token(token) {
+				tr.timing = t
+			} else if f := parse_cubic_bezier(token) {
+				tr.timing = .linear
+				tr.timing_fn = f
+			} else {
+				tr.properties = [token.trim_space()]
+			}
 		}
-		out[i] = base
+		if tr.duration >= 0 { out << tr }
 	}
-	for i, v in vals {
-		trimmed := v.trim_space()
-		match prop {
-			'animation-name' { out[i].name = trimmed }
-			'animation-duration' {
-				if d := parse_time_seconds(trimmed) { out[i].duration = d }
-			}
-			'animation-timing-function' {
-				if t := parse_timing_token(trimmed) {
-					out[i].timing = t
-					out[i].timing_fn = unsafe { nil }
-				} else if f := parse_cubic_bezier(trimmed) {
-					out[i].timing = .linear
-					out[i].timing_fn = f
-				}
-			}
-			'animation-delay' {
-				if d := parse_time_seconds(trimmed) { out[i].delay = d }
-			}
-			'animation-iteration-count' {
-				if trimmed.to_lower() == 'infinite' {
-					out[i].iteration_count = 0
-				} else {
-					// Anything else is not a count: keep the previous entry
-					// instead of mistaking garbage for infinite (f64('x') == 0).
-					if count := parse_keyframe_number(trimmed) {
-						if count > 0 {
-							out[i].iteration_count = count
-						}
-					}
-				}
-			}
-			'animation-direction' { out[i].direction = trimmed.to_lower() }
-			'animation-fill-mode' { out[i].fill_mode = trimmed.to_lower() }
-			'animation-play-state' { out[i].play_state = trimmed.to_lower() }
-			else {}
+	return out
+}
+
+fn resolve_style_animations(values map[string]string) []StyleAnimation {
+	mut base := [default_style_animation()]
+	if shorthand := values['animation'] { base = parse_animation_shorthand(shorthand) }
+	mut count := base.len
+	if names := values['animation-name'] { count = split_top_level_commas(names).len }
+	mut out := []StyleAnimation{}
+	for i in 0 .. count {
+		mut entry := if base.len > 0 { base[i % base.len] } else { default_style_animation() }
+		if raw := style_list_value(values, 'animation-name', i) {
+			entry.name = if raw == 'none' { '' } else { raw }
 		}
+		if raw := style_list_value(values, 'animation-duration', i) {
+			entry.duration = parse_time_seconds(raw) or { entry.duration }
+		}
+		if raw := style_list_value(values, 'animation-delay', i) {
+			entry.delay = parse_time_seconds(raw) or { entry.delay }
+		}
+		if raw := style_list_value(values, 'animation-timing-function', i) {
+			entry.timing_fn = unsafe { nil }
+			if t := parse_timing_token(raw) {
+				entry.timing = t
+			} else if f := parse_cubic_bezier(raw) {
+				entry.timing = .linear
+				entry.timing_fn = f
+			}
+		}
+		if raw := style_list_value(values, 'animation-iteration-count', i) {
+			entry.iteration_count = if raw == 'infinite' {
+				0.0
+			} else {
+				query_plain_number(raw) or { 1.0 }
+			}
+			entry.infinite = raw == 'infinite'
+		}
+		if raw := style_list_value(values, 'animation-direction', i) { entry.direction = raw }
+		if raw := style_list_value(values, 'animation-fill-mode', i) { entry.fill_mode = raw }
+		if raw := style_list_value(values, 'animation-play-state', i) { entry.play_state = raw }
+		out << entry
+	}
+	return out
+}
+
+fn default_style_animation() StyleAnimation {
+	return StyleAnimation{ timing: .out_cubic, iteration_count: 1, direction: 'normal', fill_mode: 'none', play_state: 'running' }
+}
+
+fn parse_animation_shorthand(value string) []StyleAnimation {
+	if value.trim_space().to_lower() == 'none' { return []StyleAnimation{} }
+	mut out := []StyleAnimation{}
+	for entry in split_top_level_commas(value) {
+		mut spec := default_style_animation()
+		mut times := 0
+		for tok in split_shorthand_tokens(entry) {
+			l := tok.to_lower()
+			if d := parse_time_seconds(tok) {
+				if times == 0 { spec.duration = d } else { spec.delay = d }
+				times++
+			} else if t := parse_timing_token(tok) {
+				spec.timing = t
+			} else if f := parse_cubic_bezier(tok) {
+				spec.timing = .linear
+				spec.timing_fn = f
+			} else if is_iteration_token(tok) {
+				spec.infinite = l == 'infinite'
+				spec.iteration_count = if spec.infinite {
+					0.0
+				} else {
+					query_plain_number(tok) or { 1.0 }
+				}
+			} else if is_direction_token(tok) {
+				spec.direction = l
+			} else if is_fill_token(tok) {
+				spec.fill_mode = l
+			} else if is_play_state_token(tok) {
+				spec.play_state = l
+			} else {
+				spec.name = tok
+			}
+		}
+		if spec.name.len > 0 && spec.duration >= 0 { out << spec }
 	}
 	return out
 }
@@ -324,16 +232,11 @@ fn split_top_level_commas(s string) []string {
 fn parse_time_seconds(tok string) ?f64 {
 	t := tok.trim_space().to_lower()
 	if t.ends_with('ms') {
-		num := t[..t.len - 2].f64()
+		num := query_plain_number(t[..t.len - 2]) or { return none }
 		return num / 1000.0
 	}
 	if t.ends_with('s') {
-		return t[..t.len - 1].f64()
-	}
-	// bare number treated as seconds
-	n := t.f64()
-	if t == n.str() {
-		return n
+		return query_plain_number(t[..t.len - 1])
 	}
 	return none
 }
@@ -363,16 +266,8 @@ fn is_iteration_token(tok string) bool {
 	if l == 'infinite' {
 		return true
 	}
-	if tok.len == 0 {
-		return false
-	}
-	first := tok[0]
-	if !(first >= `0` && first <= `9`) {
-		return false
-	}
-	// must be numeric
-	n := tok.f64()
-	return n > 0 || tok == '0'
+	n := query_plain_number(tok) or { return false }
+	return n >= 0
 }
 
 fn is_direction_token(tok string) bool {
@@ -400,10 +295,11 @@ fn parse_cubic_bezier(tok string) ?AnimationTransitionFn {
 	if parts.len != 4 {
 		return none
 	}
-	x1 := parts[0].trim_space().f64()
-	y1 := parts[1].trim_space().f64()
-	x2 := parts[2].trim_space().f64()
-	y2 := parts[3].trim_space().f64()
+	x1 := query_plain_number(parts[0].trim_space()) or { return none }
+	y1 := query_plain_number(parts[1].trim_space()) or { return none }
+	x2 := query_plain_number(parts[2].trim_space()) or { return none }
+	y2 := query_plain_number(parts[3].trim_space()) or { return none }
+	if x1 < 0 || x1 > 1 || x2 < 0 || x2 > 1 { return none }
 	return cubic_bezier_easing(x1, y1, x2, y2)
 }
 

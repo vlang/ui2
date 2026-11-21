@@ -352,9 +352,11 @@ fn native_text_view_restore_selected_range(tv macos.Id, location u64, length u64
 }
 
 fn native_text_view_selected_range(tv macos.Id) DarwinRange {
-	// NOTE(V 0.5.2 CI): `DarwinRange`/`msg_range` do not exist in 0.5.2, so
-	// return zero; text-area caret tests do not run on macOS CI.
-	return DarwinRange{}
+	if objc_is_nil(tv) {
+		return darwin_range(0, 0)
+	}
+	range := darwin_msg_range(tv, 'selectedRange')
+	return if range.location == u64(-1) { darwin_range(0, 0) } else { range }
 }
 
 fn native_text_view_insert_text(tv macos.Id, text string) {

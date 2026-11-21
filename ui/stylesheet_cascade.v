@@ -50,10 +50,11 @@ pub mut:
 	timing          AnimationTransition
 	timing_fn       AnimationTransitionFn
 	delay           f64
-	iteration_count f64 // 0 means infinite
-	direction       string
-	fill_mode       string
-	play_state      string
+	iteration_count f64 = 1
+	infinite        bool
+	direction       string = 'normal'
+	fill_mode       string = 'none'
+	play_state      string = 'running'
 }
 
 // is_style_animation_prop reports whether prop is an animation declaration
@@ -128,7 +129,7 @@ pub fn apply_stylesheet_ex(root Element, global Stylesheet, env StyleMatchEnv) (
 // variables of any mode, so it can contribute nothing to a cascade.
 fn stylesheet_is_empty(sheet Stylesheet) bool {
 	return sheet.rules.len == 0 && sheet.variables.len == 0 && sheet.light_vars.len == 0
-		&& sheet.dark_vars.len == 0
+		&& sheet.dark_vars.len == 0 && sheet.keyframes.len == 0
 }
 
 // element_has_scoped_stylesheet reports whether any element in the tree
@@ -149,7 +150,7 @@ fn element_has_scoped_stylesheet(el Element) bool {
 fn cascade_element(el Element, ancestors []StyleAncestor, index int, count int, scopes []Stylesheet, env StyleMatchEnv, qenv StyleQueryEnv, inherited map[string]string, mut warnings []StylesheetWarning, mut color_cache map[string]ComponentThemeToken, mut len_cache map[string]f64, mut split_cache map[string][]string) Element {
 	// No clone when the element brings no scoped sheet: scopes is only read.
 	has_scoped := !stylesheet_is_empty(el.stylesheet)
-	mut active := scopes.clone()
+	mut active := unsafe { scopes }
 	if has_scoped {
 		active = scopes.clone()
 		active << el.stylesheet
@@ -228,7 +229,7 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 		}
 	}
 	if candidates.len == 0 {
-		return el, inherited
+		return Element{ ...el, style_custom_properties: inherited.clone() }, inherited
 	}
 	// Usually already ordered (rules author low→high specificity): one linear
 	// check, which is also the sort's fixed point, skips the closure sort.
@@ -291,6 +292,10 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 		}
 		prop := candidate.decl.prop
 		if is_style_animation_prop(prop) {
+			if (prop.starts_with('transition') && (el.style_transitions.len > 0 || el.style_transition_values.len > 0))
+				|| (prop.starts_with('animation') && (el.style_animations.len > 0 || el.style_animation_values.len > 0)) {
+				continue
+			}
 			out = apply_style_animation_decl(out, prop, resolved[i])
 			continue
 		}
@@ -301,6 +306,7 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 	if raw.len == 0 && scope.resolved.len == 0 {
 		// No custom properties produced: the inherited map passes through
 		// shared instead of cloned.
+		out.style_custom_properties = inherited.clone()
 		return out, inherited
 	}
 	mut merged := inherited.clone()
@@ -310,6 +316,7 @@ fn cascade_props(el Element, ancestors []StyleAncestor, index int, count int, sc
 	for key, value in scope.resolved {
 		merged[key] = value
 	}
+	out.style_custom_properties = merged.clone()
 	return out, merged
 }
 
