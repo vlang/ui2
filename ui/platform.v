@@ -53,10 +53,11 @@ pub fn open_url_supported() bool {
 // with an address are accepted; anything else is rejected without touching
 // the platform.
 pub fn open_url(url string) bool {
-	if !platform_valid_url(url) {
+	candidate := url.trim_space()
+	if !platform_valid_url(candidate) {
 		return false
 	}
-	return native_open_url(url)
+	return native_open_url(candidate)
 }
 
 // share_supported reports whether share_text can open the platform share

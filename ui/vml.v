@@ -1155,10 +1155,13 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 			top := node.prop_or('top_bar_height', '0').f64()
 			bottom := node.prop_or('bottom_bar_height', '0').f64()
 			content_box := scaffold_content_rect(local, top, bottom)
+			// Resolve every slot against its own local origin: scaffold() wraps
+			// each strip in a view positioned at the strip's offset, so an
+			// absolute y here would be applied twice to children that omit y.
 			top_bar, content, bottom_bar, fab, snackbar := v_scaffold_slots(node, rect(0,
 				0, local.width, top), rect(0, 0, content_box.width, content_box.height),
-				rect(0, content_box.y + content_box.height, local.width, bottom))!
-			return scaffold(ScaffoldConfig{
+				rect(0, 0, local.width, bottom))!
+			built := scaffold(ScaffoldConfig{
 				id:                node.id
 				frame:             frame
 				top_bar_height:    top
@@ -1179,6 +1182,18 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 				snackbar:          snackbar
 				label:             node.prop('accessibility_label')
 			})!
+			// ScaffoldConfig carries only the background, so restore the rest of
+			// the ordinary VML box styling (radius and border widths/colors)
+			// that v_box would have supplied, keeping the constructor's
+			// transparent default and resolved background intact.
+			return Element{
+				...built
+				box: BoxStyle{
+					...v_box(node)
+					bg:          built.box.bg
+					transparent: built.box.transparent
+				}
+			}
 		}
 		'ProgressBar' {
 			return progress_bar(

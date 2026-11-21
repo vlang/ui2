@@ -14,8 +14,8 @@ import sokol.sapp
 #include "platform_android.h"
 
 fn C.ui2_android_haptic(activity voidptr, duration_ms int, amplitude int) int
-fn C.ui2_android_open_url(activity voidptr, url &char) int
-fn C.ui2_android_share_text(activity voidptr, text &char) int
+fn C.ui2_android_open_url(activity voidptr, url &char, url_len int) int
+fn C.ui2_android_share_text(activity voidptr, text &char, text_len int) int
 
 // android_platform_activity answers the running NativeActivity, or nil
 // outside an Android runtime.
@@ -61,7 +61,7 @@ fn native_open_url(url string) bool {
 	if act == unsafe { nil } {
 		return false
 	}
-	return C.ui2_android_open_url(act, &char(url.str)) != 0
+	return C.ui2_android_open_url(act, &char(url.str), url.len) != 0
 }
 
 fn native_share_supported() bool {
@@ -73,5 +73,5 @@ fn native_share_text(text string) bool {
 	if act == unsafe { nil } {
 		return false
 	}
-	return C.ui2_android_share_text(act, &char(text.str)) != 0
+	return C.ui2_android_share_text(act, &char(text.str), text.len) != 0
 }

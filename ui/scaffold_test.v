@@ -65,11 +65,18 @@ fn test_scaffold_skips_empty_strips_but_reserves_their_height() {
 }
 
 fn test_scaffold_rejects_strips_with_children_but_no_height() {
-	if _ := scaffold(frame: rect(0, 0, 10, 10), top_bar: [label('t', 'T', rect(0, 0, 10, 10), TextStyle{})]) {
+	if _ := scaffold(
+		frame:   rect(0, 0, 10, 10)
+		top_bar: [label('t', 'T', rect(0, 0, 10, 10), TextStyle{})]
+	) {
 		assert false, 'top bar children without height accepted'
 	}
-	if _ := scaffold(frame: rect(0, 0, 10, 10), bottom_bar: [
-		label('b', 'B', rect(0, 0, 10, 10), TextStyle{})]) {
+	if _ := scaffold(
+		frame:      rect(0, 0, 10, 10)
+		bottom_bar: [
+			label('b', 'B', rect(0, 0, 10, 10), TextStyle{}),
+		]
+	) {
 		assert false, 'bottom bar children without height accepted'
 	}
 }
@@ -136,10 +143,32 @@ fn test_vml_scaffold_routes_slots() {
 	assert el.children[0].children[0].text == 'Title'
 	assert el.children[1].frame == rect(0, 56, 400, 680)
 	assert el.children[2].frame == rect(0, 736, 400, 64)
+	// Slot children resolve against their strip's local origin: the strip view
+	// supplies the absolute y, so the child keeps y = 0.
+	assert el.children[0].children[0].frame == rect(0, 0, 400, 56)
+	assert el.children[2].children[0].frame == rect(0, 0, 400, 64)
 	assert el.children[3].frame == rect(328, 664, 56, 56)
 }
 
-fn test_vml_scaffold_rejects_duplicate_and_unknown_slots() {
+fn test_vml_scaffold_preserves_box_styling() {
+	el := element_from_vml('Scaffold {
+		corner_radius: 12
+		border_width: 1
+		background: #102030
+		Label {
+			text: "Body"
+		}
+	}', rect(0, 0, 300, 200)) or { panic(err) }
+	assert el.box.radius == 12
+	assert el.box.border_left == 1
+	assert el.box.border_top == 1
+	assert el.box.border_right == 1
+	assert el.box.border_bottom == 1
+	assert el.box.bg == u32(0x102030)
+	assert !el.box.transparent
+}
+
+fn test_vml_scaffold_rejects_duplicate_fab() {
 	element_from_vml('Scaffold {
 		Button {
 			slot: fab
@@ -154,6 +183,9 @@ fn test_vml_scaffold_rejects_duplicate_and_unknown_slots() {
 		return
 	}
 	assert false
+}
+
+fn test_vml_scaffold_rejects_unknown_slot() {
 	element_from_vml('Scaffold {
 		Label {
 			slot: sidebar
