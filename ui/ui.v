@@ -950,7 +950,7 @@ pub fn with_secure_entry(el Element) Element {
 	// Secure fields never publish their plaintext as an accessibility value.
 	return Element{
 		...el
-		secure: true
+		secure:              true
 		accessibility_value: ''
 	}
 }
