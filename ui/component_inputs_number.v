@@ -252,16 +252,16 @@ fn number_input_fit(config NumberInputConfig, value f64, places int) string {
 			}
 		}
 	}
-	scale := number_input_pow10(digits)
-	mut scaled := math.round(target * scale)
+	scale_factor := number_input_pow10(digits)
+	mut scaled := math.round(target * scale_factor)
 	if high := config.max {
-		limit := math.floor(high * scale + 1e-7 * math.max(math.abs(high * scale), 1))
+		limit := math.floor(high * scale_factor + 1e-7 * math.max(math.abs(high * scale_factor), 1))
 		if scaled > limit {
 			scaled = limit
 		}
 	}
 	if low := config.min {
-		limit := math.ceil(low * scale - 1e-7 * math.max(math.abs(low * scale), 1))
+		limit := math.ceil(low * scale_factor - 1e-7 * math.max(math.abs(low * scale_factor), 1))
 		if scaled < limit {
 			scaled = limit
 		}

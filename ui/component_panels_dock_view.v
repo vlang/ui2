@@ -352,8 +352,8 @@ fn dock_squeeze(a f64, b f64, room f64, min_size f64) (f64, f64) {
 	if rest <= 0 {
 		return 0, 0
 	}
-	scale := math.max(rest - (over - ea - eb), 0) / rest
-	return a2 * scale, b2 * scale
+	scale_factor := math.max(rest - (over - ea - eb), 0) / rest
+	return a2 * scale_factor, b2 * scale_factor
 }
 
 fn dock_side_widths(config DockAreaConfig, layout DockLayout) (f64, f64) {

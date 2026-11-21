@@ -227,10 +227,10 @@ fn stepper_slots(config StepperConfig, sm StepperMetrics) []StepperSlot {
 		total += height
 	}
 	spacing := if n > 1 { math.max(0.0, (frame.height - total) / f64(n - 1)) } else { 0.0 }
-	scale := if total > frame.height && total > 0 { frame.height / total } else { 1.0 }
+	scale_factor := if total > frame.height && total > 0 { frame.height / total } else { 1.0 }
 	mut y := 0.0
 	for i, item in config.items {
-		height := heights[i] * scale + if i < n - 1 { spacing } else { 0.0 }
+		height := heights[i] * scale_factor + if i < n - 1 { spacing } else { 0.0 }
 		slots << StepperSlot{
 			frame:     rect(0, y, frame.width, height)
 			indicator: rect(0, 0, d, d)

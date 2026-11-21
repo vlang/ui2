@@ -29,8 +29,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if frame_clip.width <= 0 || frame_clip.height <= 0 {
 			return
 		}
-		scale := math.max(f64(ctx.scale), 1.0)
-		geometry := shape_geometry(el, scale)
+		scale_factor := math.max(f64(ctx.scale), 1.0)
+		geometry := shape_geometry(el, scale_factor)
 		style := el.shape_style
 		apply_clip(ctx, frame_clip)
 		if fill := style.fill {

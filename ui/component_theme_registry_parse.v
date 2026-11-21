@@ -312,15 +312,15 @@ fn theme_palette_parse(lower string, source string) !(u32, f64) {
 		else {}
 	}
 	mut name := body
-	mut scale := 500
+	mut scale_factor := 500
 	if dash := body.last_index('-') {
 		name = body[..dash]
 		digits := body[dash + 1..]
-		scale = component_parse_index(digits, 950) or {
+		scale_factor = component_parse_index(digits, 950) or {
 			return error('"${source}" has a malformed shade')
 		}
 	}
-	color := component_theme_palette_color(name, scale) or {
+	color := component_theme_palette_color(name, scale_factor) or {
 		return error('"${source}" is not a color')
 	}
 	return color, alpha

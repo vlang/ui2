@@ -104,9 +104,9 @@ fn breadcrumb_item_widths(items []BreadcrumbItem, available f64, metrics Compone
 		total += width
 	}
 	if total > available && total > 0 {
-		scale := math.max(available, 0) / total
+		scale_factor := math.max(available, 0) / total
 		for i in 0 .. widths.len {
-			widths[i] *= scale
+			widths[i] *= scale_factor
 		}
 	}
 	return widths

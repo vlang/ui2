@@ -1102,12 +1102,12 @@ fn calendar_header(config CalendarConfig, st CalendarState, layout CalendarLayou
 	month_w := component_text_width_estimate(month_text, cm.font) * 1.08 + 2 * pad
 	year_w := component_text_width_estimate(year_text, cm.font) * 1.08 + 2 * pad
 	room := math.max(0.0, header.width - 2 * side - 8)
-	scale := if month_w + year_w > room && month_w + year_w > 0 {
+	scale_factor := if month_w + year_w > room && month_w + year_w > 0 {
 		room / (month_w + year_w)
 	} else {
 		1.0
 	}
-	total := (month_w + year_w) * scale
+	total := (month_w + year_w) * scale_factor
 	mut x := header.x + (header.width - total) / 2
 	toggle_h := math.min(header.height, cm.cell)
 	ty := header.y + (header.height - toggle_h) / 2
@@ -1115,7 +1115,7 @@ fn calendar_header(config CalendarConfig, st CalendarState, layout CalendarLayou
 	for part in ['view:months', 'view:years'] {
 		is_month := part == 'view:months'
 		caption := if is_month { month_text } else { year_text }
-		width := (if is_month { month_w } else { year_w }) * scale
+		width := (if is_month { month_w } else { year_w }) * scale_factor
 		active := st.view == (if is_month { CalendarView.months } else { CalendarView.years })
 		frame := rect(x, ty, width, toggle_h)
 		children << calendar_ghost(component_part_id(config.id, part), part, frame, pressed,

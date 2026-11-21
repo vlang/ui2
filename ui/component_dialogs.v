@@ -420,9 +420,9 @@ fn dialog_button_frames(spec DialogPanelSpec, spacing DialogSpacing, width f64) 
 		total += natural
 	}
 	if total > available && total > 0 {
-		scale := math.max(available, 0) / total
+		scale_factor := math.max(available, 0) / total
 		for i in 0 .. widths.len {
-			widths[i] *= scale
+			widths[i] *= scale_factor
 		}
 		total = math.max(available, 0)
 	}

@@ -176,12 +176,12 @@ pub fn special_chart_format(value f64, decimals int) string {
 	} else {
 		decimals
 	}
-	mut scale := i64(1)
+	mut scale_factor := i64(1)
 	for _ in 0 .. places {
-		scale *= 10
+		scale_factor *= 10
 	}
-	scaled := i64(math.round(math.abs(value) * f64(scale)))
-	whole := scaled / scale
+	scaled := i64(math.round(math.abs(value) * f64(scale_factor)))
+	whole := scaled / scale_factor
 	digits := whole.str()
 	mut grouped := []u8{cap: digits.len + digits.len / 3}
 	for i, ch in digits.bytes() {
@@ -193,7 +193,7 @@ pub fn special_chart_format(value f64, decimals int) string {
 	mut out := if value < 0 && scaled > 0 { '-' } else { '' }
 	out += grouped.bytestr()
 	if places > 0 {
-		fraction := (scaled % scale).str()
+		fraction := (scaled % scale_factor).str()
 		out += '.' + '0'.repeat(places - fraction.len) + fraction
 	}
 	return out

@@ -310,22 +310,22 @@ fn input_group_layout(config InputGroupConfig) InputGroupLayout {
 		total += w
 	}
 	room := math.max(width - math.min(width, 2 * metrics.height), 0)
-	scale := if total > room && total > 0 { room / total } else { 1.0 }
+	scale_factor := if total > room && total > 0 { room / total } else { 1.0 }
 	mut leading := []Rect{}
 	mut trailing := []Rect{}
 	mut leading_width := 0.0
 	mut trailing_width := 0.0
 	for index, addon in config.addons {
 		if addon.side == .leading {
-			leading_width += wanted[index] * scale
+			leading_width += wanted[index] * scale_factor
 		} else {
-			trailing_width += wanted[index] * scale
+			trailing_width += wanted[index] * scale_factor
 		}
 	}
 	mut left := 0.0
 	mut right := width - trailing_width
 	for index, addon in config.addons {
-		w := wanted[index] * scale
+		w := wanted[index] * scale_factor
 		if addon.side == .leading {
 			leading << rect(left, 0, w, height)
 			left += w

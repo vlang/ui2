@@ -314,9 +314,9 @@ pub fn plot_axis(config PlotAxisConfig) !Element {
 	local := rect(0, 0, frame.width, frame.height)
 	mut children := []Element{}
 	if config.grid {
-		grid := plot_grid_path(config)
-		if grid.len > 0 {
-			children << shape(component_part_id(config.id, 'grid'), local, plot_offset_path(grid,
+		grid_path := plot_grid_path(config)
+		if grid_path.len > 0 {
+			children << shape(component_part_id(config.id, 'grid'), local, plot_offset_path(grid_path,
 				dx, dy), ShapeStyle{
 				stroke:       config.grid_color or { plot_grid_color(config.theme) }
 				stroke_width: 1

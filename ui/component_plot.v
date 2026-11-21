@@ -119,14 +119,14 @@ pub fn plot_format_number(value f64, decimals int) string {
 		return '-∞'
 	}
 	places := math.max(0, math.min(decimals, 12))
-	scale := math.pow(10, f64(places))
-	scaled := math.round(math.abs(value) * scale)
+	scale_factor := math.pow(10, f64(places))
+	scaled := math.round(math.abs(value) * scale_factor)
 	if scaled >= 9.0e15 {
 		return '${value:.0f}'
 	}
 	units := u64(scaled)
-	whole := units / u64(scale)
-	frac := units % u64(scale)
+	whole := units / u64(scale_factor)
+	frac := units % u64(scale_factor)
 	digits := whole.str()
 	mut grouped := []u8{cap: digits.len + digits.len / 3}
 	for i, ch in digits.bytes() {

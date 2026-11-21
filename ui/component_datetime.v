@@ -345,6 +345,7 @@ fn calendar_long_label(d CalendarDate) string {
 }
 
 // datetime_inset shrinks a frame by dx and dy on each side, never below zero.
+@[markused]
 fn datetime_inset(frame Rect, dx f64, dy f64) Rect {
 	x := math.min(dx, frame.width / 2)
 	y := math.min(dy, frame.height / 2)
