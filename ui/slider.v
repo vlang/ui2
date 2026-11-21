@@ -22,6 +22,7 @@ pub:
 
 pub struct SliderConfig {
 pub:
+	box         BoxStyle
 	id          string
 	action_id   string
 	frame       Rect
@@ -134,6 +135,7 @@ pub fn slider(config SliderConfig) Element {
 	value := slider_clamped_value(config.value, config.min, config.max)
 	return Element{
 		kind:                .slider
+		box:                 config.box
 		id:                  config.id
 		action_id:           config.action_id
 		frame:               config.frame
