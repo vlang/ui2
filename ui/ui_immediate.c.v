@@ -1380,6 +1380,11 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	}
 
 	fn on_init(app &GgApp) {
+		// Set up sokol-gl once, after Sokol's own setup and before any frame can
+		// draw. The immediate backend draws through sgl on backends that opt into
+		// custom rendering; gg no longer initializes sgl itself, so an omitted
+		// setup makes the first sgl call fault against an uninitialized context.
+		im_draw_setup()
 		// Sokol's loops swap even when frame_fn returns early, so an undrawn backbuffer
 		// can be presented on drivers that discard it. Metal skips idle callbacks. X11
 		// skips them too when sokol honors sapp_set_present_on_demand: frames UI2 did
@@ -2458,7 +2463,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	}
 
 	fn handle_char_input(ch u32, modifiers u32) {
-		if (g_text_readonly[g_focused_field] or { false }) { return }
+		if g_text_readonly[g_focused_field] or { false } { return }
 		if g_focused_field.len == 0 {
 			return
 		}
@@ -2574,7 +2579,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if key == .enter || key == .kp_enter {
 			for target in g_hit_targets {
 				if target.id == g_focused_field && target.text_area {
-					if (g_text_readonly[g_focused_field] or { false }) { return }
+					if g_text_readonly[g_focused_field] or { false } { return }
 					editor.insert_text('\n')
 					replace_text_value(g_focused_field, editor.text)
 					replace_text_editor(g_focused_field, editor)
@@ -4160,7 +4165,7 @@ fn page_focused_text_area(direction int) {
 	// Skipping that drew the surface at 1/scale of its frame.
 	// The quad covers exactly the texture's pixels, which are the frame's size
 	// rounded down, so the sampler never reads past the texture's edge.
-	fn draw_gl_surface_quad(ctx &gg.Context, tex GlSurfaceTexture, x f64, y f64, w f64, h f64) {
+	fn draw_gl_surface_quad(ctx &gg.Context, tex GlSurfaceTexture, x f64, y f64, _w f64, _h f64) {
 		s := f64(ctx.scale)
 		x0 := x * s
 		y0 := y * s
@@ -4351,8 +4356,8 @@ fn page_focused_text_area(direction int) {
 			return
 		}
 		r := math.max(0.0, math.min(radius, math.min(w, h) / 2))
-		scale := f64(ctx.scale)
-		segments := int(math.min(math.max(math.sqrt(r * scale) * 1.5, 2), 16))
+		scale_factor := f64(ctx.scale)
+		segments := int(math.min(math.max(math.sqrt(r * scale_factor) * 1.5, 2), 16))
 		mut points := unsafe { g_outline_points }
 		points.clear()
 		rounded_outline(mut points, x, y, w, h, r, segments)
@@ -4363,15 +4368,15 @@ fn page_focused_text_area(direction int) {
 			im_load_alpha(ctx)
 		}
 		im_c4b(ctx, c.r, c.g, c.b, c.a)
-		cx := f32((x + w / 2) * scale)
-		cy := f32((y + h / 2) * scale)
+		cx := f32((x + w / 2) * scale_factor)
+		cy := f32((y + h / 2) * scale_factor)
 		im_begin_triangles(ctx)
 		count := points.len / 2
 		for i in 0 .. count {
 			j := (i + 1) % count
 			im_v2f(ctx, cx, cy)
-			im_v2f(ctx, f32(points[2 * i] * scale), f32(points[2 * i + 1] * scale))
-			im_v2f(ctx, f32(points[2 * j] * scale), f32(points[2 * j + 1] * scale))
+			im_v2f(ctx, f32(points[2 * i] * scale_factor), f32(points[2 * i + 1] * scale_factor))
+			im_v2f(ctx, f32(points[2 * j] * scale_factor), f32(points[2 * j + 1] * scale_factor))
 		}
 		im_end(ctx)
 	}
@@ -4463,7 +4468,7 @@ fn page_focused_text_area(direction int) {
 		stops := gradient_sorted_stops(gradient)
 		line := gradient_line(gradient.angle, w, h)
 		r := math.max(0.0, math.min(radius, math.min(w, h) / 2))
-		scale := f64(ctx.scale)
+		scale_factor := f64(ctx.scale)
 		if r < 0.5 && draw_square_gradient(ctx, x, y, w, h, line, stops, gradient.angle, opacity) {
 			return
 		}
@@ -4473,7 +4478,7 @@ fn page_focused_text_area(direction int) {
 		// its points, so they bunch up where the edge turns fastest.
 		cell_w := math.max(4.0, w / 16)
 		cell_h := math.max(4.0, (h - 2 * r) / 16)
-		arc_rows := int(math.min(math.max(math.sqrt(r * scale) * 1.5, 2), 16))
+		arc_rows := int(math.min(math.max(math.sqrt(r * scale_factor) * 1.5, 2), 16))
 		mut rows := [0.0]
 		if r > 0 {
 			for k in 1 .. arc_rows + 1 {
@@ -4508,10 +4513,10 @@ fn page_focused_text_area(direction int) {
 				xt1 := inset_top + (w - 2 * inset_top) * f1
 				xb0 := inset_bottom + (w - 2 * inset_bottom) * f0
 				xb1 := inset_bottom + (w - 2 * inset_bottom) * f1
-				gradient_vertex(ctx, line, stops, opacity, x, y, xt0, top, scale)
-				gradient_vertex(ctx, line, stops, opacity, x, y, xt1, top, scale)
-				gradient_vertex(ctx, line, stops, opacity, x, y, xb1, bottom, scale)
-				gradient_vertex(ctx, line, stops, opacity, x, y, xb0, bottom, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, xt0, top, scale_factor)
+				gradient_vertex(ctx, line, stops, opacity, x, y, xt1, top, scale_factor)
+				gradient_vertex(ctx, line, stops, opacity, x, y, xb1, bottom, scale_factor)
+				gradient_vertex(ctx, line, stops, opacity, x, y, xb0, bottom, scale_factor)
 			}
 		}
 		im_end(ctx)
@@ -4522,14 +4527,14 @@ fn page_focused_text_area(direction int) {
 	// box, or one per stop for a horizontal or vertical gradient. It leaves other
 	// gradients to the mesh and reports whether it drew.
 	fn draw_square_gradient(ctx &gg.Context, x f64, y f64, w f64, h f64, line GradientLine, stops []GradientStop, angle f64, opacity f64) bool {
-		scale := f64(ctx.scale)
+		scale_factor := f64(ctx.scale)
 		if stops.len == 2 {
 			im_load_alpha(ctx)
 			im_begin_quads(ctx)
-			gradient_vertex(ctx, line, stops, opacity, x, y, 0, 0, scale)
-			gradient_vertex(ctx, line, stops, opacity, x, y, w, 0, scale)
-			gradient_vertex(ctx, line, stops, opacity, x, y, w, h, scale)
-			gradient_vertex(ctx, line, stops, opacity, x, y, 0, h, scale)
+			gradient_vertex(ctx, line, stops, opacity, x, y, 0, 0, scale_factor)
+			gradient_vertex(ctx, line, stops, opacity, x, y, w, 0, scale_factor)
+			gradient_vertex(ctx, line, stops, opacity, x, y, w, h, scale_factor)
+			gradient_vertex(ctx, line, stops, opacity, x, y, 0, h, scale_factor)
 			im_end(ctx)
 			return true
 		}
@@ -4554,15 +4559,15 @@ fn page_focused_text_area(direction int) {
 				continue
 			}
 			if horizontal {
-				gradient_vertex(ctx, line, stops, opacity, x, y, a * extent, 0, scale)
-				gradient_vertex(ctx, line, stops, opacity, x, y, b * extent, 0, scale)
-				gradient_vertex(ctx, line, stops, opacity, x, y, b * extent, h, scale)
-				gradient_vertex(ctx, line, stops, opacity, x, y, a * extent, h, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, a * extent, 0, scale_factor)
+				gradient_vertex(ctx, line, stops, opacity, x, y, b * extent, 0, scale_factor)
+				gradient_vertex(ctx, line, stops, opacity, x, y, b * extent, h, scale_factor)
+				gradient_vertex(ctx, line, stops, opacity, x, y, a * extent, h, scale_factor)
 			} else {
-				gradient_vertex(ctx, line, stops, opacity, x, y, 0, a * extent, scale)
-				gradient_vertex(ctx, line, stops, opacity, x, y, w, a * extent, scale)
-				gradient_vertex(ctx, line, stops, opacity, x, y, w, b * extent, scale)
-				gradient_vertex(ctx, line, stops, opacity, x, y, 0, b * extent, scale)
+				gradient_vertex(ctx, line, stops, opacity, x, y, 0, a * extent, scale_factor)
+				gradient_vertex(ctx, line, stops, opacity, x, y, w, a * extent, scale_factor)
+				gradient_vertex(ctx, line, stops, opacity, x, y, w, b * extent, scale_factor)
+				gradient_vertex(ctx, line, stops, opacity, x, y, 0, b * extent, scale_factor)
 			}
 		}
 		im_end(ctx)
@@ -4651,14 +4656,14 @@ fn page_focused_text_area(direction int) {
 		}
 		count := outer.len / 2
 		c := hex_color(color_hex)
-		scale := f64(ctx.scale)
+		scale_factor := f64(ctx.scale)
 		im_load_alpha(ctx)
 		im_c4b(ctx, c.r, c.g, c.b, c.a)
 		im_begin_triangle_strip(ctx)
 		for i in 0 .. count + 1 {
 			k := i % count
-			im_v2f(ctx, f32(outer[2 * k] * scale), f32(outer[2 * k + 1] * scale))
-			im_v2f(ctx, f32(inner[2 * k] * scale), f32(inner[2 * k + 1] * scale))
+			im_v2f(ctx, f32(outer[2 * k] * scale_factor), f32(outer[2 * k + 1] * scale_factor))
+			im_v2f(ctx, f32(inner[2 * k] * scale_factor), f32(inner[2 * k + 1] * scale_factor))
 		}
 		im_end(ctx)
 	}

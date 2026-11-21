@@ -486,9 +486,9 @@ fn checkbox_group_frames(config CheckboxGroupConfig) []Rect {
 		y += row_h
 	}
 	if y > config.frame.height && y > 0 {
-		scale := config.frame.height / y
+		scale_factor := config.frame.height / y
 		for i, frame in frames {
-			frames[i] = rect(frame.x, frame.y * scale, frame.width, frame.height * scale)
+			frames[i] = rect(frame.x, frame.y * scale_factor, frame.width, frame.height * scale_factor)
 		}
 	}
 	return frames

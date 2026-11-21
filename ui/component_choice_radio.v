@@ -222,9 +222,9 @@ fn radio_group_frames(config RadioGroupConfig) ([]Rect, []int) {
 		bottom = y + row_height
 	}
 	if bottom > config.frame.height && bottom > 0 {
-		scale := config.frame.height / bottom
+		scale_factor := config.frame.height / bottom
 		for i, frame in frames {
-			frames[i] = rect(frame.x, frame.y * scale, frame.width, frame.height * scale)
+			frames[i] = rect(frame.x, frame.y * scale_factor, frame.width, frame.height * scale_factor)
 		}
 	}
 	return frames, lines

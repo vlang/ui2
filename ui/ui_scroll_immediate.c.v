@@ -50,6 +50,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		return if content_width > frame.width { content_width - frame.width } else { 0.0 }
 	}
 
+	@[markused]
 	fn register_scroll_view(id string, frame Rect, clip Rect, content_height f64, enabled bool, show_scrollbar bool, persistent bool) f64 {
 		return register_scroll_view_in_parent(id, '', frame, clip, content_height, enabled,
 			show_scrollbar, persistent)

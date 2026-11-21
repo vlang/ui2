@@ -72,7 +72,7 @@ mut:
 	// deadlines and animation continuation call it so a suppressed frame
 	// callback still runs. It must only touch the platform loop's own
 	// synchronization; it runs under the coordinator mutex.
-	wake_fn fn ()
+	wake_fn fn () = unsafe { nil }
 }
 
 fn new_frame_coordinator() &FrameCoordinator {

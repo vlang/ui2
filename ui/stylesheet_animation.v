@@ -44,8 +44,8 @@ fn style_animation_decl_valid(prop string, value string) bool {
 
 fn style_list_value(values map[string]string, prop string, index int) ?string {
 	raw := values[prop] or { return none }
-	list := split_top_level_commas(raw)
-	return list[index % list.len].trim_space()
+	parts := split_top_level_commas(raw)
+	return parts[index % parts.len].trim_space()
 }
 
 fn resolve_style_transitions(values map[string]string) []StyleTransition {
@@ -241,6 +241,7 @@ fn parse_time_seconds(tok string) ?f64 {
 	return none
 }
 
+@[markused]
 fn is_time_token(tok string) bool {
 	return parse_time_seconds(tok) != none
 }
@@ -257,6 +258,7 @@ fn parse_timing_token(tok string) ?AnimationTransition {
 	}
 }
 
+@[markused]
 fn is_timing_token(tok string) bool {
 	return parse_timing_token(tok) != none
 }

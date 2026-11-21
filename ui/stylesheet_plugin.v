@@ -41,12 +41,12 @@ pub:
 	at_rules       []string // custom `@name` blocks this plugin expands
 	media_features []string // custom `@media` features this plugin matches
 	functions      []string // custom value functions this plugin evaluates
-	match_pseudo   StyleMatchPseudoFn
-	expand_at_rule StyleExpandAtRuleFn
-	match_media    StyleMatchMediaFn
-	eval_function  StyleEvalFunctionFn
-	transform      StyleTransformFn
-	lint           StyleLintFn
+	match_pseudo   StyleMatchPseudoFn   = unsafe { nil }
+	expand_at_rule StyleExpandAtRuleFn   = unsafe { nil }
+	match_media    StyleMatchMediaFn     = unsafe { nil }
+	eval_function  StyleEvalFunctionFn   = unsafe { nil }
+	transform      StyleTransformFn      = unsafe { nil }
+	lint           StyleLintFn           = unsafe { nil }
 }
 
 // StyleMatchPseudoFn answers a custom pseudo-class for one element.

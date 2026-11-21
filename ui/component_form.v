@@ -260,12 +260,12 @@ pub fn form_split(frame Rect, widths []f64, gap f64) []Rect {
 			flexible++
 		}
 	}
-	scale := if fixed > total && fixed > 0 { total / fixed } else { 1.0 }
-	share := if flexible > 0 { math.max(total - fixed * scale, 0) / f64(flexible) } else { 0.0 }
+	scale_factor := if fixed > total && fixed > 0 { total / fixed } else { 1.0 }
+	share := if flexible > 0 { math.max(total - fixed * scale_factor, 0) / f64(flexible) } else { 0.0 }
 	mut frames := []Rect{cap: widths.len}
 	mut x := 0.0
 	for width in widths {
-		w := if component_finite(width) && width > 0 { width * scale } else { share }
+		w := if component_finite(width) && width > 0 { width * scale_factor } else { share }
 		frames << rect(x, 0, w, frame.height)
 		x += w + space
 	}

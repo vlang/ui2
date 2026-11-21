@@ -9,7 +9,20 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	import sokol.gfx
 	import sokol.sgl
 
+	__global im_draw_ready = false
 	__global im_alpha_pipe = sgl.Pipeline{}
+
+	// im_draw_setup prepares sokol-gl for the immediate backend. gg's pure-V
+	// renderer no longer sets sgl up, so ui2 must do it explicitly. Called once
+	// from on_init, after Sokol's setup and before the first frame, so every
+	// toolchain runs it exactly once.
+	fn im_draw_setup() {
+		if im_draw_ready {
+			return
+		}
+		sgl.setup(&sgl.Desc{})
+		im_draw_ready = true
+	}
 
 	// im_alpha_pipeline is the alpha-blend pipeline the immediate draws load:
 	// source alpha over one-minus-source-alpha, the blend gg installed for

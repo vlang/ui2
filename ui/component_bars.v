@@ -593,9 +593,9 @@ fn bars_overlay(frame Rect, radius f64, color u32, opacity f64) Element {
 }
 
 fn bars_overlay_opacity(selected bool, hovered bool, enabled bool, dark bool) f64 {
-	scale := if dark { 1.25 } else { 1.0 }
+	scale_factor := if dark { 1.25 } else { 1.0 }
 	if !enabled {
-		return if selected { 0.06 * scale } else { 0.0 }
+		return if selected { 0.06 * scale_factor } else { 0.0 }
 	}
 	base := if selected && hovered {
 		0.2
@@ -606,7 +606,7 @@ fn bars_overlay_opacity(selected bool, hovered bool, enabled bool, dark bool) f6
 	} else {
 		0.0
 	}
-	return base * scale
+	return base * scale_factor
 }
 
 // bars_focus_ring draws a two-point ring in the primary color with the

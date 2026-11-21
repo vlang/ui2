@@ -54,23 +54,23 @@ fn v_style_sheet(node &VNode) !Stylesheet {
 		if child.tag != 'Style' {
 			continue
 		}
-		sheet := parse_stylesheet(child.prop('source')) or {
+		style_sheet := parse_stylesheet(child.prop('source')) or {
 			return error('invalid `Style` block (line ${child.line}): ${err.msg()}')
 		}
-		if sheet.imports.len > 0 {
+		if style_sheet.imports.len > 0 {
 			return error('invalid `Style` block (line ${child.line}): `@import` needs a file; inline the sheet or style from V')
 		}
-		rules << sheet.rules
-		for key, value in sheet.variables {
+		rules << style_sheet.rules
+		for key, value in style_sheet.variables {
 			variables[key] = value
 		}
-		for key, value in sheet.light_vars {
+		for key, value in style_sheet.light_vars {
 			light_vars[key] = value
 		}
-		for key, value in sheet.dark_vars {
+		for key, value in style_sheet.dark_vars {
 			dark_vars[key] = value
 		}
-		for key, value in sheet.keyframes {
+		for key, value in style_sheet.keyframes {
 			keyframes[key] = value
 		}
 	}
@@ -96,10 +96,10 @@ fn v_inline_style(node &VNode, el Element, frame Rect) !Element {
 	if raw == '' {
 		return el
 	}
-	sheet := parse_stylesheet('* { ${raw} }') or {
+	style_sheet := parse_stylesheet('* { ${raw} }') or {
 		return error('invalid `style` on <${node.tag}> (line ${node.line}): ${err.msg()}')
 	}
-	if sheet.rules.len == 0 {
+	if style_sheet.rules.len == 0 {
 		return el
 	}
 	dark := stylesheet_dark_mode()
@@ -123,7 +123,7 @@ fn v_inline_style(node &VNode, el Element, frame Rect) !Element {
 	mut split_cache := map[string][]string{}
 	mut fill := StyleFill{}
 	mut out := el
-	for decl in sheet.rules[0].declarations {
+	for decl in style_sheet.rules[0].declarations {
 		if decl.prop.starts_with('--') {
 			return error('invalid `style` on <${node.tag}> (line ${node.line}): custom properties need a `Style` block')
 		}

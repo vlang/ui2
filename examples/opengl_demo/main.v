@@ -101,10 +101,16 @@ fn main() {
 	ui2.set_gl_surface_renderer(fn [mut surface] (id string, frame ui2.Rect, scale f64, height f64) {
 		surface.draw(id, frame, scale, height)
 	})
-	ui2.run_window_with_options(ui2.WindowOptions{
-		title: 'OpenGL Surface'
-		width: 400
-		height: 500
-		refresh: .continuous
-	}, build, fn (_ string) {})
+	// WindowOptions and the GL surface loop belong to the immediate backend,
+	// which is only compiled in for custom rendering on Windows and macOS.
+	$if (windows || macos) && !ui2_custom_rendering ? {
+		ui2.run_window('OpenGL Surface', 400, 500, build, fn (_ string) {})
+	} $else {
+		ui2.run_window_with_options(ui2.WindowOptions{
+			title: 'OpenGL Surface'
+			width: 400
+			height: 500
+			refresh: .continuous
+		}, build, fn (_ string) {})
+	}
 }

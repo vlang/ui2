@@ -577,8 +577,8 @@ pub fn plot_stack(keys []string, values [][]f64, offset PlotStackOffset) []PlotS
 				}
 				continue
 			}
-			scale := if offset == .expand && total != 0 { 1 / total } else { 1.0 }
-			points[i] << PlotStackPoint{up * scale, (up + value) * scale, value}
+			scale_factor := if offset == .expand && total != 0 { 1 / total } else { 1.0 }
+			points[i] << PlotStackPoint{up * scale_factor, (up + value) * scale_factor, value}
 			up += value
 		}
 	}

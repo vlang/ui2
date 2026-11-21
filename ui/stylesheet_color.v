@@ -710,53 +710,53 @@ fn style_lab_chroma(raw string, reference f64) !f64 {
 }
 
 fn style_oklab_lightness(raw string) !f64 {
-	text := raw.trim_space().to_lower()
-	if text.ends_with('%') {
-		number := query_plain_number(text[..text.len - 1]) or {
+	value := raw.trim_space().to_lower()
+	if value.ends_with('%') {
+		number := query_plain_number(value[..value.len - 1]) or {
 			return error('"${raw}" is not a lightness')
 		}
 		return number / 100
 	}
-	return query_plain_number(text) or { return error('"${raw}" is not a lightness') }
+	return query_plain_number(value) or { return error('"${raw}" is not a lightness') }
 }
 
 fn style_unit_fraction(raw string) !f64 {
-	text := raw.trim_space().to_lower()
-	if text.ends_with('%') {
-		number := query_plain_number(text[..text.len - 1]) or {
+	value := raw.trim_space().to_lower()
+	if value.ends_with('%') {
+		number := query_plain_number(value[..value.len - 1]) or {
 			return error('"${raw}" is not a fraction')
 		}
 		return number / 100
 	}
-	return query_plain_number(text) or { return error('"${raw}" is not a fraction') }
+	return query_plain_number(value) or { return error('"${raw}" is not a fraction') }
 }
 
 // style_hundred_fraction parses a channel whose bare numbers run 0..100,
 // like a percentage without the sign (hwb whiteness and blackness).
 fn style_hundred_fraction(raw string) !f64 {
-	text := raw.trim_space().to_lower()
-	plain := if text.ends_with('%') { text[..text.len - 1] } else { text }
+	value := raw.trim_space().to_lower()
+	plain := if value.ends_with('%') { value[..value.len - 1] } else { value }
 	number := query_plain_number(plain) or { return error('"${raw}" is not a percentage') }
 	return number / 100
 }
 
 // style_gray_value parses gray()'s 0..100 lightness, with or without `%`.
 fn style_gray_value(raw string) !f64 {
-	text := raw.trim_space().to_lower()
-	plain := if text.ends_with('%') { text[..text.len - 1] } else { text }
+	value := raw.trim_space().to_lower()
+	plain := if value.ends_with('%') { value[..value.len - 1] } else { value }
 	number := query_plain_number(plain) or { return error('"${raw}" is not a gray lightness') }
 	return unit_clamp(number / 100)
 }
 
 fn style_alpha_value(raw string) !f64 {
-	text := raw.trim_space().to_lower()
-	if text.ends_with('%') {
-		number := query_plain_number(text[..text.len - 1]) or {
+	value := raw.trim_space().to_lower()
+	if value.ends_with('%') {
+		number := query_plain_number(value[..value.len - 1]) or {
 			return error('"${raw}" is not an alpha')
 		}
 		return unit_clamp(number / 100)
 	}
-	number := query_plain_number(text) or { return error('"${raw}" is not an alpha') }
+	number := query_plain_number(value) or { return error('"${raw}" is not an alpha') }
 	return unit_clamp(number)
 }
 
@@ -1155,14 +1155,14 @@ fn style_expand_idents(raw string, names []string, values []f64) !string {
 }
 
 fn style_relative_srgb_channel(expanded string) !f64 {
-	text := expanded.trim_space().to_lower()
-	if text.ends_with('%') {
-		number := query_plain_number(text[..text.len - 1]) or {
+	value := expanded.trim_space().to_lower()
+	if value.ends_with('%') {
+		number := query_plain_number(value[..value.len - 1]) or {
 			return error('"${expanded}" is not a color channel')
 		}
 		return unit_clamp(number / 100)
 	}
-	number := query_plain_number(text) or {
+	number := query_plain_number(value) or {
 		parsed := style_math_channel(expanded, StyleLengthCtx{}) or {
 			return error('"${expanded}" is not a color channel')
 		}
@@ -1181,14 +1181,14 @@ fn style_relative_hsl_channel(name string, expanded string) !f64 {
 	if name == 'h' {
 		return style_channel_angle(expanded)!
 	}
-	text := expanded.trim_space().to_lower()
-	if text.ends_with('%') {
-		number := query_plain_number(text[..text.len - 1]) or {
+	value := expanded.trim_space().to_lower()
+	if value.ends_with('%') {
+		number := query_plain_number(value[..value.len - 1]) or {
 			return error('"${expanded}" is not a color channel')
 		}
 		return unit_clamp(number / 100)
 	}
-	number := query_plain_number(text) or {
+	number := query_plain_number(value) or {
 		parsed := style_math_channel(expanded, StyleLengthCtx{}) or {
 			return error('"${expanded}" is not a color channel')
 		}
@@ -1214,8 +1214,8 @@ fn style_relative_lab_channel(space string, name string, expanded string) !f64 {
 	if (space == 'lch' || space == 'oklch') && name == 'h' {
 		return style_channel_angle(expanded)!
 	}
-	text := expanded.trim_space()
-	number := query_plain_number(text) or {
+	value := expanded.trim_space()
+	number := query_plain_number(value) or {
 		parsed := style_math_channel(expanded, StyleLengthCtx{}) or {
 			return error('"${expanded}" is not a color channel')
 		}
@@ -1244,14 +1244,14 @@ fn style_lab_reference(space string, name string) f64 {
 }
 
 fn style_relative_gray_channel(expanded string) !f64 {
-	text := expanded.trim_space().to_lower()
-	if text.ends_with('%') {
-		number := query_plain_number(text[..text.len - 1]) or {
+	value := expanded.trim_space().to_lower()
+	if value.ends_with('%') {
+		number := query_plain_number(value[..value.len - 1]) or {
 			return error('"${expanded}" is not a gray channel')
 		}
 		return unit_clamp(number / 100)
 	}
-	number := query_plain_number(text) or {
+	number := query_plain_number(value) or {
 		return error('"${expanded}" is not a gray channel')
 	}
 	return unit_clamp(number / 100)

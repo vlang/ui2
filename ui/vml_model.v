@@ -1250,6 +1250,7 @@ fn v_validate_declared_schema(name string, type_name string, schema VSchema, lin
 	}
 }
 
+@[markused]
 fn v_validate_action[T](expr &VExpression, scope map[string]VSchema) ! {
 	if expr.kind != .call || !expr.value.starts_with('app.') {
 		return error('event handlers must call an app action at line ${expr.line}')
@@ -1265,6 +1266,7 @@ fn v_validate_action[T](expr &VExpression, scope map[string]VSchema) ! {
 	type_check_action[T](name, args, expr.line)!
 }
 
+@[markused]
 fn v_validate_assignment[T](expr &VExpression, scope map[string]VSchema) ! {
 	if expr.kind != .assignment || expr.left.kind != .path || !expr.left.value.starts_with('app.')
 		|| expr.left.value.count('.') != 1 {
@@ -1276,6 +1278,7 @@ fn v_validate_assignment[T](expr &VExpression, scope map[string]VSchema) ! {
 	v_validate_declared_schema(target, type_name, schema, expr.line)!
 }
 
+@[markused]
 fn v_validate_repeater_schema[T](node &VNode, scope map[string]VSchema) ! {
 	model_expr := node.expressions['model'] or {
 		return error('Repeater requires `model` at line ${node.line}')
@@ -1301,6 +1304,7 @@ fn v_validate_repeater_schema[T](node &VNode, scope map[string]VSchema) ! {
 	}
 }
 
+@[markused]
 fn v_validate_node_schema[T](node &VNode, incoming_scope map[string]VSchema) ! {
 	mut scope := incoming_scope.clone()
 	if node.id.len > 0 {
@@ -1383,6 +1387,7 @@ fn v_validate_node_schema[T](node &VNode, incoming_scope map[string]VSchema) ! {
 	}
 }
 
+@[markused]
 fn v_validate_template[T](root &VNode, model T) ! {
 	v_validate_node_schema[T](root, {
 		'app': v_schema_from(model)
@@ -1459,10 +1464,12 @@ pub fn element_from_vml_model[T](source string, model T, frame Rect) !Element {
 	return element
 }
 
+@[markused]
 fn vml_writable_field_type[T](name string) !string {
 	return vml_writable_path_type($zero(T), name.split('.'), name)
 }
 
+@[markused]
 fn type_check_action[T](name string, args []VSchema, line int) ! {
 	$for method in T.methods {
 		if method.name == name {
@@ -1491,10 +1498,12 @@ fn type_check_action[T](name string, args []VSchema, line int) ! {
 	return error('unknown app action `${name}` at line ${line}')
 }
 
+@[markused]
 fn vml_set_field[T](mut model T, name string, value VValue) ! {
 	vml_set_path(mut model, name.split('.'), name, value)!
 }
 
+@[markused]
 fn vml_dispatch[T](mut model T, invocation VmlInvocation) ! {
 	mut scope := invocation.scope.clone()
 	// The app object is intentionally refreshed here. Repeater-local values stay
@@ -1521,6 +1530,7 @@ fn vml_dispatch[T](mut model T, invocation VmlInvocation) ! {
 	return error('unknown or unsupported app action `${invocation.name}`')
 }
 
+@[markused]
 fn vml_apply_assignment[T](mut model T, assignment VmlAssignment) ! {
 	mut scope := assignment.scope.clone()
 	scope['app'] = v_value_from(model)

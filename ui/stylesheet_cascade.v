@@ -37,7 +37,7 @@ pub mut:
 	properties []string
 	duration   f64
 	timing     AnimationTransition
-	timing_fn  AnimationTransitionFn
+	timing_fn  AnimationTransitionFn = unsafe { nil }
 	delay      f64
 }
 
@@ -48,7 +48,7 @@ pub mut:
 	name            string
 	duration        f64
 	timing          AnimationTransition
-	timing_fn       AnimationTransitionFn
+	timing_fn       AnimationTransitionFn = unsafe { nil }
 	delay           f64
 	iteration_count f64 = 1
 	infinite        bool
