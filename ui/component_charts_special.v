@@ -80,8 +80,11 @@ fn special_chart_channel(color u32, shift u32) f64 {
 }
 
 // special_chart_mix blends from `a` (t = 0) to `b` (t = 1), channel by channel.
+// t is clamped to [0, 1] to keep the chart palette stable when a caller passes
+// an out-of-range value; callers that want elastic overshoot use color_mix
+// directly.
 pub fn special_chart_mix(a u32, b u32, t f64) u32 {
-	return color_mix(a, b, t)
+	return color_mix(a, b, math.clamp(t, 0.0, 1.0))
 }
 
 fn special_chart_linear(channel f64) f64 {

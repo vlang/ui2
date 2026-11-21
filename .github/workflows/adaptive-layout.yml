@@ -5,12 +5,16 @@ on:
     paths:
       - 'ui/**'
       - 'ide/**'
+      - 'adaptive_layout_test.v'
+      - 'vml_adaptive_test.v'
       - '.github/workflows/adaptive-layout.yml'
   push:
     branches: [master, work/ide-adaptive-layout]
     paths:
       - 'ui/**'
       - 'ide/**'
+      - 'adaptive_layout_test.v'
+      - 'vml_adaptive_test.v'
       - '.github/workflows/adaptive-layout.yml'
 
 permissions:

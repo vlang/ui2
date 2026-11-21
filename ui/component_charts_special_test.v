@@ -82,6 +82,9 @@ fn test_special_chart_colors_follow_the_theme() {
 	assert special_chart_mix(0x000000, 0xffffff, 0) == 0x000000
 	assert special_chart_mix(0x000000, 0xffffff, 1) == 0xffffff
 	assert special_chart_mix(0x000000, 0xffffff, 0.5) == 0x808080
+	// The public helper clamps its interpolation factor before delegating.
+	assert special_chart_mix(0x102030, 0x203040, 2) == 0x203040
+	assert special_chart_mix(0x102030, 0x203040, -1) == 0x102030
 	assert special_chart_ink_on(0x111111) == 0xffffff
 	assert special_chart_ink_on(0xfde68a) == 0x111827
 }
