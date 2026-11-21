@@ -787,6 +787,54 @@ for native and custom-rendered windows alike. Linux and the BSDs drive
 them has to be installed; Android has no clipboard this layer can reach. Check
 `clipboard_supported()` before offering a copy action.
 
+## Platform integration
+
+`haptic` plays a haptic on phones and Force Touch trackpads, `set_app_badge`
+stamps a number on the application icon, `open_url` opens a link with its
+default handler, and `share_text` opens the platform share sheet. Every call
+reports whether the platform accepted the request, and every family has a
+`*_supported` capability query, after the clipboard and dialog APIs:
+
+```v
+if ui2.haptic_supported() {
+    ui2.haptic(.success)
+}
+ui2.set_app_badge(3) // zero clears the stamp
+if ui2.open_url('https://vlang.io') {
+    // request submitted to the browser, mail client or owning app
+}
+if ui2.share_text('Look at this') {
+    // share sheet requested; the user may still cancel
+}
+```
+
+Only `http` and `https` links with a host and `mailto` links with a recipient
+address are accepted. Surrounding URL whitespace is trimmed; embedded spaces
+and control characters are rejected. Blank share text and negative badge
+counts are rejected without touching the
+platform. Haptics run on iOS (impact, selection and notification generators),
+macOS (`NSHapticFeedbackManager`) and Android (the vibrator through JNI);
+badges on iOS and macOS dock tiles; links on iOS, macOS, Windows
+(`ShellExecute`), Android (an `ACTION_VIEW` intent) and the Linux and BSD
+desktops (`xdg-open`); the share sheet on iOS (`UIActivityViewController`)
+and Android (`ACTION_SEND` through the chooser). The rest answer unsupported,
+so gate the buttons on the capability queries. Run
+`v run examples/platform_integration/main.v` for a demo.
+
+Call these integrations from the main UI thread on iOS; calls from other
+threads return false. URL opening on iOS and Unix desktops is asynchronous, so
+true means the request was submitted, rather than confirming the final result.
+Unix launchers are reaped in the background so a browser that stays running
+does not block the UI. Haptic feedback also depends on hardware and user
+settings. On Android, include
+`<uses-permission android:name="android.permission.VIBRATE"/>` in the app
+manifest; `haptic_supported()` checks this permission and the vibration motor.
+Badge display on iOS requires the user's notification authorization.
+
+Android bridge tests use a mock JVM and the NDK's JNI declarations, including
+failed Java calls, reference cleanup, and Unicode payloads. Run them with
+`python3 tests/platform_android/run.py /path/to/android-ndk`.
+
 ## File and folder dialogs
 
 `open_file_dialog`, `save_file_dialog`, and `open_folder_dialog` show the
