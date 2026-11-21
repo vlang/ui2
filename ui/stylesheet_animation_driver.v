@@ -145,23 +145,23 @@ fn walk_style_animations(current Element, ancestor_sheets []Stylesheet, now i64,
 			for previous_index, previous in state.animations {
 				if previous_index in used || previous.name != spec.name { continue }
 				used[previous_index] = true
-				mut run := StyleKeyframeRun{ ...previous, slot: slot }
+				mut kf_run := StyleKeyframeRun{ ...previous, slot: slot }
 				if previous.spec != spec {
-					run.finished = false
+					kf_run.finished = false
 					changed = true
 				}
 				paused := spec.play_state == 'paused'
-				if paused && !run.paused {
-					run.paused_at = now
+				if paused && !kf_run.paused {
+					kf_run.paused_at = now
 					changed = true
 				}
-				if !paused && run.paused {
-					run.started_at += now - run.paused_at
+				if !paused && kf_run.paused {
+					kf_run.started_at += now - kf_run.paused_at
 					changed = true
 				}
-				run.paused = paused
-				run.spec = spec
-				next << run
+				kf_run.paused = paused
+				kf_run.spec = spec
+				next << kf_run
 				found = true
 				break
 			}
@@ -284,6 +284,7 @@ fn build_keyframe_tracks(sheets []Stylesheet, kf StyleKeyframes, declared Elemen
 	return tracks
 }
 
+@[markused]
 fn keyframe_targets(sheets []Stylesheet, stop StyleKeyframe) []AnimationProperty {
 	return keyframe_targets_for_element(sheets, stop, Element{})
 }
@@ -367,18 +368,18 @@ fn apply_style_animation_node(declared Element, now i64) (Element, bool) {
 	mut state := runtime.style_runs[declared.id] or { return declared, false }
 	mut out := declared
 	for i in 0 .. state.animations.len {
-		mut run := state.animations[i]
-		position, contributes, finished := style_keyframe_position(run, now)
-		run.finished = finished
-		state.animations[i] = run
+		mut kf_run := state.animations[i]
+		position, contributes, finished := style_keyframe_position(kf_run, now)
+		kf_run.finished = finished
+		state.animations[i] = kf_run
 		if !contributes { continue }
-		for track in run.tracks {
+		for track in kf_run.tracks {
 			for stop in 1 .. track.stops.len {
 				left := track.stops[stop - 1]
 				right := track.stops[stop]
 				if position > right.at && stop < track.stops.len - 1 { continue }
 				progress := unit_clamp((position - left.at) / (right.at - left.at))
-				eased := apply_animation_transition(Animation{ transition: run.spec.timing, transition_fn: run.spec.timing_fn }, progress)
+				eased := apply_animation_transition(Animation{ transition: kf_run.spec.timing, transition_fn: kf_run.spec.timing_fn }, progress)
 				out = style_apply_property_pair(out, left.value, right.value, eased)
 				break
 			}

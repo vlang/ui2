@@ -266,7 +266,7 @@ pub fn otp_input_width(config OtpInputConfig) f64 {
 fn otp_input_cell_frames(config OtpInputConfig) []Rect {
 	m := otp_input_metrics(config.size)
 	needed := otp_input_width(config)
-	scale := if needed > config.frame.width && needed > 0 {
+	scale_factor := if needed > config.frame.width && needed > 0 {
 		config.frame.width / needed
 	} else {
 		1.0
@@ -278,10 +278,10 @@ fn otp_input_cell_frames(config OtpInputConfig) []Rect {
 	for index in 0 .. config.length {
 		if index > 0 {
 			same_group := otp_input_group_of(config, index) == otp_input_group_of(config, index - 1)
-			x += (if same_group { m.gap } else { m.group_gap }) * scale
+			x += (if same_group { m.gap } else { m.group_gap }) * scale_factor
 		}
-		frames << rect(x, y, m.width * scale, height)
-		x += m.width * scale
+		frames << rect(x, y, m.width * scale_factor, height)
+		x += m.width * scale_factor
 	}
 	return frames
 }

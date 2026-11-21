@@ -87,18 +87,18 @@ pub fn style_split_value(raw string) []string {
 // string must be numeric: V's f64() accepts leading-number prefixes, so
 // garbage like `0.0)` or `12px` must not slip through here.
 pub fn query_plain_number(raw string) ?f64 {
-	text := raw.trim_space()
-	if text.len == 0 {
+	value := raw.trim_space()
+	if value.len == 0 {
 		return none
 	}
 	mut digits := 0
 	mut points := 0
 	mut index := 0
-	if text[0] == `-` || text[0] == `+` {
+	if value[0] == `-` || value[0] == `+` {
 		index = 1
 	}
-	for index < text.len {
-		ch := text[index]
+	for index < value.len {
+		ch := value[index]
 		if ch >= `0` && ch <= `9` {
 			digits++
 		} else if ch == `.` {
@@ -111,8 +111,8 @@ pub fn query_plain_number(raw string) ?f64 {
 	if digits == 0 || points > 1 {
 		return none
 	}
-	value := text.f64()
-	return if value != value { none } else { value }
+	number := value.f64()
+	return if number != number { none } else { number }
 }
 
 // StyleDim tags a computed math value. Plugins building custom value

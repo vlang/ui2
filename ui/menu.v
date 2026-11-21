@@ -117,6 +117,7 @@ fn emit_menu_event(id string) {
 	}
 }
 
+@[markused]
 fn menu_app_name() string {
 	return menu_state().app_name
 }

@@ -176,6 +176,7 @@ fn gradient_line(angle f64, w f64, h f64) GradientLine {
 // colors perpendicular to the line in that unit square, which a box that is not
 // square stretches, so the end is moved to where the color bands come out
 // perpendicular to the line in points, as the other renderers draw them.
+@[markused]
 fn gradient_unit_points(line GradientLine, w f64, h f64) (f64, f64, f64, f64) {
 	lx := line.x1 - line.x0
 	ly := line.y1 - line.y0

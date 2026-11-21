@@ -311,7 +311,7 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 	source := os.read_file(absolute) or {
 		return error('stylesheet: cannot read "${path}": ${err.msg()}')
 	}
-	sheet := parse_stylesheet(source) or {
+	style_sheet := parse_stylesheet(source) or {
 		// Point at the file: `theme.vss:3:1: ...` instead of `stylesheet:3:1:`.
 		msg := err.msg()
 		detail := if msg.starts_with('stylesheet:') {
@@ -321,8 +321,8 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 		}
 		return error(detail)
 	}
-	if sheet.imports.len == 0 {
-		return sheet
+	if style_sheet.imports.len == 0 {
+		return style_sheet
 	}
 	base := os.dir(absolute)
 	mut rules := []StyleRule{}
@@ -333,20 +333,20 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 	mut next_rule := 0
 	mut next_var := 0
 	mut next_keyframe := 0
-	for i, name in sheet.imports {
+	for i, name in style_sheet.imports {
 		// Own rules and variables written before this `@import` come first.
-		pos := if i < sheet.import_rule_pos.len { sheet.import_rule_pos[i] } else { 0 }
+		pos := if i < style_sheet.import_rule_pos.len { style_sheet.import_rule_pos[i] } else { 0 }
 		if pos > next_rule {
-			rules << sheet.rules[next_rule..pos]
+			rules << style_sheet.rules[next_rule..pos]
 			next_rule = pos
 		}
-		for next_var < sheet.var_log.len && sheet.var_log[next_var].imports_before <= i {
-			style_apply_var_entry(sheet.var_log[next_var], mut variables, mut light_vars, mut
+		for next_var < style_sheet.var_log.len && style_sheet.var_log[next_var].imports_before <= i {
+			style_apply_var_entry(style_sheet.var_log[next_var], mut variables, mut light_vars, mut
 				dark_vars)
 			next_var++
 		}
-		for next_keyframe < sheet.keyframe_log.len && sheet.keyframe_log[next_keyframe].imports_before <= i {
-			entry := sheet.keyframe_log[next_keyframe]
+		for next_keyframe < style_sheet.keyframe_log.len && style_sheet.keyframe_log[next_keyframe].imports_before <= i {
+			entry := style_sheet.keyframe_log[next_keyframe]
 			keyframes[entry.value.name] = entry.value
 			next_keyframe++
 		}
@@ -366,14 +366,14 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 			keyframes[key] = value
 		}
 	}
-	rules << sheet.rules[next_rule..]
-	for next_var < sheet.var_log.len {
-		style_apply_var_entry(sheet.var_log[next_var], mut variables, mut light_vars, mut
+	rules << style_sheet.rules[next_rule..]
+	for next_var < style_sheet.var_log.len {
+		style_apply_var_entry(style_sheet.var_log[next_var], mut variables, mut light_vars, mut
 			dark_vars)
 		next_var++
 	}
-	for next_keyframe < sheet.keyframe_log.len {
-		entry := sheet.keyframe_log[next_keyframe]
+	for next_keyframe < style_sheet.keyframe_log.len {
+		entry := style_sheet.keyframe_log[next_keyframe]
 		keyframes[entry.value.name] = entry.value
 		next_keyframe++
 	}
@@ -382,7 +382,7 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 		variables:  variables
 		light_vars: light_vars
 		dark_vars:  dark_vars
-		imports:    sheet.imports.clone()
+		imports:    style_sheet.imports.clone()
 		rule_index: stylesheet_index_rules(rules)
 		keyframes:  keyframes
 	}

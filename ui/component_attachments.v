@@ -823,9 +823,9 @@ pub fn attachment_image_fit(box Rect, image_width f64, image_height f64) Rect {
 	if image_width <= 0 || image_height <= 0 || box.width <= 0 || box.height <= 0 {
 		return box
 	}
-	scale := math.min(box.width / image_width, box.height / image_height)
-	width := image_width * scale
-	height := image_height * scale
+	scale_factor := math.min(box.width / image_width, box.height / image_height)
+	width := image_width * scale_factor
+	height := image_height * scale_factor
 	return rect(box.x + (box.width - width) / 2, box.y + (box.height - height) / 2, width,
 		height)
 }

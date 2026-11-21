@@ -103,15 +103,15 @@ pub fn image_fit_rect(fit ImageFit, width f64, height f64, natural_width f64, na
 		return rect(0, 0, width, height)
 	}
 	contain := math.min(width / natural_width, height / natural_height)
-	scale := match fit {
+	scale_factor := match fit {
 		.contain { contain }
 		.cover { math.max(width / natural_width, height / natural_height) }
 		.scale_down { math.min(contain, 1.0) }
 		.none { 1.0 }
 		.fill { 1.0 }
 	}
-	drawn_w := natural_width * scale
-	drawn_h := natural_height * scale
+	drawn_w := natural_width * scale_factor
+	drawn_h := natural_height * scale_factor
 	px := basics_clamp(if component_finite(position_x) { position_x } else { 0.5 }, 0, 1)
 	py := basics_clamp(if component_finite(position_y) { position_y } else { 0.5 }, 0, 1)
 	return rect((width - drawn_w) * px, (height - drawn_h) * py, drawn_w, drawn_h)

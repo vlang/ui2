@@ -597,11 +597,11 @@ fn plot_value_scale(values []f64, min_value ?f64, max_value ?f64, ticks int) Plo
 	if a > b {
 		a, b = b, a
 	}
-	scale := plot_linear_scale(a, b, 0, 1)
+	scale_factor := plot_linear_scale(a, b, 0, 1)
 	if min_value != none || max_value != none {
-		return scale.with_clamp(true)
+		return scale_factor.with_clamp(true)
 	}
-	return scale.nice(ticks)
+	return scale_factor.nice(ticks)
 }
 
 // cartesian_chart_view wraps a chart's children in its root view.

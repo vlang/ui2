@@ -58,6 +58,7 @@ fn sidebar_symbol(name string, frame Rect, color u32) Element {
 	}
 }
 
+@[markused]
 fn sidebar_none() Rect {
 	return rect(0, 0, 0, 0)
 }

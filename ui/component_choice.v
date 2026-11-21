@@ -463,10 +463,10 @@ fn choice_pack(naturals []f64, available f64, gap f64, fill bool) ([]f64, f64) {
 		total += natural
 	}
 	room := space - gaps
-	scale := if total > 0 && (fill || total > room) { room / total } else { 1.0 }
+	scale_factor := if total > 0 && (fill || total > room) { room / total } else { 1.0 }
 	mut sizes := []f64{cap: naturals.len}
 	for natural in naturals {
-		sizes << natural * scale
+		sizes << natural * scale_factor
 	}
 	return sizes, used_gap
 }

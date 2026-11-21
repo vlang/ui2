@@ -2566,7 +2566,7 @@ fn ui2_windows_control_pointer(hwnd voidptr, message u32, local_x int, local_y i
 	mut y := local_y
 	C.ui2_win_point_to_root(hwnd, st.root, &x, &y)
 	if message == win_wm_lbutton_down {
-		mut target := hwnd
+		mut target := voidptr(hwnd)
 		mut binding := WindowsPointerBinding{}
 		for target != unsafe { nil } {
 			handle := windows_handle_id(target)
