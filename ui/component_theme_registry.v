@@ -201,7 +201,7 @@ pub fn component_theme_variant_of(name string, theme ComponentTheme) ComponentTh
 pub fn component_theme_accent_gradient(theme ComponentTheme) Gradient {
 	start := color_from_rgba(theme.primary, 1)
 	shifted := color_hsva(start.h + 40, start.s, start.v, 1).rgb()
-	end := choice_mix(shifted, theme.background, 0.25)
+	end := color_mix(shifted, theme.background, 0.25)
 	return linear_gradient(0, gradient_stop(theme.primary, 0), gradient_stop(end, 1))
 }
 

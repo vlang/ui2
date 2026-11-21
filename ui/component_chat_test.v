@@ -263,8 +263,8 @@ fn test_bubble_variant_colors_follow_the_theme() {
 		variant: .tinted
 		theme:   dark
 	})
-	assert tinted_light == chat_mix(light.background, light.primary, 0.12)
-	assert tinted_dark == chat_mix(dark.background, dark.primary, 0.24)
+	assert tinted_light == color_mix(light.background, light.primary, 0.12)
+	assert tinted_dark == color_mix(dark.background, dark.primary, 0.24)
 	bad, bad_fg, _, _ := bubble_colors(BubbleConfig{
 		variant: .destructive
 		theme:   light

@@ -386,7 +386,7 @@ pub fn color_contrast_foreground(rgb u32) u32 {
 // color_over composites rgb at alpha over an opaque background, as a
 // renderer blends a translucent fill.
 fn color_over(rgb u32, alpha f64, background u32) u32 {
-	return choice_mix(background, rgb, color_alpha(alpha))
+	return color_mix(background, rgb, color_alpha(alpha))
 }
 
 // ── Palettes ────────────────────────────────────────────────────────

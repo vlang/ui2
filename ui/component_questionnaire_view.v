@@ -380,9 +380,9 @@ fn questionnaire_check_indicator(frame Rect, checked bool, enabled bool, theme C
 	mut fill := if checked { theme.primary } else { theme.background }
 	mut mark := theme.primary_foreground
 	if !enabled {
-		ring = choice_mix(ring, theme.background, 0.5)
-		fill = choice_mix(fill, theme.background, 0.5)
-		mark = choice_mix(mark, theme.background, 0.3)
+		ring = color_mix(ring, theme.background, 0.5)
+		fill = color_mix(fill, theme.background, 0.5)
+		mark = color_mix(mark, theme.background, 0.3)
 	}
 	mut children := choice_ring(rect(0, 0, d, d), math.max(3.0, math.round(d * 0.25)), ring,
 		fill, .all, false)
@@ -405,7 +405,7 @@ fn questionnaire_indicator(frame Rect, multiple bool, checked bool, enabled bool
 // questionnaire_shortcut_badge is the key hint at the end of a card.
 fn questionnaire_shortcut_badge(key string, frame Rect, enabled bool, m QuestionnaireMetrics, theme ComponentTheme) Element {
 	local := component_local(frame)
-	border := if enabled { theme.border } else { choice_mix(theme.border, theme.background, 0.5) }
+	border := if enabled { theme.border } else { color_mix(theme.border, theme.background, 0.5) }
 	mut children := choice_ring(local, math.max(3.0, m.radius - 4), border, theme.background,
 		.all, false)
 	children << label('', key, local, TextStyle{
@@ -432,20 +432,20 @@ struct QuestionnaireCardColors {
 
 fn questionnaire_card_colors(theme ComponentTheme, selected bool, enabled bool, invalid bool, highlighted bool) QuestionnaireCardColors {
 	fill := if selected {
-		choice_mix(theme.background, theme.primary, 0.08)
+		color_mix(theme.background, theme.primary, 0.08)
 	} else if !enabled {
-		choice_mix(theme.background, theme.muted, 0.5)
+		color_mix(theme.background, theme.muted, 0.5)
 	} else {
 		theme.background
 	}
 	border := if highlighted {
 		theme.primary
 	} else if invalid && !selected {
-		choice_mix(theme.background, theme.danger, 0.75)
+		color_mix(theme.background, theme.danger, 0.75)
 	} else if selected {
-		choice_mix(theme.background, theme.primary, 0.6)
+		color_mix(theme.background, theme.primary, 0.6)
 	} else if !enabled {
-		choice_mix(theme.border, theme.background, 0.4)
+		color_mix(theme.border, theme.background, 0.4)
 	} else {
 		theme.border
 	}
@@ -685,7 +685,7 @@ fn questionnaire_item_view(config QuestionnaireConfig, resolved QuestionnaireRes
 		} else {
 			answers << questionnaire_text_input(ctx, input, geom.input, config.enabled
 				&& input.enabled, m.radius, if ctx.invalid {
-				choice_mix(theme.background, theme.danger, 0.75)
+				color_mix(theme.background, theme.danger, 0.75)
 			} else {
 				theme.border
 			})

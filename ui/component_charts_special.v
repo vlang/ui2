@@ -75,16 +75,15 @@ pub fn special_chart_series_color(colors SpecialChartColors, index int) u32 {
 	return colors.palette[(if index < 0 { 0 } else { index }) % colors.palette.len]
 }
 
-fn special_chart_channel(color u32, shift u32) f64 {
-	return f64((color >> shift) & 0xff)
-}
-
 // special_chart_mix blends from `a` (t = 0) to `b` (t = 1), channel by channel.
+// Preserve the public helper's weighted-sum rounding as well as its [0, 1]
+// clamp. The difference form used by color_mix is not bit-identical at some
+// half-channel boundaries.
 pub fn special_chart_mix(a u32, b u32, t f64) u32 {
 	k := math.clamp(t, 0.0, 1.0)
 	mut out := u32(0)
-	for shift in [u32(16), 8, 0] {
-		value := special_chart_channel(a, shift) * (1 - k) + special_chart_channel(b, shift) * k
+	for shift in [u32(16), 8, 0]! {
+		value := color_channel(a, shift) * (1 - k) + color_channel(b, shift) * k
 		out |= u32(math.round(math.clamp(value, 0.0, 255.0))) << shift
 	}
 	return out
@@ -97,9 +96,9 @@ fn special_chart_linear(channel f64) f64 {
 
 // special_chart_luminance is the WCAG relative luminance of an RGB color.
 fn special_chart_luminance(color u32) f64 {
-	return 0.2126 * special_chart_linear(special_chart_channel(color, 16)) +
-		0.7152 * special_chart_linear(special_chart_channel(color, 8)) +
-		0.0722 * special_chart_linear(special_chart_channel(color, 0))
+	return 0.2126 * special_chart_linear(color_channel(color, 16)) +
+		0.7152 * special_chart_linear(color_channel(color, 8)) +
+		0.0722 * special_chart_linear(color_channel(color, 0))
 }
 
 fn special_chart_is_dark(color u32) bool {

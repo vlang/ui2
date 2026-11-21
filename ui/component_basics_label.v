@@ -263,7 +263,7 @@ pub fn styled_label(config StyledLabelConfig) !Element {
 			.bottom { config.frame.height - block }
 		}
 	}
-	mark_fill := popover_blend(config.highlight_color or { config.theme.primary }, config.theme.background,
+	mark_fill := color_mix(config.highlight_color or { config.theme.primary }, config.theme.background,
 		0.82)
 	mark_height := math.min(lh, math.round(font_line_height(styled_label_font(config)) + 2))
 	mut marks := []Element{}

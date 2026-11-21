@@ -678,7 +678,7 @@ fn picker_rune_slice(runes []rune, start int, end int) string {
 fn picker_marker_color(theme ComponentTheme) u32 {
 	bg := theme.background
 	luminance := f64(((bg >> 16) & 0xff) + ((bg >> 8) & 0xff) + (bg & 0xff)) / (3 * 255.0)
-	return popover_blend(bg, theme.primary, if luminance < 0.5 { 0.4 } else { 0.25 })
+	return color_mix(bg, theme.primary, if luminance < 0.5 { 0.4 } else { 0.25 })
 }
 
 // picker_markers are the boxes drawn behind the matched characters of a label

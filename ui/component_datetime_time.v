@@ -661,7 +661,7 @@ fn time_field_segment_element(config TimeFieldConfig, segment TimeSegment, frame
 	mut children := []Element{}
 	if selected {
 		children << view('', component_local(frame), BoxStyle{
-			bg:     choice_mix(theme.primary, theme.background, 0.72)
+			bg:     color_mix(theme.primary, theme.background, 0.72)
 			radius: tm.radius
 		}, []Element{})
 	}

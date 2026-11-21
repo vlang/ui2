@@ -196,8 +196,8 @@ fn test_theme_variant_maps_keys_with_fallbacks() {
 	assert theme.background == 0x2b211b && theme.foreground == 0xf2e6d8
 	// Translucent colors are flattened over the background.
 	assert theme.muted == color_over(0xffffff, 0x1a / 255.0, 0x2b211b)
-	assert theme.muted_foreground == choice_mix(theme.muted, theme.foreground, 0.7)
-	assert theme.border == choice_mix(theme.background, theme.foreground, 0.18)
+	assert theme.muted_foreground == color_mix(theme.muted, theme.foreground, 0.7)
+	assert theme.border == color_mix(theme.background, theme.foreground, 0.18)
 	// A gradient stands in as its first stop.
 	assert theme.primary == 0xe0a458
 	assert variant.gradient('primary.background')?.stops.len == 2

@@ -168,7 +168,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		family := text_font_file(style.font_family, style.bold, style.italic)
 		ensure_family_fallbacks(ctx, family)
 		ctx.set_text_cfg(gg.TextCfg{
-			color: hex_color(style.color)
+			color: gg.hex(style.color)
 			size: int(font_render_size(style.size, text_font_metrics(family)) + 0.5)
 			bold: style.bold
 			italic: style.italic
@@ -309,7 +309,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	}
 
 	fn draw_submenu_arrow(ctx &gg.Context, center_x f64, center_y f64, color_hex u32) {
-		c := hex_color(color_hex)
+		c := gg.hex(color_hex)
 		ctx.draw_triangle_filled(f32(center_x - 2), f32(center_y - 4), f32(center_x + 3),
 			f32(center_y), f32(center_x - 2), f32(center_y + 4), c)
 	}

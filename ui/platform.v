@@ -1,0 +1,115 @@
+module ui2
+
+import net.urllib
+
+// HapticStyle names the platform haptic a call to haptic plays: three impact
+// weights, the light tick of moving a selection, and the three notification
+// outcomes. Backends without a haptics engine answer unsupported instead.
+pub enum HapticStyle {
+	light
+	medium
+	heavy
+	selection
+	success
+	warning
+	error
+}
+
+// haptic_supported reports whether haptic can make the device buzz on this
+// platform. iOS and macOS expose the native feedback API; actual feedback
+// depends on hardware and user settings. Android checks vibrator availability
+// and the app's VIBRATE permission. Windows, Linux and the BSDs have no engine
+// this layer drives.
+pub fn haptic_supported() bool {
+	return native_haptic_supported()
+}
+
+// haptic plays style and reports whether the platform took it. It never
+// blocks and never raises: without an engine it answers false.
+pub fn haptic(style HapticStyle) bool {
+	return native_haptic(style)
+}
+
+// app_badge_supported reports whether set_app_badge can stamp a number on the
+// application's icon: iOS and macOS dock tiles answer true.
+pub fn app_badge_supported() bool {
+	return native_app_badge_supported()
+}
+
+// set_app_badge stamps count on the application icon — the unread dot iOS and
+// macOS draw over it — and reports whether the platform took it. Zero clears
+// the stamp; a negative count is rejected.
+pub fn set_app_badge(count int) bool {
+	if count < 0 {
+		return false
+	}
+	return native_set_app_badge(count)
+}
+
+// open_url_supported reports whether open_url can hand a link to the
+// platform: every backend answers true except the ones with no opener.
+pub fn open_url_supported() bool {
+	return native_open_url_supported()
+}
+
+// open_url opens url in the default browser, mail client or app that owns it,
+// and reports whether the platform accepted the request. On iOS and Unix
+// desktops the outcome is asynchronous; true does not guarantee the link
+// opened. iOS integrations must run on the main UI thread. Surrounding whitespace
+// is trimmed once, and that same value is what gets validated and handed to
+// the platform. Only http, https and mailto links with an address are accepted;
+// anything else is rejected without touching the platform.
+pub fn open_url(url string) bool {
+	candidate := url.trim_space()
+	if !platform_valid_url(candidate) {
+		return false
+	}
+	return native_open_url(candidate)
+}
+
+// share_supported reports whether share_text can open the platform share
+// sheet: iOS and Android answer true.
+pub fn share_supported() bool {
+	return native_share_supported()
+}
+
+// share_text opens the platform share sheet with content and reports whether
+// the platform accepted the request, rather than whether the user completed a
+// share. Blank content is rejected without touching the platform.
+pub fn share_text(content string) bool {
+	if content.trim_space().len == 0 {
+		return false
+	}
+	return native_share_text(content)
+}
+
+// platform_valid_url accepts the links open_url can hand over: http and https
+// URLs with a host, and mailto links with an address. It judges the string
+// exactly as given — open_url trims once before calling this and forwards
+// that very same value, so there is no hidden
+// normalization here. Anything with whitespace or control characters is
+// rejected, since no opener takes it verbatim.
+fn platform_valid_url(url string) bool {
+	if url.len == 0 {
+		return false
+	}
+	for ch in url.bytes() {
+		if ch <= 32 || ch == 127 {
+			return false
+		}
+	}
+	parsed := urllib.parse(url) or { return false }
+	match parsed.scheme.to_lower() {
+		'http', 'https' {
+			return parsed.hostname().len > 0
+		}
+		'mailto' {
+			// An @ in the subject/query is not a recipient address.
+			parts := parsed.opaque.split('@')
+			return parts.len == 2 && parts[0].len > 0 && parts[1].len > 0
+		}
+		else {
+			return false
+		}
+	}
+}

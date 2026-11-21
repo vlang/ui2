@@ -275,7 +275,7 @@ fn carousel_control(config CarouselConfig, frame Rect, next bool) Element {
 		if toward_start { 'chevron.up' } else { 'chevron.down' }
 	}
 	local := rect(0, 0, frame.width, frame.height)
-	border := if enabled { theme.border } else { choice_mix(theme.border, theme.background, 0.4) }
+	border := if enabled { theme.border } else { color_mix(theme.border, theme.background, 0.4) }
 	glyph := if enabled { theme.foreground } else { choice_disabled_text(theme) }
 	mut parts := choice_ring(local, frame.width / 2, border, theme.background, .all, false)
 	icon := math.round(frame.width * 0.45)
@@ -323,11 +323,11 @@ fn carousel_indicators(config CarouselConfig, layout CarouselLayout) Element {
 			mut color := if selected {
 				theme.primary
 			} else {
-				choice_mix(theme.border, theme.muted_foreground,
+				color_mix(theme.border, theme.muted_foreground,
 					0.25)
 			}
 			if !config.enabled {
-				color = choice_mix(color, theme.background, 0.5)
+				color = color_mix(color, theme.background, 0.5)
 			}
 			parts << view('', dot, BoxStyle{
 				bg:     color
@@ -340,7 +340,7 @@ fn carousel_indicators(config CarouselConfig, layout CarouselLayout) Element {
 					bg:     if config.enabled {
 						theme.primary
 					} else {
-						choice_mix(theme.primary, theme.background, 0.5)
+						color_mix(theme.primary, theme.background, 0.5)
 					}
 					radius: 6
 				}, []Element{})
