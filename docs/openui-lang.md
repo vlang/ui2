@@ -37,8 +37,9 @@ follows the [OpenUI Lang 1.0 specification](https://www.openui.com/docs/openui-l
 
   Put the resulting `v` directory on your `PATH` and confirm `v version`.
 
-- The ui2 checkout itself. If your app lives outside the repository, link the
-  checkout into V's module directory so `import ui2` resolves to it:
+- The ui2 checkout itself. From your projects directory (in a fresh shell, or
+  after leaving the `v` directory), clone it and link the checkout into V's
+  module directory so `import ui2` resolves to it:
 
   ```sh
   git clone https://github.com/vlang/ui2.git
@@ -201,8 +202,8 @@ Functions are prefixed with `@`. Components, `Action(...)`, `Query(...)`, and
 | `@Min(list)`, `@Max(list)` | Numeric extremes, or `null` |
 | `@First(list)`, `@Last(list)` | End items, or `null` |
 | `@Filter(list, "field", op, value)` | Keep items where `field op value` holds |
-| `@Sort(list, "field", "asc"|"desc")` | Sort by the field's string value |
-| `@Round(n|list, decimals?)`, `@Abs`, `@Floor`, `@Ceil` | Math, element-wise on lists |
+| `@Sort(list, "field", "asc"\|"desc")` | Sort by the field's string value |
+| `@Round(n\|list, decimals?)`, `@Abs`, `@Floor`, `@Ceil` | Math, element-wise on lists |
 | `@Each(list, "item", template)` | Evaluate `template` once per item |
 
 `@Filter` accepts `==`, `!=`, `>`, `<`, `>=`, `<=`, and `contains`. `@Round`
@@ -233,7 +234,7 @@ The default library (root component `Stack`) contains:
 | `Input` | `Input(value: $var, placeholder?: string, on_change?: ActionExpression)` |
 | `Select` | `Select(value: $var, options: string[], on_select?: ActionExpression)` |
 | `Table` | `Table(rows: any[], columns?: string[])` — columns inferred from object keys |
-| `Chart` | `Chart(type: "bar"|"line"|"pie"|"doughnut", labels: string[], values: number[], title?: string, series?: string)` |
+| `Chart` | `Chart(type: "bar"\|"line"\|"pie"\|"doughnut", labels: string[], values: number[], title?: string, series?: string)` |
 
 `Table` caps display at 20 rows and 32 columns with a truncation footer.
 `Chart` uses the first 1000 points. A `bind` parameter such as `Input.value`
