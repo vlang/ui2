@@ -10,7 +10,7 @@ module ui2
 
 fn C.ui2_win_set_clipboard_text(text &u16, units int) int
 fn C.ui2_win_clipboard_text() &u16
-fn C.wcslen(text &u16) usize
+fn C.wcslen(text &u16) uint
 
 fn native_clipboard_supported() bool {
 	return true
