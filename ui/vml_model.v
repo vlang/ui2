@@ -1384,6 +1384,7 @@ fn v_validate_node_schema[T](node &VNode, incoming_scope map[string]VSchema) ! {
 }
 
 fn v_validate_template[T](root &VNode, model T) ! {
+	vml_validate_pointer_hook[T]()!
 	v_validate_node_schema[T](root, {
 		'app': v_schema_from(model)
 	})!
@@ -1585,6 +1586,13 @@ fn (mut controller VmlController[T]) build() Element {
 }
 
 fn (mut controller VmlController[T]) handle(event_id string) {
+	// Touch and mouse pointer phases reach run_vml through this same handler.
+	// They are not VML event ids, so route them to the model hook first.
+	if pointer := parse_pointer_event(event_id) {
+		vml_call_pointer_hook[T](mut controller.model, event_id, pointer)
+		refresh()
+		return
+	}
 	event := controller.events[event_id] or { return }
 	if binding := event.binding {
 		field_name := binding.target.all_after('app.')
