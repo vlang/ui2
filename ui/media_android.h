@@ -1,6 +1,7 @@
 // Android media through OpenSL ES (NDK, no JVM needed): URI audio playback
-// plus AAC/AMR microphone recording. Video has no NDK surface this layer
-// can reach without a JVM callback, so it reports unsupported.
+// and end-of-stream/loop state via the engine interfaces. Video needs a JVM
+// surface and OpenSL ES recording needs a PCM buffer queue plus an encoder,
+// neither of which this layer has, so both report unsupported.
 #ifndef UI2_MEDIA_ANDROID_H
 #define UI2_MEDIA_ANDROID_H
 
@@ -12,6 +13,8 @@
 
 #define UI2_MEDIA_ANDROID_MAX 16
 #define UI2_MEDIA_ANDROID_PATH 1024
+// OpenSL ES reports an unavailable time as the maximum SLmillisecond value.
+#define UI2_MEDIA_ANDROID_TIME_UNKNOWN ((SLmillisecond)0xFFFFFFFFu)
 
 typedef struct {
 	int used;
@@ -23,10 +26,10 @@ typedef struct {
 	SLVolumeItf volume;
 	SLPlaybackRateItf rate;
 	int has_rate;
-	SLObjectItf recorder_obj;
-	SLRecordItf recorder;
-	int recording;
 	int state;
+	SLmillisecond duration_ms;
+	int loop;
+	int ended;
 	char src[UI2_MEDIA_ANDROID_PATH];
 	int src_set;
 } Ui2MediaAndroid;
@@ -69,6 +72,11 @@ static Ui2MediaAndroid *ui2_media_android_alloc(const char *id) {
 	int i;
 	Ui2MediaAndroid *slot;
 	if (id == NULL) return NULL;
+	// The id is copied into a fixed 128-byte slot and every later lookup
+	// compares the full id. Accepting a longer one would store a truncated
+	// prefix that can never be found again, leaking slots until the table
+	// fills up, so reject it before allocating.
+	if (strlen(id) >= sizeof(ui2_media_android_sessions[0].id)) return NULL;
 	slot = ui2_media_android_find(id);
 	if (slot != NULL) return slot;
 	for (i = 0; i < UI2_MEDIA_ANDROID_MAX; i++) {
@@ -93,15 +101,6 @@ static void ui2_media_android_destroy_player(Ui2MediaAndroid *s) {
 	s->volume = NULL;
 	s->rate = NULL;
 	s->has_rate = 0;
-}
-
-static void ui2_media_android_destroy_recorder(Ui2MediaAndroid *s) {
-	if (s->recorder_obj != NULL) {
-		(*s->recorder_obj)->Destroy(s->recorder_obj);
-		s->recorder_obj = NULL;
-	}
-	s->recorder = NULL;
-	s->recording = 0;
 }
 
 // Container and MIME picked from the extension; anything else is refused so
@@ -166,7 +165,7 @@ static int ui2_media_android_open(const char *id, const char *src) {
 	ids[0] = SL_IID_PLAY;
 	ids[1] = SL_IID_SEEK;
 	ids[2] = SL_IID_VOLUME;
-	ids[3] = SL_IID_RATE;
+	ids[3] = SL_IID_PLAYBACKRATE;
 	req[0] = SL_BOOLEAN_TRUE;
 	req[1] = SL_BOOLEAN_TRUE;
 	req[2] = SL_BOOLEAN_TRUE;
@@ -193,13 +192,19 @@ static int ui2_media_android_open(const char *id, const char *src) {
 		!= SL_RESULT_SUCCESS) {
 		s->volume = NULL;
 	}
-	if ((*s->player_obj)->GetInterface(s->player_obj, SL_IID_RATE, &s->rate)
+	if ((*s->player_obj)->GetInterface(s->player_obj, SL_IID_PLAYBACKRATE, &s->rate)
 		== SL_RESULT_SUCCESS) {
 		s->has_rate = 1;
 	}
 	strncpy(s->src, src, sizeof(s->src) - 1);
 	s->src_set = 1;
 	s->state = 4;
+	s->ended = 0;
+	s->duration_ms = 0;
+	if ((*s->player)->GetDuration(s->player, &s->duration_ms) != SL_RESULT_SUCCESS
+		|| s->duration_ms == UI2_MEDIA_ANDROID_TIME_UNKNOWN) {
+		s->duration_ms = 0;
+	}
 	return 1;
 }
 
@@ -210,6 +215,7 @@ static int ui2_media_android_play(const char *id) {
 	res = (*s->player)->SetPlayState(s->player, SL_PLAYSTATE_PLAYING);
 	if (res != SL_RESULT_SUCCESS) return 0;
 	s->state = 2;
+	s->ended = 0;
 	return 1;
 }
 
@@ -233,14 +239,17 @@ static int ui2_media_android_stop(const char *id) {
 		(*s->seek)->SetPosition(s->seek, 0, SL_SEEKMODE_FAST);
 	}
 	s->state = 4;
+	s->ended = 0;
 	return 1;
 }
 
 static int ui2_media_android_seek(const char *id, int ms) {
 	Ui2MediaAndroid *s = ui2_media_android_find(id);
+	SLresult res;
 	if (s == NULL || s->seek == NULL || ms < 0) return 0;
-	return (*s->seek)->SetPosition(s->seek, (SLmillisecond)ms, SL_SEEKMODE_ACCURATE)
-		== SL_RESULT_SUCCESS;
+	res = (*s->seek)->SetPosition(s->seek, (SLmillisecond)ms, SL_SEEKMODE_ACCURATE);
+	if (res == SL_RESULT_SUCCESS) s->ended = 0;
+	return res == SL_RESULT_SUCCESS;
 }
 
 static int ui2_media_android_set_volume_db(const char *id, int millibel) {
@@ -279,100 +288,77 @@ static int ui2_media_android_position_ms(const char *id) {
 
 static int ui2_media_android_state(const char *id) {
 	Ui2MediaAndroid *s = ui2_media_android_find(id);
+	SLuint32 play_state = SL_PLAYSTATE_STOPPED;
+	SLmillisecond pos;
 	if (s == NULL) return 0;
-	if (s->recording) return 7;
-	return s->state;
+	if (s->player == NULL) return 0;
+	// Query the engine instead of trusting the last transport command: a
+	// finite clip reaching its end changes the native play state on its own.
+	if ((*s->player)->GetPlayState(s->player, &play_state) != SL_RESULT_SUCCESS) {
+		return 0;
+	}
+	if (s->duration_ms == 0
+		&& (*s->player)->GetDuration(s->player, &s->duration_ms) == SL_RESULT_SUCCESS
+		&& s->duration_ms == UI2_MEDIA_ANDROID_TIME_UNKNOWN) {
+		s->duration_ms = 0;
+	}
+	if (!s->ended && s->duration_ms > 0
+		&& (play_state == SL_PLAYSTATE_PLAYING || play_state == SL_PLAYSTATE_PAUSED)
+		&& (*s->player)->GetPosition(s->player, &pos) == SL_RESULT_SUCCESS
+		&& pos != UI2_MEDIA_ANDROID_TIME_UNKNOWN && pos + 50 >= s->duration_ms) {
+		s->ended = 1;
+	}
+	if (s->ended) {
+		if (!s->loop) return 5;
+		// Re-arm without closing the player so a looping clip keeps playing.
+		if (s->seek != NULL) {
+			(*s->seek)->SetPosition(s->seek, 0, SL_SEEKMODE_FAST);
+		}
+		if ((*s->player)->SetPlayState(s->player, SL_PLAYSTATE_PLAYING)
+			== SL_RESULT_SUCCESS) {
+			s->ended = 0;
+			return 2;
+		}
+		return 5;
+	}
+	if (play_state == SL_PLAYSTATE_PLAYING) {
+		s->state = 2;
+		return 2;
+	}
+	if (play_state == SL_PLAYSTATE_PAUSED) {
+		s->state = 3;
+		return 3;
+	}
+	s->state = 4;
+	return 4;
+}
+
+static int ui2_media_android_duration_ms(const char *id) {
+	Ui2MediaAndroid *s = ui2_media_android_find(id);
+	if (s == NULL || s->player == NULL) return -1;
+	if (s->duration_ms == 0
+		&& (*s->player)->GetDuration(s->player, &s->duration_ms) == SL_RESULT_SUCCESS
+		&& s->duration_ms == UI2_MEDIA_ANDROID_TIME_UNKNOWN) {
+		s->duration_ms = 0;
+	}
+	return s->duration_ms > 0 ? (int)s->duration_ms : -1;
+}
+
+static void ui2_media_android_set_loop(const char *id, int loop) {
+	Ui2MediaAndroid *s = ui2_media_android_find(id);
+	if (s == NULL) return;
+	s->loop = loop ? 1 : 0;
+	if (!s->loop) return;
+	if (s->ended) s->ended = 0;
 }
 
 static void ui2_media_android_close(const char *id) {
 	Ui2MediaAndroid *s = ui2_media_android_find(id);
 	if (s == NULL) return;
 	ui2_media_android_destroy_player(s);
-	ui2_media_android_destroy_recorder(s);
 	s->used = 0;
 	s->state = 0;
 	s->src_set = 0;
-}
-
-// AAC in MP4 (.m4a/.mp4) or AMR in 3GP (.3gp/.amr): the containers Android's
-// OpenSL recorder drains to without a JVM encoder.
-static int ui2_media_android_record_format(const char *path, SLuint32 *container, const char **mime) {
-	size_t n = path != NULL ? strlen(path) : 0;
-	if (n > 4 && (strncasecmp(path + n - 4, ".m4a", 4) == 0
-			|| strncasecmp(path + n - 4, ".mp4", 4) == 0)) {
-		*container = SL_CONTAINERTYPE_MP4;
-		*mime = "audio/mp4a-latm";
-		return 1;
-	}
-	if (n > 4 && (strncasecmp(path + n - 4, ".3gp", 4) == 0
-			|| strncasecmp(path + n - 4, ".amr", 4) == 0)) {
-		*container = SL_CONTAINERTYPE_3GPP;
-		*mime = "audio/3gpp";
-		return 1;
-	}
-	return 0;
-}
-
-static int ui2_media_android_record_start(const char *id, const char *path) {
-	Ui2MediaAndroid *s;
-	SLDataLocator_IODevice loc_dev;
-	SLDataSource audio_src;
-	SLDataLocator_URI loc_uri;
-	SLDataFormat_MIME fmt;
-	SLDataSink audio_sink;
-	SLInterfaceID rec_id;
-	SLboolean rec_req;
-	SLresult res;
-	SLuint32 container;
-	const char *mime;
-	if (!ui2_media_android_engine_ready()) return 0;
-	if (!ui2_media_android_record_format(path, &container, &mime)) return 0;
-	s = ui2_media_android_alloc(id);
-	if (s == NULL) return 0;
-	ui2_media_android_destroy_recorder(s);
-	loc_dev.locatorType = SL_DATALOCATOR_IODEVICE;
-	loc_dev.deviceType = SL_IODEVICE_AUDIOINPUT;
-	loc_dev.deviceID = SL_DEFAULTDEVICEID_AUDIOINPUT;
-	loc_dev.device = NULL;
-	audio_src.pLocator = &loc_dev;
-	audio_src.pFormat = NULL;
-	loc_uri.locatorType = SL_DATALOCATOR_URI;
-	loc_uri.URI = (SLchar *)path;
-	fmt.formatType = SL_DATAFORMAT_MIME;
-	fmt.mimeType = (SLchar *)mime;
-	fmt.containerType = container;
-	audio_sink.pLocator = &loc_uri;
-	audio_sink.pFormat = &fmt;
-	rec_id = SL_IID_RECORD;
-	rec_req = SL_BOOLEAN_TRUE;
-	res = (*ui2_media_android_engine)->CreateAudioRecorder(ui2_media_android_engine,
-		&s->recorder_obj, &audio_src, &audio_sink, 1, &rec_id, &rec_req);
-	if (res != SL_RESULT_SUCCESS || s->recorder_obj == NULL) return 0;
-	res = (*s->recorder_obj)->Realize(s->recorder_obj, SL_BOOLEAN_FALSE);
-	if (res != SL_RESULT_SUCCESS) {
-		ui2_media_android_destroy_recorder(s);
-		return 0;
-	}
-	res = (*s->recorder_obj)->GetInterface(s->recorder_obj, SL_IID_RECORD, &s->recorder);
-	if (res != SL_RESULT_SUCCESS || s->recorder == NULL) {
-		ui2_media_android_destroy_recorder(s);
-		return 0;
-	}
-	res = (*s->recorder)->SetRecordState(s->recorder, SL_RECORDSTATE_RECORDING);
-	if (res != SL_RESULT_SUCCESS) {
-		ui2_media_android_destroy_recorder(s);
-		return 0;
-	}
-	s->recording = 1;
-	return 1;
-}
-
-static int ui2_media_android_record_stop(const char *id) {
-	Ui2MediaAndroid *s = ui2_media_android_find(id);
-	if (s == NULL || s->recorder == NULL || !s->recording) return 0;
-	(*s->recorder)->SetRecordState(s->recorder, SL_RECORDSTATE_STOPPED);
-	ui2_media_android_destroy_recorder(s);
-	return 1;
 }
 
 #endif

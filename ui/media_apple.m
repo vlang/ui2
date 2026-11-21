@@ -112,7 +112,8 @@ static id ui2_media_container(void *parent) {
 	return view;
 }
 
-void *ui2_media_apple_attach(const char *cid, void *parent) {
+void *ui2_media_apple_attach(const char *cid, void *parent, double x, double y,
+		double w, double h) {
 	@autoreleasepool {
 		Ui2MediaSession *session = ui2_media_session(cid);
 		if (session == nil || session->player == nil) return NULL;
@@ -131,14 +132,26 @@ void *ui2_media_apple_attach(const char *cid, void *parent) {
 			session->layer.player = session->player;
 		}
 #if TARGET_OS_IPHONE
-		CALayer *host = [(UIView *)container layer];
-		CGRect frame = [(UIView *)container bounds];
+		UIView *hostView = (UIView *)container;
+		CALayer *host = [hostView layer];
+		// UIKit views and their backing layers share a top-left origin.
+		CGRect frame = (w > 0 && h > 0)
+			? CGRectMake((CGFloat)x, (CGFloat)y, (CGFloat)w, (CGFloat)h)
+			: [hostView bounds];
 #else
 		NSView *hostView = (NSView *)container;
 		[hostView setWantsLayer:YES];
 		CALayer *host = [hostView layer];
 		NSRect bounds = [hostView bounds];
-		CGRect frame = NSRectToCGRect(bounds);
+		// ui2 frames use a top-left origin. Flip only when the host layer
+		// is not already flipped (layer-backed flipped NSViews set
+		// geometryFlipped). Points match the view's bounds, so the backing
+		// scale factor must not be applied here.
+		CGFloat frame_y = host.geometryFlipped
+			? (CGFloat)y : (CGFloat)(bounds.size.height - y - h);
+		CGRect frame = (w > 0 && h > 0)
+			? CGRectMake((CGFloat)x, frame_y, (CGFloat)w, (CGFloat)h)
+			: NSRectToCGRect(bounds);
 #endif
 		if (session->layer.superlayer != host) {
 			[session->layer removeFromSuperlayer];
@@ -146,6 +159,16 @@ void *ui2_media_apple_attach(const char *cid, void *parent) {
 		}
 		session->layer.frame = frame;
 		return (void *)session->player;
+	}
+}
+
+void ui2_media_apple_detach(const char *cid) {
+	@autoreleasepool {
+		Ui2MediaSession *session = ui2_media_session(cid);
+		if (session == nil || session->layer == nil) return;
+		[session->layer removeFromSuperlayer];
+		[session->layer release];
+		session->layer = nil;
 	}
 }
 

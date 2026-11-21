@@ -39,6 +39,34 @@ fn probe_event(data voidptr, id &char) {
 	probe.events << input(id)
 }
 
+fn media_probe_build(data voidptr) &C.ui2_node {
+	mut probe := unsafe { &Probe(data) }
+	probe.builds++
+	root := create(0, unsafe { nil }, 0, 0, 0, 0)
+	clip := create(14, c'clip', 0, 0, 100, 100)
+	set_media(clip, 1, c'clip.mp4', 1)
+	add(root, clip)
+	return root
+}
+
+fn test_media_node_is_configured_in_build() {
+	mut probe := &Probe{}
+	config := C.ui2_config{
+		build:     media_probe_build
+		user_data: probe
+	}
+	assert configure(&config)
+	defer { release_callbacks() }
+	tree := build_tree()
+	assert state().last_error == ''
+	assert tree.children.len == 1
+	clip := tree.children[0]
+	assert clip.kind == .media
+	assert clip.media_kind == .video
+	assert clip.media_src == 'clip.mp4'
+	assert clip.autoplay
+}
+
 fn test_tree_copies_foreign_buffers_and_preserves_last_valid_build() {
 	mut probe := &Probe{}
 	config := C.ui2_config{

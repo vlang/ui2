@@ -20,6 +20,8 @@ typedef enum {
     UI2_SCROLL_VERTICAL, UI2_SCROLL_HORIZONTAL, UI2_SCROLL_BOTH
 } ui2_scroll_mode;
 
+typedef enum { UI2_MEDIA_AUDIO, UI2_MEDIA_VIDEO } ui2_media_kind;
+
 typedef enum { UI2_ALIGN_LEFT, UI2_ALIGN_CENTER, UI2_ALIGN_RIGHT } ui2_align;
 typedef enum { UI2_VALIGN_TOP, UI2_VALIGN_MIDDLE, UI2_VALIGN_BOTTOM } ui2_valign;
 
@@ -101,6 +103,9 @@ void ui2_set_scroll_mode(ui2_node *node, int mode);
 void ui2_set_slider(ui2_node *node, double value, double min, double max,
                      double step, int vertical);
 void ui2_add_option(ui2_node *node, const char *text);
+/* Configure a UI2_MEDIA node inside build: source path/URL plus whether it
+ * starts on its own. Without this call a media node has an empty source. */
+void ui2_set_media(ui2_node *node, int kind, const char *src, int autoplay);
 
 /* Mounted controls: call on the UI thread, usually from event. Rebuilds
  * preserve local edits when their declared value has not changed. */
@@ -118,6 +123,35 @@ int ui2_get_checked(const char *id); /* Checkbox, switch, toggle button. */
 void ui2_update_checked(const char *id, int checked);
 void ui2_scroll_to(const char *id, double x, double y);
 void ui2_get_scroll(const char *id, double *x, double *y);
+
+/* Media transport and state. `id` is the id of a mounted UI2_MEDIA element
+ * (or one passed to ui2_media_open), not a node handle; all calls run on the
+ * UI thread. Boolean-returning calls report whether the backend accepted the
+ * operation. ui2_media_state uses the ui2_media_state_* values below. */
+int ui2_media_playback_supported(int kind);
+int ui2_media_open(const char *id, int kind, const char *src);
+int ui2_media_play(const char *id);
+int ui2_media_pause(const char *id);
+int ui2_media_stop(const char *id);
+int ui2_media_seek(const char *id, double secs);
+int ui2_media_set_volume(const char *id, double volume);
+int ui2_media_set_muted(const char *id, int muted);
+int ui2_media_set_rate(const char *id, double rate);
+int ui2_media_can_seek(const char *id);
+double ui2_media_position(const char *id);
+double ui2_media_duration(const char *id);
+int ui2_media_state(const char *id);
+void ui2_media_close(const char *id);
+enum {
+    UI2_MEDIA_STATE_IDLE,
+    UI2_MEDIA_STATE_LOADING,
+    UI2_MEDIA_STATE_PLAYING,
+    UI2_MEDIA_STATE_PAUSED,
+    UI2_MEDIA_STATE_STOPPED,
+    UI2_MEDIA_STATE_ENDED,
+    UI2_MEDIA_STATE_ERROR,
+    UI2_MEDIA_STATE_RECORDING
+};
 
 /* Convenience constructors use the same exported ABI as ui2_create. */
 #ifdef __cplusplus

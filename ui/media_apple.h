@@ -12,7 +12,13 @@ extern "C" {
 // Playback. parent is the container NSView/UIView, or the NSWindow/UIWindow
 // for custom-rendered windows (resolved to its content view inside).
 int ui2_media_apple_open(const char *cid, const char *kind, const char *src);
-void *ui2_media_apple_attach(const char *cid, void *parent);
+// Attaches the player layer to parent at the element's frame (x, y, w, h in
+// logical points). An empty frame keeps the old full-container behaviour.
+void *ui2_media_apple_attach(const char *cid, void *parent, double x, double y,
+	double w, double h);
+// Removes just the layer from its superlayer; the player and its observers
+// stay alive so a rebuilt element can attach again.
+void ui2_media_apple_detach(const char *cid);
 void ui2_media_apple_play(const char *cid);
 void ui2_media_apple_pause(const char *cid);
 void ui2_media_apple_stop(const char *cid);

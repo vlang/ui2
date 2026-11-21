@@ -12,7 +12,8 @@ module ui2
 import os
 
 fn C.ui2_media_apple_open(cid &char, kind &char, src &char) int
-fn C.ui2_media_apple_attach(cid &char, parent voidptr) voidptr
+fn C.ui2_media_apple_attach(cid &char, parent voidptr, x f64, y f64, w f64, h f64) voidptr
+fn C.ui2_media_apple_detach(cid &char)
 fn C.ui2_media_apple_play(cid &char)
 fn C.ui2_media_apple_pause(cid &char)
 fn C.ui2_media_apple_stop(cid &char)
@@ -149,19 +150,25 @@ fn native_media_can_seek(id string) bool {
 	return C.ui2_media_apple_can_seek(id.str) != 0
 }
 
-fn native_media_attach(id string, parent voidptr, _x f64, _y f64, _w f64, _h f64) bool {
-	if media_session(id) == none {
+fn native_media_attach(id string, parent voidptr, x f64, y f64, w f64, h f64) bool {
+	session := media_session(id) or { return false }
+	// media_sync_native only opens audio eagerly: a bare video() element has
+	// no bridge session yet, and attach returns NULL when the player is
+	// missing. Open the matching Apple player here (idempotent for an
+	// already-open source) before handing its layer a parent.
+	if !native_media_open(id, session.kind, session.src) {
 		return false
 	}
-	return C.ui2_media_apple_attach(id.str, parent) != unsafe { nil }
+	return C.ui2_media_apple_attach(id.str, parent, x, y, w, h) != unsafe { nil }
 }
 
 fn native_media_detach(id string) {
-	// Layers detach on close; the session outlives the view so a rebuilt
-	// element resumes without reopening the stream.
 	if media_session(id) == none {
 		return
 	}
+	// The layer lives on the window's persistent content view, so hiding a
+	// media element must remove the layer without closing the player.
+	C.ui2_media_apple_detach(id.str)
 }
 
 fn native_media_capture_supported(source MediaSource) bool {

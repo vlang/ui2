@@ -1,6 +1,7 @@
 // Android media through OpenSL ES (NDK C API, no JVM needed): URI audio
-// playback plus AAC/AMR microphone recording. Video has no NDK surface this
-// layer can reach without a JVM callback, so it reports unsupported.
+// playback. Video has no NDK surface this layer can reach without a JVM
+// callback, and OpenSL ES can only record PCM into a buffer queue (not an
+// encoded URI sink), so both report unsupported.
 module ui2
 
 import math
@@ -18,10 +19,10 @@ fn C.ui2_media_android_set_volume_db(id &char, millibel int) int
 fn C.ui2_media_android_set_mute(id &char, muted int) int
 fn C.ui2_media_android_set_rate(id &char, per_mille int) int
 fn C.ui2_media_android_position_ms(id &char) int
+fn C.ui2_media_android_duration_ms(id &char) int
 fn C.ui2_media_android_state(id &char) int
+fn C.ui2_media_android_set_loop(id &char, loop int)
 fn C.ui2_media_android_close(id &char)
-fn C.ui2_media_android_record_start(id &char, path &char) int
-fn C.ui2_media_android_record_stop(id &char) int
 
 // media_android_millibel maps 0..1 to the SLVolumeItf range; silence bottoms
 // out at -100dB instead of asking logarithms about zero.
@@ -95,10 +96,11 @@ fn native_media_set_rate(id string, rate f64) bool {
 	return C.ui2_media_android_set_rate(id.str, int(rate * 1000.0)) != 0
 }
 
-fn native_media_set_loop(_id string, _loop bool) bool {
-	// Accepted like the Windows backend: no end-of-stream signal reaches
-	// this layer, so there is nothing to re-arm, but the flag must not fail
-	// the sync pass every frame.
+fn native_media_set_loop(id string, loop bool) bool {
+	if media_session(id) == none {
+		return false
+	}
+	C.ui2_media_android_set_loop(id.str, if loop { 1 } else { 0 })
 	return true
 }
 
@@ -117,9 +119,15 @@ fn native_media_position(id string) f64 {
 	return f64(ms) / 1000.0
 }
 
-fn native_media_duration(_id string) f64 {
-	// No metadata interface is queried; streams report unknown length.
-	return -1.0
+fn native_media_duration(id string) f64 {
+	if media_session(id) == none {
+		return -1.0
+	}
+	ms := C.ui2_media_android_duration_ms(id.str)
+	if ms < 0 {
+		return -1.0
+	}
+	return f64(ms) / 1000.0
 }
 
 fn native_media_state(id string) MediaState {
@@ -127,10 +135,12 @@ fn native_media_state(id string) MediaState {
 		return .idle
 	}
 	return match C.ui2_media_android_state(id.str) {
+		1 { .loading }
 		2 { .playing }
 		3 { .paused }
 		4 { .stopped }
-		7 { .recording }
+		5 { .ended }
+		6 { .error }
 		else { .idle }
 	}
 }
@@ -149,25 +159,20 @@ fn native_media_attach(_id string, _parent voidptr, _x f64, _y f64, _w f64, _h f
 fn native_media_detach(_id string) {
 }
 
-fn native_media_capture_supported(source MediaSource) bool {
-	return source == .microphone
+fn native_media_capture_supported(_source MediaSource) bool {
+	// OpenSL ES records PCM into an Android simple buffer queue; it cannot
+	// drain an encoded URI/MIME sink as the old bridge tried to do. Until a
+	// PCM buffer-queue path writes and encodes the take explicitly, claiming
+	// microphone support would only produce files that never open.
+	return false
 }
 
-fn native_media_start_recording(id string, source MediaSource, output_path string) bool {
-	if source != .microphone {
-		return false
-	}
-	if media_session(id) == none {
-		return false
-	}
-	return C.ui2_media_android_record_start(id.str, output_path.str) != 0
+fn native_media_start_recording(_id string, _source MediaSource, _output_path string) bool {
+	return false
 }
 
-fn native_media_stop_recording(id string) bool {
-	if media_session(id) == none {
-		return false
-	}
-	return C.ui2_media_android_record_stop(id.str) != 0
+fn native_media_stop_recording(_id string) bool {
+	return false
 }
 
 fn native_media_capture_screen(_output_path string) bool {

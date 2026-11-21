@@ -53,14 +53,13 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 	}
 
 	// The copy tools daemonize while they hold the pasted selection: an xclip
-	// keeps serving it after the command answers, carrying whatever file
-	// descriptors it inherited, and a redirect-through-pipes run made the
-	// caller wait for the daemon's whole life — the slurp never saw EOF until
-	// another claimant took the selection over, so every copy froze the
-	// event thread until the next copy. Nothing reads the child's output:
-	// stdin is the file, stdout and stderr travel with the caller's own
-	// descriptors, and wait() answers the immediate child only. wl-copy does
-	// not answer at all (it serves until superseded), so for it the run is
+	// keeps serving it after the command answers, and wl-copy never exits (it
+	// serves until superseded). Any descendant that inherits the launcher's
+	// captured output pipe keeps it open for that whole lifetime, so every
+	// copy would block the caller until the selection is claimed by someone
+	// else. Nothing reads the child's output: both streams are redirected away
+	// from the capture pipe and stdin comes from a flushed temp file. xclip's
+	// immediate child is waited for and its status reported, while wl-copy is
 	// fire-and-forget and never waited.
 	fn native_clipboard_write(copy_args []string, text string) bool {
 		path := os.join_path(os.temp_dir(), 'ui2-clipboard-${os.getpid()}-${time.sys_mono_now()}.txt')
@@ -71,14 +70,21 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 		$if clipboard_stage_probe ? {
 			eprintln('KW stage: file ${time.sys_mono_now()}')
 		}
-		// V 0.5.2 (CI) has no `os.Process.set_stdin_path`; feed the temp file
-		// via shell redirection so stdin is a file, not a pipe. Pipes made the
-		// caller wait for xclip's daemon lifetime; a file gives immediate EOF.
-		// wl-copy never exits (serves until superseded), so it stays
-		// fire-and-forget in the background.
-		cmd := copy_args.join(' ') + " < '" + path + "'"
+		// `os.execute` captures the child's stdout and stderr through a pipe and
+		// reads it to EOF before returning. A clipboard owner outlives the
+		// launcher to serve the selection (xclip forks one, wl-copy never
+		// exits), so if it inherits that pipe every copy blocks for the owner's
+		// whole lifetime. Redirect BOTH streams away from the capture pipe and
+		// feed stdin from the temp file — `os.write_file` above has already
+		// written and closed it, so the launcher reads a flushed file, not a
+		// pipe that keeps the caller waiting for EOF.
+		cmd := copy_args.join(' ') + " < '" + path + "' > /dev/null 2>&1"
 		if copy_args[0].contains('wl-copy') {
-			os.execute(cmd + ' &')
+			// wl-copy serves until superseded, so never wait for it. Open the
+			// file on fd 3 in the launching shell *before* backgrounding and
+			// hand that descriptor to the child: unlinking `path` in the defer
+			// cannot yank the input away once the child holds a descriptor.
+			os.execute("exec 3< '" + path + "'; " + copy_args.join(' ') + ' <&3 > /dev/null 2>&1 &')
 			$if clipboard_stage_probe ? {
 				eprintln('KW stage: post-run ${time.sys_mono_now()}')
 			}

@@ -11,7 +11,6 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	import os
 	import sokol.gfx
 	import sokol.sapp
-	import sokol.sgl
 	import time
 
 	struct HitTarget {
@@ -592,10 +591,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			return
 		}
 		g_gg_app.ctx.refresh_ui()
-		// NOTE(V 0.5.2 CI): sokol on-demand present (`sapp_wake`,
-		// `sapp_set_present_on_demand`, etc.) does not exist in the 0.5.2
-		// release, so the custom renderer stays continuous here. `refresh_ui`
-		// alone is enough when the loop never sleeps deeply.
+		C.sapp_wake()
 	}
 
 // refresh asks for a rebuild over whatever the application changed outside a
@@ -643,10 +639,18 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		g_refresh_mode = mode
 		$if gg_record ? {
 		} $else $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
-			// NOTE(V 0.5.2 CI): sokol present-on-demand
-			// (`sapp_set_present_on_demand`, frame-deadline hook) does not
-			// exist in the 0.5.2 release, so stay continuous here.
-			g_present_on_demand = false
+			// These run sokol's X11 loop, where the hooks below exist; the
+			// patched sokol_app.h compiles them for any __unix__ target.
+			if mode != .continuous {
+				g_present_on_demand = C.sapp_set_present_on_demand(true)
+				C.sapp_set_frame_deadline_cb(ui2_frame_deadline_cb)
+			} else {
+				// Continuous keeps sokol's stock pacing: the deadline hook
+				// steps aside and present-on-demand stops gating the swap.
+				C.sapp_set_present_on_demand(false)
+				g_present_on_demand = false
+				C.sapp_set_frame_deadline_cb(unsafe { nil })
+			}
 		}
 		// A reference field of an immutable pointer cannot be popped through to
 		// a mut method on V 0.5.2; bind it through a mutable local instead.
@@ -1318,25 +1322,19 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 
 	// ── Frame & event loop ─────────────────────────────────────────────
 
-	// NOTE(V 0.5.2 CI): sokol on-demand present APIs
-	// (`sapp_set_present_on_demand`, `sapp_request_present`,
-	// `sapp_set_frame_deadline_cb`, `sapp_wake`) do not exist in the 0.5.2
-	// release, so the custom renderer stays continuous here. The declarations
-	// below are kept for newer toolchains but unused on 0.5.2; the call sites
-	// were removed to keep the 0.5.2 link green.
-	// fn C.sapp_set_present_on_demand(enabled bool) bool
-	// fn C.sapp_request_present()
+	fn C.sapp_set_present_on_demand(enabled bool) bool
+	fn C.sapp_request_present()
 	// The X11 loop's deadline hook: before each sleep sokol asks this function
 	// how long it may wait. A negative return means nothing is scheduled, so
 	// the loop waits on its poll set — an X event or a sapp_wake — alone.
 	// Passing nil clears it, restoring sokol's stock per-frame pacing.
 	type FrameDeadlineFn = fn () f64
 
-	// fn C.sapp_set_frame_deadline_cb(cb FrameDeadlineFn)
+	fn C.sapp_set_frame_deadline_cb(cb FrameDeadlineFn)
 	// sapp_wake interrupts the loop's sleep from any thread. It is a plain
 	// nonblocking write to a pipe in data-segment memory, so unlike the
 	// scheduler's invalidate it is safe from threads the GC does not know.
-	// fn C.sapp_wake()
+	fn C.sapp_wake()
 
 // ui2_frame_deadline_cb tells sokol how long the event loop may sleep before
 // the next scheduled frame. It runs on the frame thread just before the loop
@@ -1359,12 +1357,20 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 
 	fn on_init(app &GgApp) {
 		// Sokol's loops swap even when frame_fn returns early, so an undrawn backbuffer
-		// can be presented on drivers that discard it. Metal skips idle callbacks.
-		// NOTE(V 0.5.2 CI): present-on-demand (see set_refresh_mode) is disabled
-		// for the 0.5.2 release, so the window repaints on every callback here.
+		// can be presented on drivers that discard it. Metal skips idle callbacks. X11
+		// skips them too when sokol honors sapp_set_present_on_demand: frames UI2 did
+		// not draw are not presented, so the window keeps its last picture. Other
+		// backends repaint the retained tree on every callback.
 		$if gg_record ? {
 		} $else $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
-			g_present_on_demand = false
+			g_present_on_demand = g_refresh_mode != .continuous && C.sapp_set_present_on_demand(true)
+			// The deadline hook makes the X11 loop sleep until the earliest of
+			// the scheduler's next deadline, an X event or a sapp_wake, instead
+			// of pacing itself at the swap interval all night. Continuous mode
+			// draws every frame and must keep the stock pacing.
+			if g_refresh_mode != .continuous {
+				C.sapp_set_frame_deadline_cb(ui2_frame_deadline_cb)
+			}
 		}
 		// A reference field of an immutable pointer cannot be popped through to a
 		// mut method on V 0.5.2; bind it through a mutable local instead.
@@ -1584,10 +1590,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		// nothing: the swap would land in an unmapped window and only spend
 		// the GPU's time. The keep-alive's clock keeps running from the last
 		// presented frame, so a window that comes back also repaints at once.
-		// NOTE(V 0.5.2 CI): on-demand present (`sapp_request_present`) does not
-		// exist in 0.5.2, and `g_present_on_demand` stays false above, so this
-		// block never runs there; continuous mode presents every frame anyway.
 		if g_present_on_demand && !(app.iconified && g_background_work) {
+			C.sapp_request_present()
 			g_last_frame_ticks = time.ticks()
 		}
 		app.scheduler.set_deadline(custom_visual_deadline())
@@ -4155,15 +4159,15 @@ fn page_focused_text_area(direction int) {
 		y0 := y * s
 		x1 := x0 + f64(tex.width)
 		y1 := y0 + f64(tex.height)
-		sgl.enable_texture()
-		sgl.texture(tex.image, tex.sampler)
-		sgl.begin_quads()
-		sgl.v2f_t2f_c4f(f32(x0), f32(y0), 0, 1, 1, 1, 1, 1)
-		sgl.v2f_t2f_c4f(f32(x1), f32(y0), 1, 1, 1, 1, 1, 1)
-		sgl.v2f_t2f_c4f(f32(x1), f32(y1), 1, 0, 1, 1, 1, 1)
-		sgl.v2f_t2f_c4f(f32(x0), f32(y1), 0, 0, 1, 1, 1, 1)
-		sgl.end()
-		sgl.disable_texture()
+		ctx.r.enable_texture()
+		ctx.r.texture(tex.image, tex.sampler)
+		ctx.r.begin_quads()
+		ctx.r.v2f_t2f_c4f(f32(x0), f32(y0), 0, 1, 1, 1, 1, 1)
+		ctx.r.v2f_t2f_c4f(f32(x1), f32(y0), 1, 1, 1, 1, 1, 1)
+		ctx.r.v2f_t2f_c4f(f32(x1), f32(y1), 1, 0, 1, 1, 1, 1)
+		ctx.r.v2f_t2f_c4f(f32(x0), f32(y1), 0, 0, 1, 1, 1, 1)
+		ctx.r.end()
+		ctx.r.disable_texture()
 	}
 
 	fn draw_cached_image(ctx &gg.Context, path string, x f64, y f64, width f64, height f64, rotation f64) bool {
@@ -4349,20 +4353,20 @@ fn page_focused_text_area(direction int) {
 			g_outline_points = points
 		}
 		if c.a != 255 {
-			sgl.load_pipeline(im_alpha_pipeline())
+			ctx.r.load_pipeline(ctx.pipeline.alpha)
 		}
-		sgl.c4b(c.r, c.g, c.b, c.a)
+		ctx.r.c4b(c.r, c.g, c.b, c.a)
 		cx := f32((x + w / 2) * scale)
 		cy := f32((y + h / 2) * scale)
-		sgl.begin_triangles()
+		ctx.r.begin_triangles()
 		count := points.len / 2
 		for i in 0 .. count {
 			j := (i + 1) % count
-			sgl.v2f(cx, cy)
-			sgl.v2f(f32(points[2 * i] * scale), f32(points[2 * i + 1] * scale))
-			sgl.v2f(f32(points[2 * j] * scale), f32(points[2 * j + 1] * scale))
+			ctx.r.v2f(cx, cy)
+			ctx.r.v2f(f32(points[2 * i] * scale), f32(points[2 * i + 1] * scale))
+			ctx.r.v2f(f32(points[2 * j] * scale), f32(points[2 * j + 1] * scale))
 		}
-		sgl.end()
+		ctx.r.end()
 	}
 
 	fn draw_rect_alpha(ctx &gg.Context, x f64, y f64, w f64, h f64, color_hex u32, alpha f64, radius f64) {
@@ -4479,8 +4483,8 @@ fn page_focused_text_area(direction int) {
 		} else {
 			rows << h
 		}
-		sgl.load_pipeline(im_alpha_pipeline())
-		sgl.begin_quads()
+		ctx.r.load_pipeline(ctx.pipeline.alpha)
+		ctx.r.begin_quads()
 		for i in 1 .. rows.len {
 			top := rows[i - 1]
 			bottom := math.min(rows[i], h)
@@ -4503,7 +4507,7 @@ fn page_focused_text_area(direction int) {
 				gradient_vertex(ctx, line, stops, opacity, x, y, xb0, bottom, scale)
 			}
 		}
-		sgl.end()
+		ctx.r.end()
 	}
 
 	// draw_square_gradient draws the exact gradient of a square-cornered box from a
@@ -4513,13 +4517,13 @@ fn page_focused_text_area(direction int) {
 	fn draw_square_gradient(ctx &gg.Context, x f64, y f64, w f64, h f64, line GradientLine, stops []GradientStop, angle f64, opacity f64) bool {
 		scale := f64(ctx.scale)
 		if stops.len == 2 {
-			sgl.load_pipeline(im_alpha_pipeline())
-			sgl.begin_quads()
+			ctx.r.load_pipeline(ctx.pipeline.alpha)
+			ctx.r.begin_quads()
 			gradient_vertex(ctx, line, stops, opacity, x, y, 0, 0, scale)
 			gradient_vertex(ctx, line, stops, opacity, x, y, w, 0, scale)
 			gradient_vertex(ctx, line, stops, opacity, x, y, w, h, scale)
 			gradient_vertex(ctx, line, stops, opacity, x, y, 0, h, scale)
-			sgl.end()
+			ctx.r.end()
 			return true
 		}
 		turn := math.fmod(math.fmod(angle, 360) + 360, 360)
@@ -4533,8 +4537,8 @@ fn page_focused_text_area(direction int) {
 			cuts << stop.position
 		}
 		cuts.sort()
-		sgl.load_pipeline(im_alpha_pipeline())
-		sgl.begin_quads()
+		ctx.r.load_pipeline(ctx.pipeline.alpha)
+		ctx.r.begin_quads()
 		for i in 1 .. cuts.len {
 			// Positions run along the gradient, which may point back along the axis.
 			a := if turn == 180 || turn == 270 { 1 - cuts[i] } else { cuts[i - 1] }
@@ -4554,14 +4558,14 @@ fn page_focused_text_area(direction int) {
 				gradient_vertex(ctx, line, stops, opacity, x, y, 0, b * extent, scale)
 			}
 		}
-		sgl.end()
+		ctx.r.end()
 		return true
 	}
 
 	fn gradient_vertex(ctx &gg.Context, line GradientLine, stops []GradientStop, opacity f64, ox f64, oy f64, lx f64, ly f64, scale f64) {
 		color, alpha := gradient_color_at(stops, gradient_position(line, lx, ly))
-		sgl.c4b(u8((color >> 16) & 0xff), u8((color >> 8) & 0xff), u8(color & 0xff), u8(math.round(alpha * opacity * 255)))
-		sgl.v2f(f32((ox + lx) * scale), f32((oy + ly) * scale))
+		ctx.r.c4b(u8((color >> 16) & 0xff), u8((color >> 8) & 0xff), u8(color & 0xff), u8(math.round(alpha * opacity * 255)))
+		ctx.r.v2f(f32((ox + lx) * scale), f32((oy + ly) * scale))
 	}
 
 	fn draw_outline(ctx &gg.Context, x f64, y f64, w f64, h f64, color_hex u32, radius f64) {
@@ -4641,15 +4645,15 @@ fn page_focused_text_area(direction int) {
 		count := outer.len / 2
 		c := hex_color(color_hex)
 		scale := f64(ctx.scale)
-		sgl.load_pipeline(im_alpha_pipeline())
-		sgl.c4b(c.r, c.g, c.b, c.a)
-		sgl.begin_triangle_strip()
+		ctx.r.load_pipeline(ctx.pipeline.alpha)
+		ctx.r.c4b(c.r, c.g, c.b, c.a)
+		ctx.r.begin_triangle_strip()
 		for i in 0 .. count + 1 {
 			k := i % count
-			sgl.v2f(f32(outer[2 * k] * scale), f32(outer[2 * k + 1] * scale))
-			sgl.v2f(f32(inner[2 * k] * scale), f32(inner[2 * k + 1] * scale))
+			ctx.r.v2f(f32(outer[2 * k] * scale), f32(outer[2 * k + 1] * scale))
+			ctx.r.v2f(f32(inner[2 * k] * scale), f32(inner[2 * k + 1] * scale))
 		}
-		sgl.end()
+		ctx.r.end()
 	}
 
 	fn draw_control_surface(ctx &gg.Context, x f64, y f64, w f64, h f64, box BoxStyle, focused bool, enabled bool) {

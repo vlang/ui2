@@ -1,7 +1,6 @@
 module main
 
 import os
-import time
 import ui2
 
 const memo_width = 420
@@ -68,16 +67,13 @@ fn support_line() string {
 }
 
 // refresh_memo_while_recording repaints the elapsed readout until the take
-// stops, mirroring the media player's playback loop.
+// stops. media_state reaches the unsynchronized native backend, including
+// the main-thread-only AVFoundation bridge, so this poll runs through
+// ui2.after callbacks on the UI thread rather than a spawned worker.
 fn refresh_memo_while_recording() {
-	for _ in 0 .. 3600 {
-		if ui2.media_state(memo_id) != .recording {
-			return
-		}
-		ui2.request_refresh()
-		time.sleep(500 * time.millisecond)
+	if ui2.media_state(memo_id) == .recording {
+		ui2.after(0.5, refresh_memo_while_recording)
 	}
-	ui2.request_refresh()
 }
 
 fn handle_memo_event(event string) {
@@ -94,7 +90,7 @@ fn handle_memo_event(event string) {
 			app.path = memo_output_path()
 			if ui2.media_start_recording(memo_id, .microphone, app.path) {
 				app.message = 'Recording …'
-				spawn refresh_memo_while_recording()
+				refresh_memo_while_recording()
 			} else {
 				app.message = 'Microphone unavailable on this machine.'
 			}

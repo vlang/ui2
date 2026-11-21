@@ -11,6 +11,7 @@ module ui2
 
 $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 	import os
+	import time
 
 	__global g_media_nix_players = map[string]&os.Process{}
 	__global g_media_nix_recorders = map[string]&os.Process{}
@@ -54,6 +55,35 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 			procs.delete(id)
 		}
 		g_media_nix_paused.delete(id)
+	}
+
+	// media_nix_finalize_recorder stops a recorder through its cleanup path
+	// instead of SIGKILL: arecord/parecord need to patch the WAV header and
+	// flush buffered samples before exiting. A forced kill is reserved for a
+	// recorder that ignores SIGTERM for two seconds. The return value says
+	// whether the take finalized cleanly.
+	fn media_nix_finalize_recorder(id string) bool {
+		proc := g_media_nix_recorders[id] or { return false }
+		mut graceful := true
+		if proc.is_alive() {
+			proc.signal_term()
+			for _ in 0 .. 40 {
+				if !proc.is_alive() {
+					break
+				}
+				time.sleep(50 * time.millisecond)
+			}
+			if proc.is_alive() {
+				graceful = false
+				proc.signal_kill()
+			}
+		}
+		proc.wait()
+		code := proc.code
+		proc.close()
+		g_media_nix_recorders.delete(id)
+		g_media_nix_paused.delete(id)
+		return graceful && code == 0
 	}
 
 	fn native_media_supported(kind MediaKind) bool {
@@ -188,7 +218,10 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 			return false
 		}
 		media_nix_stop_process(mut g_media_nix_recorders, id)
-		args := if recorder.ends_with('arecord') {
+		// Compare the basename exactly: `parecord` also ends with `arecord`,
+		// and sending PulseAudio's tool ALSA flags makes it exit immediately.
+		name := os.base(recorder)
+		args := if name == 'arecord' {
 			['-f', 'cd', '-t', 'wav', output_path]
 		} else {
 			['--file-format=wav', output_path]
@@ -201,11 +234,7 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 	}
 
 	fn native_media_stop_recording(id string) bool {
-		if _ := g_media_nix_recorders[id] {
-			media_nix_stop_process(mut g_media_nix_recorders, id)
-			return true
-		}
-		return false
+		return media_nix_finalize_recorder(id)
 	}
 
 	fn native_media_capture_screen(output_path string) bool {

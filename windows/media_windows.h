@@ -54,6 +54,8 @@ static inline int ui2_media_screenshot(const wchar_t *path) {
 		info.bmiHeader.biBitCount = 24;
 		info.bmiHeader.biCompression = BI_RGB;
 		BitBlt(memory, 0, 0, width, height, screen, 0, 0, SRCCOPY);
+		// GetDIBits requires the bitmap NOT to be selected into a DC.
+		SelectObject(memory, previous);
 		if (GetDIBits(memory, bitmap, 0, (UINT)height, bits, &info, DIB_RGB_COLORS) != 0) {
 			FILE *file = _wfopen(path, L"wb");
 			if (file != NULL) {
@@ -62,8 +64,10 @@ static inline int ui2_media_screenshot(const wchar_t *path) {
 				head.bfType = 0x4d42;
 				head.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
 				head.bfSize = head.bfOffBits + image_size;
+				// biHeight is negative because GetDIBits stored the rows
+				// top-down. Keep that sign in the file header: flipping it
+				// alone would make BMP readers draw the image upside down.
 				BITMAPINFOHEADER body = info.bmiHeader;
-				body.biHeight = height;
 				ok = fwrite(&head, 1, sizeof(head), file) == sizeof(head)
 					&& fwrite(&body, 1, sizeof(body), file) == sizeof(body)
 					&& fwrite(bits, 1, image_size, file) == image_size;
@@ -72,8 +76,10 @@ static inline int ui2_media_screenshot(const wchar_t *path) {
 			}
 		}
 		HeapFree(GetProcessHeap(), 0, bits);
+	} else {
+		// No capture was attempted, so restore the original object here.
+		SelectObject(memory, previous);
 	}
-	SelectObject(memory, previous);
 	DeleteObject(bitmap);
 	DeleteDC(memory);
 	ReleaseDC(NULL, screen);

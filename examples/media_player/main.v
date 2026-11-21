@@ -1,6 +1,5 @@
 module main
 
-import time
 import ui2
 
 const player_width = 560
@@ -62,16 +61,14 @@ fn support_line() string {
 }
 
 // refresh_media_while_playing repaints the position readout a few times per
-// second while the clip runs, like the timer example's refresh loop.
+// second while the clip runs. media_state enters the unsynchronized native
+// backend (and the Apple bridge is main-thread only), so polling must happen
+// through ui2.after callbacks, which run on the UI thread — never in a
+// spawned worker.
 fn refresh_media_while_playing() {
-	for _ in 0 .. 240 {
-		if ui2.media_state(player_id) != .playing {
-			return
-		}
-		ui2.request_refresh()
-		time.sleep(250 * time.millisecond)
+	if ui2.media_state(player_id) == .playing {
+		ui2.after(0.25, refresh_media_while_playing)
 	}
-	ui2.request_refresh()
 }
 
 fn handle_media_event(event string) {
@@ -79,7 +76,7 @@ fn handle_media_event(event string) {
 	if ui2.media_handle_control(player_id, event) {
 		if event == ui2.media_toggle_action(player_id)
 			|| event == ui2.media_play_action(player_id) {
-			spawn refresh_media_while_playing()
+			refresh_media_while_playing()
 		}
 		ui2.refresh()
 		return

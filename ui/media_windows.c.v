@@ -17,6 +17,7 @@ __global g_media_win_aliases = map[string]string{}
 __global g_media_win_counter = 0
 __global g_media_win_open = map[string]bool{}
 __global g_media_win_rects = map[string]string{}
+__global g_media_win_parents = map[string]u64{}
 
 // media_mci runs one MCI command string, returning ok plus any text result.
 fn media_mci(command string) (bool, string) {
@@ -59,6 +60,7 @@ fn media_win_drop_alias(id string) {
 	}
 	g_media_win_open.delete(id)
 	g_media_win_rects.delete(id)
+	g_media_win_parents.delete(id)
 }
 
 // media_win_type maps a source to its MCI device: the mpegvideo driver plays
@@ -136,9 +138,22 @@ fn native_media_stop(id string) bool {
 
 fn native_media_seek(id string, secs f64) bool {
 	alias := g_media_win_aliases[id] or { return false }
+	mut was_playing := false
+	mode_ok, mode := media_mci('status ${alias} mode')
+	if mode_ok && mode == 'playing' {
+		was_playing = true
+	}
 	ms := int(secs * 1000.0)
 	ok, _ := media_mci('seek ${alias} to ${ms}')
-	return ok
+	if !ok {
+		return false
+	}
+	// MCI stops the device on seek. Dragging the slider during playback must
+	// leave the clip playing, otherwise the next state pull reports stopped.
+	if was_playing {
+		media_mci('play ${alias}')
+	}
+	return true
 }
 
 fn native_media_set_volume(id string, volume f64) bool {
@@ -211,6 +226,30 @@ fn native_media_can_seek(id string) bool {
 	return g_media_win_open[id] or { false }
 }
 
+// media_win_open_video opens a fresh MCI device parented to `parent`. MCI
+// cannot change a device's parent in place, so a rebuilt container reopens
+// through this helper (the caller preserves transport state around it).
+fn media_win_open_video(id string, mut session &MediaSession, parent voidptr) bool {
+	media_win_drop_alias(id)
+	alias := media_win_alias(id)
+	parent_handle := u64(parent)
+	open_ok, _ := media_mci('open "${session.src}" type ${media_win_type(session.kind, session.src)} alias ${alias} style child parent ${parent_handle}')
+	if !open_ok {
+		media_win_drop_alias(id)
+		return false
+	}
+	set_ok, _ := media_mci('set ${alias} time format milliseconds')
+	if !set_ok {
+		media_win_drop_alias(id)
+		return false
+	}
+	g_media_win_open[id] = true
+	g_media_win_parents[id] = parent_handle
+	session.state = .stopped
+	session.duration = native_media_duration(id)
+	return true
+}
+
 // native_media_attach opens the video device on first sight (parented to the
 // backend's window, so no popup escapes) and keeps its picture on the
 // element's frame. Audio never reaches this function.
@@ -222,23 +261,33 @@ fn native_media_attach(id string, parent voidptr, x f64, y f64, w f64, h f64) bo
 	if !media_win_quoted(session.src) {
 		return false
 	}
+	parent_handle := u64(parent)
 	if !(g_media_win_open[id] or { false }) {
-		media_win_drop_alias(id)
-		alias := media_win_alias(id)
-		parent_handle := u64(parent)
-		open_ok, _ := media_mci('open "${session.src}" type ${media_win_type(session.kind, session.src)} alias ${alias} style child parent ${parent_handle}')
-		if !open_ok {
-			media_win_drop_alias(id)
+		if !media_win_open_video(id, mut session, parent) {
 			return false
 		}
-		set_ok, _ := media_mci('set ${alias} time format milliseconds')
-		if !set_ok {
-			media_win_drop_alias(id)
+	} else if (g_media_win_parents[id] or { 0 }) != parent_handle {
+		// The old container was destroyed and this element was rebuilt.
+		// Reopen on the new parent, restoring position and playing state so
+		// video returns instead of vanishing behind the reused MCI device.
+		old_alias := g_media_win_aliases[id] or { return false }
+		pos_ok, pos_text := media_mci('status ${old_alias} position')
+		mut resume_pos := 0.0
+		if pos_ok {
+			resume_pos = f64(pos_text.int()) / 1000.0
+		}
+		mode_ok, mode := media_mci('status ${old_alias} mode')
+		was_playing := mode_ok && mode == 'playing'
+		if !media_win_open_video(id, mut session, parent) {
 			return false
 		}
-		g_media_win_open[id] = true
-		session.state = .stopped
-		session.duration = native_media_duration(id)
+		new_alias := g_media_win_aliases[id] or { return false }
+		if resume_pos > 0 {
+			media_mci('seek ${new_alias} to ${int(resume_pos * 1000.0)}')
+		}
+		if was_playing {
+			media_mci('play ${new_alias}')
+		}
 	}
 	alias := g_media_win_aliases[id] or { return false }
 	rect := '${int(x)}:${int(y)}:${int(w)}:${int(h)}'
