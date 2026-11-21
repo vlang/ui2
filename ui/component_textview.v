@@ -120,7 +120,7 @@ pub fn (c TextViewColors) role_color(role TextViewRole) u32 {
 
 // tv_mix is a over b at weight t (0 is b, 1 is a), channel by channel.
 fn tv_mix(a u32, b u32, t f64) u32 {
-	w := math.max(0, math.min(1, t))
+	w := math.max(0.0, math.min(1.0, t))
 	mut out := u32(0)
 	for shift in [u32(16), 8, 0] {
 		ca := f64((a >> shift) & 0xff)

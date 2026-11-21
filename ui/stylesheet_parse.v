@@ -72,8 +72,32 @@ pub:
 	col              int
 }
 
-// StyleQueryCtx is the query nesting the parser is inside, outermost level
-// first. Each `@media` / `@container` block pushes one level.
+// StyleKeyframe is one stop inside a `@keyframes` block: a progress (0..1)
+// plus the declarations that apply at that stop. `from`/`to` are aliases
+// for 0 and 1.
+pub struct StyleKeyframe {
+pub:
+	stop         f64
+	declarations []StyleDeclaration
+	line         int
+	col          int
+}
+
+// StyleKeyframes is a named animation definition usable by the
+// `animation-name` property and the `animation` shorthand.
+pub struct StyleKeyframes {
+pub:
+	name  string
+	stops []StyleKeyframe
+	line  int
+	col   int
+}
+
+struct StyleKeyframeEntry {
+	value          StyleKeyframes
+	imports_before int
+}
+
 struct StyleQueryCtx {
 	media      [][]MediaQuery
 	containers [][]ContainerQuery
@@ -113,16 +137,29 @@ mut:
 	// variable definition with the number of imports before it.
 	import_rule_pos []int
 	var_log         []StyleVarEntry
+	keyframe_log    []StyleKeyframeEntry
 pub mut:
 	rules      []StyleRule
 	variables  map[string]string
 	light_vars map[string]string
 	dark_vars  map[string]string
-	imports    []string       // `@import` paths in source order, for load_stylesheet
-	rule_index StyleRuleIndex // subject buckets; empty on hand-built sheets
+	imports    []string                  // `@import` paths in source order, for load_stylesheet
+	rule_index StyleRuleIndex            // subject buckets; empty on hand-built sheets
+	keyframes  map[string]StyleKeyframes // `@keyframes` definitions by name
 }
 
-// resolve_var reads a `@name` or `--name` variable: dark-mode value first
+// merge_keyframes returns a merged map: base first, preset overrides on name clash.
+fn merge_keyframes(base map[string]StyleKeyframes, preset map[string]StyleKeyframes) map[string]StyleKeyframes {
+	mut out := map[string]StyleKeyframes{}
+	for key, value in base {
+		out[key] = value
+	}
+	for key, value in preset {
+		out[key] = value
+	}
+	return out
+}
+
 // when dark is true, then the global one. Returns none when undefined.
 pub fn (s Stylesheet) resolve_var(name string, dark bool) ?string {
 	key := name.trim_space()
@@ -176,6 +213,8 @@ mut:
 	imports         []string
 	import_rule_pos []int
 	var_log         []StyleVarEntry
+	keyframe_log    []StyleKeyframeEntry
+	keyframes       map[string]StyleKeyframes
 }
 
 // define records one variable definition: the mode's map for lookups and
@@ -203,6 +242,7 @@ pub fn parse_stylesheet(source string) !Stylesheet {
 		light_vars: map[string]string{}
 		dark_vars:  map[string]string{}
 		imports:    []string{}
+		keyframes:  map[string]StyleKeyframes{}
 	}
 	rules := parser.parse_block(StyleQueryCtx{}, true)!
 	return Stylesheet{
@@ -214,6 +254,8 @@ pub fn parse_stylesheet(source string) !Stylesheet {
 		import_rule_pos: parser.import_rule_pos
 		var_log:         parser.var_log
 		rule_index:      stylesheet_index_rules(rules)
+		keyframe_log:    parser.keyframe_log
+		keyframes:       parser.keyframes
 	}
 }
 
@@ -272,11 +314,12 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 	sheet := parse_stylesheet(source) or {
 		// Point at the file: `theme.vss:3:1: ...` instead of `stylesheet:3:1:`.
 		msg := err.msg()
-		return error(if msg.starts_with('stylesheet:') {
+		detail := if msg.starts_with('stylesheet:') {
 			'${path}:${msg['stylesheet:'.len..]}'
 		} else {
 			'${path}: ${msg}'
-		})
+		}
+		return error(detail)
 	}
 	if sheet.imports.len == 0 {
 		return sheet
@@ -286,8 +329,10 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 	mut variables := map[string]string{}
 	mut light_vars := map[string]string{}
 	mut dark_vars := map[string]string{}
+	mut keyframes := map[string]StyleKeyframes{}
 	mut next_rule := 0
 	mut next_var := 0
+	mut next_keyframe := 0
 	for i, name in sheet.imports {
 		// Own rules and variables written before this `@import` come first.
 		pos := if i < sheet.import_rule_pos.len { sheet.import_rule_pos[i] } else { 0 }
@@ -299,6 +344,11 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 			style_apply_var_entry(sheet.var_log[next_var], mut variables, mut light_vars, mut
 				dark_vars)
 			next_var++
+		}
+		for next_keyframe < sheet.keyframe_log.len && sheet.keyframe_log[next_keyframe].imports_before <= i {
+			entry := sheet.keyframe_log[next_keyframe]
+			keyframes[entry.value.name] = entry.value
+			next_keyframe++
 		}
 		target := if os.is_abs_path(name) { name } else { os.join_path(base, name) }
 		sub := load_stylesheet_file(target, confine, mut visited)!
@@ -312,12 +362,20 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 		for key, value in sub.dark_vars {
 			dark_vars[key] = value
 		}
+		for key, value in sub.keyframes {
+			keyframes[key] = value
+		}
 	}
 	rules << sheet.rules[next_rule..]
 	for next_var < sheet.var_log.len {
 		style_apply_var_entry(sheet.var_log[next_var], mut variables, mut light_vars, mut
 			dark_vars)
 		next_var++
+	}
+	for next_keyframe < sheet.keyframe_log.len {
+		entry := sheet.keyframe_log[next_keyframe]
+		keyframes[entry.value.name] = entry.value
+		next_keyframe++
 	}
 	return Stylesheet{
 		rules:      rules
@@ -326,6 +384,7 @@ fn load_stylesheet_file(path string, confine string, mut visited []string) !Styl
 		dark_vars:  dark_vars
 		imports:    sheet.imports.clone()
 		rule_index: stylesheet_index_rules(rules)
+		keyframes:  keyframes
 	}
 }
 
@@ -454,6 +513,14 @@ fn (mut p StyleParser) parse_block_inner(q StyleQueryCtx, top_level bool, eof_ok
 				for rule in p.parse_query_block(q)! {
 					rules << rule
 				}
+				continue
+			}
+			// `@keyframes name { ... }`: an animation definition, not a rule.
+			if top_level && p.src[p.pos..].starts_with('@keyframes')
+				&& style_keyword_end(p.src, p.pos + 10) {
+				kf := p.parse_keyframes()!
+				p.keyframes[kf.name] = kf
+				p.keyframe_log << StyleKeyframeEntry{ value: kf, imports_before: p.imports.len }
 				continue
 			}
 			// Builtins (`@import`, `@name: value;`) take precedence over plugin
@@ -1284,4 +1351,132 @@ fn new_style_selector(parts []StyleSelectorPart, combinators []StyleCombinator) 
 		combinators: combinators
 		specificity: ids * 1000000 + classish * 1000 + types
 	}
+}
+
+// parse_keyframes parses `@keyframes name { stops }`. Stops are `from`,
+// `to`, or a percentage (`0%`, `50%`); declarations inside follow the same
+// grammar as a rule body.
+fn (mut p StyleParser) parse_keyframes() !StyleKeyframes {
+	at_line := p.line
+	at_col := p.col
+	for _ in 0 .. 10 {
+		p.advance()
+	}
+	p.skip_space_and_comments()!
+	name := p.parse_ident()!
+	p.skip_space_and_comments()!
+	if p.eof() || p.peek() != `{` {
+		return error(style_err(p.line, p.col, 'expected `{` after keyframes name'))
+	}
+	p.advance()
+	mut stops := []StyleKeyframe{}
+	for {
+		p.skip_space_and_comments()!
+		if p.eof() {
+			return error(style_err(p.line, p.col, 'unclosed `@keyframes`'))
+		}
+		if p.peek() == `}` {
+			p.advance()
+			break
+		}
+		stop_line := p.line
+		stop_col := p.col
+		mut token := ''
+		for !p.eof() && p.peek() != `{` && p.peek() != ` ` && p.peek() != `\t`
+			&& p.peek() != `\n` && p.peek() != `\r` {
+			token += '${rune(p.peek())}'
+			p.advance()
+		}
+		token = token.trim_space()
+		if token.len == 0 {
+			return error(style_err(stop_line, stop_col, 'expected a keyframe stop'))
+		}
+		progress := keyframe_stop_progress(token) or {
+			return error(style_err(stop_line, stop_col, 'expected `from`, `to` or a percentage, got "${token}"'))
+		}
+		p.skip_space_and_comments()!
+		if p.eof() || p.peek() != `{` {
+			return error(style_err(p.line, p.col, 'expected `{` after keyframe stop'))
+		}
+		p.advance()
+		mut declarations := []StyleDeclaration{}
+		for {
+			p.skip_space_and_comments()!
+			if p.eof() {
+				return error(style_err(p.line, p.col, 'unclosed keyframe'))
+			}
+			if p.peek() == `}` {
+				p.advance()
+				break
+			}
+			decl_line := p.line
+			decl_col := p.col
+			prop := p.parse_ident()!
+			p.skip_space_and_comments()!
+			if p.eof() || p.peek() != `:` {
+				return error(style_err(p.line, p.col, 'expected `:` after property "${prop}"'))
+			}
+			p.advance()
+			p.skip_space_and_comments()!
+			value := p.parse_raw_value()!
+			if value.trim_space().len == 0 {
+				return error(style_err(decl_line, decl_col, 'property "${prop}" has an empty value'))
+			}
+			declarations << StyleDeclaration{
+				prop:  prop.to_lower()
+				value: value.trim_space()
+				line:  decl_line
+				col:   decl_col
+			}
+		}
+		if declarations.len == 0 {
+			return error(style_err(stop_line, stop_col, 'keyframe has no declarations'))
+		}
+		stops << StyleKeyframe{
+			stop:         progress
+			declarations: declarations
+			line:         stop_line
+			col:          stop_col
+		}
+	}
+	for i in 1 .. stops.len {
+		mut j := i
+		for j > 0 && stops[j - 1].stop > stops[j].stop {
+			tmp := stops[j]
+			stops[j] = stops[j - 1]
+			stops[j - 1] = tmp
+			j--
+		}
+	}
+	if stops.len == 0 {
+		return error(style_err(at_line, at_col, '`@keyframes ${name}` has no stops'))
+	}
+	return StyleKeyframes{
+		name:  name
+		stops: stops
+		line:  at_line
+		col:   at_col
+	}
+}
+
+fn keyframe_stop_progress(token string) ?f64 {
+	lower := token.to_lower()
+	if lower == 'from' {
+		return 0.0
+	}
+	if lower == 'to' {
+		return 1.0
+	}
+	if !token.ends_with('%') {
+		return none
+	}
+	raw := token[..token.len - 1]
+	if raw.len == 0 {
+		return none
+	}
+	number := query_plain_number(raw) or { return none }
+	if number < 0 || number > 100 {
+		return none
+	}
+	return number / 100.0
 }

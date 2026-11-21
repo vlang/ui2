@@ -329,7 +329,8 @@ pub fn dock_area_can_close(config DockAreaConfig, panel string) bool {
 // ── Geometry ────────────────────────────────────────────────────────
 
 fn dock_want(size f64, fallback f64, min_size f64) f64 {
-	return math.max(if size > 0 { size } else { fallback }, min_size)
+	want := if size > 0 { size } else { fallback }
+	return math.max(want, min_size)
 }
 
 // dock_squeeze fits two dock sizes into room: first from what each has above

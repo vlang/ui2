@@ -129,4 +129,20 @@ fn test_macos_v_objc_rotation_bridge_updates_layer_transform() {
 	assert math.abs(macos.msg_f64(cleared, 'doubleValue')) < 0.000001
 }
 
+
+fn test_darwin_compat_bridge_preserves_runtime_values() {
+	pool := macos.autorelease_pool_new()
+	defer { macos.release(pool) }
+	value := darwin_msg_id_range(macos.get_class('NSValue'), 'valueWithRange:', darwin_range(3, 7))
+	assert value != unsafe { nil }
+	assert darwin_responds_to(value, 'rangeValue')
+	assert !darwin_responds_to(value, 'ui2MissingSelector')
+	assert darwin_msg_bool_id(value, 'isKindOfClass:', macos.get_class('NSValue'))
+	range := darwin_msg_range(value, 'rangeValue')
+	assert range.location == 3 && range.length == 7
+	path := macos.msg_id(macos.get_class('NSBezierPath'), 'bezierPath')
+	darwin_msg_void_point(path, 'moveToPoint:', darwin_point(12, 34))
+	point := darwin_msg_point(path, 'currentPoint')
+	assert point.x == 12 && point.y == 34
+}
 }

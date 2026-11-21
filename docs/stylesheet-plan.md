@@ -147,6 +147,12 @@ which authored them.
   number/otp inputs) with `selected` state classes where the state is not
   a pseudo; leaf kinds keep matching by type. Builder-set fields still win
   over sheets; `ui/component_stylesheet_test.v` pins the contract.
+- **P11 (done):** VSS animations: `@keyframes`, `transition`/`animation`
+  shorthand and atomic properties, cascade storage on `Element`
+  (`style_transitions`, `style_animations`), and a per-build driver in
+  `stylesheet_apply_frame` that starts transitions on property changes and
+  keyframes on state entry, reusing the animation runtime.
+  `ui/stylesheet_animation.v`, `ui/stylesheet_animation_driver.v`.
 - **Follow-ups (done):** cascade optimization in two rounds — per-run
   color/length caches, in-order sort skip, then a parse-time subject index
   plus same-property folding (`ui/stylesheet_index_test.v` diffs indexed
