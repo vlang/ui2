@@ -7,7 +7,7 @@
 // scope is spelled out here: macOS has no X11 and reads its own file, monitor_darwin.v.
 module ui2
 
-$if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
+$if (linux || freebsd || openbsd || netbsd || dragonfly || solaris) && !ui2_headless ? {
 	#flag -lXrandr
 	#include <X11/extensions/Xrandr.h>
 
@@ -45,4 +45,8 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 		}
 		return hz
 	}
+}
+
+$if (linux || freebsd || openbsd || netbsd || dragonfly || solaris) && ui2_headless ? {
+	fn native_monitor_refresh_rate() f64 { return 0 }
 }

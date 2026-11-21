@@ -36,17 +36,17 @@ pub fn badge(config BadgeConfig) !Element {
 	mut children := []Element{}
 	if !config.dot {
 		inner := component_inset(component_local(config.frame), metrics.padding / 2)!
-		children << label('', badge_label, inner, TextStyle{
+		children << with_classes(label('', badge_label, inner, TextStyle{
 			color: fg
 			size:  metrics.font_size
 			align: .center
-		})
+		}), 'badge-text')
 	}
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{
+		...with_classes(view(config.id, config.frame, BoxStyle{
 			bg:     bg
 			radius: math.min(config.frame.width, config.frame.height) / 2
-		}, children)
+		}, children), 'badge')
 		hidden:              config.count == 0 && !config.show_zero && !config.dot
 		accessibility_role:  'status'
 		accessibility_label: if config.count >= 0 { config.count.str() } else { config.text }
@@ -97,20 +97,20 @@ pub fn avatar(config AvatarConfig) !Element {
 	component_validate_frame(config.frame)!
 	local := component_local(config.frame)
 	child := if config.image_path.len > 0 {
-		image('', config.image_path, local)
+		with_classes(image('', config.image_path, local), 'avatar-image')
 	} else {
-		label('', avatar_initials(config.name), local, TextStyle{
+		with_classes(label('', avatar_initials(config.name), local, TextStyle{
 			color: config.theme.foreground
 			size:  math.min(config.frame.width, config.frame.height) * 0.4
 			bold:  true
 			align: .center
-		})
+		}), 'avatar-initials')
 	}
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{
+		...with_classes(view(config.id, config.frame, BoxStyle{
 			bg:     config.theme.muted
 			radius: math.min(config.frame.width, config.frame.height) / 2
-		}, [child])
+		}, [child]), 'avatar')
 		accessibility_role:  'img'
 		accessibility_label: config.name
 	})
@@ -150,26 +150,26 @@ pub fn tag(config TagConfig) !Element {
 	} else {
 		0.0
 	}
-	mut children := [component_text(config.text, rect(inner.x, inner.y, inner.width - close_width,
-		inner.height), foreground, metrics.font_size, false)]
+	mut children := [with_classes(component_text(config.text, rect(inner.x, inner.y, inner.width - close_width,
+		inner.height), foreground, metrics.font_size, false), 'tag-text')]
 	if config.close_action.len > 0 {
 		children << Element{
-			...button(component_part_id(config.id, 'close'), '×', rect(inner.x + inner.width - close_width,
+			...with_classes(button(component_part_id(config.id, 'close'), '×', rect(inner.x + inner.width - close_width,
 				inner.y, close_width, inner.height), BoxStyle{ transparent: true }, TextStyle{
 				color: foreground
 				size:  metrics.font_size
 				align: .center
-			})
+			}), 'tag-close')
 			action_id:           config.close_action
 			enabled:             config.enabled
 			accessibility_label: 'Remove ${config.text}'
 		}
 	}
-	return component_finish(view(config.id, config.frame, component_box(background, if config.outline {
+	return component_finish(with_classes(view(config.id, config.frame, component_box(background, if config.outline {
 		bg
 	} else {
 		background
-	}, metrics.radius), children))
+	}, metrics.radius), children), 'tag'))
 }
 
 pub struct SeparatorConfig {

@@ -165,9 +165,11 @@ fn clone_vml_import_node(node &VNode) &VNode {
 }
 
 // element_from_vml_file is the file-backed counterpart to element_from_vml.
+// Like element_from_vml it runs the cascade: in-document `Style` blocks
+// always, the global sheet when one is set.
 pub fn element_from_vml_file(path string, frame Rect) !Element {
 	node := parse_vml_file(path)!
-	return node_to_element(node, frame)!
+	return vml_styled_tree(node_to_element(node, frame)!)
 }
 
 // element_from_vml_model_file evaluates a file-backed VML document, including

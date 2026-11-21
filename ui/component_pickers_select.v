@@ -559,8 +559,8 @@ pub fn select_box(config SelectConfig) !Element {
 	if !shows_clear {
 		name := if config.icon.len > 0 { config.icon } else { 'chevron.down' }
 		content << Element{
-			...picker_symbol(name, rect(trailing_x, (local.height - icon_side) / 2, icon_side,
-				icon_side), theme.muted_foreground)
+			...with_classes(picker_symbol(name, rect(trailing_x, (local.height - icon_side) / 2, icon_side,
+				icon_side), theme.muted_foreground), 'select-chevron')
 			key: 'chevron'
 		}
 	}
@@ -570,11 +570,11 @@ pub fn select_box(config SelectConfig) !Element {
 	text_color := if config.enabled { theme.foreground } else { theme.muted_foreground }
 	mut removers := []Element{}
 	if titles.len == 0 {
-		content << label('', config.placeholder, rect(x, 0, math.max(right - x, 0), local.height),
+		content << with_classes(label('', config.placeholder, rect(x, 0, math.max(right - x, 0), local.height),
 			TextStyle{
 				color: theme.muted_foreground
 				size:  metrics.font_size
-			})
+			}), 'select-placeholder')
 	} else if config.multiple && config.display == .tags {
 		tags := select_tags(config, x - pad / 3, right, local.height)
 		shapes, buttons := select_tag_elements(config, tags)
@@ -590,11 +590,11 @@ pub fn select_box(config SelectConfig) !Element {
 				x += side + metrics.gap
 			}
 		}
-		content << label('', select_display_text(config), rect(x, 0, math.max(right - x, 0),
+		content << with_classes(label('', select_display_text(config), rect(x, 0, math.max(right - x, 0),
 			local.height), TextStyle{
 			color: text_color
 			size:  metrics.font_size
-		})
+		}), 'select-value')
 	}
 	description := if config.accessibility_label.len > 0 {
 		config.accessibility_label
@@ -603,8 +603,8 @@ pub fn select_box(config SelectConfig) !Element {
 	}
 	shown := select_display_text(config)
 	children << Element{
-		...button_view(select_toggle_action(config.id), local, BoxStyle{ transparent: true },
-			content)
+		...with_classes(button_view(select_toggle_action(config.id), local, BoxStyle{ transparent: true },
+			content), 'select-trigger')
 		key:                 'trigger'
 		enabled:             config.enabled
 		cursor:              if config.enabled { cursor_pointing_hand } else { cursor_default }
@@ -617,11 +617,11 @@ pub fn select_box(config SelectConfig) !Element {
 		side := math.min(local.height - 8, icon_side + 10)
 		glyph := icon_side - 2
 		children << Element{
-			...button_view(select_clear_action(config.id), rect(local.width - pad - icon_side / 2 - side / 2,
+			...with_classes(button_view(select_clear_action(config.id), rect(local.width - pad - icon_side / 2 - side / 2,
 				(local.height - side) / 2, side, side), BoxStyle{ transparent: true }, [
 				picker_symbol('xmark', rect((side - glyph) / 2, (side - glyph) / 2, glyph, glyph),
 					theme.muted_foreground),
-			])
+			]), 'select-clear')
 			key:                 'clear'
 			tooltip:             'Clear'
 			cursor:              cursor_pointing_hand
@@ -629,7 +629,7 @@ pub fn select_box(config SelectConfig) !Element {
 		}
 	}
 	return component_finish(Element{
-		...view(config.id, config.frame, box, children)
+		...with_classes(view(config.id, config.frame, box, children), 'select')
 		accessibility_role:  'group'
 		accessibility_label: description
 	})

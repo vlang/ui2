@@ -98,7 +98,21 @@ __global g_view_translation_x = map[voidptr]f64{}
 
 // ── Public API ─────────────────────────────────────────────────────
 
+// bounds is the app's own area: the root view's bounds, which follow iPad
+// Split View and Slide Over, falling back to the screen before the window
+// exists (launch sizes the window from it).
 pub fn bounds() Rect {
+	if g_root_view != unsafe { nil } {
+		view := macos.msg_rect(g_root_view, 'bounds')
+		if view.width > 0 && view.height > 0 {
+			return Rect{
+				x:      view.x
+				y:      view.y
+				width:  view.width
+				height: view.height
+			}
+		}
+	}
 	b := macos.msg_rect(macos.msg_id(macos.get_class('UIScreen'), 'mainScreen'), 'bounds')
 	return Rect{
 		x:      b.x
@@ -133,7 +147,7 @@ pub fn refresh() {
 		return
 	}
 	g_ios_rendering = true
-	root := g_build_screen()
+	root := stylesheet_apply_frame(stylesheet_frame_build(g_build_screen), stylesheet_uikit_env())
 	render_root(root)
 	g_ios_rendering = false
 	if g_ios_refresh_pending {
@@ -148,7 +162,7 @@ pub fn request_refresh() {
 	if g_button_handler == unsafe { nil } {
 		return
 	}
-	macos.msg_void_sel_id_bool(g_button_handler, 'performSelectorOnMainThread:withObject:waitUntilDone:', macos.sel('vuiRefresh:'), objc_nil(), false)
+	darwin_msg_void_sel_id_bool(g_button_handler, 'performSelectorOnMainThread:withObject:waitUntilDone:', macos.sel('vuiRefresh:'), objc_nil(), false)
 }
 
 // refresh_on_demand reports whether the window redraws only when asked. The
@@ -303,6 +317,46 @@ pub fn focused_id() string {
 	return ''
 }
 
+// stylesheet_uikit_env reads this frame's interaction state for the
+// stylesheet cascade. UIKit tracks focus; hover and press targets are not
+// tracked, so :hover and :pressed stay unmatched here.
+fn stylesheet_uikit_env() StyleMatchEnv {
+	env := stylesheet_frame_env('', '', focused_id())
+	return StyleMatchEnv{
+		...env
+		dpi: native_device_scale()
+	}
+}
+
+// native_device_scale reports the main screen's scale.
+fn native_device_scale() f64 {
+	screen := macos.msg_id(macos.get_class('UIScreen'), 'mainScreen')
+	scale := macos.msg_f64(screen, 'scale')
+	if scale <= 0 {
+		return 1.0
+	}
+	return scale
+}
+
+// native_safe_insets reports the main screen's safe area. safeAreaInsets
+// arrives as (top, left, bottom, right), the same order safe_area_top
+// already reads its first field from.
+// native_safe_insets reads the root view's safe area, the same rectangle
+// bounds() reports (UIScreen has no safeAreaInsets). UIEdgeInsets comes
+// back in Rect's slots as top, left, bottom, right, as in safe_area_top.
+fn native_safe_insets() ?SafeInsets {
+	if g_root_view == unsafe { nil } {
+		return none
+	}
+	insets := macos.msg_rect(g_root_view, 'safeAreaInsets')
+	return SafeInsets{
+		top:    insets.x
+		right:  insets.height
+		bottom: insets.width
+		left:   insets.y
+	}
+}
+
 pub fn focused_text_area_id() string {
 	for id, native in g_views {
 		if (g_view_kinds[id] or { Kind.view }) == .text_area && macos.msg_bool(native, 'isFirstResponder') {
@@ -318,13 +372,7 @@ pub fn dismiss_keyboard() {
 	}
 }
 
-pub fn safe_area_top() f64 {
-	if g_root_view == unsafe { nil } {
-		return 0
-	}
-	insets := macos.msg_rect(g_root_view, 'safeAreaInsets')
-	return insets.x
-}
+
 
 pub fn start_barcode_scan() {
 	if g_root_vc == unsafe { nil } {
@@ -353,7 +401,7 @@ fn ios_measure_text_width(text string, style TextStyle) f64 {
 		font(style.size, style.bold), macos.nsstring('NSFont'))
 	attributed := macos.msg_id2(macos.alloc('NSAttributedString'), 'initWithString:attributes:',
 		macos.nsstring(text), attrs)
-	width := macos.msg_point(attributed, 'size').x
+	width := darwin_msg_point(attributed, 'size').x
 	macos.release(attributed)
 	return width
 }
@@ -423,8 +471,8 @@ fn set_gradient_layer(view View, layer macos.Id, box BoxStyle, opacity f64) {
 	w := if bounds.width > 0 { bounds.width } else { 1.0 }
 	h := if bounds.height > 0 { bounds.height } else { 1.0 }
 	sx, sy, ex, ey := gradient_unit_points(line, w, h)
-	macos.msg_void_point(gradient, 'setStartPoint:', macos.point(sx, sy))
-	macos.msg_void_point(gradient, 'setEndPoint:', macos.point(ex, ey))
+	darwin_msg_void_point(gradient, 'setStartPoint:', darwin_point(sx, sy))
+	darwin_msg_void_point(gradient, 'setEndPoint:', darwin_point(ex, ey))
 	macos.msg_void_bool(gradient, 'setHidden:', false)
 }
 
@@ -446,7 +494,7 @@ fn set_layer_shadow(layer macos.Id, box BoxStyle) {
 	} else {
 		0.0
 	})
-	macos.msg_void_point(layer, 'setShadowOffset:', macos.point(shadow.x, shadow.y))
+	darwin_msg_void_point(layer, 'setShadowOffset:', darwin_point(shadow.x, shadow.y))
 }
 
 // A rounded box clips its subviews to its corners, except when it casts a shadow:
@@ -897,7 +945,7 @@ fn apply_label_valign(lbl View, frame Rect, lines int, valign VAlign, boxed bool
 		macos.msg_void_f64(lbl, 'setPreferredMaxLayoutWidth:', frame.width)
 	}
 	// Point carries a Cocoa size as well as a point; y is the height.
-	content := macos.msg_point(lbl, 'intrinsicContentSize').y
+	content := darwin_msg_point(lbl, 'intrinsicContentSize').y
 	if content <= 0 || content >= frame.height {
 		return
 	}
@@ -1755,8 +1803,8 @@ fn vui_view_tap_should_receive(_self voidptr, _cmd voidptr, sender voidptr, touc
 	mut accepted := true
 	mut target := macos.msg_id(View(touch), 'view')
 	for target != unsafe { nil } && target != owner {
-		if macos.msg_bool_id(target, 'isKindOfClass:', macos.get_class('UIControl'))
-			|| macos.msg_bool_id(target, 'isKindOfClass:', macos.get_class('UIScrollView'))
+		if darwin_msg_bool_id(target, 'isKindOfClass:', macos.get_class('UIControl'))
+			|| darwin_msg_bool_id(target, 'isKindOfClass:', macos.get_class('UIScrollView'))
 			|| (g_button_behavior_views[u64(target)] or { false }) {
 			accepted = false
 			break

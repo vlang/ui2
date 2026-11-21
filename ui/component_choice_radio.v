@@ -99,12 +99,12 @@ fn radio_indicator(frame Rect, checked bool, enabled bool, theme ComponentTheme)
 	mut children := choice_ring(rect(0, 0, d, d), d / 2, ring, fill, .all, false)
 	if checked {
 		inner := math.round(d * 0.4)
-		children << view('', rect((d - inner) / 2, (d - inner) / 2, inner, inner), BoxStyle{
+		children << with_classes(view('', rect((d - inner) / 2, (d - inner) / 2, inner, inner), BoxStyle{
 			bg:     dot
 			radius: inner / 2
-		}, []Element{})
+		}, []Element{}), 'radio-dot')
 	}
-	return view('', frame, BoxStyle{ transparent: true }, children)
+	return with_classes(view('', frame, BoxStyle{ transparent: true }, children), 'radio-indicator')
 }
 
 // radio_option_children lays out one option inside a frame of the given size:
@@ -117,19 +117,19 @@ fn radio_option_children(width f64, height f64, title string, description string
 	mut children := [
 		radio_indicator(choice_fit(rect(0, top + (rm.line - rm.indicator) / 2, rm.indicator,
 			rm.indicator), width, height), checked, enabled, theme),
-		label('', title, choice_fit(rect(text_x, top, width - text_x, rm.line), width, height), TextStyle{
+		with_classes(label('', title, choice_fit(rect(text_x, top, width - text_x, rm.line), width, height), TextStyle{
 			color: if enabled { theme.foreground } else { choice_disabled_text(theme) }
 			size:  metrics.font_size
-		}),
+		}), 'radio-label'),
 	]
 	if lines > 0 {
-		children << label('', description, choice_fit(rect(text_x, top + rm.line + 2, width - text_x,
+		children << with_classes(label('', description, choice_fit(rect(text_x, top + rm.line + 2, width - text_x,
 			f64(lines) * rm.detail_line), width, height), TextStyle{
 			color:  if enabled { theme.muted_foreground } else { choice_disabled_text(theme) }
 			size:   rm.detail_size
 			valign: .top
 			lines:  lines
-		})
+		}), 'radio-description')
 	}
 	return children
 }
@@ -145,9 +145,9 @@ pub fn radio(config RadioConfig) !Element {
 	lines := radio_description_lines(config.description, config.frame.width - rm.indicator - rm.gap,
 		rm)
 	return component_finish(Element{
-		...button_view(config.id, config.frame, BoxStyle{ transparent: true }, radio_option_children(config.frame.width,
+		...with_classes(button_view(config.id, config.frame, BoxStyle{ transparent: true }, radio_option_children(config.frame.width,
 			config.frame.height, config.label, config.description, lines, config.checked,
-			config.enabled, metrics, config.theme))
+			config.enabled, metrics, config.theme)), 'radio')
 		action_id:           if config.action_id.len > 0 { config.action_id } else { config.id }
 		enabled:             config.enabled
 		accessibility_role:  'radio'
@@ -250,9 +250,9 @@ pub fn radio_group(config RadioGroupConfig) !Element {
 		enabled := config.enabled && option.enabled
 		frame := frames[index]
 		children << Element{
-			...button_view(radio_group_action_id(config.id, values[index]), frame, BoxStyle{ transparent: true }, radio_option_children(frame.width,
+			...with_classes(button_view(radio_group_action_id(config.id, values[index]), frame, BoxStyle{ transparent: true }, radio_option_children(frame.width,
 				frame.height, option.label, option.description, lines[index], checked,
-				enabled, metrics, config.theme))
+				enabled, metrics, config.theme)), 'radio-option')
 			key:                 'option:' + values[index]
 			enabled:             enabled
 			accessibility_role:  'radio'
@@ -261,7 +261,8 @@ pub fn radio_group(config RadioGroupConfig) !Element {
 		}
 	}
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{ transparent: true }, children)
+		...with_classes(view(config.id, config.frame, BoxStyle{ transparent: true }, children),
+			'radio-group')
 		accessibility_role:  'radiogroup'
 		accessibility_label: config.accessibility_label
 		accessibility_value: selected_label
