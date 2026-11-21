@@ -377,9 +377,9 @@ pub fn (c ColorHsva) same_rgb(other ColorHsva) bool {
 // the color of a check mark drawn on a swatch.
 pub fn color_contrast_foreground(rgb u32) u32 {
 	return if choice_contrast(rgb, 0x000000) >= choice_contrast(rgb, 0xffffff) {
-		0x000000
+		u32(0x000000)
 	} else {
-		0xffffff
+		u32(0xffffff)
 	}
 }
 

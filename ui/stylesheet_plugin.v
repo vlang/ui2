@@ -305,7 +305,7 @@ fn stylesheet_stamp_file(path string, mut visited []string) u64 {
 			stamp = (stamp ^ stylesheet_stamp_file(target, mut visited)) * 1099511628211
 		}
 	}
-	return if stamp == 0 { 1 } else { stamp }
+	return if stamp == 0 { u64(1) } else { stamp }
 }
 
 // stylesheet_file_changed reports whether path (or anything it imports)

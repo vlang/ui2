@@ -89,6 +89,7 @@ pub fn with_platform_design(base Stylesheet, design StylePlatformDesign) !Styles
 		light_vars: base.light_vars.clone()
 		dark_vars:  base.dark_vars.clone()
 		imports:    base.imports.clone()
+		keyframes:  merge_keyframes(base.keyframes, preset.keyframes)
 		rule_index: stylesheet_index_rules(rules)
 	}
 }

@@ -699,7 +699,7 @@ fn style_lab_axis(raw string, reference f64) !f64 {
 		}
 		return number / 100 * reference
 	}
-	return query_plain_number(trimmed) or { error('"${raw}" is not a color axis') }
+	return query_plain_number(trimmed) or { return error('"${raw}" is not a color axis') }
 }
 
 // style_lab_chroma parses a chroma channel: a bare number, or a percentage
@@ -717,7 +717,7 @@ fn style_oklab_lightness(raw string) !f64 {
 		}
 		return number / 100
 	}
-	return query_plain_number(text) or { error('"${raw}" is not a lightness') }
+	return query_plain_number(text) or { return error('"${raw}" is not a lightness') }
 }
 
 fn style_unit_fraction(raw string) !f64 {
@@ -728,7 +728,7 @@ fn style_unit_fraction(raw string) !f64 {
 		}
 		return number / 100
 	}
-	return query_plain_number(text) or { error('"${raw}" is not a fraction') }
+	return query_plain_number(text) or { return error('"${raw}" is not a fraction') }
 }
 
 // style_hundred_fraction parses a channel whose bare numbers run 0..100,
@@ -744,7 +744,7 @@ fn style_hundred_fraction(raw string) !f64 {
 fn style_gray_value(raw string) !f64 {
 	text := raw.trim_space().to_lower()
 	plain := if text.ends_with('%') { text[..text.len - 1] } else { text }
-	number := query_plain_number(plain) or { error('"${raw}" is not a gray lightness') }
+	number := query_plain_number(plain) or { return error('"${raw}" is not a gray lightness') }
 	return unit_clamp(number / 100)
 }
 
@@ -756,7 +756,7 @@ fn style_alpha_value(raw string) !f64 {
 		}
 		return unit_clamp(number / 100)
 	}
-	number := query_plain_number(text) or { error('"${raw}" is not an alpha') }
+	number := query_plain_number(text) or { return error('"${raw}" is not an alpha') }
 	return unit_clamp(number)
 }
 
@@ -785,7 +785,7 @@ fn style_channel_angle(raw string) !f64 {
 		}
 		return number * 3.6
 	}
-	number := query_plain_number(lower) or { error('"${raw}" is not an angle') }
+	number := query_plain_number(lower) or { return error('"${raw}" is not an angle') }
 	return number
 }
 

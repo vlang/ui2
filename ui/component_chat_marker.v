@@ -270,7 +270,7 @@ pub fn marker(config MarkerConfig) !Element {
 	if background := config.background {
 		children << view('', layout.surface, BoxStyle{
 			bg:     background
-			radius: math.min(8, layout.surface.height / 2)
+			radius: math.min(8.0, layout.surface.height / 2)
 		}, []Element{})
 	}
 	for line in [layout.leading, layout.trailing, layout.border] {

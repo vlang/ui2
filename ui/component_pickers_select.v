@@ -422,7 +422,7 @@ struct SelectTag {
 }
 
 fn select_tag_height(height f64) f64 {
-	return math.max(math.min(math.round(height * 0.72), height - 4), math.min(16, height))
+	return math.max(math.min(math.round(height * 0.72), height - 4), math.min(16.0, height))
 }
 
 // select_tags lays out the tags of a multiple select from x = left, as many as
