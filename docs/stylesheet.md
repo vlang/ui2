@@ -450,6 +450,13 @@ the live color mode (`light-dark()` works). Like sheet declarations,
 inline values that cannot apply (layout-owned props, typos) warn and skip
 rather than failing the document; only a syntax error fails it.
 
+UI2 Studio (`ide/`) edits the same format visually: the Style inspector
+manages document and per-component `Style` blocks, `class:`, `style:`, and
+`enabled:` (`:disabled`), with lint and Apply. Preview attaches those sheets
+to the live tree, so `:hover`/`:focused` work; container queries there see
+the scaled preview frame. Try `v run ide ide/vss_sample.vml`. `enabled:
+false` is emitted only when false, keeping files clean.
+
 ## Styling components
 
 Composite components tag their roots and styleable parts with classes, so

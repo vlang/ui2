@@ -1,0 +1,41 @@
+// VSS sample for UI2 Studio: document sheet, classes, inline style and a
+// per-component scoped sheet. Open with `v run ide ide/vss_sample.vml`.
+// The designer keeps every block; Preview applies them live (hover the
+// primary buttons to see `:hover` win).
+Screen {
+    id: VssForm
+    width: 760
+    height: 520
+    background: #F8FAFC
+    Style {
+        @accent: #2563eb;
+        @accent-hover: #1d4ed8;
+        light { @ink: #172033; }
+        dark { @ink: #f8fafc; }
+        Button.primary { background: @accent; color: white; border-radius: 6px; opacity: 0.95; }
+        Button.primary:hover { background: @accent-hover; opacity: 1; }
+        Label.title { font-size: 22px; font-weight: bold; }
+        @media (max-width: 500px) { Label.title { font-size: 16px; } }
+    }
+    Label { id: heading x: 48 y: 48 width: 420 height: 38 text: "Styled with VSS" color: #172033 font_size: 26 class: "title" }
+    Label { id: subtitle x: 48 y: 94 width: 520 height: 28 text: "Sheets own fills; inline props still win." color: #64748B font_size: 14 }
+    Button { id: continue_button x: 48 y: 150 width: 170 height: 42 text: "Continue" background: #2563EB color: #FFFFFF font_size: 14 corner_radius: 6 on_tap: continue_clicked class: "primary" style: "opacity: 0.9;" }
+    Button {
+        id: scoped_button
+        x: 48
+        y: 210
+        width: 190
+        height: 42
+        text: "Scoped"
+        background: #2563EB
+        color: #FFFFFF
+        font_size: 14
+        corner_radius: 6
+        on_tap: scoped_clicked
+        class: "primary"
+        Style {
+            Button { border-width: 2px; border-color: #0d9488; }
+        }
+    }
+    Rectangle { id: accent_panel x: 390 y: 150 width: 280 height: 210 background: #DBEAFE corner_radius: 4 }
+}
