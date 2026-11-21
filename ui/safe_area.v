@@ -2,8 +2,19 @@ module ui2
 
 import math
 
-// SafeInsets is declared in ui/stylesheet_query.v (shared with the stylesheet
-// environment); safe_area_insets() below returns it.
+// safe_area_insets reports the current window's display intrusions in logical
+// units. Backends without a cutout API and headless builds return zero insets.
+pub fn safe_area_insets() SafeInsets {
+	$if ui2_headless ? {
+		return SafeInsets{}
+	} $else {
+		return native_safe_insets() or { SafeInsets{} }
+	}
+}
+
+pub fn safe_area_top() f64 {
+	return safe_area_insets().top
+}
 
 // safe_side resolves one edge of the effective safe padding: the system inset
 // when that side is enabled, the caller-supplied minimum otherwise, whichever
@@ -135,8 +146,8 @@ pub fn safe_viewport(config SafeViewportConfig) !Element {
 	pad := safe_area_padding(config.left, config.top, config.right, config.bottom,
 		config.minimum)
 	mut content := []Element{cap: config.children.len + 1}
-	mut reach_x := 0.0
-	mut reach_y := 0.0
+	mut reach_x := pad.left
+	mut reach_y := pad.top
 	for child in config.children {
 		shifted := Element{
 			...child
@@ -151,10 +162,10 @@ pub fn safe_viewport(config SafeViewportConfig) !Element {
 	}
 	width := reach_x + pad.right
 	height := reach_y + pad.bottom
-	if pad.right > 0 || pad.bottom > 0 {
-		// A spacer at the far corner carries the trailing padding into the
-		// scroll range, which reaches only as far as the children do.
-		content << view('', rect(math.max(width - 1, 0), math.max(height - 1, 0), 1, 1),
+	if pad.left > 0 || pad.top > 0 || pad.right > 0 || pad.bottom > 0 {
+		// A spacer carries padding into the scroll range, including leading
+		// padding when no visible children reach it.
+		content << view('', rect(width, height, 0, 0),
 			BoxStyle{ transparent: true }, []Element{})
 	}
 	box := if bg := config.background {

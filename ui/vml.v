@@ -1020,26 +1020,19 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 			pad := safe_area_padding(left, top, right, bottom, minimum)
 			inner := safe_content_rect(local, pad)
 			kids := v_children(node, rect(0, 0, inner.width, inner.height))!
-			// Delegate to the constructor so frame validation, the group role
-			// and the transparent default stay in one place.
-			return safe_area(SafeAreaConfig{
-				id:         node.id
-				frame:      frame
-				left:       left
-				top:        top
-				right:      right
-				bottom:     bottom
-				minimum:    minimum
-				background: if node.prop_bool('transparent') {
-					none
-				} else if node.prop('background').len > 0 {
-					v_color(node, 'background', 0xffffff)
-				} else {
-					none
-				}
-				children:   kids
-				label:      node.prop('accessibility_label')
-			})!
+			return Element{
+				...safe_area(
+					id:       node.id
+					frame:    frame
+					left:     left
+					top:      top
+					right:    right
+					bottom:   bottom
+					minimum:  minimum
+					children: kids
+				)!
+				box: v_box(node)
+			}
 		}
 		'SafeViewport' {
 			left, top, right, bottom := v_safe_sides(node)
@@ -1048,26 +1041,21 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 			pad := safe_area_padding(left, top, right, bottom, minimum)
 			inner := safe_content_rect(local, pad)
 			kids := v_children(node, rect(0, 0, inner.width, inner.height))!
-			return safe_viewport(SafeViewportConfig{
-				id:                    node.id
-				frame:                 frame
-				left:                  left
-				top:                   top
-				right:                 right
-				bottom:                bottom
-				minimum:               minimum
-				axis:                  mode
-				background:            if node.prop_bool('transparent') {
-					none
-				} else if node.prop('background').len > 0 {
-					v_color(node, 'background', 0xffffff)
-				} else {
-					none
-				}
-				persistent_scrollbars: node.prop_bool('persistent')
-				children:              kids
-				label:                 node.prop('accessibility_label')
-			})!
+			return Element{
+				...safe_viewport(SafeViewportConfig{
+					id:                    node.id
+					frame:                 frame
+					left:                  left
+					top:                   top
+					right:                 right
+					bottom:                bottom
+					minimum:               minimum
+					axis:                  mode
+					persistent_scrollbars: node.prop_bool('persistent')
+					children:              kids
+				})!
+				box: v_box(node)
+			}
 		}
 		'View', 'Rectangle' {
 			return view(node.id, frame, v_box(node), v_children(node, local)!)
@@ -1152,48 +1140,7 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 			return view(node.id, frame, v_box(node), [label('${node.id}_title', node.prop_or('title', node.prop('text')), rect(12, 8, frame.width - 24, 20), v_text_style(node))])
 		}
 		'Scaffold' {
-			top := node.prop_or('top_bar_height', '0').f64()
-			bottom := node.prop_or('bottom_bar_height', '0').f64()
-			content_box := scaffold_content_rect(local, top, bottom)
-			// Resolve every slot against its own local origin: scaffold() wraps
-			// each strip in a view positioned at the strip's offset, so an
-			// absolute y here would be applied twice to children that omit y.
-			top_bar, content, bottom_bar, fab, snackbar := v_scaffold_slots(node, rect(0,
-				0, local.width, top), rect(0, 0, content_box.width, content_box.height),
-				rect(0, 0, local.width, bottom))!
-			built := scaffold(ScaffoldConfig{
-				id:                node.id
-				frame:             frame
-				top_bar_height:    top
-				bottom_bar_height: bottom
-				fab_margin:        node.prop_or('fab_margin', '16').f64()
-				snackbar_margin:   node.prop_or('snackbar_margin', '16').f64()
-				background:        if node.prop_bool('transparent') {
-					none
-				} else if node.prop('background').len > 0 {
-					v_color(node, 'background', 0xffffff)
-				} else {
-					none
-				}
-				top_bar:           top_bar
-				content:           content
-				bottom_bar:        bottom_bar
-				floating_action:   fab
-				snackbar:          snackbar
-				label:             node.prop('accessibility_label')
-			})!
-			// ScaffoldConfig carries only the background, so restore the rest of
-			// the ordinary VML box styling (radius and border widths/colors)
-			// that v_box would have supplied, keeping the constructor's
-			// transparent default and resolved background intact.
-			return Element{
-				...built
-				box: BoxStyle{
-					...v_box(node)
-					bg:          built.box.bg
-					transparent: built.box.transparent
-				}
-			}
+			return view(node.id, frame, v_box(node), v_children(node, local)!)
 		}
 		'ProgressBar' {
 			return progress_bar(
@@ -1474,52 +1421,6 @@ fn v_safe_minimum(node &VNode) !LayoutPadding {
 	}
 	safe_validate_minimum(minimum)!
 	return minimum
-}
-
-// v_scaffold_slots routes a Scaffold's children into their slots: `slot: top`
-// for the top bar, `slot: bottom` for the bottom bar, `slot: fab` for the
-// floating action, `slot: snackbar` for the snackbar, and anything else for
-// the content box. Frames are resolved against each slot's own box, so slot
-// coordinates start at the slot's top-left corner. At most one fab and one
-// snackbar child are allowed.
-fn v_scaffold_slots(node &VNode, top_box Rect, content_box Rect, bottom_box Rect) !([]Element, []Element, []Element, ?Element, ?Element) {
-	mut top_bar := []Element{}
-	mut content := []Element{}
-	mut bottom_bar := []Element{}
-	mut fab := ?Element(none)
-	mut snackbar := ?Element(none)
-	for child in node.children {
-		if v_is_layout_metadata(child) {
-			continue
-		}
-		match child.prop_or('slot', 'content') {
-			'top' {
-				top_bar << node_to_element(child, top_box)!
-			}
-			'bottom' {
-				bottom_bar << node_to_element(child, bottom_box)!
-			}
-			'fab' {
-				if fab != none {
-					return error('Scaffold accepts at most one fab child')
-				}
-				fab = node_to_element(child, content_box)!
-			}
-			'snackbar' {
-				if snackbar != none {
-					return error('Scaffold accepts at most one snackbar child')
-				}
-				snackbar = node_to_element(child, content_box)!
-			}
-			'content' {
-				content << node_to_element(child, content_box)!
-			}
-			else {
-				return error('unknown scaffold slot `${child.prop('slot')}`')
-			}
-		}
-	}
-	return top_bar, content, bottom_bar, fab, snackbar
 }
 
 fn v_column(node &VNode, frame Rect) !Element {

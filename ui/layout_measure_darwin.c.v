@@ -15,7 +15,7 @@ $if macos && !ui2_custom_rendering ?&& !ui2_headless ? {
 			style.bold, style.italic, style.underline, style.strikethrough, style.vertical_align)
 		return layout_measure_text_lines(text, style, max_width, line_height, fn [attrs] (line string) f64 {
 			attributed := macos.msg_id2(macos.alloc('NSAttributedString'), 'initWithString:attributes:', macos.nsstring(line), attrs)
-			size := macos.msg_point(attributed, 'size')
+			size := darwin_msg_point(attributed, 'size')
 			macos.release(attributed)
 			return size.x
 		})

@@ -1113,13 +1113,7 @@ pub fn dismiss_keyboard() {
 	C.ui2_win_clear_focus(st.root)
 }
 
-pub fn safe_area_insets() SafeInsets {
-	return SafeInsets{}
-}
 
-pub fn safe_area_top() f64 {
-	return safe_area_insets().top
-}
 
 pub fn start_barcode_scan() {
 	st := windows_state()

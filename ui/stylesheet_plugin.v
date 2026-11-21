@@ -305,13 +305,7 @@ fn stylesheet_stamp_file(path string, mut visited []string) u64 {
 			stamp = (stamp ^ stylesheet_stamp_file(target, mut visited)) * 1099511628211
 		}
 	}
-	// NOTE(V 0.5.2 CI): `return if ..` as a value and int->u64 coercion both
-	// fail on 0.5.2; use explicit branches with `u64(1)` (same on newer).
-	if stamp == 0 {
-		return u64(1)
-	} else {
-		return stamp
-	}
+	return if stamp == 0 { u64(1) } else { stamp }
 }
 
 // stylesheet_file_changed reports whether path (or anything it imports)
