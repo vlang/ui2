@@ -89,6 +89,14 @@ fn test_special_chart_colors_follow_the_theme() {
 	assert special_chart_ink_on(0xfde68a) == 0x111827
 }
 
+fn test_special_chart_mix_preserves_channel_rounding() {
+	// Keep the weighted-sum rounding of the public helper. Rewriting it as
+	// a + (b - a) * t can round half-way channels to a different byte.
+	assert special_chart_mix(0x010101, 0x242424, 0.3) == 0x0b0b0b
+	assert special_chart_mix(0x010101, 0x060606, 0.7) == 0x040404
+	assert special_chart_mix(0x050505, 0x000000, 0.9) == 0x000000
+}
+
 fn test_special_chart_number_formats() {
 	assert special_chart_format(12345.678, 2) == '12,345.68'
 	assert special_chart_format(1234567, 0) == '1,234,567'

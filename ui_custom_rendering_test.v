@@ -15,5 +15,8 @@ fn test_custom_renderer_uses_render_pipeline() {
 		assert c.r == 0xff && c.g == 0x00 && c.b == 0x00 && c.a == 255
 		faded := shape_color(0x00ff00, 0.5)
 		assert faded.g == 0xff && faded.a == 128
+		// Packed RGB ignores the high byte; shape opacity supplies alpha.
+		packed := shape_color(0x80123456, 0.5)
+		assert packed.r == 0x12 && packed.g == 0x34 && packed.b == 0x56 && packed.a == 128
 	}
 }

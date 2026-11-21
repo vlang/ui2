@@ -16,6 +16,12 @@ fn test_color_mix_endpoints_and_midpoint() {
 fn test_color_mix_clamps_overshooting_ranges() {
 	assert color_mix(0x000000, 0xffffff, 7) == 0xffffff
 	assert color_mix(0xffffff, 0x000000, 7) == 0x000000
+	// Extrapolate each channel before saturating it. Clamping the factor
+	// instead would make elastic animation transitions stop at the target.
+	assert color_mix(0x102030, 0x203040, 2) == 0x304050
+	assert color_mix(0x102030, 0x203040, -1) == 0x001020
+	assert color_mix(0xf01080, 0x1020c0, 2) == 0x0030ff
+	assert color_mix(0xf01080, 0x1020c0, -1) == 0xff0040
 }
 
 fn test_color_tint_moves_toward_white() {
