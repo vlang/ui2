@@ -762,6 +762,7 @@ fn run_window_with_min_size(title string, width int, height int, min_width int, 
 	C.ui2_win_shutdown_accessibility()
 }
 
+	$if !ui2_headless ? {
 pub fn refresh() {
 	mut st := windows_state()
 	if st.root == unsafe { nil } || st.rendering || voidptr(st.build_screen) == unsafe { nil } {
@@ -806,6 +807,7 @@ pub fn refresh() {
 	// Content can move under a cursor that stays put.
 	windows_update_hover()
 }
+	}
 
 pub fn request_refresh() {
 	st := windows_state()
@@ -888,6 +890,7 @@ pub fn set_window_title(title string) {
 	}
 }
 
+	$if !ui2_headless ? {
 pub fn text(id string) string {
 	st := windows_state()
 	hwnd := st.views[id] or { return '' }
@@ -897,7 +900,9 @@ pub fn text(id string) string {
 	}
 	return windows_native_text(hwnd)
 }
+	}
 
+	$if !ui2_headless ? {
 pub fn set_text(id string, value string) {
 	mut st := windows_state()
 	outer := st.views[id] or { return }
@@ -920,7 +925,9 @@ pub fn set_text(id string, value string) {
 	}
 	st.rendering = was_rendering
 }
+	}
 
+	$if !ui2_headless ? {
 pub fn slider_value(id string) f64 {
 	st := windows_state()
 	hwnd := st.views[id] or { return 0 }
@@ -930,6 +937,7 @@ pub fn slider_value(id string) f64 {
 	spec := st.slider_specs[windows_handle_id(hwnd)] or { return 0 }
 	return windows_snap_slider_value(hwnd, spec)
 }
+	}
 
 pub fn set_slider_value(id string, value f64) {
 	st := windows_state()
@@ -1143,11 +1151,13 @@ pub fn insert_text_area_text(id string, value string) {
 	unsafe { free(wide_value) }
 }
 
+	$if !ui2_headless ? {
 pub fn scroll_offset(id string) f64 {
 	st := windows_state()
 	key := st.view_keys[id] or { return 0 }
 	return f64(st.scroll_positions[key] or { 0 })
 }
+	}
 
 // scroll_horizontal_offset returns how far a Scroll element is scrolled sideways. It
 // stays zero for one whose scroll_mode leaves the horizontal axis out.
