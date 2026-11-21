@@ -62,6 +62,9 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
 	// immediate child is waited for and its status reported, while wl-copy is
 	// fire-and-forget and never waited.
 	fn native_clipboard_write(copy_args []string, text string) bool {
+		if copy_args.len == 0 {
+			return false
+		}
 		path := os.join_path(os.temp_dir(), 'ui2-clipboard-${os.getpid()}-${time.sys_mono_now()}.txt')
 		os.write_file(path, text) or { return false }
 		defer {
