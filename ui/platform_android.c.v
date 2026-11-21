@@ -7,13 +7,13 @@
 // on Android.
 module ui2
 
-import os
 import sokol.sapp
 
 #flag -I @VMODROOT/ui
 #include "platform_android.h"
 
 fn C.ui2_android_haptic(activity voidptr, duration_ms int, amplitude int) int
+fn C.ui2_android_haptic_supported(activity voidptr) int
 fn C.ui2_android_open_url(activity voidptr, url &char, url_len int) int
 fn C.ui2_android_share_text(activity voidptr, text &char, text_len int) int
 
@@ -24,7 +24,7 @@ fn android_platform_activity() voidptr {
 }
 
 fn native_haptic_supported() bool {
-	return android_platform_activity() != unsafe { nil }
+	return C.ui2_android_haptic_supported(android_platform_activity()) != 0
 }
 
 fn native_haptic(style HapticStyle) bool {

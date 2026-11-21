@@ -2,6 +2,14 @@ module ui2
 
 import macos
 
+#insert "@VMODROOT/ui/platform_ios.h"
+
+fn C.ui2_platform_ios_string(bytes voidptr, length usize) voidptr
+
+fn ios_platform_main_thread() bool {
+	return macos.msg_bool(macos.get_class('NSThread'), 'isMainThread')
+}
+
 fn native_haptic_supported() bool {
 	return true
 }
@@ -20,6 +28,9 @@ fn ios_impact_generator(style u64) macos.Id {
 }
 
 fn native_haptic(style HapticStyle) bool {
+	if !ios_platform_main_thread() {
+		return false
+	}
 	pool := macos.autorelease_pool_new()
 	defer {
 		macos.release(pool)
@@ -79,6 +90,9 @@ fn native_app_badge_supported() bool {
 }
 
 fn native_set_app_badge(count int) bool {
+	if !ios_platform_main_thread() {
+		return false
+	}
 	app := macos.msg_id(macos.get_class('UIApplication'), 'sharedApplication')
 	if objc_is_nil(app) {
 		return false
@@ -92,6 +106,9 @@ fn native_open_url_supported() bool {
 }
 
 fn native_open_url(url string) bool {
+	if !ios_platform_main_thread() {
+		return false
+	}
 	pool := macos.autorelease_pool_new()
 	defer {
 		macos.release(pool)
@@ -107,11 +124,12 @@ fn native_open_url(url string) bool {
 	// UIApplication.openURL: is deprecated and returns false on iOS 18+ SDKs.
 	// openURL:options:completionHandler: (iOS 10+) is asynchronous and returns
 	// void, so the OS result is delivered only to the completion handler. With
-	// nil options and a nil handler the request is queued on the main thread and
+	// empty options and a nil handler the request is made on the main thread and
 	// its outcome is not observed. This function therefore reports true when the
-	// request was queued against a valid app and URL, and false only when those
-	// objects could not be obtained.
-	macos.msg_void3(app, 'openURL:options:completionHandler:', target, objc_nil(), objc_nil())
+	// request was submitted for a valid app and URL. Avoid canOpenURL:, whose
+	// scheme allowlist can reject schemes that openURL itself can open.
+	options := macos.msg_id(macos.get_class('NSDictionary'), 'dictionary')
+	macos.msg_void3(app, 'openURL:options:completionHandler:', target, options, objc_nil())
 	return true
 }
 
@@ -120,7 +138,7 @@ fn native_share_supported() bool {
 }
 
 fn native_share_text(text string) bool {
-	if g_root_vc == unsafe { nil } || g_root_view == unsafe { nil } {
+	if !ios_platform_main_thread() || g_root_vc == unsafe { nil } || g_root_view == unsafe { nil } {
 		return false
 	}
 	pool := macos.autorelease_pool_new()
@@ -131,7 +149,15 @@ fn native_share_text(text string) bool {
 	if objc_is_nil(items) {
 		return false
 	}
-	macos.msg_void1(items, 'addObject:', macos.nsstring(text))
+	// macos.nsstring uses a NUL-terminated UTF-8 string. Share the full V
+	// string, including embedded NULs, through a length-aware initializer.
+	body := macos.Id(C.ui2_platform_ios_string(text.str, usize(text.len)))
+	if objc_is_nil(body) {
+		macos.release(items)
+		return false
+	}
+	macos.msg_void1(items, 'addObject:', body)
+	macos.release(body)
 
 	// initWithActivityItems:applicationActivities: is an instance initializer:
 	// it must be sent to an allocated instance, not to the class object.
