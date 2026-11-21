@@ -1100,6 +1100,11 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	}
 
 	fn on_init(app &GgApp) {
+		// Set up sokol-gl once, after Sokol's own setup and before any frame can
+		// draw. The immediate backend draws through sgl on backends that opt into
+		// custom rendering; gg no longer initializes sgl itself, so an omitted
+		// setup makes the first sgl call fault against an uninitialized context.
+		im_draw_setup()
 		// Sokol's loops swap even when frame_fn returns early, so an undrawn backbuffer
 		// can be presented on drivers that discard it. Metal skips idle callbacks. X11
 		// skips them too when sokol honors sapp_set_present_on_demand: frames UI2 did
