@@ -1,135 +1,204 @@
 module ui2
 
+// ComponentBoxField and ComponentTextField mark explicit overrides, including
+// zero, false and values equal to the style defaults.
+pub enum ComponentBoxField {
+	bg
+	radius
+	transparent
+	border_color
+	border_left
+	border_top
+	border_right
+	border_bottom
+	opacity
+	gradient
+	shadow
+}
+
+pub enum ComponentTextField {
+	color
+	background_color
+	size
+	font_family
+	bold
+	italic
+	underline
+	strikethrough
+	shadow
+	outline
+	vertical_align
+	link
+	align
+	valign
+	head_indent
+	first_line_indent
+	hyphenation_factor
+	lines
+}
+
 // ComponentVariant is a reusable style bundle applied to a component's
 // BoxStyle and TextStyle. shadcn-style components are built from these
 // variants plus small named parts, so an application can change a button's
 // appearance without rewriting its layout.
 pub struct ComponentVariant {
 pub:
-	name string
-	box  BoxStyle
-	text TextStyle
+	name        string
+	box         BoxStyle
+	text        TextStyle
+	box_fields  []ComponentBoxField
+	text_fields []ComponentTextField
 }
 
-// component_variant merges a base style with a variant's overrides. A field
-// left at its style default keeps the base, so a variant only has to spell
-// out what it changes. Explicitly setting a field to its style default
-// (BoxStyle{}.bg, TextStyle{}.color, TextStyle{}.size, TextStyle{}.lines) is
-// indistinguishable from leaving it unset, and zero-valued fields keep the
-// base the same way, so a variant cannot force black/zero through the merge.
+// component_variant merges a base style with a variant's overrides. For
+// convenience, nonzero/nondefault values override the base automatically.
+// List a field in box_fields or text_fields to apply its value explicitly,
+// including black, zero, false, empty values and style defaults.
 pub fn component_variant(base_box BoxStyle, base_text TextStyle, variant ComponentVariant) (BoxStyle, TextStyle) {
 	box := BoxStyle{
-		bg:            if variant.box.bg != 0 && variant.box.bg != BoxStyle{}.bg {
+		bg:            if ComponentBoxField.bg in variant.box_fields || (variant.box.bg != 0 && variant.box.bg != BoxStyle{}.bg) {
 			variant.box.bg
 		} else {
 			base_box.bg
 		}
-		radius:        if variant.box.radius > 0 { variant.box.radius } else { base_box.radius }
-		transparent:   variant.box.transparent || base_box.transparent
-		border_color:  if variant.box.border_color != 0 {
+		radius:        if ComponentBoxField.radius in variant.box_fields || (variant.box.radius > 0) {
+			variant.box.radius
+		} else {
+			base_box.radius
+		}
+		transparent:   if ComponentBoxField.transparent in variant.box_fields {
+			variant.box.transparent
+		} else {
+			variant.box.transparent || base_box.transparent
+		}
+		border_color:  if ComponentBoxField.border_color in variant.box_fields || (variant.box.border_color != 0) {
 			variant.box.border_color
 		} else {
 			base_box.border_color
 		}
-		border_left:   if variant.box.border_left > 0 {
+		border_left:   if ComponentBoxField.border_left in variant.box_fields || (variant.box.border_left > 0) {
 			variant.box.border_left
 		} else {
 			base_box.border_left
 		}
-		border_top:    if variant.box.border_top > 0 {
+		border_top:    if ComponentBoxField.border_top in variant.box_fields || (variant.box.border_top > 0) {
 			variant.box.border_top
 		} else {
 			base_box.border_top
 		}
-		border_right:  if variant.box.border_right > 0 {
+		border_right:  if ComponentBoxField.border_right in variant.box_fields || (variant.box.border_right > 0) {
 			variant.box.border_right
 		} else {
 			base_box.border_right
 		}
-		border_bottom: if variant.box.border_bottom > 0 {
+		border_bottom: if ComponentBoxField.border_bottom in variant.box_fields || (variant.box.border_bottom > 0) {
 			variant.box.border_bottom
 		} else {
 			base_box.border_bottom
 		}
-		opacity:       if variant.box.opacity > 0 && variant.box.opacity != 1 {
+		opacity:       if ComponentBoxField.opacity in variant.box_fields || (variant.box.opacity > 0 && variant.box.opacity != 1) {
 			variant.box.opacity
 		} else {
 			base_box.opacity
 		}
-		gradient:      if variant.box.gradient.stops.len > 0 {
+		gradient:      if ComponentBoxField.gradient in variant.box_fields || (variant.box.gradient.stops.len > 0) {
 			variant.box.gradient
 		} else {
 			base_box.gradient
 		}
-		shadow:        if component_box_shadow_is_set(variant.box.shadow) {
+		shadow:        if ComponentBoxField.shadow in variant.box_fields || (component_box_shadow_is_set(variant.box.shadow)) {
 			variant.box.shadow
 		} else {
 			base_box.shadow
 		}
 	}
 	text := TextStyle{
-		color:              if variant.text.color != 0 && variant.text.color != TextStyle{}.color {
+		color:              if ComponentTextField.color in variant.text_fields || (variant.text.color != 0 && variant.text.color != TextStyle{}.color) {
 			variant.text.color
 		} else {
 			base_text.color
 		}
-		background_color:   if variant.text.background_color != 0 {
+		background_color:   if ComponentTextField.background_color in variant.text_fields || (variant.text.background_color != 0) {
 			variant.text.background_color
 		} else {
 			base_text.background_color
 		}
-		size:               if variant.text.size > 0 && variant.text.size != TextStyle{}.size {
+		size:               if ComponentTextField.size in variant.text_fields || (variant.text.size > 0 && variant.text.size != TextStyle{}.size) {
 			variant.text.size
 		} else {
 			base_text.size
 		}
-		font_family:        if variant.text.font_family.len > 0 {
+		font_family:        if ComponentTextField.font_family in variant.text_fields || (variant.text.font_family.len > 0) {
 			variant.text.font_family
 		} else {
 			base_text.font_family
 		}
-		bold:               variant.text.bold || base_text.bold
-		italic:             variant.text.italic || base_text.italic
-		underline:          variant.text.underline || base_text.underline
-		strikethrough:      variant.text.strikethrough || base_text.strikethrough
-		shadow:             variant.text.shadow || base_text.shadow
-		outline:            variant.text.outline || base_text.outline
-		vertical_align:     if variant.text.vertical_align.len > 0 {
+		bold:               if ComponentTextField.bold in variant.text_fields {
+			variant.text.bold
+		} else {
+			variant.text.bold || base_text.bold
+		}
+		italic:             if ComponentTextField.italic in variant.text_fields {
+			variant.text.italic
+		} else {
+			variant.text.italic || base_text.italic
+		}
+		underline:          if ComponentTextField.underline in variant.text_fields {
+			variant.text.underline
+		} else {
+			variant.text.underline || base_text.underline
+		}
+		strikethrough:      if ComponentTextField.strikethrough in variant.text_fields {
+			variant.text.strikethrough
+		} else {
+			variant.text.strikethrough || base_text.strikethrough
+		}
+		shadow:             if ComponentTextField.shadow in variant.text_fields {
+			variant.text.shadow
+		} else {
+			variant.text.shadow || base_text.shadow
+		}
+		outline:            if ComponentTextField.outline in variant.text_fields {
+			variant.text.outline
+		} else {
+			variant.text.outline || base_text.outline
+		}
+		vertical_align:     if ComponentTextField.vertical_align in variant.text_fields || (variant.text.vertical_align.len > 0) {
 			variant.text.vertical_align
 		} else {
 			base_text.vertical_align
 		}
-		link:               if variant.text.link.len > 0 {
+		link:               if ComponentTextField.link in variant.text_fields || (variant.text.link.len > 0) {
 			variant.text.link
 		} else {
 			base_text.link
 		}
-		align:              if variant.text.align != .left {
+		align:              if ComponentTextField.align in variant.text_fields || (variant.text.align != .left) {
 			variant.text.align
 		} else {
 			base_text.align
 		}
-		valign:             if variant.text.valign != .middle {
+		valign:             if ComponentTextField.valign in variant.text_fields || (variant.text.valign != .middle) {
 			variant.text.valign
 		} else {
 			base_text.valign
 		}
-		head_indent:        if variant.text.head_indent > 0 {
+		head_indent:        if ComponentTextField.head_indent in variant.text_fields || (variant.text.head_indent > 0) {
 			variant.text.head_indent
 		} else {
 			base_text.head_indent
 		}
-		first_line_indent:  if variant.text.first_line_indent > 0 {
+		first_line_indent:  if ComponentTextField.first_line_indent in variant.text_fields || (variant.text.first_line_indent > 0) {
 			variant.text.first_line_indent
 		} else {
 			base_text.first_line_indent
 		}
-		hyphenation_factor: if variant.text.hyphenation_factor > 0 {
+		hyphenation_factor: if ComponentTextField.hyphenation_factor in variant.text_fields || (variant.text.hyphenation_factor > 0) {
 			variant.text.hyphenation_factor
 		} else {
 			base_text.hyphenation_factor
 		}
-		lines:              if variant.text.lines != 0 && variant.text.lines != TextStyle{}.lines {
+		lines:              if ComponentTextField.lines in variant.text_fields || (variant.text.lines != 0 && variant.text.lines != TextStyle{}.lines) {
 			variant.text.lines
 		} else {
 			base_text.lines
@@ -193,9 +262,8 @@ pub fn component_assemble(id string, frame Rect, box BoxStyle, parts ComponentPa
 	return component_finish(view(id, frame, box, children))
 }
 
-// component_slot reports whether a component exposes a named slot. This is
-// the capability check applications use to decide whether to compose children
-// into a part or fall back to the default rendering.
+// component_slot reports whether a named slot is populated. Empty and unknown
+// slots return false, allowing a caller to supply fallback content.
 pub fn component_slot(parts ComponentParts, name string) bool {
 	match name {
 		'leading' { return parts.leading.len > 0 }

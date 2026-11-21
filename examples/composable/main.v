@@ -17,12 +17,26 @@ fn build_composable_screen() ui2.Element {
 			body:   [ui2.label('body', 'Card body', ui2.rect(0, 0, width - 32, 24), ui2.TextStyle{})]
 			footer: [ui2.label('foot', 'Footer', ui2.rect(0, 28, width - 32, 20), ui2.TextStyle{ color: 0x64748b })]
 		}) or { return ui2.screen(0xf1f5f9, []) },
+		ui2.composable_input('search', ui2.rect(16, 304, width, 40), presets['outline'],
+			ui2.image('search_icon', 'symbol:magnifyingglass', ui2.rect(8, 12, 16, 16)),
+			ui2.button('clear_search', '×', ui2.rect(width - 32, 4, 28, 32),
+				ui2.BoxStyle{ transparent: true }, ui2.TextStyle{}),
+			'Search', '', ui2.TextStyle{}) or { return ui2.screen(0xf1f5f9, []) },
 	])
 }
 
-fn handle_composable_event(_ string) {}
+fn handle_composable_event(event string) {
+	if event == 'clear_search' {
+		ui2.set_text(ui2.composable_input_field_id('search'), '')
+		ui2.refresh()
+	}
+}
 
 fn main() {
-	ui2.run_window('Composable', composable_width, composable_height, build_composable_screen,
-		handle_composable_event)
+	$if ios {
+		ui2.run(build_composable_screen, handle_composable_event)
+	} $else {
+		ui2.run_window('Composable', composable_width, composable_height, build_composable_screen,
+			handle_composable_event)
+	}
 }

@@ -787,6 +787,40 @@ for native and custom-rendered windows alike. Linux and the BSDs drive
 them has to be installed; Android has no clipboard this layer can reach. Check
 `clipboard_supported()` before offering a copy action.
 
+## Composable components
+
+`ComponentVariant` merges reusable box and text styles with a caller's base
+styles. `composable_button`, `composable_card`, and `composable_input` build
+controls from variants and caller-supplied children. `component_variant_presets()`
+provides default, secondary, destructive, outline, ghost, and link variants.
+
+Nonzero, nondefault variant values override the base automatically. Use the
+typed `box_fields` and `text_fields` lists to explicitly apply zero, false,
+empty, or default values:
+
+```v
+variant := ui2.ComponentVariant{
+    box: ui2.BoxStyle{ bg: 0x000000, radius: 0 }
+    text: ui2.TextStyle{ color: 0xffffff, bold: false }
+    box_fields: [.bg, .radius]
+    text_fields: [.color, .bold]
+}
+box, text := ui2.component_variant(base_box, base_text, variant)
+```
+
+Unspecified fields keep their base values. Button sizes select the default
+caption font metrics; a custom font size overrides those defaults.
+`ComponentParts` groups leading, body, trailing, and footer children for
+`component_assemble`; children retain their own local frames.
+`component_slot(parts, name)` reports whether a named slot is populated.
+
+Interactive recipes require a nonempty ID. An input reserves space around
+visible leading and trailing slots and keeps its editable field inside the
+outer frame. Use `composable_input_field_id(id)` with `set_text`, `text`,
+focus, and selection APIs to address that field. Run
+`v run examples/composable/main.v` for a demo, including a slotted input with a
+working clear button.
+
 ## Platform integration
 
 `haptic` plays a haptic on phones and Force Touch trackpads, `set_app_badge`
