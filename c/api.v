@@ -6,8 +6,8 @@ $if !macos && !windows && !linux {
 	$compile_error('the C shared library currently supports macOS, Windows and Linux')
 }
 
-// ui2.h is not included here: its declarations clash with the C structs and
-// exports below, and UI2_IMPLEMENTATION can no longer suppress them from a .v file.
+#flag -DUI2_IMPLEMENTATION
+#include "@VMODROOT/c/ui2.h"
 #include <string.h>
 
 struct C.ui2_node {}
@@ -297,9 +297,9 @@ pub fn create(kind int, id &char, x f64, y f64, width f64, height f64) &C.ui2_no
 }
 
 @[export: 'ui2_add']
-pub fn add(mut parent &C.ui2_node, mut child &C.ui2_node) {
-	mut p := node(parent) or { return }
-	mut c := node(child) or { return }
+pub fn add(parent &C.ui2_node, child &C.ui2_node) {
+	mut p := unsafe { node(parent) or { return } }
+	mut c := unsafe { node(child) or { return } }
 	if p.element.kind !in [.screen, .view, .scroll] {
 		fail('only screens, views and scrolls can have children')
 		return
@@ -322,44 +322,44 @@ pub fn add(mut parent &C.ui2_node, mut child &C.ui2_node) {
 }
 
 @[export: 'ui2_set_text']
-pub fn set_text(mut handle &C.ui2_node, text &char) {
-	mut n := node(handle) or { return }
+pub fn set_text(handle &C.ui2_node, text &char) {
+	mut n := unsafe { node(handle) or { return } }
 	n.element = ui2.Element{ ...n.element, text: input(text) }
 }
 
 @[export: 'ui2_set_key']
-pub fn set_key(mut handle &C.ui2_node, key &char) {
-	mut n := node(handle) or { return }
+pub fn set_key(handle &C.ui2_node, key &char) {
+	mut n := unsafe { node(handle) or { return } }
 	n.element = ui2.Element{ ...n.element, key: input(key) }
 }
 
 @[export: 'ui2_set_action']
-pub fn set_action(mut handle &C.ui2_node, action &char) {
-	mut n := node(handle) or { return }
+pub fn set_action(handle &C.ui2_node, action &char) {
+	mut n := unsafe { node(handle) or { return } }
 	n.element = ui2.Element{ ...n.element, action_id: input(action) }
 }
 
 @[export: 'ui2_set_tooltip']
-pub fn set_tooltip(mut handle &C.ui2_node, tooltip &char) {
-	mut n := node(handle) or { return }
+pub fn set_tooltip(handle &C.ui2_node, tooltip &char) {
+	mut n := unsafe { node(handle) or { return } }
 	n.element = ui2.Element{ ...n.element, tooltip: input(tooltip) }
 }
 
 @[export: 'ui2_set_placeholder']
-pub fn set_placeholder(mut handle &C.ui2_node, placeholder &char) {
-	mut n := node(handle) or { return }
+pub fn set_placeholder(handle &C.ui2_node, placeholder &char) {
+	mut n := unsafe { node(handle) or { return } }
 	n.element = ui2.Element{ ...n.element, placeholder: input(placeholder) }
 }
 
 @[export: 'ui2_set_image']
-pub fn set_image(mut handle &C.ui2_node, path &char) {
-	mut n := node(handle) or { return }
+pub fn set_image(handle &C.ui2_node, path &char) {
+	mut n := unsafe { node(handle) or { return } }
 	n.element = ui2.Element{ ...n.element, image_path: input(path) }
 }
 
 @[export: 'ui2_set_media']
-pub fn set_media(mut handle &C.ui2_node, kind int, src &char, autoplay int) {
-	mut n := node(handle) or { return }
+pub fn set_media(handle &C.ui2_node, kind int, src &char, autoplay int) {
+	mut n := unsafe { node(handle) or { return } }
 	if n.element.kind != .media {
 		fail('ui2_set_media requires a media node')
 		return
@@ -461,8 +461,8 @@ pub fn media_close(id &char) {
 }
 
 @[export: 'ui2_set_box_style']
-pub fn set_box_style(mut handle &C.ui2_node, style &C.ui2_box_style) {
-	mut n := node(handle) or { return }
+pub fn set_box_style(handle &C.ui2_node, style &C.ui2_box_style) {
+	mut n := unsafe { node(handle) or { return } }
 	if style == unsafe { nil } {
 		fail('box style is required')
 		return
@@ -483,8 +483,8 @@ pub fn set_box_style(mut handle &C.ui2_node, style &C.ui2_box_style) {
 }
 
 @[export: 'ui2_set_text_style']
-pub fn set_text_style(mut handle &C.ui2_node, style &C.ui2_text_style) {
-	mut n := node(handle) or { return }
+pub fn set_text_style(handle &C.ui2_node, style &C.ui2_text_style) {
+	mut n := unsafe { node(handle) or { return } }
 	if style == unsafe { nil } {
 		fail('text style is required')
 		return
@@ -512,8 +512,8 @@ pub fn set_text_style(mut handle &C.ui2_node, style &C.ui2_text_style) {
 }
 
 @[export: 'ui2_set_flags']
-pub fn set_flags(mut handle &C.ui2_node, flags u32) {
-	mut n := node(handle) or { return }
+pub fn set_flags(handle &C.ui2_node, flags u32) {
+	mut n := unsafe { node(handle) or { return } }
 	n.element = ui2.Element{
 		...n.element
 		native_style:          flags & 1 != 0
@@ -530,14 +530,14 @@ pub fn set_flags(mut handle &C.ui2_node, flags u32) {
 }
 
 @[export: 'ui2_set_checked']
-pub fn set_checked(mut handle &C.ui2_node, checked int) {
-	mut n := node(handle) or { return }
+pub fn set_checked(handle &C.ui2_node, checked int) {
+	mut n := unsafe { node(handle) or { return } }
 	n.element = ui2.Element{ ...n.element, checked: checked != 0 }
 }
 
 @[export: 'ui2_set_scroll_mode']
-pub fn set_scroll_mode(mut handle &C.ui2_node, mode int) {
-	mut n := node(handle) or { return }
+pub fn set_scroll_mode(handle &C.ui2_node, mode int) {
+	mut n := unsafe { node(handle) or { return } }
 	if mode < 0 || mode > 2 {
 		fail('unknown scroll mode')
 		return
@@ -546,8 +546,8 @@ pub fn set_scroll_mode(mut handle &C.ui2_node, mode int) {
 }
 
 @[export: 'ui2_set_slider']
-pub fn set_slider(mut handle &C.ui2_node, value f64, min f64, max f64, step f64, vertical int) {
-	mut n := node(handle) or { return }
+pub fn set_slider(handle &C.ui2_node, value f64, min f64, max f64, step f64, vertical int) {
+	mut n := unsafe { node(handle) or { return } }
 	if max < min || step < 0 {
 		fail('invalid slider range or step')
 		return
@@ -563,8 +563,8 @@ pub fn set_slider(mut handle &C.ui2_node, value f64, min f64, max f64, step f64,
 }
 
 @[export: 'ui2_add_option']
-pub fn add_option(mut handle &C.ui2_node, text &char) {
-	mut n := node(handle) or { return }
+pub fn add_option(handle &C.ui2_node, text &char) {
+	mut n := unsafe { node(handle) or { return } }
 	if n.element.kind != .dropdown {
 		fail('options require a dropdown')
 		return
