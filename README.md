@@ -245,6 +245,26 @@ event assignments; use a public model method for those transitions.
 Validation traverses every expression branch and repeater item schema without
 executing expressions against the model's initial values.
 
+### Pointer and touch events
+
+Raw pointer events from clickable and draggable elements — including touch input
+on backends that report touches as pointer phases — are delivered to the model's
+optional `on_pointer_event` hook:
+
+```v
+pub fn (mut app MyApp) on_pointer_event(event ui2.PointerEvent) {
+    // event.phase is down, drag, up, enter or leave
+    // event.action names the element; event.x and event.y are window points
+}
+```
+
+The method must be public and take exactly one `ui2.PointerEvent` (decoded) or
+one `string` (the raw `pointer:phase:action:x:y` id). An incompatible method is
+rejected when the document is loaded; a model with no such method keeps ignoring
+raw pointer events. A pointer event is routed to the hook instead of the VML
+event-id map, so a `pointer:down` on a control with `on_tap` does not fire that
+action a second time.
+
 Use a keyed `Repeater` for model collections. `item` and `index` are scoped to
 each instance, and the evaluated key becomes `Element.key` for reconciliation:
 

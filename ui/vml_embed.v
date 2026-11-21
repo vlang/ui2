@@ -71,6 +71,13 @@ pub fn (mut app VmlApp[T]) build(size Rect) !Element {
 // that names nothing is ignored, which is what lets an embedder route every
 // click it did not recognise here.
 pub fn (mut app VmlApp[T]) handle(event_id string) ! {
+	// Raw pointer phases (mouse or touch) are not VML event ids. Deliver them to
+	// the model's optional hook before any action lookup, so a pointer:down on a
+	// control with on_tap cannot fire that action a second time.
+	if pointer := parse_pointer_event(event_id) {
+		vml_call_pointer_hook[T](mut app.model, event_id, pointer)
+		return
+	}
 	event := app.events[event_id] or { return }
 	if binding := event.binding {
 		field_name := binding.target.all_after('app.')
