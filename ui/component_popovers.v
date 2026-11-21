@@ -279,8 +279,10 @@ pub fn popover(config PopoverConfig) !Element {
 	} else {
 		popover_dismiss_action(config.id)
 	}
-	return component_finish(popover_layer(config.id, config.window, component_part_id(config.id,
-		'backdrop'), dismiss, [chrome]))
+	return component_finish(Element{
+		...with_classes(popover_layer(config.id, config.window, component_part_id(config.id,
+			'backdrop'), dismiss, [chrome]), 'popover')
+	})
 }
 
 // HoverCardTimer names the delay a hover card is waiting out.

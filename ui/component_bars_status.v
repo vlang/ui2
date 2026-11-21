@@ -111,6 +111,7 @@ pub fn status_bar(config StatusBarConfig) !Element {
 		surface:    bars_surface_color(fill, config.style.gradient, fill)
 		enabled:    config.enabled
 		hovered:    config.hovered
+		item_class: 'statusbar-item'
 	}
 	breadth := config.frame.height
 	children << bars_items(config.leading, layout.leading, breadth, BarLook{
@@ -126,7 +127,8 @@ pub fn status_bar(config StatusBarConfig) !Element {
 		region: 'trailing:'
 	})
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{ transparent: true }, children)
+		...with_classes(view(config.id, config.frame, BoxStyle{ transparent: true }, children),
+			'statusbar')
 		accessibility_role:  'status'
 		accessibility_label: config.label
 	})

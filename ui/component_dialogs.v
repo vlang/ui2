@@ -519,12 +519,12 @@ fn dialog_button_element(id string, item DialogButton, frame Rect, enabled bool,
 	}
 	part := dialog_button_part(item.id)
 	return Element{
-		...button(component_part_id(id, part), item.text, frame, box, TextStyle{
+		...with_classes(button(component_part_id(id, part), item.text, frame, box, TextStyle{
 			color: foreground
 			size:  spacing.text_font
 			bold:  variant in [.primary, .danger]
 			align: .center
-		})
+		}), 'dialog-button', 'dialog-button-${variant}')
 		key:                 part
 		enabled:             enabled && item.enabled
 		accessibility_label: item.text
@@ -544,9 +544,9 @@ fn dialog_close_element(id string, frame Rect, enabled bool, theme ComponentThem
 		}
 	}
 	return Element{
-		...with_button_behavior(view(component_part_id(id, 'close'), frame, BoxStyle{
+		...with_classes(with_button_behavior(view(component_part_id(id, 'close'), frame, BoxStyle{
 			transparent: true
-		}, [mark]))
+		}, [mark])), 'dialog-close')
 		key:                 'close'
 		enabled:             enabled
 		cursor:              cursor_pointing_hand
@@ -562,7 +562,7 @@ fn dialog_panel_children(id string, spec DialogPanelSpec, geom DialogLayout, chi
 	mut parts := []Element{}
 	if spec.icon.len > 0 {
 		parts << Element{
-			...image('', 'symbol:' + spec.icon, geom.icon)
+			...with_classes(image('', 'symbol:' + spec.icon, geom.icon), 'dialog-icon')
 			key:        'icon'
 			text_style: TextStyle{
 				color: icon_color
@@ -571,25 +571,25 @@ fn dialog_panel_children(id string, spec DialogPanelSpec, geom DialogLayout, chi
 	}
 	if spec.title.len > 0 {
 		parts << Element{
-			...label(component_part_id(id, 'title'), spec.title, geom.title, TextStyle{
+			...with_classes(label(component_part_id(id, 'title'), spec.title, geom.title, TextStyle{
 				color:  theme.foreground
 				size:   spacing.title_font
 				bold:   true
 				valign: .top
 				lines:  geom.title_lines
-			})
+			}), 'dialog-title')
 			key: 'title'
 		}
 	}
 	if spec.description.len > 0 {
 		parts << Element{
-			...label(component_part_id(id, 'description'), spec.description, geom.description,
+			...with_classes(label(component_part_id(id, 'description'), spec.description, geom.description,
 				TextStyle{
 					color:  theme.muted_foreground
 					size:   spacing.text_font
 					valign: .top
 					lines:  geom.description_lines
-				})
+				}), 'dialog-description')
 			key: 'description'
 		}
 	}
@@ -597,9 +597,9 @@ fn dialog_panel_children(id string, spec DialogPanelSpec, geom DialogLayout, chi
 		content := view('', rect(spacing.pad - geom.body.x, 0, geom.content_width, geom.content_height),
 			BoxStyle{ transparent: true }, children)
 		parts << Element{
-			...scroll(component_part_id(id, 'body'), geom.body, theme.background, [
+			...with_classes(scroll(component_part_id(id, 'body'), geom.body, theme.background, [
 				content,
-			])
+			]), 'dialog-body')
 			key: 'body'
 		}
 	}
@@ -839,10 +839,10 @@ pub fn modal_dialog(config DialogConfig) !Element {
 		if config.icon_tone == .neutral { config.theme.foreground } else { icon_color },
 		config.theme)
 	surface_el := Element{
-		...view(dialog_surface_id(config.id), geom.surface, BoxStyle{
+		...with_classes(view(dialog_surface_id(config.id), geom.surface, BoxStyle{
 			...component_box(config.theme.background, config.theme.border, spacing.radius)
 			shadow: component_popup_shadow()
-		}, parts)
+		}, parts), 'dialog-surface')
 		accessibility_role:  'group'
 		accessibility_label: config.title
 	}
@@ -870,7 +870,7 @@ pub fn modal_dialog(config DialogConfig) !Element {
 		content:           surface_el
 	)!
 	return component_finish(Element{
-		...host
+		...with_classes(host, 'dialog')
 		accessibility_role:  'dialog'
 		accessibility_label: config.title
 	})
