@@ -1147,3 +1147,30 @@ fn test_vml_popup_validates_header_height() {
 		assert err.msg().contains('exceed')
 	}
 }
+
+fn test_vml_video_and_audio_map_source_and_transport() {
+	el := element_from_vml('Video {
+		id: trailer
+		source: "https://example.com/t.mp4"
+		autoplay: true
+		loop: true
+		volume: 0.5
+		rate: 2
+	}', rect(0, 0, 320, 180)) or { panic(err) }
+	assert el.kind == .media
+	assert el.media_kind == .video
+	assert el.autoplay
+	assert el.loop
+	assert el.media_volume == 0.5
+	assert el.media_rate == 2
+	assert el.accessibility_role == 'video'
+
+	aud := element_from_vml('Audio {
+		id: theme
+		source: "assets/theme.mp3"
+	}', rect(0, 0, 0, 0)) or { panic(err) }
+	assert aud.kind == .media
+	assert aud.media_kind == .audio
+	assert aud.media_src == 'assets/theme.mp3'
+	assert aud.accessibility_role == 'audio'
+}

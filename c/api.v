@@ -275,7 +275,7 @@ pub fn create(kind int, id &char, x f64, y f64, width f64, height f64) &C.ui2_no
 		fail('widgets may only be created inside build')
 		return unsafe { nil }
 	}
-	if kind < 0 || kind > int(ui2.Kind.opengl) {
+	if kind < 0 || kind > int(ui2.Kind.media) {
 		fail('unknown widget kind')
 		return unsafe { nil }
 	}
@@ -355,6 +355,109 @@ pub fn set_placeholder(handle &C.ui2_node, placeholder &char) {
 pub fn set_image(handle &C.ui2_node, path &char) {
 	mut n := node(handle) or { return }
 	n.element = ui2.Element{ ...n.element, image_path: input(path) }
+}
+
+@[export: 'ui2_set_media']
+pub fn set_media(handle &C.ui2_node, kind int, src &char, autoplay int) {
+	mut n := node(handle) or { return }
+	if n.element.kind != .media {
+		fail('ui2_set_media requires a media node')
+		return
+	}
+	if kind < int(ui2.MediaKind.audio) || kind > int(ui2.MediaKind.video) {
+		fail('unknown media kind')
+		return
+	}
+	n.element = ui2.Element{
+		...n.element
+		media_kind: unsafe { ui2.MediaKind(kind) }
+		media_src:  input(src)
+		autoplay:   autoplay != 0
+	}
+}
+
+fn media_kind(kind int) ?ui2.MediaKind {
+	if kind < int(ui2.MediaKind.audio) || kind > int(ui2.MediaKind.video) {
+		fail('unknown media kind')
+		return none
+	}
+	return unsafe { ui2.MediaKind(kind) }
+}
+
+fn media_bool(v bool) int {
+	return if v { 1 } else { 0 }
+}
+
+@[export: 'ui2_media_playback_supported']
+pub fn media_playback_supported(kind int) int {
+	k := media_kind(kind) or { return 0 }
+	return media_bool(ui2.media_playback_supported(k))
+}
+
+@[export: 'ui2_media_open']
+pub fn media_open(id &char, kind int, src &char) int {
+	k := media_kind(kind) or { return 0 }
+	return media_bool(ui2.media_open(input(id), k, input(src)))
+}
+
+@[export: 'ui2_media_play']
+pub fn media_play(id &char) int {
+	return media_bool(ui2.media_play(input(id)))
+}
+
+@[export: 'ui2_media_pause']
+pub fn media_pause(id &char) int {
+	return media_bool(ui2.media_pause(input(id)))
+}
+
+@[export: 'ui2_media_stop']
+pub fn media_stop(id &char) int {
+	return media_bool(ui2.media_stop(input(id)))
+}
+
+@[export: 'ui2_media_seek']
+pub fn media_seek(id &char, secs f64) int {
+	return media_bool(ui2.media_seek(input(id), secs))
+}
+
+@[export: 'ui2_media_set_volume']
+pub fn media_set_volume(id &char, volume f64) int {
+	return media_bool(ui2.media_set_volume(input(id), volume))
+}
+
+@[export: 'ui2_media_set_muted']
+pub fn media_set_muted(id &char, muted int) int {
+	return media_bool(ui2.media_set_muted(input(id), muted != 0))
+}
+
+@[export: 'ui2_media_set_rate']
+pub fn media_set_rate(id &char, rate f64) int {
+	return media_bool(ui2.media_set_rate(input(id), rate))
+}
+
+@[export: 'ui2_media_can_seek']
+pub fn media_can_seek(id &char) int {
+	return media_bool(ui2.media_can_seek(input(id)))
+}
+
+@[export: 'ui2_media_position']
+pub fn media_position(id &char) f64 {
+	return ui2.media_position(input(id))
+}
+
+@[export: 'ui2_media_duration']
+pub fn media_duration(id &char) f64 {
+	return ui2.media_duration(input(id))
+}
+
+@[export: 'ui2_media_state']
+pub fn media_state(id &char) int {
+	return int(ui2.media_state(input(id)))
+}
+
+@[export: 'ui2_media_close']
+pub fn media_close(id &char) {
+	ui2.media_close(input(id))
 }
 
 @[export: 'ui2_set_box_style']
