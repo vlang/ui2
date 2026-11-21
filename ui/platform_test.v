@@ -21,6 +21,18 @@ fn test_platform_valid_url_rejects_junk() {
 	assert !platform_valid_url('mailto:   ')
 }
 
+fn test_platform_valid_url_judges_the_exact_string_it_is_given() {
+	// open_url trims once and forwards the very value it validated, so the
+	// validator must not trim a copy of its own: padding could then pass
+	// validation while the backend still received it.
+	assert platform_valid_url('https://vlang.io')
+	assert !platform_valid_url(' https://vlang.io')
+	assert !platform_valid_url('https://vlang.io ')
+	assert !platform_valid_url('https://vlang.io\n')
+	assert !platform_valid_url('\thttps://vlang.io')
+	assert !open_url('  just words  ')
+}
+
 fn test_open_url_rejects_bad_input_on_every_backend() {
 	assert !open_url('')
 	assert !open_url('just words')
@@ -52,9 +64,16 @@ fn test_platform_supported_flags_match_the_backend() {
 		assert app_badge_supported()
 		assert open_url_supported()
 		assert share_supported()
+	} $else $if android {
+		// Android reports haptics, URL opening and sharing only when a
+		// NativeActivity exists; badges are never supported. All three flags
+		// therefore move together, whatever the runtime provides.
+		assert !app_badge_supported()
+		assert haptic_supported() == open_url_supported()
+		assert open_url_supported() == share_supported()
 	} $else {
-		// Linux, the BSDs, Android and the custom renderer answer unsupported
-		// everywhere except URLs, which the nix desktops hand to xdg-open.
+		// Linux, the BSDs and the custom renderer answer unsupported everywhere
+		// except URLs, which the nix desktops hand to xdg-open.
 		assert !haptic_supported()
 		assert !app_badge_supported()
 		assert !share_supported()

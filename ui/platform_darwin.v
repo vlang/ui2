@@ -6,6 +6,18 @@ module ui2
 import macos
 
 #flag darwin -framework AppKit
+#insert "@VMODROOT/ui/platform_darwin.h"
+
+fn C.ui2_platform_perform_feedback(performer voidptr, pattern i64, performance_time i64)
+
+// NSHapticFeedbackPerformanceTime from AppKit's NSHapticFeedback.h. ui2 asks
+// for .now so a tap fires immediately rather than waiting for the next drawing
+// pass, which is what .default currently means.
+enum NSHapticFeedbackPerformanceTime {
+	default_time   = 0
+	now            = 1
+	draw_completed = 2
+}
 
 fn native_haptic_supported() bool {
 	return true
@@ -30,7 +42,7 @@ fn native_haptic(style HapticStyle) bool {
 		.warning { 0 }
 		.error { 2 }
 	}
-	macos.msg_void_i64(performer, 'performFeedbackPattern:', i64(pattern))
+	C.ui2_platform_perform_feedback(performer, i64(pattern), i64(NSHapticFeedbackPerformanceTime.now))
 	return true
 }
 

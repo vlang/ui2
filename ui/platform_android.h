@@ -3,6 +3,7 @@
 
 #include <jni.h>
 #include <android/native_activity.h>
+#include <stdlib.h>
 
 // The Android integrations below call platform Java APIs through JNI only, so
 // no activity subclass or Java code is needed on the app side. The activity is
@@ -27,6 +28,85 @@ static int ui2_android_jni_env(ANativeActivity *act, JNIEnv **env, int *attached
 
 static void ui2_android_jni_release(ANativeActivity *act, int attached) {
 	if (attached && act != NULL) (*act->vm)->DetachCurrentThread(act->vm);
+}
+
+// V strings are ordinary UTF-8, but JNI's NewStringUTF expects modified UTF-8:
+// 4-byte (non-BMP) sequences are invalid there (they can corrupt the string or
+// abort under CheckJNI), and embedded NULs are cut off at the C string boundary.
+// Decode the bytes to UTF-16 ourselves and use NewString with an explicit
+// length, so emoji become correct surrogate pairs and embedded NULs survive.
+// The caller must pass an explicit byte length; NUL termination is not assumed.
+// Returns NULL if the pointer/length is invalid or if allocation/NewString
+// fails (NewString may leave a pending exception for the caller to clear).
+static jstring ui2_android_jstring_from_utf8(JNIEnv *env, const char *bytes, int len) {
+	const unsigned char *p = (const unsigned char *)bytes;
+	int i = 0;
+	int units = 0;
+	jchar *buf;
+	jstring result;
+
+	if (bytes == NULL || len <= 0) return NULL;
+
+	// First pass: count UTF-16 code units (non-BMP needs a surrogate pair).
+	while (i < len) {
+		unsigned char c = p[i];
+		if (c < 0x80) {
+			i += 1;
+			units += 1;
+		} else if ((c & 0xE0) == 0xC0 && i + 1 < len) {
+			i += 2;
+			units += 1;
+		} else if ((c & 0xF0) == 0xE0 && i + 2 < len) {
+			i += 3;
+			units += 1;
+		} else if ((c & 0xF8) == 0xF0 && i + 3 < len) {
+			i += 4;
+			units += 2;
+		} else {
+			i += 1; // malformed byte -> U+FFFD
+			units += 1;
+		}
+	}
+
+	buf = (jchar *)malloc((size_t)units * sizeof(jchar));
+	if (buf == NULL) return NULL;
+
+	// Second pass: decode into UTF-16.
+	i = 0;
+	units = 0;
+	while (i < len) {
+		unsigned char c = p[i];
+		if (c < 0x80) {
+			buf[units++] = (jchar)c;
+			i += 1;
+		} else if ((c & 0xE0) == 0xC0 && i + 1 < len) {
+			buf[units++] = (jchar)(((c & 0x1F) << 6) | (p[i + 1] & 0x3F));
+			i += 2;
+		} else if ((c & 0xF0) == 0xE0 && i + 2 < len) {
+			buf[units++] = (jchar)(((c & 0x0F) << 12) | ((p[i + 1] & 0x3F) << 6) | (p[i + 2] & 0x3F));
+			i += 3;
+		} else if ((c & 0xF8) == 0xF0 && i + 3 < len) {
+			unsigned int cp = ((unsigned int)(c & 0x07) << 18)
+				| ((unsigned int)(p[i + 1] & 0x3F) << 12)
+				| ((unsigned int)(p[i + 2] & 0x3F) << 6)
+				| (unsigned int)(p[i + 3] & 0x3F);
+			i += 4;
+			if (cp > 0x10FFFF) {
+				buf[units++] = (jchar)0xFFFD;
+			} else {
+				cp -= 0x10000;
+				buf[units++] = (jchar)(0xD800 + (cp >> 10));
+				buf[units++] = (jchar)(0xDC00 + (cp & 0x3FF));
+			}
+		} else {
+			buf[units++] = (jchar)0xFFFD;
+			i += 1;
+		}
+	}
+
+	result = (*env)->NewString(env, buf, (jsize)units);
+	free(buf);
+	return result;
 }
 
 // ui2_android_haptic fires the vibrator for duration_ms at amplitude (1-255).
@@ -128,7 +208,7 @@ static int ui2_android_start_activity(void *activity, jobject intent) {
 
 // ui2_android_open_url opens url with ACTION_VIEW. Returns 1 when the system
 // took the intent.
-static int ui2_android_open_url(void *activity, const char *url) {
+static int ui2_android_open_url(void *activity, const char *url, int url_len) {
 	ANativeActivity *act = (ANativeActivity *)activity;
 	JNIEnv *env = NULL;
 	int attached = 0;
@@ -142,7 +222,7 @@ static int ui2_android_open_url(void *activity, const char *url) {
 	jstring target;
 	jobject uri;
 	jobject intent;
-	if (act == NULL || url == NULL || url[0] == 0) return 0;
+	if (act == NULL || url == NULL || url_len <= 0) return 0;
 	if (!ui2_android_jni_env(act, &env, &attached)) return 0;
 	intent_class = (*env)->FindClass(env, "android/content/Intent");
 	uri_class = (*env)->FindClass(env, "android/net/Uri");
@@ -155,7 +235,8 @@ static int ui2_android_open_url(void *activity, const char *url) {
 		"(I)Landroid/content/Intent;");
 	if (view_init == NULL || parse == NULL || add_flags == NULL) goto open_done;
 	action = (*env)->NewStringUTF(env, "android.intent.action.VIEW");
-	target = (*env)->NewStringUTF(env, url);
+	target = ui2_android_jstring_from_utf8(env, url, url_len);
+	if (target == NULL) goto open_strings;
 	uri = (*env)->CallStaticObjectMethod(env, uri_class, parse, target);
 	if (uri == NULL || (*env)->ExceptionCheck(env)) goto open_strings;
 	intent = (*env)->NewObject(env, intent_class, view_init, action, uri);
@@ -181,7 +262,7 @@ open_done:
 
 // ui2_android_share_text shares text with ACTION_SEND through the system
 // chooser. Returns 1 when the system took the intent.
-static int ui2_android_share_text(void *activity, const char *text) {
+static int ui2_android_share_text(void *activity, const char *text, int text_len) {
 	ANativeActivity *act = (ANativeActivity *)activity;
 	JNIEnv *env = NULL;
 	int attached = 0;
@@ -196,10 +277,11 @@ static int ui2_android_share_text(void *activity, const char *text) {
 	jstring action;
 	jstring mime;
 	jstring body;
-	jstring extra_key;
+	// Initialized so the share_strings cleanup is safe if body creation fails.
+	jstring extra_key = NULL;
 	jobject intent;
 	jobject chooser;
-	if (act == NULL || text == NULL || text[0] == 0) return 0;
+	if (act == NULL || text == NULL || text_len <= 0) return 0;
 	if (!ui2_android_jni_env(act, &env, &attached)) return 0;
 	intent_class = (*env)->FindClass(env, "android/content/Intent");
 	if (intent_class == NULL) goto share_done;
@@ -218,7 +300,8 @@ static int ui2_android_share_text(void *activity, const char *text) {
 		|| create_chooser == NULL || extra_text_field == NULL) goto share_done;
 	action = (*env)->NewStringUTF(env, "android.intent.action.SEND");
 	mime = (*env)->NewStringUTF(env, "text/plain");
-	body = (*env)->NewStringUTF(env, text);
+	body = ui2_android_jstring_from_utf8(env, text, text_len);
+	if (body == NULL) goto share_strings;
 	extra_key = (*env)->GetStaticObjectField(env, intent_class, extra_text_field);
 	intent = (*env)->NewObject(env, intent_class, send_init, action);
 	if (intent == NULL || (*env)->ExceptionCheck(env)) goto share_strings;

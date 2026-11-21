@@ -49,14 +49,16 @@ pub fn open_url_supported() bool {
 }
 
 // open_url opens url in the default browser, mail client or app that owns it,
-// and reports whether the platform took it. Only http, https and mailto links
-// with an address are accepted; anything else is rejected without touching
-// the platform.
+// and reports whether the platform took it. Surrounding whitespace is trimmed
+// once, and that same normalized value is what gets validated and handed to
+// the platform. Only http, https and mailto links with an address are accepted;
+// anything else is rejected without touching the platform.
 pub fn open_url(url string) bool {
-	if !platform_valid_url(url) {
+	candidate := url.trim_space()
+	if !platform_valid_url(candidate) {
 		return false
 	}
-	return native_open_url(url)
+	return native_open_url(candidate)
 }
 
 // share_supported reports whether share_text can open the platform share
@@ -77,26 +79,27 @@ pub fn share_text(content string) bool {
 
 // platform_valid_url accepts the links open_url can hand over: http and https
 // URLs with something after the scheme separator, and mailto links with an
-// address. Anything with whitespace or control characters is rejected, since
-// no opener takes it verbatim.
+// address. It judges the string exactly as given — open_url trims once before
+// calling this and forwards that very same value, so there is no hidden
+// normalization here. Anything with whitespace or control characters is
+// rejected, since no opener takes it verbatim.
 fn platform_valid_url(url string) bool {
-	candidate := url.trim_space()
-	if candidate.len == 0 {
+	if url.len == 0 {
 		return false
 	}
-	for ch in candidate.bytes() {
+	for ch in url.bytes() {
 		if ch <= 32 || ch == 127 {
 			return false
 		}
 	}
-	if candidate.starts_with('mailto:') {
-		addr := candidate['mailto:'.len..]
+	if url.starts_with('mailto:') {
+		addr := url['mailto:'.len..]
 		return addr.len > 0 && addr.contains('@')
 	}
-	sep := candidate.index('://') or { return false }
-	if sep <= 0 || candidate.len <= sep + 3 {
+	sep := url.index('://') or { return false }
+	if sep <= 0 || url.len <= sep + 3 {
 		return false
 	}
-	scheme := candidate[..sep]
+	scheme := url[..sep]
 	return scheme == 'http' || scheme == 'https'
 }

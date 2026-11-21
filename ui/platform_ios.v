@@ -8,6 +8,7 @@ fn native_haptic_supported() bool {
 
 // ios_impact_generator builds a UIImpactFeedbackGenerator for style, where 0,
 // 1 and 2 are the light, medium and heavy UIImpactFeedbackStyle values.
+// The returned object is owned by the caller (+1) and must be released.
 fn ios_impact_generator(style u64) macos.Id {
 	generator := macos.msg_id_u64(macos.alloc('UIImpactFeedbackGenerator'), 'initWithStyle:',
 		style)
@@ -30,6 +31,7 @@ fn native_haptic(style HapticStyle) bool {
 				return false
 			}
 			macos.msg_void(generator, 'impactOccurred')
+			macos.release(generator)
 		}
 		.medium {
 			generator := ios_impact_generator(1)
@@ -37,6 +39,7 @@ fn native_haptic(style HapticStyle) bool {
 				return false
 			}
 			macos.msg_void(generator, 'impactOccurred')
+			macos.release(generator)
 		}
 		.heavy {
 			generator := ios_impact_generator(2)
@@ -44,6 +47,7 @@ fn native_haptic(style HapticStyle) bool {
 				return false
 			}
 			macos.msg_void(generator, 'impactOccurred')
+			macos.release(generator)
 		}
 		.selection {
 			generator := macos.msg_id(macos.alloc('UISelectionFeedbackGenerator'), 'init')
@@ -51,6 +55,7 @@ fn native_haptic(style HapticStyle) bool {
 				return false
 			}
 			macos.msg_void(generator, 'selectionChanged')
+			macos.release(generator)
 		}
 		.success, .warning, .error {
 			generator := macos.msg_id(macos.alloc('UINotificationFeedbackGenerator'), 'init')
@@ -63,6 +68,7 @@ fn native_haptic(style HapticStyle) bool {
 				else { 2 }
 			}
 			macos.msg_void_i64(generator, 'notificationOccurred:', i64(kind))
+			macos.release(generator)
 		}
 	}
 	return true
@@ -98,7 +104,15 @@ fn native_open_url(url string) bool {
 	if objc_is_nil(target) {
 		return false
 	}
-	return macos.msg_bool_id(app, 'openURL:', target)
+	// UIApplication.openURL: is deprecated and returns false on iOS 18+ SDKs.
+	// openURL:options:completionHandler: (iOS 10+) is asynchronous and returns
+	// void, so the OS result is delivered only to the completion handler. With
+	// nil options and a nil handler the request is queued on the main thread and
+	// its outcome is not observed. This function therefore reports true when the
+	// request was queued against a valid app and URL, and false only when those
+	// objects could not be obtained.
+	macos.msg_void3(app, 'openURL:options:completionHandler:', target, objc_nil(), objc_nil())
+	return true
 }
 
 fn native_share_supported() bool {
@@ -118,9 +132,21 @@ fn native_share_text(text string) bool {
 		return false
 	}
 	macos.msg_void1(items, 'addObject:', macos.nsstring(text))
-	activity := macos.msg_id2(macos.get_class('UIActivityViewController'), 'initWithActivityItems:applicationActivities:',
-		items, objc_nil())
+
+	// initWithActivityItems:applicationActivities: is an instance initializer:
+	// it must be sent to an allocated instance, not to the class object.
+	mut activity := macos.alloc('UIActivityViewController')
 	if objc_is_nil(activity) {
+		macos.release(items)
+		return false
+	}
+	activity = macos.msg_id2(activity, 'initWithActivityItems:applicationActivities:', items,
+		objc_nil())
+	// The controller retains/copies the items array once initialized, so drop
+	// our own +1 reference on every path after the initializer has run.
+	macos.release(items)
+	if objc_is_nil(activity) {
+		// A failed initializer consumed and released the allocated instance.
 		return false
 	}
 	// iPad shows the sheet in a popover anchored to the root view; iPhone
@@ -133,5 +159,8 @@ fn native_share_text(text string) bool {
 	}
 	macos.msg_void_id_i64_id(top_view_controller(g_root_vc), 'presentViewController:animated:completion:',
 		activity, 1, objc_nil())
+	// The presenting view controller retains activity for the sheet's lifetime;
+	// release our own +1 reference.
+	macos.release(activity)
 	return true
 }
