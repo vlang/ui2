@@ -2278,7 +2278,10 @@ static inline void *ui2_win_touch_target(void *root_ptr, int screen_x, int scree
 // Decodes a WM_TOUCH message into per-contact down/move/up calls. Touch
 // coordinates arrive in hundredths of a pixel. Returns nonzero when at least
 // one contact was dispatched, in which case the caller must not let the
-// default handler synthesize a duplicate mouse message.
+// default handler synthesize a duplicate mouse message. The input handle is
+// ours to close only then: on every zero-return path the packet is still
+// unclaimed and DefWindowProc must receive it (and close it) to synthesize
+// the mouse messages for contacts no binding took.
 static inline int ui2_win_handle_touch(void *hwnd_ptr, uintptr_t wparam, intptr_t lparam) {
 	(void)hwnd_ptr;
 	HMODULE user32 = GetModuleHandleW(L"user32.dll");
@@ -2289,19 +2292,10 @@ static inline int ui2_win_handle_touch(void *hwnd_ptr, uintptr_t wparam, intptr_
 		"CloseTouchInputHandle");
 	if (get_input == NULL || close_input == NULL) return 0;
 	unsigned int count = (unsigned int)(wparam & 0xffff);
-	// The input handle must be closed for every WM_TOUCH, even when there is
-	// nothing to decode or no room to decode it into; otherwise a dropped UP
-	// wedges the contact tracking on the V side with no further UP coming.
-	if (count == 0) {
-		close_input((void *)lparam);
-		return 0;
-	}
+	if (count == 0) return 0;
 	ui2_win_touch_point *inputs = (ui2_win_touch_point *)HeapAlloc(GetProcessHeap(), 0,
 		(size_t)count * sizeof(ui2_win_touch_point));
-	if (inputs == NULL) {
-		close_input((void *)lparam);
-		return 0;
-	}
+	if (inputs == NULL) return 0;
 	int handled = 0;
 	if (get_input((void *)lparam, count, inputs, (int)sizeof(ui2_win_touch_point))) {
 		for (unsigned int i = 0; i < count; i++) {
@@ -2316,14 +2310,16 @@ static inline int ui2_win_handle_touch(void *hwnd_ptr, uintptr_t wparam, intptr_
 			}
 		}
 	}
-	close_input((void *)lparam);
 	HeapFree(GetProcessHeap(), 0, inputs);
+	if (handled != 0) close_input((void *)lparam);
 	return handled;
 }
 
 // Decodes a WM_GESTURE message. Only pan scrolls today; a pan started over a
 // scrollable pane moves it the way a drag would. Returns nonzero when a pan
-// was dispatched.
+// was dispatched. The gesture info handle is closed only for a consumed pan;
+// every zero-return path leaves it for DefWindowProc, which owns and closes
+// unclaimed gesture handles.
 static inline int ui2_win_handle_gesture(void *hwnd_ptr, uintptr_t wparam, intptr_t lparam) {
 	(void)hwnd_ptr;
 	(void)wparam;
@@ -2337,10 +2333,7 @@ static inline int ui2_win_handle_gesture(void *hwnd_ptr, uintptr_t wparam, intpt
 	ui2_win_gesture_info info;
 	ZeroMemory(&info, sizeof(info));
 	info.size = sizeof(info);
-	if (!get_info((void *)lparam, &info)) {
-		close_info((void *)lparam);
-		return 0;
-	}
+	if (!get_info((void *)lparam, &info)) return 0;
 	int handled = 0;
 	if (info.id == GID_PAN) {
 		static LONG previous_x = 0;
@@ -2370,7 +2363,7 @@ static inline int ui2_win_handle_gesture(void *hwnd_ptr, uintptr_t wparam, intpt
 			tracking = 0;
 		}
 	}
-	close_info((void *)lparam);
+	if (handled != 0) close_info((void *)lparam);
 	return handled;
 }
 

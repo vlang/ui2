@@ -974,11 +974,17 @@ pub fn with_action(el Element, action_id string) Element {
 }
 
 // with_secure_entry makes a text field use the platform's native password
-// control while retaining the field's change and submit bindings.
+// control while retaining the field's change and submit bindings. The
+// accessibility value is cleared too: native backends publish it unchanged to
+// the platform's accessibility setter, so a password must not stay readable
+// there just because the visible control masks it. Clearing here covers every
+// text-field constructor, including text_field_with_submit and
+// text_field_with_change_and_submit, once the element is made secure.
 pub fn with_secure_entry(el Element) Element {
 	return Element{
 		...el
-		secure: true
+		secure:              true
+		accessibility_value: ''
 	}
 }
 
