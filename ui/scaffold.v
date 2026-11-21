@@ -14,26 +14,12 @@ pub fn scaffold_content_rect(frame Rect, top_bar_height f64, bottom_bar_height f
 }
 
 // scaffold_validate_sizes rejects bar heights and overlay margins that are
-// negative or non-finite before they can warp a scaffold. A strip that holds
-// children must also reserve a positive height: a zero-height strip cannot
-// show them, and views do not clip, so the children would draw over the
-// content instead of erroring.
+// negative or non-finite before they can warp a scaffold.
 fn scaffold_validate_sizes(top_bar_height f64, bottom_bar_height f64, fab_margin f64, snackbar_margin f64) ! {
 	for value in [top_bar_height, bottom_bar_height, fab_margin, snackbar_margin] {
 		if !component_finite(value) || value < 0 {
 			return error('scaffold bar heights and margins must be finite and non-negative')
 		}
-	}
-}
-
-// scaffold_validate_strips rejects a bar strip that holds children without
-// reserving any height for them.
-fn scaffold_validate_strips(top_bar_height f64, top_bar []Element, bottom_bar_height f64, bottom_bar []Element) ! {
-	if top_bar.len > 0 && top_bar_height <= 0 {
-		return error('scaffold top bar has children but top_bar_height is zero')
-	}
-	if bottom_bar.len > 0 && bottom_bar_height <= 0 {
-		return error('scaffold bottom bar has children but bottom_bar_height is zero')
 	}
 }
 
@@ -49,15 +35,20 @@ fn scaffold_place_end(content Rect, el Element, margin f64) Element {
 	}
 }
 
-// scaffold_place_snackbar keeps a snackbar's declared height, stretches it
+// scaffold_snackbar_frame keeps a snackbar's declared height, stretches it
 // across the content box inside margin, and docks it at the content bottom.
-fn scaffold_place_snackbar(content Rect, el Element, margin f64) Element {
+fn scaffold_snackbar_frame(content Rect, height f64, margin f64) Rect {
 	gap := if margin > 0 { margin } else { 0.0 }
 	width := math.max(content.width - 2 * gap, 0)
-	y := content.y + math.max(content.height - gap - el.frame.height, 0)
+	x := content.x + math.min(gap, content.width / 2)
+	y := content.y + math.max(content.height - gap - height, 0)
+	return rect(x, y, width, height)
+}
+
+fn scaffold_place_snackbar(content Rect, el Element, margin f64) Element {
 	return Element{
 		...el
-		frame: rect(content.x + gap, y, width, el.frame.height)
+		frame: scaffold_snackbar_frame(content, el.frame.height, margin)
 	}
 }
 
@@ -66,7 +57,9 @@ pub:
 	id    string
 	frame Rect
 	// top_bar_height and bottom_bar_height reserve the top and bottom strips.
-	// The content box fills whatever is left between them.
+	// The content box fills whatever is left between them. Bars retain their
+	// heights and overlap if they exceed the frame; the bottom bar stays
+	// anchored to the frame's bottom edge.
 	top_bar_height    f64
 	bottom_bar_height f64
 	// fab_margin insets the floating action from the content box's bottom end;
@@ -84,8 +77,8 @@ pub:
 	bottom_bar []Element
 	// floating_action keeps its declared size and is docked at the content
 	// box's bottom end; snackbar keeps its declared height, spans the content
-	// width inside its margin, and docks at the content bottom. Both draw over
-	// the content.
+	// width inside its margin, and docks above a visible floating action or at
+	// the content bottom. Both draw over the content.
 	floating_action ?Element
 	snackbar        ?Element
 	label           string // accessibility label
@@ -96,21 +89,10 @@ pub:
 // action and snackbar overlays docked inside the content box. Slot elements
 // keep their declared sizes; the scaffold chooses the strips they sit in and,
 // for the overlays, their positions.
-//
-// Size negotiation matches Compose: bars keep their declared heights and the
-// content absorbs any shortage (clamped at zero), so over-tall bars can extend
-// past the frame; overlays keep their declared sizes and dock inside the
-// content box, so an oversized overlay can cover the bars; the floating action
-// and the snackbar both dock at the content bottom independently, so setting
-// both without staggering them overlaps them. Callers that need tighter
-// behavior clamp the heights, shrink the overlays, or offset one overlay
-// above the other before building the scaffold.
 pub fn scaffold(config ScaffoldConfig) !Element {
 	component_validate_frame(config.frame)!
 	scaffold_validate_sizes(config.top_bar_height, config.bottom_bar_height, config.fab_margin,
 		config.snackbar_margin)!
-	scaffold_validate_strips(config.top_bar_height, config.top_bar, config.bottom_bar_height,
-		config.bottom_bar)!
 	local := component_local(config.frame)
 	content := scaffold_content_rect(local, config.top_bar_height, config.bottom_bar_height)
 	box := if bg := config.background {
@@ -119,24 +101,26 @@ pub fn scaffold(config ScaffoldConfig) !Element {
 		BoxStyle{ transparent: true }
 	}
 	mut children := []Element{cap: 5}
-	// A strip with no children is skipped outright, even when its height is
-	// positive: there is nothing to hit-test or draw, so no empty view node is
-	// emitted. The content box still reserves the declared heights.
-	if config.top_bar.len > 0 {
+	if config.top_bar_height > 0 || config.top_bar.len > 0 {
 		children << view('', rect(0, 0, local.width, config.top_bar_height), BoxStyle{
 			transparent: true
 		}, config.top_bar)
 	}
 	children << view('', content, BoxStyle{ transparent: true }, config.content)
-	if config.bottom_bar.len > 0 {
-		children << view('', rect(0, content.y + content.height, local.width, config.bottom_bar_height),
+	if config.bottom_bar_height > 0 || config.bottom_bar.len > 0 {
+		children << view('', rect(0, local.height - config.bottom_bar_height, local.width, config.bottom_bar_height),
 			BoxStyle{ transparent: true }, config.bottom_bar)
 	}
+	mut snackbar_content := content
 	if fab := config.floating_action {
-		children << scaffold_place_end(content, fab, config.fab_margin)
+		placed := scaffold_place_end(content, fab, config.fab_margin)
+		children << placed
+		if !fab.hidden && fab.frame.width > 0 && fab.frame.height > 0 {
+			snackbar_content = rect(content.x, content.y, content.width, placed.frame.y - content.y)
+		}
 	}
 	if bar := config.snackbar {
-		children << scaffold_place_snackbar(content, bar, config.snackbar_margin)
+		children << scaffold_place_snackbar(snackbar_content, bar, config.snackbar_margin)
 	}
 	return component_finish(Element{
 		...view(config.id, config.frame, box, children)

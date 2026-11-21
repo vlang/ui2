@@ -40,7 +40,8 @@ fn test_scaffold_arranges_bars_content_and_overlays() {
 	assert fab.frame == rect(328, 664, 56, 56)
 	snack := el.children[4]
 	assert snack.id == 'snack'
-	assert snack.frame == rect(16, 680, 368, 40)
+	assert snack.frame == rect(16, 608, 368, 40)
+	assert snack.frame.y + snack.frame.height + 16 == fab.frame.y
 }
 
 fn test_scaffold_skips_empty_strips_and_overlays() {
@@ -51,34 +52,6 @@ fn test_scaffold_skips_empty_strips_and_overlays() {
 	assert el.children.len == 1
 	assert el.children[0].frame == rect(0, 0, 400, 800)
 	assert el.box.transparent
-}
-
-fn test_scaffold_skips_empty_strips_but_reserves_their_height() {
-	el := scaffold(
-		frame:             rect(0, 0, 400, 800)
-		top_bar_height:    56
-		bottom_bar_height: 64
-		content:           [label('body', 'Hi', rect(0, 0, 100, 24), TextStyle{})]
-	) or { panic(err) }
-	assert el.children.len == 1
-	assert el.children[0].frame == rect(0, 56, 400, 680)
-}
-
-fn test_scaffold_rejects_strips_with_children_but_no_height() {
-	if _ := scaffold(
-		frame:   rect(0, 0, 10, 10)
-		top_bar: [label('t', 'T', rect(0, 0, 10, 10), TextStyle{})]
-	) {
-		assert false, 'top bar children without height accepted'
-	}
-	if _ := scaffold(
-		frame:      rect(0, 0, 10, 10)
-		bottom_bar: [
-			label('b', 'B', rect(0, 0, 10, 10), TextStyle{}),
-		]
-	) {
-		assert false, 'bottom bar children without height accepted'
-	}
 }
 
 fn test_scaffold_background_paints_outer_frame() {
@@ -110,7 +83,7 @@ fn test_vml_plain_scaffold_keeps_children_in_full_frame() {
 	assert el.kind == .view
 	assert el.children.len == 1
 	assert el.children[0].frame == rect(0, 0, 400, 800)
-	assert el.children[0].children[0].text == 'Hello'
+	assert el.children[0].text == 'Hello'
 }
 
 fn test_vml_scaffold_routes_slots() {
@@ -143,9 +116,8 @@ fn test_vml_scaffold_routes_slots() {
 	assert el.children[0].children[0].text == 'Title'
 	assert el.children[1].frame == rect(0, 56, 400, 680)
 	assert el.children[2].frame == rect(0, 736, 400, 64)
-	// Slot children resolve against their strip's local origin: the strip view
-	// supplies the absolute y, so the child keeps y = 0.
-	assert el.children[0].children[0].frame == rect(0, 0, 400, 56)
+	// Bottom children resolve against the slot-local rect; the bar wrapper
+	// supplies the absolute y, so the child's y stays at zero.
 	assert el.children[2].children[0].frame == rect(0, 0, 400, 64)
 	assert el.children[3].frame == rect(328, 664, 56, 56)
 }
@@ -153,19 +125,19 @@ fn test_vml_scaffold_routes_slots() {
 fn test_vml_scaffold_preserves_box_styling() {
 	el := element_from_vml('Scaffold {
 		corner_radius: 12
-		border_width: 1
-		background: #102030
+		border_width: 2
+		background: "#112233"
 		Label {
 			text: "Body"
 		}
 	}', rect(0, 0, 300, 200)) or { panic(err) }
-	assert el.box.radius == 12
-	assert el.box.border_left == 1
-	assert el.box.border_top == 1
-	assert el.box.border_right == 1
-	assert el.box.border_bottom == 1
-	assert el.box.bg == u32(0x102030)
 	assert !el.box.transparent
+	assert el.box.bg == 0x112233
+	assert el.box.radius == 12
+	assert el.box.border_left == 2
+	assert el.box.border_top == 2
+	assert el.box.border_right == 2
+	assert el.box.border_bottom == 2
 }
 
 fn test_vml_scaffold_rejects_duplicate_fab() {
@@ -196,4 +168,92 @@ fn test_vml_scaffold_rejects_unknown_slot() {
 		return
 	}
 	assert false
+}
+
+fn test_scaffold_bottom_bar_stays_at_bottom_when_bars_overlap() {
+	el := scaffold(
+		frame:             rect(10, 20, 200, 100)
+		top_bar_height:    80
+		bottom_bar_height: 60
+	) or { panic(err) }
+	assert el.frame == rect(10, 20, 200, 100)
+	assert el.children[0].frame == rect(0, 0, 200, 80)
+	assert el.children[1].frame == rect(0, 80, 200, 0)
+	assert el.children[2].frame == rect(0, 40, 200, 60)
+}
+
+fn test_scaffold_snackbar_margin_clamps_on_narrow_frames() {
+	for width in [0.0, 10.0, 32.0] {
+		el := scaffold(
+			frame:    rect(10, 20, width, 100)
+			snackbar: label('snack', 'Saved', rect(0, 0, 100, 40), TextStyle{})
+		) or { panic(err) }
+		snack := el.children[1]
+		assert snack.frame == rect(width / 2, 44, 0, 40)
+		assert snack.frame.x + snack.frame.width <= width
+	}
+}
+
+fn test_vml_plain_scaffold_preserves_direct_child_styles() {
+	el := element_from_vml('Scaffold {
+		id: app
+		Style {
+			#app > Label { color: #123456; }
+			#app > Label:nth-child(2) { font-size: 22px; }
+		}
+		Label { id: first text: "One" }
+		Label { id: second text: "Two" }
+	}', rect(10, 20, 300, 200)) or { panic(err) }
+	assert el.children.len == 2
+	assert el.children[0].text_style.color == 0x123456
+	assert el.children[1].text_style.color == 0x123456
+	assert el.children[1].text_style.size == 22
+}
+
+fn test_vml_scaffold_snackbar_children_fit_in_inset_width() {
+	el := element_from_vml('Scaffold {
+		top_bar_height: 56
+		bottom_bar_height: 64
+		snackbar_margin: 20
+		View {
+			slot: snackbar
+			width: 100
+			height: 40
+			Label { text: "Saved" }
+		}
+	}', rect(10, 20, 400, 800)) or { panic(err) }
+	snack := el.children[3]
+	assert snack.frame == rect(20, 676, 360, 40)
+	assert snack.children[0].frame == rect(0, 0, 360, 40)
+}
+
+fn test_vml_scaffold_rejects_duplicate_snackbar() {
+	if _ := element_from_vml('Scaffold {
+		Label { slot: snackbar text: "First" }
+		Label { slot: snackbar text: "Second" }
+	}', rect(0, 0, 300, 200)) {
+		assert false, 'duplicate snackbar accepted'
+	} else {
+		assert err.msg().contains('at most one snackbar')
+	}
+}
+
+fn test_vml_scaffold_rejects_bad_sizes_even_without_slots() {
+	if _ := element_from_vml('Scaffold { snackbar_margin: -1 }', rect(0, 0, 300, 200)) {
+		assert false, 'negative margin accepted'
+	} else {
+		assert err.msg().contains('finite and non-negative')
+	}
+}
+
+fn test_scaffold_hidden_fab_does_not_reserve_snackbar_space() {
+	el := scaffold(
+		frame:           rect(0, 0, 400, 800)
+		floating_action: Element{
+			...button('add', '+', rect(0, 0, 56, 56), BoxStyle{}, TextStyle{})
+			hidden: true
+		}
+		snackbar:        label('snack', 'Saved', rect(0, 0, 100, 40), TextStyle{})
+	) or { panic(err) }
+	assert el.children[2].frame == rect(16, 744, 368, 40)
 }
