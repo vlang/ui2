@@ -994,9 +994,10 @@ these functions.
 `scaffold` lays a screen out the way Compose's `Scaffold` does: a top bar, a
 bottom bar, content filling the box between them, and optional floating
 action and snackbar overlays docked inside the content box. Slot elements
-keep their declared sizes; bar children are positioned relative to their
-strip, content children relative to the content box, and the overlays are
-placed by the scaffold itself:
+keep their declared sizes, except that the snackbar stretches to the content
+width inside its margin. Bar children are positioned relative to their strip,
+content children relative to the content box, and the overlays are placed by
+the scaffold itself:
 
 ```v
 ui2.scaffold(
@@ -1009,23 +1010,6 @@ ui2.scaffold(
     bottom_bar:        [ui2.label('nav', 'Nav', ui2.rect(16, 0, 200, 64), style)]
     floating_action:   ui2.button('add', '+', ui2.rect(0, 0, 56, 56), fab_box, fab_text)
     snackbar:          ui2.label('snack', 'Saved', ui2.rect(0, 0, 100, 40), snack_text)
-)!
-```
-
-## Safe areas
-
-A `SafeArea` insets its children by the operating-system intrusions — the
-status bar, display notch, camera housing, and home indicator on phones —
-after Flutter's `SafeArea`. Each side can be switched off individually, and
-`minimum` keeps at least that much room where the platform reports nothing.
-Children are positioned relative to the safe content box:
-
-```v
-content := ui2.safe_area(
-    id:    'safe'
-    frame: ui2.bounds()
-    minimum: ui2.LayoutPadding{ top: 8, bottom: 8 }
-    children: [ui2.label('title', 'Hello', ui2.rect(0, 0, 200, 24), style)]
 )!
 ```
 
@@ -1043,9 +1027,30 @@ Scaffold {
 ```
 
 Children without a `slot` land in the content box. At most one `fab` and one
-`snackbar` child are allowed; anything else in `slot` is rejected while the
-document loads. `scaffold_content_rect` exposes the content box for code that
-places its own overlays.
+`snackbar` child are allowed. Named slots are `top`, `bottom`, `content`, `fab`,
+and `snackbar`; unknown slots are rejected while the document loads.
+`scaffold_content_rect` exposes the content box for code that places its own
+overlays. When the bars exceed the available height, the content height is zero
+and the bars overlap, with the bottom bar anchored to the bottom edge.
+When both overlays are visible, the snackbar sits above the floating action
+with `snackbar_margin` between them, keeping the action accessible.
+
+## Safe areas
+
+A `SafeArea` insets its children by the operating-system intrusions — the
+status bar, display notch, camera housing, and home indicator on phones —
+after Flutter's `SafeArea`. Each side can be switched off individually, and
+`minimum` keeps at least that much room where the platform reports nothing.
+Children are positioned relative to the safe content box:
+
+```v
+content := ui2.safe_area(
+    id:    'safe'
+    frame: ui2.bounds()
+    minimum: ui2.LayoutPadding{ top: 8, bottom: 8 }
+    children: [ui2.label('title', 'Hello', ui2.rect(0, 0, 200, 24), style)]
+)!
+```
 
 ```vml
 SafeArea {

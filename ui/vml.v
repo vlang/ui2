@@ -1142,22 +1142,27 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 		'Scaffold' {
 			top := node.prop_or('top_bar_height', '0').f64()
 			bottom := node.prop_or('bottom_bar_height', '0').f64()
+			fab_margin := node.prop_or('fab_margin', '16').f64()
+			snackbar_margin := node.prop_or('snackbar_margin', '16').f64()
+			component_validate_frame(frame)!
+			scaffold_validate_sizes(top, bottom, fab_margin, snackbar_margin)!
 			content_box := scaffold_content_rect(local, top, bottom)
 			top_bar, content, bottom_bar, fab, snackbar := v_scaffold_slots(node, rect(0,
 				0, local.width, top), rect(0, 0, content_box.width, content_box.height),
-				rect(0, 0, local.width, bottom))!
+				rect(0, 0, local.width, bottom), snackbar_margin)!
+			// Preserve the old plain Scaffold tree, including direct-child
+			// stylesheet selectors, when no strips or overlays are requested.
+			if top == 0 && bottom == 0 && top_bar.len == 0 && bottom_bar.len == 0
+				&& fab == none && snackbar == none {
+				return view(node.id, frame, v_box(node), content)
+			}
 			base := scaffold(ScaffoldConfig{
 				id:                node.id
 				frame:             frame
 				top_bar_height:    top
 				bottom_bar_height: bottom
-				fab_margin:        node.prop_or('fab_margin', '16').f64()
-				snackbar_margin:   node.prop_or('snackbar_margin', '16').f64()
-				background:        if node.prop_bool('transparent') {
-					none
-				} else {
-					v_color(node, 'background', 0xffffff)
-				}
+				fab_margin:        fab_margin
+				snackbar_margin:   snackbar_margin
 				top_bar:           top_bar
 				content:           content
 				bottom_bar:        bottom_bar
@@ -1436,11 +1441,11 @@ fn v_keyboard(raw string) int {
 
 // v_scaffold_slots routes a Scaffold's children into their slots: `slot: top`
 // for the top bar, `slot: bottom` for the bottom bar, `slot: fab` for the
-// floating action, `slot: snackbar` for the snackbar, and anything else for
-// the content box. Frames are resolved against each slot's own box, so slot
-// coordinates start at the slot's top-left corner. At most one fab and one
-// snackbar child are allowed.
-fn v_scaffold_slots(node &VNode, top_box Rect, content_box Rect, bottom_box Rect) !([]Element, []Element, []Element, ?Element, ?Element) {
+// floating action, `slot: snackbar` for the snackbar, and `slot: content` or
+// no slot property for the content box. Frames resolve against each slot's
+// own box, with coordinates starting at its top-left corner. At most one fab
+// and one snackbar child are allowed.
+fn v_scaffold_slots(node &VNode, top_box Rect, content_box Rect, bottom_box Rect, snackbar_margin f64) !([]Element, []Element, []Element, ?Element, ?Element) {
 	mut top_bar := []Element{}
 	mut content := []Element{}
 	mut bottom_bar := []Element{}
@@ -1467,7 +1472,16 @@ fn v_scaffold_slots(node &VNode, top_box Rect, content_box Rect, bottom_box Rect
 				if snackbar != none {
 					return error('Scaffold accepts at most one snackbar child')
 				}
-				snackbar = node_to_element(child, content_box)!
+				// Resolve descendants against the width the scaffold will give
+				// this overlay, so nested layouts fit inside its side margins.
+				area := scaffold_snackbar_frame(content_box, content_box.height, snackbar_margin)
+				mut props := child.props.clone()
+				props['width'] = area.width.str()
+				snackbar_node := VNode{
+					...child
+					props: props
+				}
+				snackbar = node_to_element(&snackbar_node, rect(0, 0, area.width, content_box.height))!
 			}
 			'content' {
 				content << node_to_element(child, content_box)!
