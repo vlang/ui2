@@ -43,3 +43,35 @@ fn test_native_clipboard_write_quotes_paths_and_reports_copy_failure() ! {
 		assert !native_clipboard_write(['/bin/sh', script], 'must fail')
 	}
 }
+
+fn test_native_clipboard_write_reports_wayland_launcher_failure() ! {
+	$if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
+		dir := os.join_path(os.temp_dir(), 'ui2-copy-failure-${os.getpid()}-${time.sys_mono_now()}')
+		os.mkdir_all(dir)!
+		defer { os.rmdir_all(dir) or {} }
+		script := os.join_path(dir, 'wl-copy')
+		os.write_file(script, '#!/bin/sh\nexit 7\n')!
+		os.chmod(script, 0o755)!
+		assert !native_clipboard_write([script], 'must fail')
+		assert !native_clipboard_write([]string{}, 'no tool')
+	}
+}
+
+fn test_native_clipboard_write_does_not_wait_for_owner_output_pipes() ! {
+	$if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
+		dir := os.join_path(os.temp_dir(), 'ui2-copy-owner-${os.getpid()}-${time.sys_mono_now()}')
+		os.mkdir_all(dir)!
+		defer { os.rmdir_all(dir) or {} }
+		script := os.join_path(dir, 'wl-copy')
+		output := os.join_path(dir, 'contents.txt')
+		// The descendant keeps both output descriptors open, just as a
+		// selection owner can do. It exits on its own even if the test fails.
+		os.write_file(script, '#!/bin/sh\ncat > "$1"\nsleep 3 &\n')!
+		os.chmod(script, 0o755)!
+		start := time.sys_mono_now()
+		assert native_clipboard_write([script, output], 'owned clipboard contents')
+		assert time.sys_mono_now() - start < 2 * time.second
+		// Success must also mean the launcher has already consumed stdin.
+		assert os.read_file(output)! == 'owned clipboard contents'
+	}
+}

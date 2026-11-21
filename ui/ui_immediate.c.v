@@ -4358,7 +4358,7 @@ fn page_focused_text_area(direction int) {
 		r := math.max(0.0, math.min(radius, math.min(w, h) / 2))
 		scale := f64(ctx.scale)
 		segments := int(math.min(math.max(math.sqrt(r * scale) * 1.5, 2), 16))
-		mut points := g_outline_points.clone()
+		mut points := g_outline_points
 		points.clear()
 		rounded_outline(mut points, x, y, w, h, r, segments)
 		unsafe {
@@ -4641,8 +4641,8 @@ fn page_focused_text_area(direction int) {
 			return
 		}
 		segments := int(math.max(4.0, math.min(16.0, radius / 2)))
-		mut outer := g_outline_outer.clone()
-		mut inner := g_outline_inner.clone()
+		mut outer := g_outline_outer
+		mut inner := g_outline_inner
 		outer.clear()
 		inner.clear()
 		rounded_outline(mut outer, x, y, w, h, radius, segments)
