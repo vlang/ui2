@@ -663,11 +663,58 @@ fn test_text_area_vertical_and_line_boundary_navigation() {
 		caret: 7
 	}
 }
+
+fn test_physical_clip_keeps_fractional_edges_outward() {
+	x, y, width, height := physical_clip_edges(rect(0.2, 1.2, 1.2, 2.2), 1.25)
+	assert x == 0 && y == 1 && width == 2 && height == 4
+	left, top, w, h := physical_clip_edges(rect(4, 6, 20, 30), 2)
+	assert left == 8 && top == 12 && w == 40 && h == 60
+	_, _, empty_w, empty_h := physical_clip_edges(rect(0.2, 0.2, 0, 2), 1.25)
+	assert empty_w == 0 && empty_h == 0
 }
 
-// The tests above exercise the custom renderer and only compile with it; this
-// one keeps `v test` green on the native backends, where the file would
-// otherwise contain no test functions at all.
-fn test_scroll_immediate_suite_needs_custom_renderer() {
-	assert true
+fn test_pointer_selection_offsets_match_wrapped_unicode_and_scrolling() {
+	layout := TextAreaLayout{ text: 'αβ\r\nsecond line', lines: ['αβ', 'second', 'line'], width: 100, style: TextStyle{ size: 10 }, content: rect(10, 20, 100, 100) }
+	height := font_line_height(10)
+	assert text_area_pointer_offset(layout, 0, 10, 20, scroll_test_width) == 0
+	assert text_area_pointer_offset(layout, 0, 30, 20, scroll_test_width) == 2
+	assert text_area_pointer_offset(layout, 0, 10, 20 + height * 1.5, scroll_test_width) == 4
+	assert text_area_pointer_offset(layout, 0, 30, 20 + height * 2.5, scroll_test_width) == 13
+	assert text_area_pointer_offset(layout, height, 10, 20, scroll_test_width) == 4
+	assert text_area_pointer_offset(layout, 0, 999, 999, scroll_test_width) == 15
+}
+
+fn test_readonly_area_mouse_drag_keeps_selection_and_does_not_scroll() {
+	reset_scroll_test_state()
+	set_test_text_value('lyrics', 'first\nsecond')
+	replace_text_editor('lyrics', text_editor('first\nsecond'))
+	set_test_text_readonly('lyrics', true)
+	set_test_text_area_layout('lyrics', TextAreaLayout{ text: 'first\nsecond', lines: ['first', 'second'], width: 100, style: TextStyle{ size: 10 }, content: rect(4, 8, 100, 100) })
+	set_test_hit_targets([HitTarget{ id: 'lyrics', text_area: true, w: 120, h: 120 }])
+	handle_touch_down(4, 8)
+	begin_text_area_selection(4, 8)
+	assert embedded_focused_field() == 'lyrics'
+	handle_touch_move(110, 8 + font_line_height(10))
+	assert editor_selected_text(get_test_text_editor('lyrics') or { panic('missing editor') }) == 'first\nsecond'
+	assert scroll_offset('lyrics') == 0
+	assert text('lyrics') == 'first\nsecond'
+	cancel_touch()
+	assert get_touch_state().text_selection_id == ''
+	// Shift-click extends the existing anchor, and touch scrolling alone
+	// does not opt into the mouse selection gesture.
+	set_test_key_modifiers(KeyModifiers{ shift: true })
+	handle_touch_down(4, 8 + font_line_height(10))
+	begin_text_area_selection(4, 8 + font_line_height(10))
+	selected_editor := get_test_text_editor('lyrics') or { panic('missing editor') }
+	assert selected_editor.selection == TextSelection{ anchor: 0, caret: 6 }
+	cancel_touch()
+	set_test_key_modifiers(KeyModifiers{})
+	handle_touch_down(4, 8)
+	assert get_touch_state().text_selection_id == ''
+	// A thumb drag keeps its own gesture instead of selecting text.
+	handle_touch_down(4, 8)
+	set_test_scrollbar_drag(true)
+	begin_text_area_selection(4, 8)
+	assert get_touch_state().text_selection_id == ''
+}
 }

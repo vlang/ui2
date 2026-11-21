@@ -135,8 +135,8 @@ mut:
 	refresh_pending     bool // a refresh was asked for while one was rendering
 	image_symbols       map[u64]string // NSImageView pointer -> the symbol and tint it shows
 	hovered             []string       // hovered actions, outermost first
-	hover_window_point  macos.Point    // last pointer location, window coordinates
-	hover_root_point    macos.Point    // the same in the root view's coordinates
+	hover_window_point  DarwinPoint    // last pointer location, window coordinates
+	hover_root_point    DarwinPoint    // the same in the root view's coordinates
 	hover_inside        bool
 	pointer_clickable   map[u64]bool
 	pointer_buttons     map[u64]bool
@@ -810,9 +810,7 @@ pub fn quit() {
 	native_terminate_app()
 }
 
-pub fn safe_area_top() f64 {
-	return 0
-}
+
 
 pub fn start_barcode_scan() {
 	st := state()
@@ -1655,7 +1653,7 @@ fn ui2_root_mouse_moved(self voidptr, _cmd voidptr, event voidptr) {
 	if NativeView(self) != st.root_view {
 		return
 	}
-	st.hover_window_point = macos.msg_point(event, 'locationInWindow')
+	st.hover_window_point = darwin_msg_point(event, 'locationInWindow')
 	st.hover_root_point = native_event_point(st.root_view, event)
 	st.hover_inside = true
 	native_update_hover()
@@ -1675,7 +1673,7 @@ fn ui2_root_mouse_exited(self voidptr, _cmd voidptr, event voidptr) {
 // native_hovered_chain returns the hoverable elements at a window point, outermost
 // first: the topmost view there and its superviews, as CSS :hover counts them.
 // hitTest: skips hidden views and the parts of a scroll view's content clipped away.
-fn native_hovered_chain(window_point macos.Point) []string {
+fn native_hovered_chain(window_point DarwinPoint) []string {
 	st := state()
 	if st.hover_ids.len == 0 || native_is_nil(st.root_view) {
 		return []string{}
@@ -1686,7 +1684,7 @@ fn native_hovered_chain(window_point macos.Point) []string {
 	point := if objc_is_nil(superview) {
 		window_point
 	} else {
-		macos.msg_point_point_id(superview, 'convertPoint:fromView:', window_point, objc_nil())
+		darwin_msg_point_point_id(superview, 'convertPoint:fromView:', window_point, objc_nil())
 	}
 	mut hit_view := NativeView(C.ui2_macos_msg_id_point(st.root_view, macos.sel('hitTest:'), point.x,
 		point.y))
@@ -2168,7 +2166,7 @@ fn native_set_delegate(delegate NativeView) {
 
 fn native_new_window(frame NativeRect, title string) NativeView {
 	style := ns_window_style_titled | ns_window_style_closable | ns_window_style_miniaturizable | ns_window_style_resizable
-	window := macos.msg_id_rect_u64_u64_bool(macos.alloc('UI2Window'), 'initWithContentRect:styleMask:backing:defer:', appkit_rect(frame), style, ns_backing_store_buffered, false)
+	window := darwin_msg_id_rect_u64_u64_bool(macos.alloc('UI2Window'), 'initWithContentRect:styleMask:backing:defer:', appkit_rect(frame), style, ns_backing_store_buffered, false)
 	macos.msg_void1(window, 'setTitle:', macos.nsstring(title))
 	macos.msg_void_bool(window, 'setReleasedWhenClosed:', false)
 	return window
@@ -2183,7 +2181,7 @@ fn native_set_content_view(window NativeView, view NativeView) {
 }
 
 fn native_set_content_min_size(window NativeView, width f64, height f64) {
-	macos.msg_void_point(window, 'setContentMinSize:', macos.point(width, height))
+	darwin_msg_void_point(window, 'setContentMinSize:', darwin_point(width, height))
 }
 
 fn native_bounds(view NativeView) NativeRect {
@@ -2390,7 +2388,7 @@ fn native_update_image(image_view NativeView, frame NativeRect, path string, rot
 		macos.msg_void1(image_view, 'setImage:', macos.Id(unsafe { nil }))
 		return
 	}
-	tints := macos.responds_to(image_view, 'setContentTintColor:')
+	tints := darwin_responds_to(image_view, 'setContentTintColor:')
 	mut st := state()
 	pointer := u64(voidptr(image_view))
 	if path.starts_with('symbol:') {
@@ -2459,7 +2457,7 @@ struct LabelPlacement {
 
 // The text field a label draws with: the view itself, or the one it holds.
 fn label_text_field(view NativeView) NativeView {
-	if macos.msg_bool_id(view, 'isKindOfClass:', macos.get_class('NSTextField')) {
+	if darwin_msg_bool_id(view, 'isKindOfClass:', macos.get_class('NSTextField')) {
 		return view
 	}
 	subviews := macos.msg_id(view, 'subviews')
@@ -2524,7 +2522,7 @@ fn native_measure_text_width(text string, style TextStyle) f64 {
 		italic:      style.italic
 	}))
 	macos.msg_void1(field, 'setStringValue:', macos.nsstring(text))
-	return macos.msg_point(macos.msg_id(field, 'cell'), 'cellSize').x
+	return darwin_msg_point(macos.msg_id(field, 'cell'), 'cellSize').x
 }
 
 // Put the text field back over the whole area the label was laid out with, then move
@@ -2617,7 +2615,7 @@ fn native_label_content_height(label_view NativeView, frame NativeRect, lines in
 	if lines != 1 {
 		macos.msg_void_f64(label_view, 'setPreferredMaxLayoutWidth:', frame.width)
 		// Point carries a Cocoa size as well as a point; y is the height.
-		return macos.msg_point(label_view, 'intrinsicContentSize').y
+		return darwin_msg_point(label_view, 'intrinsicContentSize').y
 	}
 	font := macos.msg_id(label_view, 'font')
 	if native_is_nil(font) {
@@ -2643,7 +2641,7 @@ fn native_label_content_height(label_view NativeView, frame NativeRect, lines in
 // A width left over from when the label wrapped would make it measure as wrapped.
 fn native_single_line_height(label_view NativeView) f64 {
 	macos.msg_void_f64(label_view, 'setPreferredMaxLayoutWidth:', 0)
-	return macos.msg_point(label_view, 'intrinsicContentSize').y
+	return darwin_msg_point(label_view, 'intrinsicContentSize').y
 }
 
 // NSLineBreakMode values.
@@ -2766,7 +2764,7 @@ fn native_text_shortened(native NativeView, el Element) bool {
 		if native_is_nil(cell) {
 			return false
 		}
-		return macos.msg_point(cell, 'cellSize').x > el.frame.width + 0.01
+		return darwin_msg_point(cell, 'cellSize').x > el.frame.width + 0.01
 	}
 	cell := macos.msg_id(native, 'cell')
 	if native_is_nil(cell) {
@@ -2783,7 +2781,7 @@ fn native_text_shortened(native NativeView, el Element) bool {
 		width:  frame.width
 		height: frame.height
 	})
-	return macos.msg_point(title, 'size').x > title_rect.width + 0.5
+	return darwin_msg_point(title, 'size').x > title_rect.width + 0.5
 }
 
 fn native_new_button(frame NativeRect, title string, box BoxStyle, text_hex u32, size f64, bold bool, italic bool, underline bool, lines int, image_name string, native_style bool) NativeView {
@@ -2854,7 +2852,7 @@ fn native_new_switch_control(el Element) NativeView {
 
 fn native_update_switch_control(view NativeView, el Element) {
 	native_set_frame(view, element_rect(el.frame))
-	if macos.msg_bool_id(view, 'isKindOfClass:', macos.get_class('NSButton')) {
+	if darwin_msg_bool_id(view, 'isKindOfClass:', macos.get_class('NSButton')) {
 		macos.msg_void_i64(view, 'setButtonType:', ns_button_type_switch)
 		macos.msg_void1(view, 'setTitle:', macos.nsstring(''))
 		macos.msg_void_bool(view, 'setAllowsMixedState:', false)
@@ -2894,7 +2892,7 @@ fn native_update_slider(slider_view NativeView, el Element) {
 	macos.msg_void_f64(slider_view, 'setDoubleValue:', slider_clamped_value(el.value,
 		el.min_value, el.max_value))
 	macos.msg_void_bool(slider_view, 'setContinuous:', true)
-	if macos.responds_to(slider_view, 'setVertical:') {
+	if darwin_responds_to(slider_view, 'setVertical:') {
 		macos.msg_void_bool(slider_view, 'setVertical:', el.orientation == .vertical)
 	}
 }
@@ -3204,6 +3202,7 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 		macos.msg_void1(tv, 'setString:', macos.nsstring(el.text))
 		return
 	}
+	selection := native_text_view_selected_range(tv)
 	macos.msg_void_bool(tv, 'setRichText:', true)
 	native_text_view_set_attributed_string(tv, el.text, el.text_style.color, el.text_style.background_color, el.text_style.size, el.text_style.font_family, el.text_style.bold, el.text_style.italic, el.text_style.underline, el.text_style.strikethrough, el.text_style.vertical_align)
 	base_length := native_utf16_length(el.text)
@@ -3222,6 +3221,8 @@ fn native_set_text_area_content(tv NativeView, el Element) {
 		}
 		location += length
 	}
+	// Applying effects changes the selected range; rendering must preserve it.
+	native_text_view_restore_selected_range(tv, selection.location, selection.length, false)
 }
 
 fn text_style_effect_value(style TextStyle) int {
@@ -3316,7 +3317,7 @@ fn native_set_box_background(view NativeView, box BoxStyle) {
 	// A control draws its title in its own layer, beneath any sublayer, so only
 	// views take a gradient; a button keeps its solid fill.
 	gradient := box_has_gradient(box)
-		&& !macos.msg_bool_id(view, 'isKindOfClass:', macos.get_class('NSControl'))
+		&& !darwin_msg_bool_id(view, 'isKindOfClass:', macos.get_class('NSControl'))
 	if gradient {
 		macos.msg_void1(layer, 'setBackgroundColor:', macos.Id(unsafe { nil }))
 		native_set_gradient_layer(view, layer, box, opacity)
@@ -3379,8 +3380,8 @@ fn native_set_gradient_layer(view NativeView, layer macos.Id, box BoxStyle, opac
 	flipped := macos.msg_bool(view, 'isFlipped')
 	y0 := if flipped { sy } else { 1 - sy }
 	y1 := if flipped { ey } else { 1 - ey }
-	macos.msg_void_point(gradient, 'setStartPoint:', macos.point(sx, y0))
-	macos.msg_void_point(gradient, 'setEndPoint:', macos.point(ex, y1))
+	darwin_msg_void_point(gradient, 'setStartPoint:', darwin_point(sx, y0))
+	darwin_msg_void_point(gradient, 'setEndPoint:', darwin_point(ex, y1))
 	macos.msg_void_bool(gradient, 'setHidden:', false)
 }
 
@@ -3410,7 +3411,7 @@ fn native_set_layer_shadow(view NativeView, layer macos.Id, box BoxStyle) {
 	// standard deviation: about half the CSS-style blur the box declares.
 	macos.msg_void_f64(ns_shadow, 'setShadowBlurRadius:', if shadow.blur > 0 { shadow.blur / 2 } else { 0.0 })
 	// NSShadow measures its offset upward, whatever the view's flipping.
-	macos.msg_void_point(ns_shadow, 'setShadowOffset:', macos.point(shadow.x, -shadow.y))
+	darwin_msg_void_point(ns_shadow, 'setShadowOffset:', darwin_point(shadow.x, -shadow.y))
 	macos.msg_void1(view, 'setShadow:', ns_shadow)
 	macos.release(ns_shadow)
 	layer_bounds := macos.msg_rect(view, 'bounds')

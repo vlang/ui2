@@ -185,7 +185,7 @@ fn macos_status_image(icon string) macos.Id {
 	mut source := macos.Id(unsafe { nil })
 	if icon.starts_with('symbol:') {
 		image_class := macos.get_class('NSImage')
-		if macos.responds_to(image_class, 'imageWithSystemSymbolName:accessibilityDescription:') {
+		if darwin_responds_to(image_class, 'imageWithSystemSymbolName:accessibilityDescription:') {
 			source = macos.msg_id2(image_class, 'imageWithSystemSymbolName:accessibilityDescription:', macos.nsstring(icon['symbol:'.len..]), macos.Id(unsafe { nil }))
 		}
 	} else {
@@ -200,7 +200,7 @@ fn macos_status_image(icon string) macos.Id {
 		return source
 	}
 	sized := macos.msg_id(macos.msg_id(source, 'copy'), 'autorelease')
-	macos.msg_void_point(sized, 'setSize:', macos.point(macos_status_image_size, macos_status_image_size))
+	darwin_msg_void_point(sized, 'setSize:', darwin_point(macos_status_image_size, macos_status_image_size))
 	// Carry the source's own template flag rather than forcing one: a template
 	// image is recolored by the system, which is what keeps an SF Symbol
 	// legible in both the light and the dark menu bar, while an icon the app

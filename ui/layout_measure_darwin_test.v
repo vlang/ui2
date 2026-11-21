@@ -15,7 +15,7 @@ $if macos && !ui2_custom_rendering ?&& !ui2_headless ? {
 			native := native_new_label(frame, caption, style.color, style.size, false,
 				false, false, align_value(style.align), 1, .top, false)
 			cell := macos.msg_id(native, 'cell')
-			cell_size := macos.msg_point(cell, 'cellSize')
+			cell_size := darwin_msg_point(cell, 'cellSize')
 			macos.release(native)
 			assert measured.width >= cell_size.x, 'content-sized `${caption}` must include the NSTextField cell insets: ${measured.width} < ${cell_size.x}'
 		}
