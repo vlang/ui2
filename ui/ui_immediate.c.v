@@ -53,6 +53,9 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		// A rebuild can move a dragged view away from the initial press.
 		// Keep its event identity until release instead of hit-testing it again.
 		pointer_target     HitTarget
+		// Mouse text selection captures its source field and anchor until release.
+		text_selection_id string
+		text_selection_anchor int
 		// A slider owns its gesture through commit_slider, which returns before
 		// any pointer_target capture is taken. Recording its id here gives the
 		// same protection from the other side: an external write racing the drag
@@ -344,10 +347,25 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		}
 		// The drawn menu bar owns the top strip of the window, so the screen
 		// an app lays out is the rest of it.
+		ctx := g_gg_app.ctx
 		return Rect{
-			width: f64(g_gg_app.ctx.width)
-			height: f64(g_gg_app.ctx.height) - menu_bar_height()
+			width: layout_window_width(ctx)
+			height: layout_window_height(ctx) - menu_bar_height()
 		}
+	}
+
+	// gg keeps window dimensions as whole logical pixels. Dividing the
+	// framebuffer by a fractional scale can produce a fractional layout size;
+	// using ctx.width/height loses the remainder and leaves a physical edge
+	// outside full-window elements and clips.
+	fn layout_window_width(ctx &gg.Context) f64 {
+		s := f64(ctx.scale)
+		return if s > 0 { f64(sapp.width()) / s } else { f64(sapp.width()) }
+	}
+
+	fn layout_window_height(ctx &gg.Context) f64 {
+		s := f64(ctx.scale)
+		return if s > 0 { f64(sapp.height()) / s } else { f64(sapp.height()) }
 	}
 
 	// scale is the factor between framebuffer pixels and layout pixels: framebuffer
@@ -513,7 +531,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			g_font_metrics = font_file_metrics(font_regular) or { FontMetrics{} }
 		}
 		g_gg_app.ctx = gg.new_context(
-			bg_color: gg.hex(0xf4f6f8)
+			bg_color: hex_color(0xf4f6f8)
 			font_path: font_regular
 			custom_bold_font_path: font_bold
 			width: opts.width
@@ -591,7 +609,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			return
 		}
 		g_gg_app.ctx.refresh_ui()
-		C.sapp_wake()
+		C.ui2_sapp_wake()
 	}
 
 // refresh asks for a rebuild over whatever the application changed outside a
@@ -642,14 +660,14 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			// These run sokol's X11 loop, where the hooks below exist; the
 			// patched sokol_app.h compiles them for any __unix__ target.
 			if mode != .continuous {
-				g_present_on_demand = C.sapp_set_present_on_demand(true)
-				C.sapp_set_frame_deadline_cb(ui2_frame_deadline_cb)
+				g_present_on_demand = C.ui2_sapp_set_present_on_demand(true)
+				C.ui2_sapp_set_frame_deadline_cb(ui2_frame_deadline_cb)
 			} else {
 				// Continuous keeps sokol's stock pacing: the deadline hook
 				// steps aside and present-on-demand stops gating the swap.
-				C.sapp_set_present_on_demand(false)
+				C.ui2_sapp_set_present_on_demand(false)
 				g_present_on_demand = false
-				C.sapp_set_frame_deadline_cb(unsafe { nil })
+				C.ui2_sapp_set_frame_deadline_cb(unsafe { nil })
 			}
 		}
 		// A reference field of an immutable pointer cannot be popped through to
@@ -934,6 +952,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		g_text_kinds = map[string]Kind{}
 		g_text_editors = map[string]TextEditor{}
 		g_text_area_layouts = map[string]TextAreaLayout{}
+		g_text_readonly = map[string]bool{}
+		g_key_modifiers = KeyModifiers{}
 		g_hit_targets = []HitTarget{}
 		g_touch = TouchState{}
 		g_focused_field = ''
@@ -1081,6 +1101,18 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		g_text_area_layouts[id] = layout
 	}
 
+	pub fn set_test_text_readonly(id string, value bool) {
+		g_text_readonly[id] = value
+	}
+
+	pub fn set_test_key_modifiers(value KeyModifiers) {
+		g_key_modifiers = value
+	}
+
+	pub fn set_test_scrollbar_drag(value bool) {
+		g_touch.scrollbar_drag = value
+	}
+
 	pub fn set_toggle_button_pressed(id string, pressed bool) {
 		if id !in g_active_toggles {
 			return
@@ -1172,9 +1204,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		consume_key()
 	}
 
-	pub fn safe_area_top() f64 {
-		return 0
-	}
+
 
 	pub fn start_barcode_scan() {
 		if voidptr(g_event_handler) != unsafe { nil } {
@@ -1322,19 +1352,13 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 
 	// ── Frame & event loop ─────────────────────────────────────────────
 
-	fn C.sapp_set_present_on_demand(enabled bool) bool
-	fn C.sapp_request_present()
-	// The X11 loop's deadline hook: before each sleep sokol asks this function
-	// how long it may wait. A negative return means nothing is scheduled, so
-	// the loop waits on its poll set — an X event or a sapp_wake — alone.
-	// Passing nil clears it, restoring sokol's stock per-frame pacing.
-	type FrameDeadlineFn = fn () f64
+	#include "@VMODROOT/ui/sokol_frame_compat.h"
 
-	fn C.sapp_set_frame_deadline_cb(cb FrameDeadlineFn)
-	// sapp_wake interrupts the loop's sleep from any thread. It is a plain
-	// nonblocking write to a pipe in data-segment memory, so unlike the
-	// scheduler's invalidate it is safe from threads the GC does not know.
-	fn C.sapp_wake()
+	type FrameDeadlineFn = fn () f64
+	fn C.ui2_sapp_set_present_on_demand(enabled bool) bool
+	fn C.ui2_sapp_request_present()
+	fn C.ui2_sapp_set_frame_deadline_cb(cb FrameDeadlineFn)
+	fn C.ui2_sapp_wake()
 
 // ui2_frame_deadline_cb tells sokol how long the event loop may sleep before
 // the next scheduled frame. It runs on the frame thread just before the loop
@@ -1363,13 +1387,13 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		// backends repaint the retained tree on every callback.
 		$if gg_record ? {
 		} $else $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
-			g_present_on_demand = g_refresh_mode != .continuous && C.sapp_set_present_on_demand(true)
+			g_present_on_demand = g_refresh_mode != .continuous && C.ui2_sapp_set_present_on_demand(true)
 			// The deadline hook makes the X11 loop sleep until the earliest of
 			// the scheduler's next deadline, an X event or a sapp_wake, instead
 			// of pacing itself at the swap interval all night. Continuous mode
 			// draws every frame and must keep the stock pacing.
 			if g_refresh_mode != .continuous {
-				C.sapp_set_frame_deadline_cb(ui2_frame_deadline_cb)
+				C.ui2_sapp_set_frame_deadline_cb(ui2_frame_deadline_cb)
 			}
 		}
 		// A reference field of an immutable pointer cannot be popped through to a
@@ -1419,6 +1443,31 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			}
 		}
 		return deadline
+	}
+
+	// stylesheet_immediate_env reads this frame's interaction state for the
+	// stylesheet cascade: the innermost hovered action, the pressed pointer
+	// target while down, and the focused field.
+	fn stylesheet_immediate_env() StyleMatchEnv {
+		hovered := if g_hovered.len > 0 { g_hovered.last() } else { '' }
+		pressed := if g_touch.down { g_touch.pointer_target.id } else { '' }
+		env := stylesheet_frame_env(hovered, pressed, g_focused_field)
+		return StyleMatchEnv{
+			...env
+			dpi: scale()
+		}
+	}
+
+	// native_device_scale reports the backing-store pixel ratio.
+	fn native_device_scale() f64 {
+		return scale()
+	}
+
+	// native_safe_insets reports the display safe area. The custom renderer
+	// has no cutout API wired (even on Android), so there is none to report
+	// and env() uses its fallback.
+	fn native_safe_insets() ?SafeInsets {
+		return none
 	}
 
 	fn on_frame(mut app GgApp) {
@@ -1483,12 +1532,12 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		}
 		if work.build && voidptr(g_build_screen) != unsafe { nil } {
 			app.scheduler.record_build()
-			declared := g_build_screen()
-			validate_element_tree(declared) or {
+			built := stylesheet_frame_build(g_build_screen)
+			validate_element_tree(built) or {
 				eprintln('ui2: ${err}')
 				return
 			}
-			app.declared_root = declared
+			app.declared_root = stylesheet_apply_frame(built, stylesheet_immediate_env())
 			app.has_root = true
 		}
 		// A background window runs its frames while hidden (the drains and
@@ -1509,7 +1558,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		preload_images(root)
 		if voidptr(g_gl_surface_renderer) != unsafe { nil } {
 			for id, frame in g_opengl_surface_frames {
-				g_gl_surface_renderer(id, frame, f64(ctx.scale), f64(ctx.height))
+				g_gl_surface_renderer(id, frame, f64(ctx.scale), layout_window_height(ctx))
 			}
 		}
 		sync_gl_surface_textures()
@@ -1538,7 +1587,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		if app.has_root {
 			g_dropdown_popup.mounted = false
 			top := menu_bar_height()
-			render_element(ctx, root, 0, top, rect(0, top, f64(ctx.width), f64(ctx.height) - top), '')
+			render_element(ctx, root, 0, top, rect(0, top, layout_window_width(ctx),
+				layout_window_height(ctx) - top), '')
 			if g_open_dropdown.len > 0 {
 				if g_dropdown_popup.mounted {
 					draw_dropdown_popup(ctx)
@@ -1564,7 +1614,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		// the GPU's time. The keep-alive's clock keeps running from the last
 		// presented frame, so a window that comes back also repaints at once.
 		if g_present_on_demand && !(app.iconified && g_background_work) {
-			C.sapp_request_present()
+			C.ui2_sapp_request_present()
 			g_last_frame_ticks = time.ticks()
 		}
 		app.scheduler.set_deadline(custom_visual_deadline())
@@ -1657,7 +1707,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 			inside: true
 		}
 		update_hover()
-		if g_touch.down && g_touch.pointer_target.action_id.len > 0 {
+		if g_touch.down && (g_touch.pointer_target.action_id.len > 0 || g_touch.text_selection_id != '') {
 			handle_touch_move(x, y)
 			return
 		}
@@ -1676,6 +1726,13 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 	fn pointer_release_at(x f64, y f64, button int) {
 		if voidptr(g_mouse_button_handler) != unsafe { nil } {
 			g_mouse_button_handler(button, false, x, y)
+		}
+		if button == 0 && g_touch.text_selection_id != '' {
+			extend_text_area_selection(x, y)
+			g_touch.text_selection_id = ''
+			g_touch.down = false
+			publish_text_selection(x, y)
+			return
 		}
 		if button == 0 {
 			publish_text_selection(x, y)
@@ -1710,6 +1767,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		match e.typ {
 			.mouse_down {
 				pointer_press_at(f64(e.mouse_x), f64(e.mouse_y), int(e.mouse_button))
+				if int(e.mouse_button) == 0 { begin_text_area_selection(f64(e.mouse_x), f64(e.mouse_y)) }
 			}
 			.mouse_move {
 				pointer_move_to(f64(e.mouse_x), f64(e.mouse_y))
@@ -1901,6 +1959,10 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
 		}
 		g_touch.current_x = x
 		g_touch.current_y = y
+		if g_touch.text_selection_id != '' {
+			extend_text_area_selection(x, y)
+			return
+		}
 		target := if g_touch.pointer_target.action_id.len > 0 {
 			g_touch.pointer_target
 		} else {
@@ -2874,7 +2936,7 @@ fn page_focused_text_area(direction int) {
 		}
 		row_height := dropdown_row_height(el.text_style)
 		anchor := rect(x, y, el.frame.width, el.frame.height)
-		window := rect(0, 0, f64(ctx.width), f64(ctx.height))
+		window := rect(0, 0, layout_window_width(ctx), layout_window_height(ctx))
 		frame := dropdown_popup_frame(anchor, options.len, row_height, window)
 		content_height := f64(options.len) * row_height
 		view_height := frame.height - dropdown_popup_padding * 2
@@ -2909,7 +2971,7 @@ fn page_focused_text_area(direction int) {
 			|| dropdown_state.height <= 0 {
 			return
 		}
-		window := rect(0, 0, f64(ctx.width), f64(ctx.height))
+		window := rect(0, 0, layout_window_width(ctx), layout_window_height(ctx))
 		apply_clip(ctx, window)
 		draw_rect(ctx, dropdown_state.x + 1, dropdown_state.y + 2, dropdown_state.width,
 			dropdown_state.height, 0xdbe2ea, dropdown_state.radius)
@@ -3134,7 +3196,8 @@ fn page_focused_text_area(direction int) {
 	// fills the window below its offset, whatever its frame says.
 	fn element_area(ctx &gg.Context, el Element, off_x f64, off_y f64) Rect {
 		if el.kind == .screen {
-			return rect(off_x, off_y, f64(ctx.width) - off_x, f64(ctx.height) - off_y)
+			return rect(off_x, off_y, layout_window_width(ctx) - off_x,
+				layout_window_height(ctx) - off_y)
 		}
 		return rect(el.frame.x + off_x, el.frame.y + off_y, el.frame.width, el.frame.height)
 	}
@@ -3211,7 +3274,7 @@ fn page_focused_text_area(direction int) {
 			return
 		}
 		line_h := font_line_height(style.size)
-		window := rect(0, 0, f64(ctx.width), f64(ctx.height))
+		window := rect(0, 0, layout_window_width(ctx), layout_window_height(ctx))
 		frame := tooltip_frame(g_tooltip.anchor_x, g_tooltip.anchor_y,
 			text_width + tooltip_padding * 2, f64(lines.len) * line_h + tooltip_padding * 2, window)
 		apply_clip(ctx, window)
@@ -3384,8 +3447,8 @@ fn page_focused_text_area(direction int) {
 		}
 		match el.kind {
 			.screen {
-				w := f64(ctx.width)
-				h := f64(ctx.height)
+				w := layout_window_width(ctx)
+				h := layout_window_height(ctx)
 				if !el.box.transparent {
 					draw_rect(ctx, off_x, off_y, w - off_x, h - off_y, el.box.bg, 0)
 				}
@@ -3832,9 +3895,10 @@ fn page_focused_text_area(direction int) {
 				current_text := g_text_values[el.id] or { el.text }
 				if el.box.transparent {
 					// A transparent text area sits on what is behind it, as on AppKit:
-					// only its declared borders, and the focus outline while focused.
+					// only its declared borders. Editable areas also show a focus ring;
+					// read-only viewers use their selection highlight for focus.
 					draw_box_borders(ctx, x, y, el.frame.width, el.frame.height, el.box)
-					if g_focused_field == el.id {
+					if g_focused_field == el.id && !el.readonly {
 						draw_outline(ctx, x, y, el.frame.width, el.frame.height, 0x3478d4, el.box.radius)
 					}
 				} else {
@@ -3995,7 +4059,20 @@ fn page_focused_text_area(direction int) {
 	}
 
 	fn apply_clip(ctx &gg.Context, clip Rect) {
-		ctx.scissor_rect(int(clip.x), int(clip.y), int(clip.width), int(clip.height))
+		// Round the physical clip edges outward as a pair. Casting the logical
+		// origin and extent separately, then scaling both in gg, can drop up to
+		// two pixels at fractional scales because the two truncations compound.
+		left, top, width, height := physical_clip_edges(clip, f64(ctx.scale))
+		im_scissor_rect(ctx, left, top, width, height)
+	}
+
+	fn physical_clip_edges(clip Rect, scale f64) (int, int, int, int) {
+		left := int(math.floor(clip.x * scale))
+		top := int(math.floor(clip.y * scale))
+		if clip.width <= 0 || clip.height <= 0 { return left, top, 0, 0 }
+		right := int(math.ceil((clip.x + math.max(0.0, clip.width)) * scale))
+		bottom := int(math.ceil((clip.y + math.max(0.0, clip.height)) * scale))
+		return left, top, math.max(0, right - left), math.max(0, bottom - top)
 	}
 
 	fn add_hit_target(target HitTarget, clip Rect) {
@@ -4089,15 +4166,15 @@ fn page_focused_text_area(direction int) {
 		y0 := y * s
 		x1 := x0 + f64(tex.width)
 		y1 := y0 + f64(tex.height)
-		ctx.r.enable_texture()
-		ctx.r.texture(tex.image, tex.sampler)
-		ctx.r.begin_quads()
-		ctx.r.v2f_t2f_c4f(f32(x0), f32(y0), 0, 1, 1, 1, 1, 1)
-		ctx.r.v2f_t2f_c4f(f32(x1), f32(y0), 1, 1, 1, 1, 1, 1)
-		ctx.r.v2f_t2f_c4f(f32(x1), f32(y1), 1, 0, 1, 1, 1, 1)
-		ctx.r.v2f_t2f_c4f(f32(x0), f32(y1), 0, 0, 1, 1, 1, 1)
-		ctx.r.end()
-		ctx.r.disable_texture()
+		im_enable_texture(ctx)
+		im_texture(ctx, tex.image, tex.sampler)
+		im_begin_quads(ctx)
+		im_v2f_t2f_c4f(ctx, f32(x0), f32(y0), 0, 1, 1, 1, 1, 1)
+		im_v2f_t2f_c4f(ctx, f32(x1), f32(y0), 1, 1, 1, 1, 1, 1)
+		im_v2f_t2f_c4f(ctx, f32(x1), f32(y1), 1, 0, 1, 1, 1, 1)
+		im_v2f_t2f_c4f(ctx, f32(x0), f32(y1), 0, 0, 1, 1, 1, 1)
+		im_end(ctx)
+		im_disable_texture(ctx)
 	}
 
 	fn draw_cached_image(ctx &gg.Context, path string, x f64, y f64, width f64, height f64, rotation f64) bool {
@@ -4246,8 +4323,17 @@ fn page_focused_text_area(direction int) {
 
 	// ── Drawing helpers ────────────────────────────────────────────────
 
+	fn hex_color(hex u32) gg.Color {
+		return gg.Color{
+			r: u8((hex >> 16) & 0xFF)
+			g: u8((hex >> 8) & 0xFF)
+			b: u8(hex & 0xFF)
+			a: 255
+		}
+	}
+
 	fn draw_rect(ctx &gg.Context, x f64, y f64, w f64, h f64, color_hex u32, radius f64) {
-		c := gg.hex(color_hex)
+		c := hex_color(color_hex)
 		if radius > 0 {
 			fill_rounded_rect(ctx, x, y, w, h, radius, c)
 		} else {
@@ -4267,27 +4353,27 @@ fn page_focused_text_area(direction int) {
 		r := math.max(0.0, math.min(radius, math.min(w, h) / 2))
 		scale := f64(ctx.scale)
 		segments := int(math.min(math.max(math.sqrt(r * scale) * 1.5, 2), 16))
-		mut points := g_outline_points.clone()
+		mut points := g_outline_points
 		points.clear()
 		rounded_outline(mut points, x, y, w, h, r, segments)
 		unsafe {
 			g_outline_points = points
 		}
 		if c.a != 255 {
-			ctx.r.load_pipeline(ctx.pipeline.alpha)
+			im_load_alpha(ctx)
 		}
-		ctx.r.c4b(c.r, c.g, c.b, c.a)
+		im_c4b(ctx, c.r, c.g, c.b, c.a)
 		cx := f32((x + w / 2) * scale)
 		cy := f32((y + h / 2) * scale)
-		ctx.r.begin_triangles()
+		im_begin_triangles(ctx)
 		count := points.len / 2
 		for i in 0 .. count {
 			j := (i + 1) % count
-			ctx.r.v2f(cx, cy)
-			ctx.r.v2f(f32(points[2 * i] * scale), f32(points[2 * i + 1] * scale))
-			ctx.r.v2f(f32(points[2 * j] * scale), f32(points[2 * j + 1] * scale))
+			im_v2f(ctx, cx, cy)
+			im_v2f(ctx, f32(points[2 * i] * scale), f32(points[2 * i + 1] * scale))
+			im_v2f(ctx, f32(points[2 * j] * scale), f32(points[2 * j + 1] * scale))
 		}
-		ctx.r.end()
+		im_end(ctx)
 	}
 
 	fn draw_rect_alpha(ctx &gg.Context, x f64, y f64, w f64, h f64, color_hex u32, alpha f64, radius f64) {
@@ -4295,7 +4381,7 @@ fn page_focused_text_area(direction int) {
 			return
 		}
 		c := gg.Color{
-			...gg.hex(color_hex)
+			...hex_color(color_hex)
 			a: u8(math.round(unit_clamp(alpha) * 255))
 		}
 		if radius > 0 {
@@ -4404,8 +4490,8 @@ fn page_focused_text_area(direction int) {
 		} else {
 			rows << h
 		}
-		ctx.r.load_pipeline(ctx.pipeline.alpha)
-		ctx.r.begin_quads()
+		im_load_alpha(ctx)
+		im_begin_quads(ctx)
 		for i in 1 .. rows.len {
 			top := rows[i - 1]
 			bottom := math.min(rows[i], h)
@@ -4428,7 +4514,7 @@ fn page_focused_text_area(direction int) {
 				gradient_vertex(ctx, line, stops, opacity, x, y, xb0, bottom, scale)
 			}
 		}
-		ctx.r.end()
+		im_end(ctx)
 	}
 
 	// draw_square_gradient draws the exact gradient of a square-cornered box from a
@@ -4438,13 +4524,13 @@ fn page_focused_text_area(direction int) {
 	fn draw_square_gradient(ctx &gg.Context, x f64, y f64, w f64, h f64, line GradientLine, stops []GradientStop, angle f64, opacity f64) bool {
 		scale := f64(ctx.scale)
 		if stops.len == 2 {
-			ctx.r.load_pipeline(ctx.pipeline.alpha)
-			ctx.r.begin_quads()
+			im_load_alpha(ctx)
+			im_begin_quads(ctx)
 			gradient_vertex(ctx, line, stops, opacity, x, y, 0, 0, scale)
 			gradient_vertex(ctx, line, stops, opacity, x, y, w, 0, scale)
 			gradient_vertex(ctx, line, stops, opacity, x, y, w, h, scale)
 			gradient_vertex(ctx, line, stops, opacity, x, y, 0, h, scale)
-			ctx.r.end()
+			im_end(ctx)
 			return true
 		}
 		turn := math.fmod(math.fmod(angle, 360) + 360, 360)
@@ -4458,8 +4544,8 @@ fn page_focused_text_area(direction int) {
 			cuts << stop.position
 		}
 		cuts.sort()
-		ctx.r.load_pipeline(ctx.pipeline.alpha)
-		ctx.r.begin_quads()
+		im_load_alpha(ctx)
+		im_begin_quads(ctx)
 		for i in 1 .. cuts.len {
 			// Positions run along the gradient, which may point back along the axis.
 			a := if turn == 180 || turn == 270 { 1 - cuts[i] } else { cuts[i - 1] }
@@ -4479,21 +4565,21 @@ fn page_focused_text_area(direction int) {
 				gradient_vertex(ctx, line, stops, opacity, x, y, 0, b * extent, scale)
 			}
 		}
-		ctx.r.end()
+		im_end(ctx)
 		return true
 	}
 
 	fn gradient_vertex(ctx &gg.Context, line GradientLine, stops []GradientStop, opacity f64, ox f64, oy f64, lx f64, ly f64, scale f64) {
 		color, alpha := gradient_color_at(stops, gradient_position(line, lx, ly))
-		ctx.r.c4b(u8((color >> 16) & 0xff), u8((color >> 8) & 0xff), u8(color & 0xff), u8(math.round(alpha * opacity * 255)))
-		ctx.r.v2f(f32((ox + lx) * scale), f32((oy + ly) * scale))
+		im_c4b(ctx, u8((color >> 16) & 0xff), u8((color >> 8) & 0xff), u8(color & 0xff), u8(math.round(alpha * opacity * 255)))
+		im_v2f(ctx, f32((ox + lx) * scale), f32((oy + ly) * scale))
 	}
 
 	fn draw_outline(ctx &gg.Context, x f64, y f64, w f64, h f64, color_hex u32, radius f64) {
 		if w <= 0 || h <= 0 {
 			return
 		}
-		c := gg.hex(color_hex)
+		c := hex_color(color_hex)
 		if radius > 0 {
 			ctx.draw_rounded_rect_empty(f32(x), f32(y), f32(w), f32(h), f32(radius), c)
 		} else {
@@ -4550,8 +4636,8 @@ fn page_focused_text_area(direction int) {
 			return
 		}
 		segments := int(math.max(4.0, math.min(16.0, radius / 2)))
-		mut outer := g_outline_outer.clone()
-		mut inner := g_outline_inner.clone()
+		mut outer := g_outline_outer
+		mut inner := g_outline_inner
 		outer.clear()
 		inner.clear()
 		rounded_outline(mut outer, x, y, w, h, radius, segments)
@@ -4564,17 +4650,17 @@ fn page_focused_text_area(direction int) {
 			g_outline_inner = inner
 		}
 		count := outer.len / 2
-		c := gg.hex(color_hex)
+		c := hex_color(color_hex)
 		scale := f64(ctx.scale)
-		ctx.r.load_pipeline(ctx.pipeline.alpha)
-		ctx.r.c4b(c.r, c.g, c.b, c.a)
-		ctx.r.begin_triangle_strip()
+		im_load_alpha(ctx)
+		im_c4b(ctx, c.r, c.g, c.b, c.a)
+		im_begin_triangle_strip(ctx)
 		for i in 0 .. count + 1 {
 			k := i % count
-			ctx.r.v2f(f32(outer[2 * k] * scale), f32(outer[2 * k + 1] * scale))
-			ctx.r.v2f(f32(inner[2 * k] * scale), f32(inner[2 * k + 1] * scale))
+			im_v2f(ctx, f32(outer[2 * k] * scale), f32(outer[2 * k + 1] * scale))
+			im_v2f(ctx, f32(inner[2 * k] * scale), f32(inner[2 * k + 1] * scale))
 		}
-		ctx.r.end()
+		im_end(ctx)
 	}
 
 	fn draw_control_surface(ctx &gg.Context, x f64, y f64, w f64, h f64, box BoxStyle, focused bool, enabled bool) {
@@ -4650,12 +4736,12 @@ fn page_focused_text_area(direction int) {
 		], false)
 		contours := path_flatten(path, 0.3)
 		triangles := path_stroke_triangles(contours, math.max(1.5, size / 8), .round, .round)
-		shape_triangles(ctx, triangles, x, y, f64(ctx.scale), gg.hex(color_hex))
+		shape_triangles(ctx, triangles, x, y, f64(ctx.scale), hex_color(color_hex))
 	}
 
 	fn draw_chevron_down(ctx &gg.Context, center_x f64, center_y f64, color_hex u32) {
 		pen := gg.PenConfig{
-			color: gg.hex(color_hex)
+			color: hex_color(color_hex)
 			thickness: 1.5
 		}
 		ctx.draw_line_with_config(f32(center_x - 4), f32(center_y - 2), f32(center_x),
@@ -4933,7 +5019,7 @@ fn page_focused_text_area(direction int) {
 		family := text_font_file(style.font_family, style.bold, style.italic)
 		ensure_family_fallbacks(ctx, family)
 		ctx.set_text_cfg(gg.TextCfg{
-			color: gg.hex(style.color)
+			color: hex_color(style.color)
 			size: int(font_render_size(style.size, text_font_metrics(family)) + 0.5)
 			bold: style.bold
 			italic: style.italic
@@ -5009,7 +5095,7 @@ fn page_focused_text_area(direction int) {
 		family := text_font_file(style.font_family, style.bold, style.italic)
 		ensure_family_fallbacks(ctx, family)
 		cfg := gg.TextCfg{
-			color: gg.hex(style.color)
+			color: hex_color(style.color)
 			size: int(font_render_size(style.size, text_font_metrics(family)) + 0.5)
 			bold: style.bold
 			italic: style.italic

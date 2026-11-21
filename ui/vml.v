@@ -128,6 +128,7 @@ enum TokenKind {
 	gte
 	and_and
 	or_or
+	style_text // a `Style { ... }` block: raw sheet source, braces balanced
 	eof
 }
 
@@ -224,6 +225,82 @@ fn (mut l Lexer) read_ident() Token {
 		l.pos++
 	}
 	return Token{.ident, l.src[start..l.pos].clone(), line}
+}
+
+// try_read_style_block captures a `Style { ... }` block as one raw token.
+// Only the exact tag `Style` followed by `{` qualifies: lowercase `style:`
+// stays the inline-declarations prop, and any other use of the word falls
+// back to a plain ident. Braces inside strings and comments do not count.
+// Returns true when the block was consumed; real errors (unclosed block or
+// comment) propagate, anything else leaves the lexer untouched.
+fn (mut l Lexer) try_read_style_block(tok Token, mut tokens []Token) !bool {
+	if tok.val != 'Style' {
+		return false
+	}
+	saved_pos := l.pos
+	saved_line := l.line
+	l.skip_whitespace_and_comments()
+	if l.peek() != `{` {
+		l.pos = saved_pos
+		l.line = saved_line
+		return false
+	}
+	l.advance()
+	mut body := []u8{}
+	mut depth := 1
+	for l.pos < l.src.len && depth > 0 {
+		c := l.peek()
+		if c == `"` || c == `'` {
+			quote := l.advance()
+			body << quote
+			for l.pos < l.src.len {
+				q := l.advance()
+				body << q
+				if q == `\\` && l.pos < l.src.len {
+					body << l.advance()
+				} else if q == quote {
+					break
+				}
+			}
+			continue
+		}
+		if c == `/` && l.pos + 1 < l.src.len && l.src[l.pos + 1] == `/` {
+			for l.pos < l.src.len && l.peek() != `\n` {
+				body << l.advance()
+			}
+			continue
+		}
+		if c == `/` && l.pos + 1 < l.src.len && l.src[l.pos + 1] == `*` {
+			body << l.advance()
+			body << l.advance()
+			mut closed := false
+			for l.pos < l.src.len {
+				b := l.advance()
+				body << b
+				if b == `*` && l.pos < l.src.len && l.src[l.pos] == `/` {
+					body << l.advance()
+					closed = true
+					break
+				}
+			}
+			if !closed {
+				return error('unclosed comment in `Style` block at line ${l.line}')
+			}
+			continue
+		}
+		if c == `{` {
+			depth++
+		} else if c == `}` {
+			depth--
+			if depth == 0 {
+				l.advance()
+				tokens << Token{.style_text, body.bytestr(), tok.line}
+				return true
+			}
+		}
+		body << l.advance()
+	}
+	return error('unclosed `Style` block starting at line ${tok.line}')
 }
 
 fn (mut l Lexer) read_number() Token {
@@ -370,7 +447,11 @@ fn tokenize(source string) ![]Token {
 				if is_digit(c) {
 					tokens << l.read_number()
 				} else if is_ident_char(c) {
-					tokens << l.read_ident()
+					tok := l.read_ident()
+					if l.try_read_style_block(tok, mut tokens)! {
+						continue
+					}
+					tokens << tok
 				} else {
 					return error('unexpected character `${[c].bytestr()}` at line ${l.line}')
 				}
@@ -410,6 +491,29 @@ fn (mut p Parser) parse_node() !&VNode {
 		line: tag_tok.line
 	}
 	for p.at().kind != .rbrace && p.at().kind != .eof {
+		// A `Style { ... }` block arrives as one raw token: keep its source
+		// verbatim for the stylesheet parser. The expressions entry carries
+		// it through template evaluation, which rebuilds props from there.
+		if p.at().kind == .style_text {
+			tok := p.eat(.style_text)!
+			lit := &VExpression{
+				kind:   .literal
+				value:  tok.val
+				line:   tok.line
+				quoted: true
+			}
+			node.children << &VNode{
+				tag:         'Style'
+				line:        tok.line
+				props:       {
+					'source': tok.val
+				}
+				expressions: {
+					'source': lit
+				}
+			}
+			continue
+		}
 		// Lookahead: if IDENT followed by '{', it's a child node; if followed by ':', it's a property
 		if p.at().kind == .ident {
 			if p.at().val == 'property' {
@@ -768,11 +872,11 @@ fn assign_vml_paths(mut node VNode, path string) {
 
 pub fn element_from_vml(source string, frame Rect) !Element {
 	node := parse_vml(source)!
-	return node_to_element(node, frame)!
+	return vml_styled_tree(node_to_element(node, frame)!)
 }
 
 pub fn element_from_vnode(node &VNode, frame Rect) !Element {
-	return node_to_element(node, frame)!
+	return vml_styled_tree(node_to_element(node, frame)!)
 }
 
 fn node_to_element(node &VNode, frame Rect) !Element {
@@ -782,11 +886,23 @@ fn node_to_element(node &VNode, frame Rect) !Element {
 		v_frame(node, frame)
 	}
 	el := node_to_element_base(node, resolved)!
+	// `Style {}` blocks scope their sheet to this node's subtree; `class:`
+	// joins the node's classes; `style:` fills remaining inline fields.
+	scoped := v_style_sheet(node)!
+	styled := v_inline_style(node, el, resolved)!
+	mut classes := styled.classes.clone()
+	for class in v_classes(node) {
+		if class !in classes {
+			classes << class
+		}
+	}
 	key := node.prop('key')
 	menu := v_menu(node)
 	secure := el.secure || node.prop_bool('secure') || node.prop_bool('password')
 	result := Element{
-		...el
+		...styled
+		classes:             classes
+		stylesheet:          scoped
 		action_id:           if el.action_id.len > 0 { el.action_id } else { node.prop('on_tap') }
 		key:                 key
 		menu:                if menu.len > 0 { menu } else { el.menu }
@@ -896,6 +1012,49 @@ fn node_to_element_base(node &VNode, frame Rect) !Element {
 				...scroll(node.id, frame, v_color(node, 'background', 0xffffff), children)
 				box:         v_box(node)
 				scroll_mode: mode
+			}
+		}
+		'SafeArea' {
+			left, top, right, bottom := v_safe_sides(node)
+			minimum := v_safe_minimum(node)!
+			pad := safe_area_padding(left, top, right, bottom, minimum)
+			inner := safe_content_rect(local, pad)
+			kids := v_children(node, rect(0, 0, inner.width, inner.height))!
+			return Element{
+				...safe_area(
+					id:       node.id
+					frame:    frame
+					left:     left
+					top:      top
+					right:    right
+					bottom:   bottom
+					minimum:  minimum
+					children: kids
+				)!
+				box: v_box(node)
+			}
+		}
+		'SafeViewport' {
+			left, top, right, bottom := v_safe_sides(node)
+			minimum := v_safe_minimum(node)!
+			mode := scroll_mode(node.prop_or('scroll_mode', ''))!
+			pad := safe_area_padding(left, top, right, bottom, minimum)
+			inner := safe_content_rect(local, pad)
+			kids := v_children(node, rect(0, 0, inner.width, inner.height))!
+			return Element{
+				...safe_viewport(SafeViewportConfig{
+					id:                    node.id
+					frame:                 frame
+					left:                  left
+					top:                   top
+					right:                 right
+					bottom:                bottom
+					minimum:               minimum
+					axis:                  mode
+					persistent_scrollbars: node.prop_bool('persistent')
+					children:              kids
+				})!
+				box: v_box(node)
 			}
 		}
 		'View', 'Rectangle' {
@@ -1211,7 +1370,7 @@ fn v_message_box(node &VNode, frame Rect) Element {
 // Layout metadata must be excluded before assigning slots or measuring a
 // container. Dedicated menu/option traversals still consume their own entries.
 fn v_is_layout_metadata(node &VNode) bool {
-	return node.tag in ['MenuItem', 'Option', 'LayoutVariation']
+	return node.tag in ['MenuItem', 'Option', 'LayoutVariation', 'Style']
 }
 
 fn v_children(node &VNode, frame Rect) ![]Element {
@@ -1243,6 +1402,25 @@ fn v_keyboard(raw string) int {
 		'decimal', 'numeric', 'number' { keyboard_decimal }
 		else { keyboard_default }
 	}
+}
+
+// v_safe_sides reads which system intrusions a SafeArea or SafeViewport
+// avoids. Every side defaults to true, after Flutter's SafeArea flags.
+fn v_safe_sides(node &VNode) (bool, bool, bool, bool) {
+	return node.prop_or('left', 'true') == 'true', node.prop_or('top', 'true') == 'true', node.prop_or('right', 'true') == 'true', node.prop_or('bottom', 'true') == 'true'
+}
+
+// v_safe_minimum reads the minimum padding a SafeArea or SafeViewport keeps on
+// every side, even where the platform reports no intrusion.
+fn v_safe_minimum(node &VNode) !LayoutPadding {
+	minimum := LayoutPadding{
+		left:   node.prop_or('minimum_left', '0').f64()
+		top:    node.prop_or('minimum_top', '0').f64()
+		right:  node.prop_or('minimum_right', '0').f64()
+		bottom: node.prop_or('minimum_bottom', '0').f64()
+	}
+	safe_validate_minimum(minimum)!
+	return minimum
 }
 
 fn v_column(node &VNode, frame Rect) !Element {

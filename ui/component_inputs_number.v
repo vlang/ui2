@@ -441,7 +441,7 @@ fn number_input_button(config NumberInputConfig, direction NumberInputStep, fram
 		}
 	}
 	return Element{
-		...button(component_part_id(config.id, part), glyph, frame, BoxStyle{ transparent: true }, TextStyle{
+		...with_classes(button(component_part_id(config.id, part), glyph, frame, BoxStyle{ transparent: true }, TextStyle{
 			color: if available { config.theme.foreground } else { config.theme.muted_foreground }
 			size:  if config.controls == .sides {
 				metrics.font_size + 2
@@ -449,7 +449,7 @@ fn number_input_button(config NumberInputConfig, direction NumberInputStep, fram
 				math.max(math.round(frame.height * 0.7), 6)
 			}
 			align: .center
-		})
+		}), 'number-input-button')
 		key:                 part
 		enabled:             available
 		accessibility_label: if direction == .increment { 'Increment' } else { 'Decrement' }
@@ -499,8 +499,9 @@ pub fn number_input(config NumberInputConfig) !Element {
 	]
 	if config.controls == .trailing {
 		children << Element{
-			...view('', rect(layout.increment.x, layout.decrement.y - 0.5, layout.increment.width,
-				1), BoxStyle{ bg: if config.invalid { theme.danger } else { theme.border } }, []Element{})
+			...with_classes(view('', rect(layout.increment.x, layout.decrement.y - 0.5, layout.increment.width,
+				1), BoxStyle{ bg: if config.invalid { theme.danger } else { theme.border } }, []Element{}),
+				'number-input-divider')
 			key: 'divider'
 		}
 	}
@@ -512,8 +513,8 @@ pub fn number_input(config NumberInputConfig) !Element {
 		range_text = (range_text + ' to ' + number_input_plain(high)).trim_space()
 	}
 	return component_finish(Element{
-		...view(config.id, config.frame, inputs_frame_box(theme, config.invalid, metrics.radius),
-			children)
+		...with_classes(view(config.id, config.frame, inputs_frame_box(theme, config.invalid, metrics.radius),
+			children), 'number-input')
 		accessibility_role:  'group'
 		accessibility_label: description
 		accessibility_value: range_text

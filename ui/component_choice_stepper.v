@@ -131,7 +131,8 @@ fn stepper_indicator(frame Rect, index int, item StepperItem, step_state Stepper
 			align: .center
 		})
 	}
-	return view('', frame, BoxStyle{ transparent: true }, children)
+	return with_classes(view('', frame, BoxStyle{ transparent: true }, children),
+		'stepper-indicator')
 }
 
 // stepper_text lays out a step's title and description inside a box of the
@@ -273,8 +274,8 @@ pub fn stepper(config StepperConfig) !Element {
 			rect((from.indicator.width - sm.thickness) / 2, start, sm.thickness, end - start)
 		}
 		if line.width > 0 && line.height > 0 {
-			children << view('', choice_fit(line, config.frame.width, config.frame.height),
-				BoxStyle{ bg: color }, []Element{})
+			children << with_classes(view('', choice_fit(line, config.frame.width, config.frame.height),
+				BoxStyle{ bg: color }, []Element{}), 'stepper-connector')
 		}
 	}
 	for index, item in config.items {
@@ -297,7 +298,8 @@ pub fn stepper(config StepperConfig) !Element {
 		label_text := 'Step ${index + 1} of ${config.items.len}: ${item.title}'
 		children << if config.clickable {
 			Element{
-				...button_view(stepper_action_id(config.id, index), slot.frame, BoxStyle{ transparent: true }, content)
+				...with_classes(button_view(stepper_action_id(config.id, index), slot.frame, BoxStyle{ transparent: true }, content),
+					'stepper-step')
 				key:                 'step:${index}'
 				enabled:             stepper_step_enabled(config, index)
 				accessibility_label: label_text
@@ -305,7 +307,8 @@ pub fn stepper(config StepperConfig) !Element {
 			}
 		} else {
 			Element{
-				...view('', slot.frame, BoxStyle{ transparent: true }, content)
+				...with_classes(view('', slot.frame, BoxStyle{ transparent: true }, content),
+					'stepper-step')
 				key:                 'step:${index}'
 				accessibility_role:  'listitem'
 				accessibility_label: label_text
@@ -314,7 +317,8 @@ pub fn stepper(config StepperConfig) !Element {
 		}
 	}
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{ transparent: true }, children)
+		...with_classes(view(config.id, config.frame, BoxStyle{ transparent: true }, children),
+			'stepper')
 		accessibility_role:  'list'
 		accessibility_label: 'Progress'
 		accessibility_value: if current >= config.items.len {

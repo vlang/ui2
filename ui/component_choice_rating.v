@@ -100,22 +100,24 @@ pub fn rating(config RatingConfig) !Element {
 		glyph := rating_star(component_local(frame), if filled { filled_color } else { empty_color })
 		if interactive {
 			children << Element{
-				...button_view(rating_action_id(config.id, star), frame, BoxStyle{ transparent: true }, [
+				...with_classes(button_view(rating_action_id(config.id, star), frame, BoxStyle{ transparent: true }, [
 					glyph,
-				])
+				]), 'rating-star')
 				key:                 'star:${star}'
 				accessibility_label: if star == 1 { '1 star' } else { '${star} stars' }
 				accessibility_value: if filled { 'filled' } else { 'empty' }
 			}
 		} else {
 			children << Element{
-				...view('', frame, BoxStyle{ transparent: true }, [glyph])
+				...with_classes(view('', frame, BoxStyle{ transparent: true }, [glyph]),
+					'rating-star')
 				key: 'star:${star}'
 			}
 		}
 	}
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{ transparent: true }, children)
+		...with_classes(view(config.id, config.frame, BoxStyle{ transparent: true }, children),
+			'rating')
 		accessibility_role:  if interactive { 'group' } else { 'img' }
 		accessibility_label: 'Rating'
 		accessibility_value: rating_label(value, config.max)

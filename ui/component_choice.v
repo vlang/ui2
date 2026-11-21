@@ -515,7 +515,7 @@ pub fn styled_button(config StyledButtonConfig) !Element {
 		}
 		value:   if config.selected { 'selected' } else { '' }
 	}
-	return component_finish(choice_free_segment(segment, metrics))
+	return component_finish(with_classes(choice_free_segment(segment, metrics), 'styled-button'))
 }
 
 // ── Button group ────────────────────────────────────────────────────
@@ -701,7 +701,7 @@ pub fn toggle(config ToggleConfig) !Element {
 		}
 		value:   toggle_value(config.pressed)
 	}
-	return component_finish(choice_free_segment(segment, metrics))
+	return component_finish(with_classes(choice_free_segment(segment, metrics), 'toggle'))
 }
 
 // toggle_pressed_from_action returns the toggle's new pressed state, or none

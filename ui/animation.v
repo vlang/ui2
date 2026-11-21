@@ -113,6 +113,8 @@ pub:
 	step            f64
 	repeat          bool
 	on_event        AnimationEventFn = unsafe { nil }
+	delay           f64
+	fill_mode       string
 	x               ?f64
 	y               ?f64
 	width           ?f64
@@ -164,6 +166,8 @@ mut:
 	targets       AnimationTargets
 	children      []Animation
 	properties    []string
+	delay         f64
+	fill_mode     string
 	transition_fn AnimationTransitionFn = unsafe { nil }
 	on_event      AnimationEventFn      = unsafe { nil }
 }
@@ -208,6 +212,7 @@ struct AnimationRuntime {
 	mutex &sync.Mutex = sync.new_mutex()
 mut:
 	runs             map[string]AnimationRun
+	style_runs       map[string]StyleElementAnimations
 	refresh_callback AnimationRefreshFn = unsafe { nil }
 	drive_frames     bool
 	driver_running   bool
@@ -215,6 +220,11 @@ mut:
 
 __global g_animation_runtime = &AnimationRuntime{
 	runs: map[string]AnimationRun{}
+}
+
+// Keep runtime access behind a function for compilers with file-local globals.
+fn animation_runtime() &AnimationRuntime {
+	return g_animation_runtime
 }
 
 // animation creates a reusable definition for one or more Element properties.
@@ -228,6 +238,8 @@ pub fn animation(config AnimationConfig) Animation {
 		transition:    config.transition
 		transition_fn: config.transition_fn
 		step:          step
+		delay:         config.delay
+		fill_mode:     config.fill_mode
 		repeat:        config.repeat
 		on_event:      config.on_event
 		properties:    properties
@@ -258,7 +270,7 @@ pub fn sequence(animations ...Animation) Animation {
 	mut duration := 0.0
 	mut properties := []string{}
 	for child in animations {
-		duration += child.duration
+		duration += math.max(0.0, child.delay + child.duration)
 		properties = merge_property_names(properties, child.properties)
 	}
 	return Animation{
@@ -275,8 +287,8 @@ pub fn parallel(animations ...Animation) Animation {
 	mut duration := 0.0
 	mut properties := []string{}
 	for child in animations {
-		if child.duration > duration {
-			duration = child.duration
+		if child.duration + child.delay > duration {
+			duration = child.duration + child.delay
 		}
 		properties = merge_property_names(properties, child.properties)
 	}
@@ -708,13 +720,14 @@ fn animations_need_frames(now i64) bool {
 	runtime.mutex.lock()
 	mut active := false
 	for _, animation_run in runtime.runs {
-		deadline := animation_run.started_at + i64(math.ceil(animation_run.definition.duration * 1000.0)) + 34
+		deadline := animation_run.started_at + i64(math.ceil((animation_run.definition.duration + animation_run.definition.delay) * 1000.0)) + 34
 		if animation_run.status == .running
 			&& (animation_run.definition.repeat || now <= deadline) {
 			active = true
 			break
 		}
 	}
+	active = active || style_animations_need_frames(now)
 	if !active {
 		runtime.driver_running = false
 	}
@@ -750,6 +763,9 @@ fn custom_animations_need_frame(root Element) bool {
 fn animation_tree_needs_frame(root Element, runs map[string]AnimationRun) bool {
 	if root.hidden {
 		return false
+	}
+	if style_animation_needs_frame(root.id) {
+		return true
 	}
 	if animation_run := runs[root.id] {
 		if animation_run.status == .running {
@@ -787,7 +803,7 @@ fn apply_widget_animations_for_visibility(root Element, now i64, visible_only bo
 	// Custom-rendered text resolves lines: 0 when it draws (text_line_budget), so with no
 	// animation running the tree passes through unchanged instead of being copied.
 	mut result := root
-	if !(visible_only && runtime.runs.len == 0) {
+	if !(visible_only && runtime.runs.len == 0 && runtime.style_runs.len == 0) {
 		result, _ = apply_widget_animation_node(root, now, visible_only, mut pending)
 	}
 	runtime.mutex.unlock()
@@ -801,6 +817,13 @@ fn apply_widget_animations_for_visibility(root Element, now i64, visible_only bo
 }
 
 fn apply_widget_animation_node(declared Element, now i64, visible_only bool, mut pending []PendingAnimationEvent) (Element, bool) {
+	if visible_only && declared.hidden { return declared, false }
+	processed, changed := apply_widget_animation_node_base(declared, now, visible_only, mut pending)
+	styled, style_changed := apply_style_animation_node(processed, now)
+	return styled, changed || style_changed
+}
+
+fn apply_widget_animation_node_base(declared Element, now i64, visible_only bool, mut pending []PendingAnimationEvent) (Element, bool) {
 	// Hidden custom subtrees retain their animation timeline without evaluating
 	// it. Otherwise progress callbacks could repeatedly invalidate the model and
 	// keep an invisible repeating animation drawing despite zero frame demand.
@@ -868,10 +891,12 @@ fn apply_widget_animation_node(declared Element, now i64, visible_only bool, mut
 		}
 	}
 	if animation_run.status == .running {
-		elapsed := math.max(0.0, f64(now - animation_run.started_at) / 1000.0)
+		raw_elapsed := math.max(0.0, f64(now - animation_run.started_at) / 1000.0)
+		delay := animation_run.definition.delay
 		duration := animation_run.definition.duration
+		elapsed := if raw_elapsed > delay { raw_elapsed - delay } else { 0.0 }
 		mut evaluation_elapsed := elapsed
-		mut completed := duration == 0.0
+		mut completed := false
 		if animation_run.definition.repeat && duration > 0.0 {
 			cycle := i64(math.floor(elapsed / duration))
 			evaluation_elapsed = math.fmod(elapsed, duration)
@@ -882,8 +907,20 @@ fn apply_widget_animation_node(declared Element, now i64, visible_only bool, mut
 			}
 			evaluated := evaluate_animation(animation_run.definition, cycle_start, evaluation_elapsed)
 			result = merge_animation_properties(result, evaluated, animation_run.retained)
-			animation_run.progress = evaluation_elapsed / duration
+			animation_run.progress = if duration == 0.0 {
+				1.0
+			} else {
+				evaluation_elapsed / duration
+			}
 		} else {
+			if raw_elapsed < delay {
+				// still in delay: hold start values
+				result = merge_animation_properties(result, animation_run.start, animation_run.retained)
+				animation_run.progress = 0.0
+				animation_run.last = result
+				runtime.runs[declared.id] = animation_run
+				return result, true
+			}
 			if elapsed >= duration {
 				evaluation_elapsed = duration
 				completed = true
@@ -912,6 +949,13 @@ fn apply_widget_animation_node(declared Element, now i64, visible_only bool, mut
 		}
 		if completed {
 			animation_run.status = .completed
+			if animation_run.definition.fill_mode == 'none' {
+				// revert: release retained values
+				runtime.runs.delete(declared.id)
+				result = merge_animation_properties(result, declared, animation_run.retained)
+			} else {
+				runtime.runs[declared.id] = animation_run
+			}
 			if voidptr(animation_run.definition.on_event) != unsafe { nil } {
 				pending << PendingAnimationEvent{
 					callback: animation_run.definition.on_event
@@ -923,8 +967,10 @@ fn apply_widget_animation_node(declared Element, now i64, visible_only bool, mut
 				}
 			}
 		}
-		animation_run.last = result
-		runtime.runs[declared.id] = animation_run
+		if !completed || animation_run.definition.fill_mode != 'none' {
+			animation_run.last = result
+			runtime.runs[declared.id] = animation_run
+		}
 		return result, true
 	}
 	if animation_run.initialized {
@@ -949,6 +995,10 @@ fn dispatch_animation_events(pending []PendingAnimationEvent) {
 fn evaluate_animation(definition Animation, start Element, elapsed f64) Element {
 	return match definition.kind {
 		.tween {
+			// Callers pass delay-adjusted elapsed (the frame node subtracts
+			// definition.delay, and compound evaluators adjust child delays), so no
+			// further adjustment here: subtracting again would run every
+			// delayed tween at double delay.
 			mut sample := elapsed
 			if definition.step > 0.0 && elapsed < definition.duration {
 				sample = math.floor(elapsed / definition.step) * definition.step
@@ -974,12 +1024,14 @@ fn evaluate_animation_sequence(children []Animation, start Element, elapsed f64)
 	mut current := start
 	mut remaining := math.max(0.0, elapsed)
 	for child in children {
-		if remaining >= child.duration {
+		if remaining < child.delay { return current }
+		adjusted := remaining - child.delay
+		if adjusted >= child.duration {
 			current = evaluate_animation(child, current, child.duration)
-			remaining -= child.duration
+			remaining -= math.max(0.0, child.delay + child.duration)
 			continue
 		}
-		return evaluate_animation(child, current, remaining)
+		return evaluate_animation(child, current, adjusted)
 	}
 	return current
 }
@@ -987,7 +1039,10 @@ fn evaluate_animation_sequence(children []Animation, start Element, elapsed f64)
 fn evaluate_animation_parallel(children []Animation, start Element, elapsed f64) Element {
 	mut current := start
 	for child in children {
-		evaluated := evaluate_animation(child, start, math.min(elapsed, child.duration))
+		// Children carry their own delays; adjust per child like the frame
+		// node does for single tweens (a delay not yet reached holds start).
+		adj := if elapsed > child.delay { elapsed - child.delay } else { 0.0 }
+		evaluated := evaluate_animation(child, start, math.min(adj, child.duration))
 		current = merge_animation_properties(current, evaluated, child.properties)
 	}
 	return current
@@ -1411,8 +1466,10 @@ fn reset_widget_animations() {
 	mut runtime := g_animation_runtime
 	runtime.mutex.lock()
 	runtime.runs = map[string]AnimationRun{}
+	runtime.style_runs = map[string]StyleElementAnimations{}
 	runtime.driver_running = false
 	runtime.mutex.unlock()
+	reset_style_animation_history()
 }
 
 // text_lines_unlimited is the line budget `lines: 0` stands for: more than any

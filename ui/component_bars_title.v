@@ -276,8 +276,8 @@ fn title_bar_window_button(config TitleBarConfig, button TitleBarButton, frame R
 	}
 	caption := title_bar_button_label(button, config.window.maximized)
 	return Element{
-		...button_view(component_part_id(config.id, part), frame, BoxStyle{ transparent: true },
-			children)
+		...with_classes(button_view(component_part_id(config.id, part), frame, BoxStyle{ transparent: true },
+			children), 'titlebar-window-button')
 		key:                 part
 		action_id:           title_bar_button_action(config.id, button)
 		hoverable:           true
@@ -325,15 +325,16 @@ pub fn title_bar(config TitleBarConfig) !Element {
 		surface:    bars_surface_color(config.style.background, gradient, theme.background)
 		enabled:    config.enabled
 		hovered:    config.hovered
+		item_class: 'titlebar-item'
 	}
 	if layout.title.width > 0 {
 		children << Element{
-			...label('', config.title, layout.title, TextStyle{
+			...with_classes(label('', config.title, layout.title, TextStyle{
 				color: base.foreground
 				size:  m.font_size
 				bold:  true
 				align: if layout.centered { Align.center } else { Align.left }
-			})
+			}), 'titlebar-title')
 			key:                'title'
 			accessibility_role: 'text'
 		}
@@ -360,7 +361,8 @@ pub fn title_bar(config TitleBarConfig) !Element {
 		}
 	}
 	return component_finish(Element{
-		...view(config.id, config.frame, BoxStyle{ transparent: true }, children)
+		...with_classes(view(config.id, config.frame, BoxStyle{ transparent: true }, children),
+			'titlebar')
 		action_id:           title_bar_drag_action(config.id)
 		clickable:           true
 		accessibility_role:  'group'

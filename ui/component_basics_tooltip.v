@@ -477,7 +477,8 @@ pub fn tooltip_popup(config TooltipPopupConfig) !Element {
 			math.max(config.content_height, 0)), BoxStyle{ transparent: true }, config.children)
 	}
 	surface := Element{
-		...view(component_part_id(config.id, 'surface'), placement.frame, box, children)
+		...with_classes(view(component_part_id(config.id, 'surface'), placement.frame, box, children),
+			'tooltip-surface')
 		accessibility_role:  'tooltip'
 		accessibility_label: [config.title, config.text, config.description].filter(it.len > 0).join('. ')
 	}
@@ -487,7 +488,7 @@ pub fn tooltip_popup(config TooltipPopupConfig) !Element {
 		border:     border
 	})
 	return component_finish(Element{
-		...chrome
+		...with_classes(chrome, 'tooltip')
 		id: config.id
 	})
 }

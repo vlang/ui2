@@ -19,6 +19,10 @@ jobs:
     name: Build examples (${{ matrix.os }}${{ matrix.custom && ', custom renderer' || '' }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      # The macOS release's optional TCC points libc at a protected DriverKit
+      # location; use the runner's supported compiler instead.
+      VFLAGS: ${{ runner.os == 'macOS' && '-cc clang' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +52,14 @@ jobs:
           curl --fail --location --retry 3 \
             --output "$RUNNER_TEMP/v.zip" \
             "https://github.com/vlang/v/releases/download/0.5.2/${{ matrix.v_asset }}"
-          unzip -q "$RUNNER_TEMP/v.zip" -d "$RUNNER_TEMP"
+          if [ "$RUNNER_OS" = macOS ]; then
+            # This optional TCC symlink targets /System/DriverKit. It cannot
+            # be extracted on hosted runners and is unused by Clang.
+            /usr/bin/unzip -q "$RUNNER_TEMP/v.zip" -d "$RUNNER_TEMP" \
+              -x 'v/thirdparty/tcc/lib/libc.dylib'
+          else
+            unzip -q "$RUNNER_TEMP/v.zip" -d "$RUNNER_TEMP"
+          fi
           echo "$RUNNER_TEMP/v" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/v/v" version
 
@@ -74,7 +85,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --quiet -y --no-install-recommends \
-            libx11-dev libxcursor-dev libxi-dev libgl1-mesa-dev libasound2-dev xvfb
+            libx11-dev libxcursor-dev libxi-dev libxrandr-dev libxinerama-dev \
+            libxfixes-dev libgl1-mesa-dev libegl-dev libasound2-dev xvfb
 
       - name: Test component catalog and primitives
         run: v ${{ matrix.custom && '-d ui2_custom_rendering' || '' }} test ui2/component_catalog_test.v
