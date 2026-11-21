@@ -42,7 +42,11 @@ fn handle_platform_event(event string) {
 	mut state := unsafe { platform_state }
 	match event {
 		'buzz' {
-			state.status = if ui2.haptic(.medium) { 'Haptic fired.' } else { 'No haptics here.' }
+			state.status = if ui2.haptic(.medium) {
+				'Haptic requested.'
+			} else {
+				'No haptics here.'
+			}
 		}
 		'badge' {
 			state.badges++
@@ -54,14 +58,14 @@ fn handle_platform_event(event string) {
 		}
 		'open' {
 			state.status = if ui2.open_url('https://vlang.io') {
-				'Link opened.'
+				'Link requested.'
 			} else {
 				'Cannot open links here.'
 			}
 		}
 		'share' {
 			state.status = if ui2.share_text('ui2 platform integration') {
-				'Share sheet opened.'
+				'Share sheet requested.'
 			} else {
 				'No share sheet here.'
 			}

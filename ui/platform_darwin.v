@@ -19,10 +19,6 @@ enum NSHapticFeedbackPerformanceTime {
 	draw_completed = 2
 }
 
-// native_haptic_supported reports whether the haptics API is present: macOS
-// always links NSHapticFeedbackManager, so this answers true wherever the
-// file compiles. Whether a buzz is felt is best-effort hardware-dependent —
-// Macs without Force Touch take the pattern silently.
 fn native_haptic_supported() bool {
 	return true
 }

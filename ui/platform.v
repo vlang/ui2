@@ -1,5 +1,7 @@
 module ui2
 
+import net.urllib
+
 // HapticStyle names the platform haptic a call to haptic plays: three impact
 // weights, the light tick of moving a selection, and the three notification
 // outcomes. Backends without a haptics engine answer unsupported instead.
@@ -14,8 +16,10 @@ pub enum HapticStyle {
 }
 
 // haptic_supported reports whether haptic can make the device buzz on this
-// platform. iOS, macOS (Force Touch hardware) and Android answer true;
-// Windows, Linux and the BSDs have no engine this layer drives.
+// platform. iOS and macOS expose the native feedback API; actual feedback
+// depends on hardware and user settings. Android checks vibrator availability
+// and the app's VIBRATE permission. Windows, Linux and the BSDs have no engine
+// this layer drives.
 pub fn haptic_supported() bool {
 	return native_haptic_supported()
 }
@@ -49,9 +53,12 @@ pub fn open_url_supported() bool {
 }
 
 // open_url opens url in the default browser, mail client or app that owns it,
-// and reports whether the platform took it. Only http, https and mailto links
-// with an address are accepted; anything else is rejected without touching
-// the platform.
+// and reports whether the platform accepted the request. On iOS and Unix
+// desktops the outcome is asynchronous; true does not guarantee the link
+// opened. iOS integrations must run on the main UI thread. Surrounding whitespace
+// is trimmed once, and that same value is what gets validated and handed to
+// the platform. Only http, https and mailto links with an address are accepted;
+// anything else is rejected without touching the platform.
 pub fn open_url(url string) bool {
 	candidate := url.trim_space()
 	if !platform_valid_url(candidate) {
@@ -67,8 +74,8 @@ pub fn share_supported() bool {
 }
 
 // share_text opens the platform share sheet with content and reports whether
-// the platform took it. Blank content is rejected without touching the
-// platform.
+// the platform accepted the request, rather than whether the user completed a
+// share. Blank content is rejected without touching the platform.
 pub fn share_text(content string) bool {
 	if content.trim_space().len == 0 {
 		return false
@@ -77,27 +84,32 @@ pub fn share_text(content string) bool {
 }
 
 // platform_valid_url accepts the links open_url can hand over: http and https
-// URLs with something after the scheme separator, and mailto links with an
-// address. Anything with whitespace or control characters is rejected, since
-// no opener takes it verbatim.
+// URLs with a host, and mailto links with an address. It judges the string
+// exactly as given — open_url trims once before calling this and forwards
+// that very same value, so there is no hidden
+// normalization here. Anything with whitespace or control characters is
+// rejected, since no opener takes it verbatim.
 fn platform_valid_url(url string) bool {
-	candidate := url.trim_space()
-	if candidate.len == 0 {
+	if url.len == 0 {
 		return false
 	}
-	for ch in candidate.bytes() {
+	for ch in url.bytes() {
 		if ch <= 32 || ch == 127 {
 			return false
 		}
 	}
-	if candidate.starts_with('mailto:') {
-		addr := candidate['mailto:'.len..]
-		return addr.len > 0 && addr.contains('@')
+	parsed := urllib.parse(url) or { return false }
+	match parsed.scheme.to_lower() {
+		'http', 'https' {
+			return parsed.hostname().len > 0
+		}
+		'mailto' {
+			// An @ in the subject/query is not a recipient address.
+			parts := parsed.opaque.split('@')
+			return parts.len == 2 && parts[0].len > 0 && parts[1].len > 0
+		}
+		else {
+			return false
+		}
 	}
-	sep := candidate.index('://') or { return false }
-	if sep <= 0 || candidate.len <= sep + 3 {
-		return false
-	}
-	scheme := candidate[..sep]
-	return scheme == 'http' || scheme == 'https'
 }
